@@ -80,7 +80,7 @@
 - Gotchas: Scrubbed plan samples live in `repos/`, not at any session cwd, so `steps` takes `--repo`.
   `api-request-blob` records repeat `tool_use` ids; only `assistant` records count. Claude file
   85a715ba… starts with 351 inherited records of session a93413d9… (resumed session); id = file stem.
-  The 0.4 busy record is fresh only at `--now` ≤ 23:17:39Z.
+  The busy record (60243.json) is fresh only for `--now` ≤ 23:17:39.714Z.
 
 ### 2026-10-29 — Step 0.4: Scrubbed fixtures — Codex
 - Did: Scrubbed all 13 Claude transcripts (including the plugin subagent), 5 session records,
