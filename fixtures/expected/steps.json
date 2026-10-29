@@ -1,0 +1,46 @@
+{
+  "repos": [
+    {
+      "repo": "repos/repo-a",
+      "convention": "supported",
+      "latest_logged_step": "0.4",
+      "steps": [
+        {
+          "id": "0.4",
+          "title": "Parse sample records",
+          "verify_command": "cargo test parser",
+          "progress": [
+            {"date": "2026-10-29", "agent": "Codex", "verify": {"command": "cargo test parser", "result": "unknown", "result_text": "not run (synthetic format sample).", "source": "reported"}}
+          ]
+        },
+        {
+          "id": "0.5",
+          "title": "Display records",
+          "verify_command": "cargo test display",
+          "progress": []
+        }
+      ]
+    },
+    {
+      "repo": "repos/repo-b",
+      "convention": "supported",
+      "latest_logged_step": "3",
+      "steps": [
+        {
+          "id": "3",
+          "title": "Parse sample records",
+          "verify_command": "cargo test parser",
+          "progress": [
+            {"date": "2026-10-29", "agent": "Codex", "verify": {"command": "cargo test parser", "result": "unknown", "result_text": "not run (synthetic format sample).", "source": "reported"}}
+          ]
+        },
+        {
+          "id": "4",
+          "title": "Display records",
+          "verify_command": "cargo test display",
+          "progress": []
+        }
+      ]
+    }
+  ]
+}

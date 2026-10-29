@@ -25,12 +25,62 @@
   `repos/repo-b` (`N`, plain Verify), one style per file. Sessions' prompts are placeholders, so step
   assignment from prompt text has no real evidence here; 0.5 must decide what steps.json expects.
   Verify regex changed to `\bsk-` (PLAN.md Review log). Regenerate with `python3 fixtures/raw/scrub.py`.
-- Next: Step 0.5 (Claude writes schema and expected outputs). Phase 0 decisions so far:
+- Step 0.5 done (Claude, reviewed by Codex): `docs/output-schema.md` is the binding JSON contract;
+  expected files in `fixtures/expected/` (sessions, links, steps, links-amb-hidden). Phase 1 Verify:
+  `--root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json` for sessions/links;
+  `steps --root fixtures/sessions --repo repos/repo-a --repo repos/repo-b --json`.
+  Decisions Step 0.6 must carry into design.md/PLAN.md: transcript-only sessions are `unknown`, not
+  `finished` (no exit evidence); fixture mode (`--root`) turns off `ps` and git lookups, so `repo` = `cwd`
+  and repo-a-wt is its own repo there; step tags are not recognised yet (tag format is an open question),
+  so every segment is `step: null`; heuristic window is 60 s after the call, same exact checkout;
+  background task output is read from `<root>/task-output/<file>` in fixture mode.
+  Phase 1 tasks the fixtures can't cover (unit tests): `stale` and `finished` states, open Codex turn,
+  git root + worktree grouping, Verify `pass`/`fail` parsing, and the derived amb-hidden variant
+  (built in a test from a temp copy; see schema "Ambiguous variant").
+  Gotcha for 0.6: this repo's own PLAN.md uses ids like `0.2a`, which the supported `N`/`N.M` convention
+  doesn't parse; decide whether to allow a letter suffix.
+- Next: Step 0.6 (revise design, split Phase 1). Phase 0 decisions so far:
   (a) go, (b) no-go for waiting, (c) no-go, (d) go.
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 0.5: Output schema and expected outputs — Claude
+- Did: Wrote `docs/output-schema.md` (flags, value formats, ordering; every field of `sessions`, `links`,
+  `steps`; state table with evidence; recognised invocation grammar; exact-evidence order incl. task-output
+  lookup; 60 s heuristic; skipped-line reasons; PLAN/PROGRESS parsing). Hand-wrote the expected files from
+  `ground-truth.md`, the scrubbed transcripts and session records (values read with ad-hoc jq/python in the
+  scratchpad, no project code). 27 sessions (13 Claude transcripts, 5 record-only, 9 Codex): 1 busy,
+  4 idle, 22 unknown; 4 skipped lines. 13 links: 8 exact (exec, resume on the same child, plugin via
+  subagent, bg via task output, par-main/par-wt distinct, amb-1/amb-2), 5 organic repo-c `unlinked`;
+  mention has no link; manual and the synthetic Codex file are `unparented`. Derived variant
+  `links-amb-hidden.json`: amb-1 `ambiguous` (746/1822 ms), amb-2 `heuristic` (447 ms).
+- Changed: `docs/output-schema.md`, `fixtures/expected/{sessions,links,links-amb-hidden,steps}.json`, `PROGRESS.md`
+- Verify: `jq . fixtures/expected/*.json > /dev/null && echo OK` → `jq: OK (4 files)`.
+  Trace (`jq -r '.links[]|[.parent,.child,.match]'` + `grep -n "| <parent> | <child>" fixtures/raw/ground-truth.md`):
+  ```text
+  exact bb792d9c… -> 01a189e2-d57f… : ground-truth.md line 11
+  exact ef72378c… -> 01a189e2-d57f… : ground-truth.md line 12
+  exact 9d9a0ed8… -> 01a189e3-a439… : ground-truth.md line 13
+  exact 07c80c2e… -> 01a189e3-f419… : ground-truth.md line 14
+  exact 80cce3e4… -> 01a189e4-7f31… : ground-truth.md line 16
+  exact c86d374f… -> 01a189e4-8084… : ground-truth.md line 17
+  exact 11bf1b58… -> 01a189e4-d501… : ground-truth.md line 18
+  exact f4d83303… -> 01a189e4-d953… : ground-truth.md line 19
+  unparented 01a189e5-5b32… : ground-truth.md line 20 (manual)
+  mention parent df403bfa… in links: 0 (line 15)
+  ```
+  Deviation: the 5 `unlinked` organic links (parents 85a715ba…, 11c1f13c…) have no ground-truth row
+  (organic data); they trace to `fixtures/README.md:116` and `docs/phase0.md` (organic launches, no child id).
+- Review: Codex (read-only), 3 findings, all accepted and fixed in the schema; expected files unchanged:
+  (1) state rows overlapped → first-match order, process-exit first, probe-unavailable and unknown-status rules;
+  (2) `--since` link visibility undefined → window filters output only, all files parsed, link listed if
+  parent or child listed, `--now` scope corrected; (3) partial EOF line → buffered, not `invalid_json`.
+- Gotchas: Scrubbed plan samples live in `repos/`, not at any session cwd, so `steps` takes `--repo`.
+  `api-request-blob` records repeat `tool_use` ids; only `assistant` records count. Claude file
+  85a715ba… starts with 351 inherited records of session a93413d9… (resumed session); id = file stem.
+  The 0.4 busy record is fresh only at `--now` ≤ 23:17:39Z.
 
 ### 2026-10-29 — Step 0.4: Scrubbed fixtures — Codex
 - Did: Scrubbed all 13 Claude transcripts (including the plugin subagent), 5 session records,
