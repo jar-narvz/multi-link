@@ -48,12 +48,16 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
 - Verify: `docs/phase0.md` has sections (a) and (b), each ending in `Decision: go` or `Decision: no-go`,
   with field names only (no conversation content).
 
-### Step 0.3 — Phase 0 spike: dependencies (questions c, d)
+### Step 0.3 — Phase 0 spike: dependencies (questions c, d) — can run in parallel with 0.2
 - (c) Is zoetrope's core usable as a library crate (public API for parsing and graph model)?
-- (d) Does agtrace already link a Claude session to the Codex run it launched? Test on the raw fixtures.
-- Files: `docs/phase0.md`
+- (d) Does agtrace already link a Claude session to the Codex run it launched? Test it on the 0.2a
+  sandbox sessions only (copied into a throwaway `HOME`), checked against `fixtures/raw/ground-truth.md`.
+  Read its source first; don't run it if it writes into `~/.claude` / `~/.codex` or makes network calls.
+- Third-party sources are cloned / built outside this repo (`~/multi-link-sandbox/deps/`).
+- Files: `docs/phase0-deps.md` (separate from 0.2's `docs/phase0.md` so both can run at once;
+  merged in Step 0.6).
 - Verify: sections (c) and (d) exist, each ending in `Decision: go` / `Decision: no-go`, with the
-  version tested and the command used.
+  version (commit) tested and the command used.
 
 ### Step 0.4 — Scrubbed fixtures (Codex)
 - Scrub the raw sessions into `fixtures/sessions/` (rules in `fixtures/README.md`), laid out like
@@ -73,7 +77,7 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   line in `ground-truth.md`; Codex reviews the schema and the expected files.
 
 ### Step 0.6 — Revise design from Phase 0
-- Claude updates `docs/design.md` and this plan with the go / no-go results, gets a Codex critique,
+- Claude merges `docs/phase0-deps.md` into `docs/phase0.md`, updates `docs/design.md` and this plan with the go / no-go results, gets a Codex critique,
   then splits Phase 1 into steps.
 - Verify: Review log below has a Phase 0 entry; Phase 1 has numbered steps with Verify commands.
 
