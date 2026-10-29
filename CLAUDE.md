@@ -32,6 +32,7 @@ export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
 codex exec -s workspace-write -c sandbox_workspace_write.network_access=true \
   --add-dir "$HOME/.cargo" --add-dir "$HOME/.rustup" -C "$PWD" -o <scratchpad>/codex-last.txt "<prompt>"
 ```
+Always close stdin (`< /dev/null`) when running it in the background, or it waits for input forever.
 Network is on only so cargo can fetch crates; project code still makes no network calls.
 Prompts start with "Read AGENTS.md, then do Step <id> in PLAN.md." and add only what the step lacks.
 
