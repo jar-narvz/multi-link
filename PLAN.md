@@ -64,7 +64,7 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   `~/.claude` and `~/.codex` so `--root fixtures/sessions` works. Add a malformed-line case.
   Add sample PLAN.md / PROGRESS.md files covering both step-id and both Verify styles.
 - Files: `fixtures/sessions/**`, `fixtures/README.md` (layout section)
-- Verify: `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` prints nothing; the case list in
+- Verify: `rg -l "/Users/|\bsk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` prints nothing; the case list in
   `fixtures/README.md` matches `fixtures/raw/ground-truth.md` case for case.
 
 ### Step 0.5 — Output schema and expected outputs (Claude)
@@ -110,6 +110,11 @@ Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions |
 Step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-29 — Step 0.4 review (Claude)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | Verify pattern `sk-` matches ordinary `task-*` values (`task-notification`, `task-resume-candidate`), so the scrub had to corrupt real data to pass | Changed to `\bsk-`: still catches `sk-` keys, no longer matches inside words |
 
 ### 2026-10-29 — Claude roadmap read-through (design doc vs PLAN.md)
 | # | Finding | Decision |

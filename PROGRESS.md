@@ -14,11 +14,73 @@
 - Step 0.2 reviewed (Claude): (a) go, (b) no-go for *waiting* only; see review notes in the 0.2 entry.
 - Step 0.3 done: zoetrope no-go as a library (write our own parsers); agtrace go (doesn't link
   Claude → Codex; confirmed by source and by running it on sandbox copies).
-- Next: Step 0.4 (Codex scrubs fixtures). Phase 0 decisions so far: (a) go, (b) no-go for waiting, (c) no-go, (d) go.
+- Step 0.4 done (Codex, reviewed by Claude): scrubbed fixtures in `fixtures/sessions/` (home-shaped root for
+  `--root fixtures/sessions`); case list in `fixtures/README.md` matches `fixtures/raw/ground-truth.md`.
+  For Step 0.5: ids, timestamps, line numbers and record shapes equal raw, so `docs/phase0.md` line refs
+  (e.g. exec result at line 27) hold for the scrubbed copies. Paths: sandbox → `/home/dev/multi-link-sandbox/repo-{a,a-wt,b}`,
+  organic → `repo-c`, `repo-d`, `repo-f`; multi-link itself → `/home/dev/project`; temp → `/tmp/dev/...`.
+  The bg tool result names `/tmp/dev/.../tasks/be01y5dv6.output`; the copy is `task-output/be01y5dv6.output`, so
+  the loader needs a task-output lookup by filename (design choice for 0.5/0.6). Extras: malformed Claude
+  (repo-e) and Codex (`00000000-...000f`) files; plan samples in `repos/repo-a` (`N.M`, bold Verify) and
+  `repos/repo-b` (`N`, plain Verify), one style per file. Sessions' prompts are placeholders, so step
+  assignment from prompt text has no real evidence here; 0.5 must decide what steps.json expects.
+  Verify regex changed to `\bsk-` (PLAN.md Review log). Regenerate with `python3 fixtures/raw/scrub.py`.
+- Next: Step 0.5 (Claude writes schema and expected outputs). Phase 0 decisions so far:
+  (a) go, (b) no-go for waiting, (c) no-go, (d) go.
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 0.4: Scrubbed fixtures — Codex
+- Did: Scrubbed all 13 Claude transcripts (including the plugin subagent), 5 session records,
+  8 Codex rollouts and the background task output. Preserved physical line counts/order, JSON
+  structure, session/tool IDs, timestamps/config and linking IDs/output paths; replaced prose and output
+  bodies with placeholders and mapped paths/project names. Added synthetic malformed Claude/Codex
+  transcripts, dotted/integer step and bold/plain Verify samples, and a ground-truth-matched case index.
+- Did (Claude review fixes): Narrowed key redaction to real key shapes/bearer tokens, regenerated
+  intact task kinds/commands, replaced creator_user_id with user-dev, and scrubbed organic quoted
+  prompts/heredoc bodies with launch-segment recognition. Preserved repo-f and Library separately;
+  added independent regression cases, organic length checks and directory-injectivity assertions.
+- Changed: `fixtures/sessions/**`, `fixtures/README.md`, `PROGRESS.md`; ignored local helpers
+  `fixtures/raw/scrub.py`, `fixtures/raw/check-scrub.py` (plus Python's ignored raw cache).
+- Verify: `python3 fixtures/raw/scrub.py` → actual output:
+  ```text
+PASS: scrubbed 26 JSON/JSONL files (2350 lines) and 1 task-output file (51 lines).
+  ```
+  `rg -l "/Users/|\bsk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` → no output (exit 1).
+  `rg -il "jarednarvaez|narvaez|jarjar|gmail" fixtures --glob '!raw/**'` → no output (exit 1).
+  `python3 fixtures/raw/check-scrub.py` → actual output:
+  ```text
+PASS: 26 raw JSON/JSONL files, 2350 lines: identical line counts/order, JSON keys, array lengths and scalar types.
+PASS: 9703 id/timestamp string values and all numeric/epoch values unchanged at their original locations.
+PASS: 14789 type/subtype/role/stop_reason/subagent_type/tool-name values unchanged; session records and Codex metadata/config checked.
+PASS: 21 tool-result linking evidence lines retain IDs and scrubbed output paths; task-output banner/header and 51 lines retained.
+PASS: synthetic Claude (1 truncated + 1 empty + unknown type) and Codex (1 truncated) cases; no unexpected JSON files; 10 case rows match ground truth; privacy scan includes hidden files.
+PASS: 8 task kinds and 2 companion task commands restored; real key/bearer patterns redacted; 8 account IDs replaced with user-dev.
+PASS: 442 organic commands checked; quoted prompts/heredoc bodies scrubbed, false launches removed; organic strings <=80 characters after placeholder/id/path normalization.
+PASS: 18 distinct raw home directories (including cwd ancestors) map to distinct scrubbed directories; repo-f and Library remain separate.
+  ```
+  `git status --short --ignored fixtures` → actual output:
+  ```text
+ M fixtures/README.md
+?? fixtures/sessions/
+!! fixtures/raw/
+  ```
+  `rg --hidden -il '/Users/|\bsk-|api_key|jarednarvaez|narvaez|jarjar|gmail|osm-validate|pib-ingest|ta<redacted>' fixtures/sessions` → no output (exit 1).
+- Review: Claude, 2026-10-29, 2 rounds. Round 1 findings, all fixed: (1) `sk-` redaction corrupted
+  `task-*` values (origin.kind, `codex-companion.mjs task-resume-candidate`) — Verify regex was too broad,
+  changed to `\bsk-` in PLAN.md; (2) Codex `creator_user_id` account id kept → `user-dev`; (3) organic
+  codex commands kept real prompts and heredoc scripts → `<prompt>`/`<script>`/`<command>`; (4) `osm-validate`
+  and `~/Library` both mapped to `/home/dev/project` → `repo-f` and `/home/dev/Library`. Re-review after the fixes: clean.
+  Claude also replaced the real name `osm-validate` left in `fixtures/README.md` layout text (doc-only edit).
+  Re-ran Verify: step rg (incl. `--hidden`) and name rg print nothing; case-by-case comparison of the
+  10 ground-truth rows vs README: MATCH; `check-scrub.py` output identical to above; swept every unique string
+  value in the fixtures by eye; nothing under `fixtures/raw/` tracked (`git ls-files fixtures/raw` → 0).
+- Gotchas: The task result retains its scrubbed runtime temp path; the corresponding output copy is
+  `fixtures/sessions/task-output/be01y5dv6.output` (documented in the layout). JSON validity checks
+  exclude that plain-text output and intentionally malformed/empty synthetic lines. Raw helpers
+  stay ignored. No stale live-process fixture was made; static old idle records do not prove liveness.
 
 ### 2026-10-29 — Step 0.3: Phase 0 spike: dependencies (c, d) — Claude (subagent), run by Claude
 - Did: Subagent read zoetrope @b1f31dd and agtrace @7649b7e via `gh api` (no clone/run, per the

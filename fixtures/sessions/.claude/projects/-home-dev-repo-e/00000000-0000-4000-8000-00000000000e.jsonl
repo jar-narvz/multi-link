@@ -1,0 +1,6 @@
+{"type": "user", "uuid": "00000000-0000-4000-8000-0000000000e1", "parentUuid": null, "sessionId": "00000000-0000-4000-8000-00000000000e", "cwd": "/home/dev/repo-e", "timestamp": "2026-10-29T00:00:00Z", "message": {"role": "user", "content": "<prompt>"}}
+{"type": "assistant", "uuid": "00000000-0000-4000-8000-0000000000e2", "parentUuid": "00000000-0000-4000-8000-0000000000e1", "sessionId": "00000000-0000-4000-8000-00000000000e", "timestamp": "2026-10-29T00:00:01Z", "message": {"id": "synthetic-message-e2", "role": "assistant", "content": [{"type": "text", "text": "<text>"}], "stop_reason": "end_turn"}}
+{"type":"assistant","message":
+
+{"type": "synthetic-unknown", "sessionId": "00000000-0000-4000-8000-00000000000e", "timestamp": "2026-10-29T00:00:02Z", "payload": {"synthetic": true}}
+{"type": "system", "subtype": "stop_hook_summary", "sessionId": "00000000-0000-4000-8000-00000000000e", "uuid": "00000000-0000-4000-8000-0000000000e3", "timestamp": "2026-10-29T00:00:03Z", "stopReason": ""}
