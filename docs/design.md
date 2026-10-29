@@ -6,6 +6,10 @@ Oct 29, 2026 · Status: draft
 > source of truth.** Changes made since the export: name → multi-link; supported PLAN / PROGRESS
 > convention matches the owner's real format; `hook install` prints a snippet instead of writing
 > `~/.claude/settings.json`. See `PLAN.md` → Review log. The architecture diagram was not exported.
+>
+> Revised in Step 0.6 (2026-10-29) with the Phase 0 results (`docs/phase0.md`): see "Phase 0 results
+> and decisions" under Solution design. Sections changed: Glossary, Major decisions (Reuse), Linking
+> algorithm, Repo and step assignment, Session state, Edge cases, Proposed plan, Open questions.
 
 ## Abstract
 
@@ -31,6 +35,9 @@ One Rust core reads both transcript formats, assigns each session to a repo and 
 | TUI | A full-screen terminal app (like zoetrope) drawn with ratatui. |
 | Swimlane | One horizontal row per session on a shared time axis, with bars where it was busy. |
 | Worktree | A second checkout of the same git repo on its own branch, used so parallel sessions don't edit the same files. |
+| Session record | Claude Code's `~/.claude/sessions/<pid>.json` for a running session: `pid`, `procStart`, `status`, `statusUpdatedAt`, `cwd`. |
+| Task output file | The temp file a background Bash call writes to; its path appears in the tool result. It can vanish. |
+| Fixture mode | Running with `--root <dir>`: reads a saved home-shaped folder; no process probing and no git lookups. |
 
 ## Problem statement
 
@@ -120,39 +127,64 @@ Transcripts, PLAN.md / PROGRESS.md and optional hook records flow into the core;
 | Core language | Rust | zoetrope's engine and c9watch's detection code are Rust; fast file tailing; Tauri (desktop) is Rust too | TypeScript: can't reuse either |
 | Mod ↔ core bridge | Mod runs `multi-link` and reads JSON | Mods must be TypeScript; a process boundary is the simplest cross-language link | WASM or native bindings: more build complexity |
 | Link strategy | Hook record first, heuristic as fallback | Hooks are exact but only cover new sessions; heuristics cover history | Heuristic only: can't be trusted when sessions overlap |
-| Reuse | Depend on zoetrope's crate if Phase 0 shows it is usable; copy c9watch detection files with credit | Depending gets upstream fixes; copied code is small and stable | Fork c9watch: weak portfolio story |
+| Reuse | Write our own parsers, borrowing zoetrope's per-provider split (defensive wire model, path discovery, per-file stream) with credit; copy c9watch detection files with credit only if they fit | Phase 0 (c): zoetrope's public API drops the tool output and long commands we link on | Depending on zoetrope: lossy, private parsers, pulls in ratatui (see Phase 0 results) |
 | Data source | Read files, never write them | Read-only is safe and matches every comparable tool | Wrapping the CLIs: breaks my existing workflow |
 | Hook install | `hook install` prints the settings snippet; the owner pastes it | Keeps the read-only rule absolute; install stays visible and reversible | Writing `~/.claude/settings.json`: one exception makes the rule harder to trust |
 
+### Phase 0 results and decisions
+
+Evidence: `docs/phase0.md` (10 generated hand-offs with recorded ground truth, plus organic samples).
+Field names are observed on real data, not documented, and may change with a harness update.
+
+| # | Result | Decision | Why |
+| --- | --- | --- | --- |
+| P1 | (a) go: the child Codex id is observable for every launch form | Exact links per form: `exec` → `session id: <uuid>` line in the tool result; `resume` → the `<uuid>` argument; plugin → `[codex] Thread ready (<uuid>)` in the **subagent transcript** (`<session>/subagents/agent-<agentId>.jsonl`), linked to the parent session; background → the `session id:` line in the **task output file** named by the tool result | Each is an id the harness printed, so the link is a fact, not a guess |
+| P2 | (a) the task output file is a temp file | When it is gone, the background link falls through to the heuristic; never marked exact | Exact means observed; a vanished file is no evidence |
+| P3 | (b) no-go for *waiting*: neither harness writes a pending-approval signal | Phase 1 never emits `waiting`. "Needs me" comes from the Phase 2 hook (Claude Code's `Notification` hook, an assumption to confirm in Phase 2); without the hook it shows as unknown. Codex waiting stays unsupported | Showing "waiting" from silence would be a guess, and alerts (FR14) fire only on a real signal |
+| P4 | (b) busy / idle come from the session record's `status` | The 300 s freshness limit applies to `busy` only: an old `busy` → `stale`; `idle` at any age stays `idle` | Live idle desktop sessions were seen 1.7–2.6 h without an update; a busy session updates as it works |
+| P5 | (b) liveness is checkable | Live = `ps` shows the record's `pid` with a start time equal to `procStart`; gone or different start → `finished` (`process_exit`). If the probe can't run, trust the record and skip `finished` | pid + start time defeats pid reuse; confirmed outside the sandbox with `ps -p <pid> -o lstart=` |
+| P6 | (b) transcripts carry no exit evidence | A transcript-only session is `unknown`, never `finished` | A missing record proves nothing (`claude -p` may never write one); a completed Codex turn ends the turn, not the process |
+| P7 | (c) no-go on zoetrope as a library | Write our own parsers; borrow its per-provider split (wire model / discovery / stream) and credit it (MIT) in NOTICE | Its public API truncates commands to 200 chars and drops tool output, which is exactly where the child id lives |
+| P8 | (d) go: agtrace links only within one harness | The differentiator (Claude → Codex links + PLAN.md steps) holds; re-check agtrace before publishing a comparison | Confirmed by its source at 7649b7e and by running it on sandbox copies: 0 cross-harness parents |
+| P9 | Fixtures need a deterministic, machine-independent run | Fixture mode (`--root`): no `ps`, no git lookups (`repo` = `cwd`), task output read from `<root>/task-output/<file name>` | Saved pids and paths belong to another machine; tests must not depend on it |
+| P10 | No prompt-tag convention exists yet | Phase 1 recognises no step tags: each session is one segment with `step: null` | The fixtures' prompts are placeholders, so a tag parser would have no evidence to test against |
+| P11 | This repo's own PLAN.md uses `0.2a` | Step ids are `N` or `N.M` with an optional lowercase letter suffix on the last part (`0.2a`, `3b`) | multi-link must read its own plan, and inserting a step without renumbering is a real need; the grammar stays strict otherwise |
+| P12 | Heuristic needs a bounded window | Candidates: same exact checkout, Codex start within 60 s after the call | All sampled launches started within 2 s; 60 s leaves room for slow starts while keeping candidates few. A ranking value, not calibrated |
+
+The binding field-level contract for all of this is `docs/output-schema.md`.
+
 ### Linking algorithm
 
-1. **Recognised invocations only.** A hand-off is a Claude tool call in a supported form: `codex exec …`, `codex resume <id>`, or the Codex plugin's call (exact forms recorded in Phase 0). Other commands that merely mention `codex` are ignored.
-2. **Exact.** A link is exact only when the child Codex session id is explicitly observed: in the tool result (`stdout`, a background task's output) or as the `resume` argument. Codex's review of my local files found Claude tool calls carry an `id`, results carry `tool_use_id` plus `stdout` / `stderr` or `backgroundTaskId`, and only some results contain the Codex id. The hook records the same evidence; it does not make a guess exact.
-3. **Heuristic.** Without an observed id: candidates are Codex sessions whose working folder equals the invocation's exact checkout (not the merged repo) and whose start falls inside the invocation's time interval. One candidate → `heuristic` with a ranking score; several → `ambiguous`, listing them; none → unlinked. The score is not a probability until checked against labelled fixtures.
+1. **Recognised invocations only.** A hand-off is a Bash `tool_use` in an `assistant` record whose command has a segment (split on `&&`, `||`, `;`, `|`, newlines outside quotes) of the form `codex exec …`, `codex [exec] resume <uuid>`, or `node …/codex-companion.mjs task …` (the plugin, called from a subagent). Other commands that merely mention `codex` are ignored. Exact grammar: `docs/output-schema.md`.
+2. **Exact.** A link is exact only when the child Codex session id is explicitly observed, checked in this order: the `resume` argument; a `session id: <uuid>` line in the tool result; `[codex] Thread ready (<uuid>)` in the result (plugin); a `session id:` line in the task output file the result names (background). The hook records the same evidence; it does not make a guess exact.
+3. **Heuristic.** Without an observed id: candidates are Codex sessions whose working folder equals the invocation's exact checkout (not the merged repo) and whose start falls within 60 s after the call, excluding children created by another invocation's exact link (a `resume` link doesn't claim its child, so a resume can't hide the run that created it). If a `cd` or `-C` / `--cd` in the command moves the launch elsewhere, no heuristic runs (unlinked), since the checkout is then unknown. One candidate → `heuristic` with a ranking value (`gap_ms`); several → `ambiguous`, listing them; none → unlinked. The ranking value is not a probability.
 4. **Resume.** `codex resume` adds a hand-off to an existing Codex session instead of creating one, so a Codex session can have several hand-offs over time.
 
 ### Repo and step assignment
 
 1. **Repo.** Each transcript records the folder it ran in (Claude's project folder name is lossy, so the core reads the path from inside the file). The core resolves the git root for grouping but keeps the exact checkout (main or which worktree) on every session.
 2. **Supported convention** (the owner's real format):
-   - PLAN.md step heading `### Step <id> — <title>`, where `<id>` is `N` or `N.M`, with a `- Verify:` or `- **Verify:**` line inside the step.
+   - PLAN.md step heading `### Step <id> — <title>`, where `<id>` is `N` or `N.M`, optionally followed by one lowercase letter (`0.2a`; decision P11), with a `- Verify:` or `- **Verify:**` line inside the step.
    - PROGRESS.md entries headed `### YYYY-MM-DD — Step <id>: <title>`, optionally `— <agent>`, newest first, with a Verify line.
    - Anything else → steps unknown.
-3. **Work segments.** A session is split into time ranges; each gets a step only from explicit evidence (hook tag, or a `step N` tag in the hand-off prompt), else `unknown`. A long Claude session that plans step 4 and reviews step 5 gets two segments.
+3. **Work segments.** A session is split into time ranges; each gets a step only from explicit evidence (hook tag, or a `step N` tag in the hand-off prompt), else `unknown`. A long Claude session that plans step 4 and reviews step 5 gets two segments. Phase 1 recognises no tags yet (decision P10): one segment per session, step `unknown`.
 4. **Verify per step.** `{command, result, time, checkout, source}` where source is `reported` (PROGRESS.md) or `observed` (the command's run seen in a transcript). Marked stale if the checkout changed since. There is no repo-level "last Verify".
 5. A repo without PLAN.md still shows; its sessions have no steps.
 
 ### Session state
 
-| State | Evidence (to confirm in Phase 0) |
-| --- | --- |
-| Busy | Codex: a `task_started` event without its `task_complete`. Claude: the live session record's `status`, recently updated. |
-| Waiting on me | Claude: session record status or the optional hook bridge reports a permission prompt or question. Codex: approval events, if Phase 0 finds them. |
-| Idle | Process alive, last turn complete. |
-| Finished | No live process. |
-| Stale / unknown | Process alive but no update within a freshness limit (set in Phase 0), or no usable signal. |
+Confirmed in Phase 0 (b) on real data; rule order and exact conditions are in `docs/output-schema.md` → State.
 
-Signals found in my local files during review: Claude's `~/.claude/sessions/<pid>.json` has `pid`, `procStart`, `status`, `statusUpdatedAt`; Codex events carry `event_msg.payload.type` values such as `task_started` and `task_complete`. Silence alone never means busy. Alerts (FR14) fire only on a supported waiting signal.
+| State | Evidence |
+| --- | --- |
+| Busy | Claude: session record `status=busy`, updated ≤ 300 s ago. Codex: last `task_started` turn has no `task_complete`, last activity ≤ 300 s ago. |
+| Waiting on me | Phase 2 hook only (Claude Code `Notification` hook, to confirm). No transcript or record field signals it (P3). Codex: unsupported. |
+| Idle | Claude: session record `status=idle`, at any age (P4). |
+| Finished | Claude: the record's process is gone, or its pid now has a different start time than `procStart` (P5). |
+| Stale | `busy` evidence older than 300 s (record or open Codex turn). |
+| Unknown | No usable signal: transcript-only sessions, Codex sessions whose turns all completed (P6). |
+
+Silence alone never means busy or waiting. Alerts (FR14) fire only on the hook's waiting signal.
 
 ### Data model (CLI output)
 
@@ -224,6 +256,11 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 - **Format change after a harness update:** unknown records skipped and counted; `multi-link doctor` reports the count.
 - **Partial, truncated or replaced files:** partial line buffered; truncation or replacement → re-read from the start.
 - **Session ids:** always store full ids; display prefixes only.
+- **Background task output gone:** the link falls back to the heuristic (P2).
+- **Idle for hours:** still `idle`, not stale; freshness applies to `busy` only (P4).
+- **Pid reused by another process:** start time differs from `procStart` → `finished` (P5).
+- **Plugin hand-off:** the launch is in the subagent transcript; the link's parent is the main session (P1).
+- **Step id with a letter suffix (`0.2a`):** supported (P11).
 
 ## Solution implementation
 
@@ -255,18 +292,21 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
 
 1. **Phase 0: Spike with go / no-go.** On real data, answer: (a) for each invocation form (exec, resume, plugin, background), where is the child Codex id observable? (b) which signals give busy / waiting / idle for each harness? (c) is zoetrope's core a usable library crate? (d) does agtrace already link Claude → Codex? Collect scrubbed fixtures, including negative cases (`codex` mentioned but not launched; a manual Codex run in the same folder), an ambiguous case (two hand-offs seconds apart in one checkout), a resume, a background launch, a stale session and a malformed line. Hand-label the expected outputs.
    - Verify: `docs/phase0.md` answers (a)–(d), each marked go or no-go, and `fixtures/expected/{sessions,links,steps}.json` exist. A no-go on (a) means links are heuristic-only, and this doc is revised before Phase 1.
-2. **Phase 1: MVP, core + CLI.** Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions`, `multi-link links`, `multi-link steps`.
-   - Verify: `cargo test` passes, and each of the three commands run with `--root fixtures --now <fixed time> --json` equals its expected file. Negative fixtures produce no link; the ambiguous fixture produces `ambiguous`.
-3. **Phase 2: Hook.** `multi-link hook install` (prints the snippet); exact links and step tags when the child id is observable.
+   - **Done 2026-10-29:** (a) go, (b) no-go for waiting only, (c) no-go, (d) go. See Phase 0 results and decisions.
+2. **Phase 1: MVP, core + CLI.** Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions`, `multi-link links`, `multi-link steps`. A Cargo workspace with one crate per parser (Claude, Codex, PLAN/PROGRESS) plus shared model, core and CLI crates: a format change touches one crate (swappable parsers), and parallel steps can't break each other's build.
+   - Verify: `cargo test` passes, and each of the three commands run with `--root fixtures/sessions --now <fixed time> --json` equals its expected file (exact commands in `docs/output-schema.md`). Negative fixtures produce no link; the ambiguous variant produces `ambiguous`.
+3. **Phase 2: Hook.** `multi-link hook install` (prints the snippet); exact links and step tags when the child id is observable. Since Phase 0 found no waiting signal in transcripts, the hook is also the only source of "waiting on me" (Claude `Notification` hook, to confirm).
    - Verify: for one real hand-off, the child id the hook records equals the id read independently from `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
-4. **Phase 3: TUI home + timeline + open (Release 1).** Screens 6 and 2, needs-you sorting, bell, FR18 resume and app link.
+4. **Phase 3: TUI home + timeline + open (Release 1).** Screens 6 and 2, needs-you sorting, bell, FR18 resume and app link. Needs-you sorting and the bell depend on the Phase 2 hook; without it, those sessions show as unknown.
    - Verify: snapshot tests of both screens on fixtures pass; home refresh on my real `~` is 2 s or less; opening a running fixture session never calls resume.
 5. **Backlog (ordered, uncommitted):** step graph (screen 3), live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
 
 ### Open questions
 
 - [x] Can a terminal program open a running desktop-app session? Yes: `open "claude://code/continue?session=local_<id>"` switched the app to a live route-impact session (tested 2026-10-29). Format found in repo-sessions' code; undocumented.
-- [ ] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap.
+- [x] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap. Answered in `docs/phase0.md`; decisions P1–P12 above.
+- [x] May step ids carry a letter suffix (`0.2a`)? Yes, one lowercase letter (P11).
+- [ ] Does Claude Code's `Notification` hook fire for every permission prompt and question, so it can drive "waiting"? (Phase 2)
 - [ ] How to find the `local_` app id of a finished desktop-app session.
 - [ ] Does `codex://threads/<id>` open a Codex desktop thread?
 - [ ] Should Claude's hand-off prompts carry a `step N` tag by convention, so step assignment is explicit? (A `/progress-entry` or hand-off skill could add it.)

@@ -82,7 +82,8 @@ Rows are checked top to bottom; the first match wins. If the process probe canno
 | Claude transcript, no session record | `unknown` | `no_signal` |
 | Codex, last `task_started` turn has no `task_complete`, `last_activity` ≤ 300 s ago | `busy` | `open_turn` |
 | Codex, open turn, older than 300 s | `stale` | `open_turn` |
-| Codex, every `task_started` turn has its `task_complete` | `unknown` | `turns_complete` |
+| Codex, last `task_started` turn has its `task_complete` (the latest turn governs; an earlier unmatched turn was interrupted and is ignored) | `unknown` | `turns_complete` |
+| Codex, no `task_started` in the file | `unknown` | `no_signal` |
 
 Why `unknown` and not `finished` for transcript-only sessions: Phase 0 found no exit evidence in
 transcripts. A missing session record proves nothing (`claude -p` may never write one), and a completed
@@ -168,6 +169,10 @@ One launch per `tool_use`. Env-var prefixes (`FOO=1 codex exec`) are not recogni
    background links will often end up heuristic — by design, never guessed exact.
 
 ### Heuristic (no exact evidence)
+**Launch directory must be certain.** If the launch segment follows a `cd` in the same command, or the
+`codex` call has `-C` / `--cd`, the child's directory is not `checkout`: no heuristic runs and the link
+is `unlinked` (no fixture has this; Phase 1 unit test).
+
 Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_at` in
 `[at, at + 60 s]`, excluding sessions that are the child of another invocation's `exact` link with
 `form` ≠ `resume` (that invocation created them). `gap_ms` = `started_at − at`. 0 → `unlinked`; 1 → `heuristic`; ≥ 2 → `ambiguous`.
@@ -214,7 +219,7 @@ ambiguous case in a test: copy `fixtures/sessions` to a temp dir and, in
 ### Step
 | Field | Type | Rule |
 | --- | --- | --- |
-| `id` | string | `N` or `N.M` from `### Step <id> — <title>`; a string so `0.10` ≠ `0.1`. |
+| `id` | string | `N` or `N.M`, optionally followed by one lowercase letter (`0.2a`, `3b`; design decision P11), from `### Step <id> — <title>`; a string so `0.10` ≠ `0.1`. No fixture uses a suffix; Phase 1 covers it with a unit test. |
 | `title` | string | Heading text after ` — `. |
 | `verify_command` | string \| null | Inside the step: first `- Verify:` or `- **Verify:**` line; the text in its first backticks. |
 | `progress` | Entry[] | PROGRESS.md entries for this id, file order (newest first). |
