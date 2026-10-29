@@ -1,8 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- Step 0.1 (repo scaffold) verified, not yet committed or reviewed.
-- No code yet. Next: Step 0.2, Phase 0 spike on real sessions.
+- Step 0.1 (repo scaffold) verified and committed on `main` (5a61cc1). Codex review still pending.
+- No code yet. Next: Step 0.2, Phase 0 spike on real sessions (Codex).
+- PLAN.md revised after a roadmap read-through: real step convention, print-only hook install,
+  ambiguous fixture added to 0.2 (see Review log, 2026-10-29).
+- Existing data for 0.2: Claude transcripts that invoke Codex exist in physaflow, route-impact,
+  posting-triage, jarednarvaez-app (counted by grep for `codex exec|resume|codex-companion`, not yet read).
+  Parallel/worktree, background, manual-run and stale cases may still need to be created on purpose.
 
 ## Log (newest first)
 
@@ -13,4 +18,4 @@
   `PROGRESS.md`, `README.md`, `docs/design.md`, `fixtures/README.md` (8 files, all `??`);
   `git check-ignore fixtures/raw/x.jsonl` → `fixtures/raw/x.jsonl`. Matches expected.
 - Review: pending (Codex)
-- Gotchas: Repo was empty on GitHub; work is on branch `setup/scaffold`, so `main` doesn't exist locally yet.
+- Gotchas: Repo was empty on GitHub; work started on branch `setup/scaffold` (since landed on `main` as 5a61cc1).

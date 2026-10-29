@@ -25,7 +25,9 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
 ### Step 0.2 — Phase 0 spike: hand-offs and state signals (questions a, b)
 - Copy real sessions into `fixtures/raw/` (git-ignored): 3 Claude → Codex hand-offs across 2 repos,
   including two parallel Claude sessions in one repo (one in a worktree), one `codex resume`,
-  one background launch, one manual Codex run in the same folder, one stale session.
+  one background launch, one manual Codex run in the same folder, one stale session, and one
+  ambiguous case: two hand-offs seconds apart in the same checkout. Cases not found in existing
+  data are created on purpose; list any that couldn't be made.
 - Record in `docs/phase0.md`:
   - (a) for each invocation form (exec, resume, plugin, background): where the child Codex id is
     observable, with field names. Go / no-go for exact links.
@@ -54,10 +56,19 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
 
 ### Phase 1 — Core + CLI (MVP) — to be split in Step 0.5
 Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions | links | steps`.
+- Supported PLAN / PROGRESS convention (the owner's real format, seen in route-impact and this repo):
+  - PLAN.md step heading: `### Step <id> — <title>`, where `<id>` is `N` or `N.M`.
+  - Verify line inside the step: `- Verify:` or `- **Verify:**`.
+  - PROGRESS.md entry heading: `### YYYY-MM-DD — Step <id>: <title>`, optionally `— <agent>`.
+  - Anything else → steps `unknown`. Fixtures must include both id styles and both Verify styles.
 - Verify: `cargo test` passes; each command with `--root fixtures --now <fixed time> --json` equals its
   expected file; negative fixtures produce no link; the ambiguous fixture produces `ambiguous`.
 
 ### Phase 2 — Hook — to be split later
+- multi-link never writes to `~/.claude/`, including settings. `multi-link hook install` **prints** the
+  settings snippet and the file to paste it into; the owner pastes it. `hook uninstall` prints what to remove.
+- The hook writes its records only to multi-link's own state folder (`~/.multi-link/`), never into
+  `~/.claude/` or `~/.codex/`.
 - Verify: for one real hand-off, the child id the hook records equals the id read independently from
   `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
 
@@ -69,6 +80,14 @@ Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions |
 Step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-29 — Claude roadmap read-through (design doc vs PLAN.md)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | Design's supported convention (`## Step N: title`) doesn't match the owner's real PLAN.md (`### Step <id> — <title>`, dotted ids); multi-link couldn't read its own plan | Accepted: Phase 1 now names the real convention. Sampled only 2 repos with a PLAN.md (route-impact, multi-link) |
+| 2 | Design's `hook install` writes `~/.claude/settings.json`, contradicting AGENTS.md "never write to `~/.claude/`" | Accepted: install prints a snippet for the owner to paste; keeps the read-only rule absolute and the install visible and reversible. Rejected an opt-in `--write` flag: one exception makes the rule harder to trust |
+| 3 | Step 0.2 omitted the ambiguous fixture (two hand-offs seconds apart, one checkout) that Phase 1's Verify needs | Accepted: added to Step 0.2 |
+Design doc (claude.ai) still has the old convention and install wording; update it in Step 0.5.
 
 ### 2026-10-29 — Codex critique of the design doc (`codex exec`, read-only)
 Verdict: ready with changes. Full table in `docs/design.md` → Review log.
