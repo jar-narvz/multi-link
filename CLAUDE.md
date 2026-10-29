@@ -42,6 +42,16 @@ Stop and ask the owner only when:
 - the same step fails Verify after 3 Codex rounds.
 - anything destructive or hard to undo, any push, publishing, or installing software beyond crates.
 
+### One session per step (keeps context fresh)
+- A coordinator session starts one fresh Claude session per PLAN.md step (sharing this checkout, no
+  worktree). It does no step work itself; it only starts sessions and checks results.
+- A step session reads `CLAUDE.md`, `AGENTS.md`, the step in `PLAN.md` and "Current state" in
+  `PROGRESS.md`, does exactly one step through the loop above (Codex → review → Verify → commit),
+  updates "Current state" with what the next step needs to know, and ends. It never starts the next step.
+- Everything a later step needs goes in PROGRESS.md or the repo, never only in a session's chat.
+- When a step session ends, the coordinator checks `git log -1` and PROGRESS.md: a new commit for that
+  step → start the next step's session; no commit or a "stop and ask" → report to the owner and wait.
+
 Sandbox repos for generating real test sessions live in `~/multi-link-sandbox/` (outside this repo).
 Claude may create them and run `claude -p` / `codex exec` there to produce hand-offs on purpose.
 
