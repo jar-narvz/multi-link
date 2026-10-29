@@ -39,12 +39,47 @@
   (built in a test from a temp copy; see schema "Ambiguous variant").
   Gotcha for 0.6: this repo's own PLAN.md uses ids like `0.2a`, which the supported `N`/`N.M` convention
   doesn't parse; decide whether to allow a letter suffix.
-- Next: Step 0.6 (revise design, split Phase 1). Phase 0 decisions so far:
-  (a) go, (b) no-go for waiting, (c) no-go, (d) go.
+- Step 0.6 done (Claude, critiqued by Codex): Phase 0 closed; `docs/phase0-deps.md` merged into
+  `docs/phase0.md`; `docs/design.md` has decisions P1–P12 ("Phase 0 results and decisions"); Phase 1 split
+  into Steps 1.1–1.9 in PLAN.md. No stop-and-ask: (a) go, (b) no-go for waiting only, (c) no-go, (d) go.
+  Step ids may carry one letter suffix (`0.2a`). Schema changes this step (`docs/output-schema.md`): id
+  suffix, Codex "latest turn governs" + `no_signal` row, no heuristic when a `cd` / `-C` moves the launch.
+  Expected files unchanged (no fixture hits these cases).
+- **Next: Step 1.1** (workspace, output model, JSONL reader) — runs alone; it creates every crate skeleton
+  and `Cargo.lock`. After it, **1.2, 1.3, 1.4, 1.5 can run in parallel** (separate crates: claude, codex,
+  plan, core). Then 1.6 (after 1.2; parallel with 1.3–1.5), 1.7 (after 1.2, 1.3, 1.5; not with 1.6),
+  1.8 (after 1.6, 1.7), 1.9 (after 1.4, 1.7, 1.8). Parallel steps: Codex doesn't edit PROGRESS.md (it
+  returns the entry text); Claude prepends it and commits with `git commit -- <paths>` (PLAN.md Phase 1 rules).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 0.6: Revise design from Phase 0 — Claude
+- Did: Merged `docs/phase0-deps.md` into `docs/phase0.md` as (c) and (d) (content kept; added a results
+  table and the Step 0.2 review corrections up top; noted in the method that agtrace was later run).
+  Updated `docs/design.md`: new "Phase 0 results and decisions" table (P1–P12, each with a why), linking
+  algorithm (forms, evidence order, 60 s window, task-output fallback), state table (waiting only via the
+  Phase 2 hook; freshness for busy only; liveness = pid + `procStart`), Reuse row (own parsers, zoetrope
+  split credited), step-id suffix, edge cases, plan, open questions. Split Phase 1 into Steps 1.1–1.9
+  (Cargo workspace, one crate per parser so parallel steps can't break each other's build), marked
+  1.2–1.5 parallel; noted Phase 2/3 changes forced by Phase 0. Ran the Codex critique and applied it.
+- Changed: `docs/phase0.md`, `docs/phase0-deps.md` (deleted), `docs/design.md`, `docs/output-schema.md`
+  (outside the step's named files: id suffix row, Codex latest-turn rule, `cd`/`-C` heuristic rule —
+  the schema is the binding contract, so decisions had to land there too), `PLAN.md`, `PROGRESS.md`
+- Verify: `grep -n '^### 2026-10-29 — Phase 0' PLAN.md` →
+  `273:### 2026-10-29 — Phase 0: design revision and Phase 1 split (Step 0.6, Codex critique, read-only)`;
+  Phase 1 step headings vs Verify lines (awk over PLAN.md between `### Step 1.1` and `### Phase 2`) →
+  `steps: 9, verify lines in Phase 1 steps: 9`; `test -e docs/phase0-deps.md` → absent;
+  `grep -c '^Decision: ' docs/phase0.md` → `4`.
+- Review: Codex critique (`codex exec -s read-only`), 10 findings, all P2: 9 accepted, 1 partly accepted
+  (`checkout` output field deferred to Phase 3). Main fixes: probe outcomes Alive/Gone/Unavailable, Codex
+  latest-turn rule, no heuristic after `cd`/`-C`, concrete missing-task-output result (474 ms, checked),
+  merge and `--since` visibility tests, broken smoke `jq`, design's resume-exclusion wording, PROGRESS.md /
+  git-index rule for parallel steps. Table in PLAN.md Review log.
+- Gotchas: `procStart` is `ps lstart` text in local time (e.g. `Thu Oct 29 19:40:25 2026`), so the
+  liveness check compares strings on the same machine; it is meaningless across machines (fixture mode
+  turns the probe off). The `Notification` hook as the waiting source is an assumption for Phase 2.
 
 ### 2026-10-29 — Step 0.5: Output schema and expected outputs — Claude
 - Did: Wrote `docs/output-schema.md` (flags, value formats, ordering; every field of `sessions`, `links`,
