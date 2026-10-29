@@ -11,7 +11,8 @@ by PLAN.md step. Design: `docs/design.md`.
 
 ## How to work a step
 1. Read the step in `PLAN.md` and the "Current state" in `PROGRESS.md`.
-2. Change only the files the step names. If another file must change, stop and say why.
+2. Change only the files the step names, plus `PROGRESS.md` (always allowed for the log entry).
+   If another file must change, stop and say why.
 3. Run the step's **Verify** command. The step is done only when it produces the expected result.
 4. Add a `PROGRESS.md` log entry (newest first) and update "Current state".
 5. Do not commit or push. Stage nothing. Claude commits after review.
@@ -23,7 +24,9 @@ by PLAN.md step. Design: `docs/design.md`.
   the step's file list.
 
 ## Hard rules
-- **Read-only access to agent data.** Never write to `~/.claude/` or `~/.codex/`.
+- **Read-only access to agent data.** Never edit, move or delete anything in `~/.claude/` or `~/.codex/`,
+  and project code never writes there. Transcripts the harnesses write themselves when a session runs
+  (e.g. Claude's sandbox sessions in Step 0.2a) are fine.
 - **No real transcripts in git.** Real session files go in `fixtures/raw/` (git-ignored).
   Only scrubbed copies go in `fixtures/`. See `fixtures/README.md`.
 - **No network calls** in project code.

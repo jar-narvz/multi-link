@@ -60,7 +60,7 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   `~/.claude` and `~/.codex` so `--root fixtures/sessions` works. Add a malformed-line case.
   Add sample PLAN.md / PROGRESS.md files covering both step-id and both Verify styles.
 - Files: `fixtures/sessions/**`, `fixtures/README.md` (layout section)
-- Verify: `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**'` prints nothing; the case list in
+- Verify: `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` prints nothing; the case list in
   `fixtures/README.md` matches `fixtures/raw/ground-truth.md` case for case.
 
 ### Step 0.5 — Output schema and expected outputs (Claude)
@@ -84,7 +84,7 @@ Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions |
   - Verify line inside the step: `- Verify:` or `- **Verify:**`.
   - PROGRESS.md entry heading: `### YYYY-MM-DD — Step <id>: <title>`, optionally `— <agent>`.
   - Anything else → steps `unknown`. Fixtures must include both id styles and both Verify styles.
-- Verify: `cargo test` passes; each command with `--root fixtures --now <fixed time> --json` equals its
+- Verify: `cargo test` passes; each command with `--root fixtures/sessions --now <fixed time> --json` equals its
   expected file; negative fixtures produce no link; the ambiguous fixture produces `ambiguous`.
 
 ### Phase 2 — Hook — to be split later

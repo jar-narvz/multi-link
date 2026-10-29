@@ -13,7 +13,7 @@ Test data for parsers, linking, state and step assignment.
 3. Keep ids, timestamps and record structure exactly as they were; tests depend on them.
 4. Remove anything that looks like a key or token.
 5. Before committing, run:
-   `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**'` — it must print nothing.
+   `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` — it must print nothing.
 
 ## Expected outputs
 `fixtures/expected/{sessions,links,steps}.json` are written **by hand** from reading the raw sessions,
