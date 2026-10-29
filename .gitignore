@@ -1,0 +1,14 @@
+# Real session transcripts: never commit (may contain private code, paths, keys)
+fixtures/raw/
+
+# Rust
+target/
+
+# OS / editor
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Logs
+*.log
