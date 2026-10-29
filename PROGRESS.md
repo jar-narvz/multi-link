@@ -12,11 +12,26 @@
   (a) conditional go for observed exact child IDs and (b) no-go for authoritative state detection.
   Approval/waiting events and a confirmed live-but-stale process remain unverified.
 - Step 0.2 reviewed (Claude): (a) go, (b) no-go for *waiting* only; see review notes in the 0.2 entry.
-- Next: Codex review of Step 0.3, agtrace test run on sandbox sessions, then Step 0.4.
+- Step 0.3 done: zoetrope no-go as a library (write our own parsers); agtrace go (doesn't link
+  Claude → Codex; confirmed by source and by running it on sandbox copies).
+- Next: Step 0.4 (Codex scrubs fixtures). Phase 0 decisions so far: (a) go, (b) no-go for waiting, (c) no-go, (d) go.
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 0.3: Phase 0 spike: dependencies (c, d) — Claude (subagent), run by Claude
+- Did: Subagent read zoetrope @b1f31dd and agtrace @7649b7e via `gh api` (no clone/run, per the
+  auto-mode safety check). After owner approval, Claude cloned both outside the repo, built agtrace and
+  ran it on copies of the sandbox sessions under a throwaway `HOME`.
+- Changed: `docs/phase0-deps.md` (new)
+- Verify: `grep -n 'Decision:' docs/phase0-deps.md` → `116:Decision: no-go`, `123`/`125` (definition
+  lines), `213:Decision: go`. agtrace index: 9 claude_code + 10 codex sessions, 0 with `parent_session_id`.
+- Review: Codex, read-only on local clones. 2 P2 findings, both accepted and applied: the live in-memory
+  parent path (`workspace/view.rs::link`) is now covered; "neither survives" softened (short commands
+  survive whole). Decisions unchanged.
+- Gotchas: Codex's read-only sandbox has no network even with the network flag; give it local clones
+  via `--add-dir`. agtrace's CLI package is `agtrace` (crate dir `agtrace-cli`).
 
 ### 2026-10-29 — Step 0.2: Phase 0 spike: hand-offs and state signals — Codex
 - Did: Copied sandbox parents, plugin subagent, all generated Codex children, organic samples,
