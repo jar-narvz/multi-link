@@ -1,13 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- Step 0.1 (repo scaffold) verified and committed on `main` (5a61cc1). Codex review still pending.
-- No code yet. Next: Step 0.2, Phase 0 spike on real sessions (Codex).
-- PLAN.md revised after a roadmap read-through: real step convention, print-only hook install,
-  ambiguous fixture added to 0.2 (see Review log, 2026-10-29).
-- Existing data for 0.2: Claude transcripts that invoke Codex exist in physaflow, route-impact,
-  posting-triage, jarednarvaez-app (counted by grep for `codex exec|resume|codex-companion`, not yet read).
-  Parallel/worktree, background, manual-run and stale cases may still need to be created on purpose.
+- Step 0.1 done and committed. Codex review of 0.1 still pending.
+- Autonomous loop set up (CLAUDE.md "Autonomous mode"): Claude commits locally after review, never pushes.
+  Rust 1.99.1 installed; Codex sandbox smoke-tested building a crate with a crates.io dependency.
+- `docs/design.md` now holds the full design (exported from claude.ai, repo copy is source of truth).
+- PLAN.md revised: Step 0.2a (Claude generates known hand-offs in `~/multi-link-sandbox/`), fixtures
+  split into 0.4 (Codex scrubs) and 0.5 (Claude writes schema + expected outputs), design revision is 0.6.
+- Next: Step 0.2a.
+- Existing organic data for 0.2: Claude transcripts that invoke Codex exist in physaflow, route-impact,
+  posting-triage, jarednarvaez-app (counted by grep, not yet read).
 
 ## Log (newest first)
 

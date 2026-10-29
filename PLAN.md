@@ -22,7 +22,19 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
 - Verify: `git status --short --untracked-files=all` lists exactly those 8 files, and `git check-ignore fixtures/raw/x.jsonl`
   prints `fixtures/raw/x.jsonl`.
 
+### Step 0.2a — Generate known hand-offs (Claude)
+- In `~/multi-link-sandbox/repo-a` and `repo-b` (small git repos, outside this repo), Claude runs
+  `claude -p` sessions that hand work to Codex in each form: `codex exec`, `codex exec resume`,
+  the Codex plugin, a background launch; two parallel sessions in repo-a (one in a worktree);
+  two hand-offs seconds apart in one checkout; one manual `codex exec` with no Claude parent;
+  one Claude session that only mentions `codex` without launching it.
+- Claude records the ground truth (which Claude session / tool call launched which Codex id, and when)
+  in `fixtures/raw/ground-truth.md`. Ground truth comes from the launches, not from parsing.
+- Files: none committed (`~/multi-link-sandbox/`, ignored `fixtures/raw/`).
+- Verify: `fixtures/raw/ground-truth.md` lists every case above, or says why one couldn't be made.
+
 ### Step 0.2 — Phase 0 spike: hand-offs and state signals (questions a, b)
+- Use the sandbox sessions from 0.2a plus organic ones from the owner's repos.
 - Copy real sessions into `fixtures/raw/` (git-ignored): 3 Claude → Codex hand-offs across 2 repos,
   including two parallel Claude sessions in one repo (one in a worktree), one `codex resume`,
   one background launch, one manual Codex run in the same folder, one stale session, and one
@@ -43,18 +55,29 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
 - Verify: sections (c) and (d) exist, each ending in `Decision: go` / `Decision: no-go`, with the
   version tested and the command used.
 
-### Step 0.4 — Scrubbed fixtures and hand-labelled expected outputs
-- Scrub the raw sessions into `fixtures/` (rules in `fixtures/README.md`). Add a malformed-line case.
-- Hand-write `fixtures/expected/{sessions,links,steps}.json`, including negative and ambiguous cases.
-- Files: `fixtures/**` (not `raw/`), `fixtures/expected/*.json`
-- Verify: `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**'` prints nothing, and the three
-  expected files parse with `jq . fixtures/expected/*.json > /dev/null`.
+### Step 0.4 — Scrubbed fixtures (Codex)
+- Scrub the raw sessions into `fixtures/sessions/` (rules in `fixtures/README.md`), laid out like
+  `~/.claude` and `~/.codex` so `--root fixtures/sessions` works. Add a malformed-line case.
+  Add sample PLAN.md / PROGRESS.md files covering both step-id and both Verify styles.
+- Files: `fixtures/sessions/**`, `fixtures/README.md` (layout section)
+- Verify: `rg -l "/Users/|sk-|api_key" fixtures --glob '!raw/**'` prints nothing; the case list in
+  `fixtures/README.md` matches `fixtures/raw/ground-truth.md` case for case.
 
-### Step 0.5 — Revise design from Phase 0
-- Claude updates `docs/design.md` and this plan with the go / no-go results, then splits Phase 1 into steps.
+### Step 0.5 — Output schema and expected outputs (Claude)
+- Claude writes `docs/output-schema.md` (fields of `sessions`, `links`, `steps` JSON) and hand-writes
+  `fixtures/expected/{sessions,links,steps}.json` from the ground truth and the scrubbed files,
+  including negative and ambiguous cases. Claude writes the answer key so the implementer (Codex)
+  never writes the answers its code is tested against.
+- Files: `docs/output-schema.md`, `fixtures/expected/*.json`
+- Verify: `jq . fixtures/expected/*.json > /dev/null` succeeds; every link in `links.json` traces to a
+  line in `ground-truth.md`; Codex reviews the schema and the expected files.
+
+### Step 0.6 — Revise design from Phase 0
+- Claude updates `docs/design.md` and this plan with the go / no-go results, gets a Codex critique,
+  then splits Phase 1 into steps.
 - Verify: Review log below has a Phase 0 entry; Phase 1 has numbered steps with Verify commands.
 
-### Phase 1 — Core + CLI (MVP) — to be split in Step 0.5
+### Phase 1 — Core + CLI (MVP) — to be split in Step 0.6
 Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions | links | steps`.
 - Supported PLAN / PROGRESS convention (the owner's real format, seen in route-impact and this repo):
   - PLAN.md step heading: `### Step <id> — <title>`, where `<id>` is `N` or `N.M`.
@@ -71,6 +94,9 @@ Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions |
   `~/.claude/` or `~/.codex/`.
 - Verify: for one real hand-off, the child id the hook records equals the id read independently from
   `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
+  The test hand-off runs in `~/multi-link-sandbox/repo-a` with the hook in that repo's own
+  `.claude/settings.local.json` (project scope, not `~/.claude/`), so Claude can run it unattended.
+  Enabling the hook for the owner's real repos stays the owner's paste.
 
 ### Phase 3 — TUI home + timeline + open (Release 1) — to be split later
 - Verify: snapshot tests of both screens pass on fixtures; home refresh on real `~` is ≤ 2 s;
@@ -87,7 +113,19 @@ Step graph · live grid · tmux / Herdr jump · desktop app with notifications �
 | 1 | Design's supported convention (`## Step N: title`) doesn't match the owner's real PLAN.md (`### Step <id> — <title>`, dotted ids); multi-link couldn't read its own plan | Accepted: Phase 1 now names the real convention. Sampled only 2 repos with a PLAN.md (route-impact, multi-link) |
 | 2 | Design's `hook install` writes `~/.claude/settings.json`, contradicting AGENTS.md "never write to `~/.claude/`" | Accepted: install prints a snippet for the owner to paste; keeps the read-only rule absolute and the install visible and reversible. Rejected an opt-in `--write` flag: one exception makes the rule harder to trust |
 | 3 | Step 0.2 omitted the ambiguous fixture (two hand-offs seconds apart, one checkout) that Phase 1's Verify needs | Accepted: added to Step 0.2 |
-Design doc (claude.ai) still has the old convention and install wording; update it in Step 0.5.
+Design doc (claude.ai) still has the old convention and install wording; update it in Step 0.6.
+
+### 2026-10-29 — Gaps for autonomous running (owner asked for an unattended loop)
+| # | Gap | Decision |
+| --- | --- | --- |
+| 1 | Claude couldn't commit, so the loop stopped at every step | Owner approved local commits under their identity; never push. Rules in CLAUDE.md |
+| 2 | No Rust toolchain | Installed rustup (owner approved); stable 1.99.1 |
+| 3 | Codex's sandbox can't fetch crates | Codex runs with network on and `~/.cargo`, `~/.rustup` writable; smoke-tested `cargo build` with a crates.io dep |
+| 4 | Phase 0 cases depended on the owner happening to create them | New Step 0.2a: Claude generates them in `~/multi-link-sandbox/` with recorded ground truth, which also makes labelling exact |
+| 5 | Codex would write both the answer key and the code tested against it | Split: Codex scrubs fixtures (0.4), Claude writes schema + expected outputs (0.5) |
+| 6 | Expected outputs had no defined schema | `docs/output-schema.md` in Step 0.5 |
+| 7 | Phase 2 Verify needed the owner to paste a hook | Test in a sandbox repo with project-scope settings; real repos stay the owner's paste |
+| 8 | Codex couldn't read the claude.ai design doc | Exported into `docs/design.md`; the repo copy is now the source of truth |
 
 ### 2026-10-29 — Codex critique of the design doc (`codex exec`, read-only)
 Verdict: ready with changes. Full table in `docs/design.md` → Review log.
