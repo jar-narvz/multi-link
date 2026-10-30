@@ -35,11 +35,52 @@ pub struct App {
     refresh_error: Option<String>,
     pub selection: usize,
     expanded: HashSet<String>,
+    expanded_repos: HashSet<String>,
     timeline: Option<(String, TimeWindow)>,
-    home_selection: usize,
+    home_selection: Option<SelectionIdentity>,
     waiting: Option<HashSet<String>>,
     healthy: bool,
     opening: bool,
+}
+
+/// Stable identity shared by refresh and returning from the timeline.
+struct SelectionIdentity {
+    repo: String,
+    id: Option<String>,
+    harness: Option<multi_link_model::Harness>,
+}
+
+impl SelectionIdentity {
+    fn from_target(repo: &str, target: Target<'_>) -> Self {
+        let (id, harness) = match target {
+            Target::Session(row) => (Some(row.id.clone()), Some(row.harness)),
+            Target::Merged(row) => (None, Some(row.harness)),
+            Target::Repo(_) => (None, None),
+        };
+        Self {
+            repo: repo.to_string(),
+            id,
+            harness,
+        }
+    }
+
+    fn restore(&self, targets: &[(&str, Target<'_>)]) -> Option<usize> {
+        targets
+            .iter()
+            .position(|(repo, target)| {
+                *repo == self.repo
+                    && match target {
+                        Target::Session(row) => {
+                            self.id.as_deref() == Some(&row.id) && self.harness == Some(row.harness)
+                        }
+                        Target::Merged(row) => {
+                            self.id.is_none() && self.harness == Some(row.harness)
+                        }
+                        Target::Repo(_) => true,
+                    }
+            })
+            .or_else(|| targets.iter().position(|(repo, _)| *repo == self.repo))
+    }
 }
 
 impl App {
@@ -66,15 +107,40 @@ impl App {
         Some(report)
     }
 
+    fn targets<'a>(&self, view: &'a OverviewReport) -> Vec<(&'a str, Target<'a>)> {
+        if self.timeline.is_some() {
+            selectable(view)
+        } else {
+            crate::selectable_home(view, &self.expanded_repos)
+        }
+    }
+
+    fn selection_identity(&self) -> Option<SelectionIdentity> {
+        let view = self.view()?;
+        let targets = self.targets(&view);
+        let (repo, target) = targets.get(self.selection)?;
+        Some(SelectionIdentity::from_target(repo, *target))
+    }
+
+    fn restore_selection(&mut self, selected: Option<&SelectionIdentity>, fallback: usize) {
+        if let Some(view) = self.view() {
+            let targets = self.targets(&view);
+            self.selection = selected
+                .and_then(|identity| identity.restore(&targets))
+                .unwrap_or(fallback)
+                .min(targets.len().saturating_sub(1));
+        }
+    }
+
     fn selected(&self) -> Option<(String, Option<String>)> {
         let view = self.view()?;
-        let targets = selectable(&view);
+        let targets = self.targets(&view);
         let (repo, target) = targets.get(self.selection)?;
         Some((
             repo.to_string(),
             match target {
                 Target::Session(row) => Some(row.id.clone()),
-                Target::Merged(_) => None,
+                Target::Merged(_) | Target::Repo(_) => None,
             },
         ))
     }
@@ -89,15 +155,7 @@ impl App {
                 self.refresh_error = Some(format!("refresh failed: {error}; keeping last report"));
             }
             Event::Refresh(Ok(report)) => {
-                let selected = self.view().and_then(|view| {
-                    selectable(&view).get(self.selection).map(|(repo, target)| {
-                        let (id, harness) = match target {
-                            Target::Session(row) => (Some(row.id.clone()), row.harness),
-                            Target::Merged(row) => (None, row.harness),
-                        };
-                        (repo.to_string(), id, harness)
-                    })
-                });
+                let selected = self.selection_identity();
                 let waiting = waiting_ids(&report.overview);
                 let bells = self
                     .waiting
@@ -107,24 +165,7 @@ impl App {
                 self.refresh_error = None;
                 self.report = Some(report);
                 self.healthy = true;
-                // Keep the full id selected when needs-you sorting moves rows.
-                if let Some(view) = self.view() {
-                    let targets = selectable(&view);
-                    self.selection = selected
-                        .and_then(|(repo, id, harness)| {
-                            targets.iter().position(|(r, target)| {
-                                *r == repo
-                                    && match target {
-                                        Target::Session(row) => id.as_deref() == Some(&row.id),
-                                        Target::Merged(row) => {
-                                            id.is_none() && row.harness == harness
-                                        }
-                                    }
-                            })
-                        })
-                        .unwrap_or(self.selection)
-                        .min(targets.len().saturating_sub(1));
-                }
+                self.restore_selection(selected.as_ref(), self.selection);
                 return (0..bells).map(|_| Effect::Bell).collect();
             }
             Event::Opened(message) => {
@@ -135,23 +176,30 @@ impl App {
                 KeyCode::Char('q') => return vec![Effect::Quit],
                 KeyCode::Up => self.selection = self.selection.saturating_sub(1),
                 KeyCode::Down => {
-                    let count = self.view().map_or(0, |view| selectable(&view).len());
+                    let count = self.view().map_or(0, |view| self.targets(&view).len());
                     self.selection = (self.selection + 1).min(count.saturating_sub(1));
                 }
                 KeyCode::Esc => {
                     if self.timeline.take().is_some() {
-                        self.selection = self.home_selection;
+                        let selected = self.home_selection.take();
+                        self.restore_selection(selected.as_ref(), 0);
                     } else {
                         self.expanded.clear();
+                        self.expanded_repos.clear();
                         self.selection = 0;
                     }
                 }
                 KeyCode::Enter | KeyCode::Char('t') if self.timeline.is_none() => {
                     if let Some((repo, id)) = self.selected() {
                         if key == KeyCode::Enter && id.is_none() {
-                            self.expanded.insert(repo);
+                            let view = self.view().unwrap();
+                            if matches!(self.targets(&view)[self.selection].1, Target::Repo(_)) {
+                                self.expanded_repos.insert(repo);
+                            } else {
+                                self.expanded.insert(repo);
+                            }
                         } else {
-                            self.home_selection = self.selection;
+                            self.home_selection = self.selection_identity();
                             self.timeline = Some((
                                 repo,
                                 TimeWindow::default_for(&self.report.as_ref().unwrap().overview),
@@ -173,7 +221,7 @@ impl App {
                             fork: key == KeyCode::Char('f'),
                         }];
                     } else {
-                        self.footer = "enter expands a merged row first".into();
+                        self.footer = "enter expands a repo or merged row first".into();
                     }
                 }
                 // +/- zoom around the right edge; left/right pan by half a window.
@@ -226,7 +274,12 @@ impl App {
                     buf,
                 );
             } else {
-                crate::home::render_home_with_footer(&view, Some(self.selection), false, body, buf);
+                let options = crate::HomeOptions {
+                    expanded_repos: self.expanded_repos.clone(),
+                    links: Some(&report.links),
+                    hide_footer: true,
+                };
+                crate::render_home_with_options(&view, Some(self.selection), &options, body, buf);
             }
         }
         let footer = self.footer_text();
@@ -473,8 +526,18 @@ mod tests {
     fn merged_rows_expand_before_action_and_timeline_navigates() {
         let mut app = App::default();
         app.update(Event::Refresh(Ok(report())));
+        app.expanded_repos = app
+            .report
+            .as_ref()
+            .unwrap()
+            .overview
+            .repos
+            .iter()
+            .map(|g| g.repo.clone())
+            .collect();
         let view = app.view().unwrap();
-        app.selection = selectable(&view)
+        app.selection = app
+            .targets(&view)
             .iter()
             .position(|(_, t)| matches!(t, Target::Merged(_)))
             .unwrap();
@@ -519,7 +582,7 @@ mod tests {
             app.update(Event::Key(KeyCode::Down));
         }
         let view = app.view().unwrap();
-        let targets = selectable(&view);
+        let targets = app.targets(&view);
         let Target::Session(selected) = targets[app.selection].1 else {
             panic!("session")
         };
@@ -567,6 +630,7 @@ mod tests {
             .retain(|group| group.repo == "/home/dev/repo-i");
         let mut app = App::default();
         app.update(Event::Refresh(Ok(refresh)));
+        app.update(Event::Key(KeyCode::Enter));
         let mut reordered = report();
         reordered.overview = app.report.as_ref().unwrap().overview.clone();
         reordered.overview.repos[0].rows.reverse();
@@ -591,6 +655,188 @@ mod tests {
                 .iter()
                 .all(|(_, target)| matches!(target, Target::Session(_)))
         );
+    }
+
+    fn phase4() -> Box<Refresh> {
+        let mut refresh = report();
+        refresh.overview = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase4/overview.json"
+        ))
+        .unwrap();
+        refresh.links.links.clear();
+        refresh.links.unparented.clear();
+        refresh
+    }
+
+    #[test]
+    fn quiet_repo_expansion_is_separate_from_merged_expansion_and_survives_refresh() {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(phase4())));
+        let view = app.view().unwrap();
+        let targets = app.targets(&view);
+        assert_eq!(targets.len(), 8); // h:4, j:1, k:1, g:1, i:1
+        assert!(matches!(targets[4].1, Target::Repo(group) if group.repo.ends_with("/repo-j")));
+        assert!(matches!(targets[5].1, Target::Session(row) if row.state == State::Stale));
+        app.selection = 6;
+        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
+        assert!(!app.opening);
+        app.update(Event::Key(KeyCode::Down));
+        assert_eq!(app.selected().unwrap(), ("/home/dev/repo-i".into(), None));
+        app.update(Event::Key(KeyCode::Enter));
+        assert!(app.timeline.is_none());
+        assert!(app.expanded.is_empty());
+        let view = app.view().unwrap();
+        assert_eq!(app.targets(&view).len(), 9);
+        assert!(
+            matches!(app.targets(&view)[7].1, Target::Merged(row) if row.harness == multi_link_model::Harness::Codex)
+        );
+        assert!(
+            matches!(app.targets(&view)[8].1, Target::Merged(row) if row.harness == multi_link_model::Harness::Claude)
+        );
+        let mut refresh = phase4();
+        refresh.overview.repos.rotate_right(1);
+        app.update(Event::Refresh(Ok(refresh)));
+        assert_eq!(app.selection, 0);
+        assert!(app.expanded_repos.contains("/home/dev/repo-i"));
+        app.update(Event::Key(KeyCode::Enter));
+        let view = app.view().unwrap();
+        assert_eq!(app.targets(&view).len(), 15);
+        assert_eq!(
+            app.selected().unwrap().1.unwrap(),
+            "00000000-0000-4000-8000-0000000040c4"
+        );
+        app.update(Event::Key(KeyCode::Esc));
+        assert!(app.expanded_repos.is_empty());
+        assert!(app.expanded.is_empty());
+        assert_eq!(app.selection, 0);
+        let view = app.view().unwrap();
+        assert_eq!(app.targets(&view).len(), 8);
+        assert!(matches!(app.targets(&view)[0].1, Target::Repo(_)));
+    }
+
+    #[test]
+    fn stale_children_and_merged_members_prevent_repo_collapse() {
+        let mut refresh = phase4();
+        let group = &mut refresh.overview.repos[4]; // repo-i
+        let Row::Merged(merged) = &mut group.rows[0] else {
+            panic!("merged")
+        };
+        merged.rows[0].state = State::Stale;
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh)));
+        let view = app.view().unwrap();
+        assert_eq!(app.targets(&view).len(), 9);
+        assert!(matches!(app.targets(&view)[7].1, Target::Merged(_)));
+
+        let mut refresh = phase4();
+        let group = &mut refresh.overview.repos[1]; // repo-j
+        let Row::Session(parent) = &mut group.rows[0] else {
+            panic!("session")
+        };
+        let mut child = parent.clone();
+        child.id = "stale-child".into();
+        child.state = State::Stale;
+        parent.children.push(child);
+        app.update(Event::Refresh(Ok(refresh)));
+        let view = app.view().unwrap();
+        assert_eq!(app.targets(&view).len(), 9);
+        assert!(matches!(app.targets(&view)[5].1, Target::Session(row) if row.id == "stale-child"));
+    }
+
+    #[test]
+    fn refresh_collapses_newly_quiet_repo_without_selecting_a_hidden_row() {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(phase4())));
+        app.selection = 3; // last visible session in busy repo-h
+        let mut refresh = phase4();
+        refresh.overview.repos[0].tier = multi_link_model::Tier::Other;
+        let Row::Session(row) = &mut refresh.overview.repos[0].rows[0] else {
+            panic!("session")
+        };
+        row.state = State::Unknown;
+        app.update(Event::Refresh(Ok(refresh)));
+        assert_eq!(app.selection, 0);
+        let view = app.view().unwrap();
+        assert!(
+            matches!(app.targets(&view)[0].1, Target::Repo(group) if group.repo.ends_with("/repo-h"))
+        );
+        app.update(Event::Key(KeyCode::Down));
+        assert_eq!(app.selection, 1);
+        assert_eq!(app.selected().unwrap().0, "/home/dev/repo-j");
+    }
+
+    #[test]
+    fn refresh_keeps_newly_expanded_repo_summary_in_the_same_repo() {
+        for state in [State::Busy, State::Stale] {
+            let mut app = App::default();
+            app.update(Event::Refresh(Ok(phase4())));
+            app.selection = 4; // collapsed repo-j, after repo-h's four lanes
+            let mut refresh = phase4();
+            let group = &mut refresh.overview.repos[1];
+            if state == State::Busy {
+                group.tier = multi_link_model::Tier::Busy;
+            }
+            let Row::Session(row) = &mut group.rows[0] else {
+                panic!("session")
+            };
+            row.state = state;
+            refresh.overview.repos.swap(0, 1);
+            app.update(Event::Refresh(Ok(refresh)));
+            assert_eq!(app.selection, 0);
+            assert_eq!(
+                app.selected().unwrap(),
+                (
+                    "/home/dev/repo-j".into(),
+                    Some("00000000-0000-4000-8000-0000000040d1".into()),
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn timeline_escape_restores_home_identity_after_repo_visibility_changes() {
+        // A collapsed summary becomes a visible session while in the timeline.
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(phase4())));
+        app.selection = 4; // repo-j summary
+        app.update(Event::Key(KeyCode::Char('t')));
+        let mut refresh = phase4();
+        refresh.overview.repos[1].tier = multi_link_model::Tier::Busy;
+        refresh.overview.repos.swap(0, 1);
+        app.update(Event::Refresh(Ok(refresh)));
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.selection, 0);
+        assert_eq!(app.selected().unwrap().0, "/home/dev/repo-j");
+        assert_eq!(
+            app.selected().unwrap().1.as_deref(),
+            Some("00000000-0000-4000-8000-0000000040d1")
+        );
+
+        // A selected session becomes hidden by collapse; return to its repo summary.
+        app.update(Event::Key(KeyCode::Char('t')));
+        app.update(Event::Refresh(Ok(phase4())));
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.selection, 4);
+        assert_eq!(app.selected().unwrap(), ("/home/dev/repo-j".into(), None));
+
+        // Preserve an exact session identity when an earlier repo expands.
+        app.selection = 5; // stale repo-k session
+        let selected = app.selected().unwrap();
+        app.update(Event::Key(KeyCode::Char('t')));
+        let mut refresh = phase4();
+        refresh.overview.repos[1].tier = multi_link_model::Tier::Busy;
+        let Row::Session(row) = &mut refresh.overview.repos[1].rows[0] else {
+            panic!("session")
+        };
+        let mut extra = row.clone();
+        extra.id = "extra-session".into();
+        refresh.overview.repos[1]
+            .rows
+            .insert(0, Row::Session(extra));
+        app.update(Event::Refresh(Ok(refresh)));
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.selection, 6);
+        assert_eq!(app.selected().unwrap(), selected);
     }
 
     #[test]

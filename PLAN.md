@@ -774,7 +774,9 @@ mockup screen 6 promises. The real screen buries that (owner, 2026-10-30, after 
 - `render_home`: U4 header line; U3 one-line quiet groups. `App`: per-repo expanded set; `enter` on a
   collapsed repo expands it, `esc` collapses; selection never lands on hidden rows; expansion survives
   refresh by repo path.
-- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/home*.txt`
+- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/home*.txt`;
+  `crates/cli/src/tui.rs` test module only (planner, 2026-10-30: a CLI test opens a session in a repo
+  that U3 now collapses, so it must press `enter` on the repo line first; no non-test CLI change)
 - Verify: `cargo test --workspace` → all `ok`, a new home golden rendered from the phase4 key, all goldens
   reviewed by Claude against the overview keys (Review line names each checked row); App tests for
   expand/collapse, selection skipping collapsed rows, a stale-only group staying expanded and expansion

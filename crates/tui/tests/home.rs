@@ -4,7 +4,7 @@
 use std::{fs, path::PathBuf};
 
 use multi_link_model::{Link, OverviewReport, Row, State};
-use multi_link_tui::{Target, render_home, selectable};
+use multi_link_tui::{HomeOptions, Target, render_home, render_home_with_options, selectable};
 use ratatui::{buffer::Buffer, layout::Rect, style::Modifier, text::Span};
 
 fn repo_root() -> PathBuf {
@@ -19,7 +19,16 @@ fn load(path: &str) -> OverviewReport {
 fn render(report: &OverviewReport, selection: Option<usize>, width: u16, height: u16) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
-    render_home(report, selection, area, &mut buf);
+    // Detailed lane tests explicitly expand repos; snapshots below exercise default collapse.
+    let options = HomeOptions {
+        expanded_repos: report
+            .repos
+            .iter()
+            .map(|group| group.repo.clone())
+            .collect(),
+        ..HomeOptions::default()
+    };
+    render_home_with_options(report, selection, &options, area, &mut buf);
     buf
 }
 
@@ -42,7 +51,32 @@ fn text(buf: &Buffer) -> String {
 }
 
 fn check_snapshot(fixture: &str, golden: &str, width: u16, height: u16) {
-    let rendered = text(&render(&load(fixture), None, width, height));
+    let report = load(fixture);
+    let links_path = if fixture.contains("hook") {
+        "fixtures/expected/hook/links.json"
+    } else {
+        "fixtures/expected/links.json"
+    };
+    let links = if fixture.contains("phase4") {
+        // The isolated Phase 4 fixture has no hand-offs (output-schema.md).
+        multi_link_model::LinksReport {
+            links: vec![],
+            unparented: vec![],
+        }
+    } else {
+        serde_json::from_str(&fs::read_to_string(repo_root().join(links_path)).unwrap()).unwrap()
+    };
+    let mut options = HomeOptions {
+        links: Some(&links),
+        ..HomeOptions::default()
+    };
+    if fixture.contains("phase4") {
+        options.expanded_repos.insert("/home/dev/repo-i".into());
+    }
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &options, area, &mut buf);
+    let rendered = text(&buf);
     let path = repo_root().join("fixtures/expected/tui").join(golden);
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some_and(|value| value == "1") {
         fs::write(&path, &rendered).expect("write golden");
@@ -64,6 +98,16 @@ fn home_hook_snapshot_100x30() {
         "fixtures/expected/hook/overview.json",
         "home-hook.txt",
         100,
+        30,
+    );
+}
+
+#[test]
+fn home_phase4_snapshot_160x30() {
+    check_snapshot(
+        "fixtures/expected/phase4/overview.json",
+        "home-phase4.txt",
+        160,
         30,
     );
 }
@@ -373,7 +417,7 @@ fn clipped_body_shows_lines_below() {
         .iter()
         .position(|(_, target)| match target {
             Target::Session(session) => !screen.contains(&session.id[..8]),
-            Target::Merged(_) => false,
+            Target::Merged(_) | Target::Repo(_) => false,
         })
         .expect("a row below the fold");
     let buf = render(&report, Some(hidden), 100, 30);
@@ -381,4 +425,82 @@ fn clipped_body_shows_lines_below() {
     assert!(row_text(&buf, 28).contains("more lines"));
     // Nothing hidden: no marker.
     assert!(!text(&render(&report, None, 100, 80)).contains("more lines"));
+}
+
+#[test]
+fn header_counts_hidden_members_children_and_the_full_link_report() {
+    let mut report = load("fixtures/expected/hook/overview.json");
+    // Latest-per-repo hand-offs cannot supply the full count.
+    for group in &mut report.repos {
+        group.latest_handoff = None;
+    }
+    let links = serde_json::from_str(
+        &fs::read_to_string(repo_root().join("fixtures/expected/hook/links.json")).unwrap(),
+    )
+    .unwrap();
+    let area = Rect::new(0, 0, 160, 80);
+    let mut buf = Buffer::empty(area);
+    let mut options = HomeOptions {
+        links: Some(&links),
+        ..HomeOptions::default()
+    };
+    render_home_with_options(&report, None, &options, area, &mut buf);
+    let expected = "multi-link  2 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 29 sessions · 13 hand-offs  now 2026-10-29T23:15:00.000Z";
+    assert_eq!(row_text(&buf, 0), expected);
+    options.expanded_repos = report
+        .repos
+        .iter()
+        .map(|group| group.repo.clone())
+        .collect();
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &options, area, &mut buf);
+    assert_eq!(row_text(&buf, 0), expected);
+    assert!(row_text(&buf, 0).contains("  now "));
+    let area = Rect::new(0, 0, 100, 30);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &options, area, &mut buf);
+    assert_eq!(row_text(&buf, 0), expected.split("  now ").next().unwrap());
+    assert!(row_text(&buf, 0).ends_with("hand-offs"));
+}
+
+#[test]
+fn header_uses_singular_counts() {
+    let mut report = load("fixtures/expected/phase4/overview.json");
+    report.repos.retain(|group| group.repo.ends_with("/repo-j"));
+    let mut links: multi_link_model::LinksReport = serde_json::from_str(
+        &fs::read_to_string(repo_root().join("fixtures/expected/links.json")).unwrap(),
+    )
+    .unwrap();
+    links.links.truncate(1);
+    let options = HomeOptions {
+        links: Some(&links),
+        ..HomeOptions::default()
+    };
+    let area = Rect::new(0, 0, 100, 10);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &options, area, &mut buf);
+    assert_eq!(
+        row_text(&buf, 0),
+        "multi-link  0 waiting · 0 busy · 0 stale · 0 warnings · 1 repo · 1 session · 1 hand-off"
+    );
+}
+
+#[test]
+fn default_collapse_highlights_only_repo_summaries_and_stale_lanes() {
+    let report = load("fixtures/expected/phase4/overview.json");
+    let targets = multi_link_tui::selectable_home(&report, &Default::default());
+    assert_eq!(targets.len(), 8);
+    let area = Rect::new(0, 0, 160, 30);
+    for (index, (_, target)) in targets.iter().enumerate() {
+        let mut buf = Buffer::empty(area);
+        render_home(&report, Some(index), area, &mut buf);
+        let rows = highlighted_rows(&buf);
+        assert_eq!(rows.len(), 1);
+        let expected = match target {
+            Target::Session(row) => format!("00000000…{}", &row.id[row.id.len() - 4..]),
+            Target::Repo(group) => format!("▸ {}", group.repo.rsplit('/').next().unwrap()),
+            Target::Merged(_) => panic!("quiet merged rows should be hidden"),
+        };
+        assert!(row_text(&buf, rows[0]).contains(&expected));
+    }
 }

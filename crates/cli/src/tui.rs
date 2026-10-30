@@ -427,6 +427,7 @@ mod tests {
             panic!("session")
         };
         assert_eq!(row.state, multi_link_model::State::Finished);
+        app.update(Event::Key(KeyCode::Enter));
         let (selected, fork) = request(&mut app);
         assert_eq!(selected, id);
         probe.results.insert((42, "start".into()), Liveness::Alive);

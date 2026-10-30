@@ -8,7 +8,10 @@ home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coo
 2026-10-30: `cargo test --workspace` 28 `test result: ok`, 0 failed; clippy `-D warnings` clean).
 `-C .` / `-C "$PWD"` no longer count as a directory move (real-`~` counts in the 4.1 entry).
 **4.3 is committed** (Claude-reviewed; `cargo test --workspace` 29 `test result: ok`, clippy clean).
-Next: **4.4**, then 4.5 → 4.6 in order, one fresh step session each.
+**4.4 is committed** (Claude-reviewed, 1 Codex fix round; Claude re-ran `cargo test --workspace`
+→ 29 `test result: ok`, 0 failed; clippy `-D warnings` clean).
+Next: **4.5**, then 4.6.
+One fresh step session each.
 4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
 stub/missing-program child handling and terminal restoration. The child checks used a synthetic
@@ -18,9 +21,17 @@ exited terminal Claude session deletes its record, leaving `unknown` / `Unavaila
 resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
 Codex-off mode is off: Codex implements, Claude plans and reviews.
 
+- **What 4.5 needs from 4.4:** home draws through `render_home_with_options(report, selection,
+  &HomeOptions { expanded_repos, links, hide_footer }, area, buf)`; `render_home` = default options (every
+  quiet repo collapsed, `? hand-offs`). `selectable_home(report, expanded)` lists visible targets (adds
+  `Target::Repo` for a collapsed line); `selectable` (all rows) is still what the timeline uses. Session lane
+  lines come from `body_lines` in `crates/tui/src/home.rs`; collapsed repo lines and merged rows get no bar.
+  The U4 header is line 0 (`summary_line`, takes the width; `now <ts>` only when the whole line fits), so
+  4.5's shared axis labels must not push the counts past 100 columns (at 100 cols `now` is already dropped).
+  Golden helper `check_snapshot` in `crates/tui/tests/home.rs` expands only repo-i for phase4 and passes the
+  fixture links; `render()` there expands every repo for lane tests.
 - **What 4.4 needs from 4.3:** `MergedRow.harness` exists; core emits `codex ×N` and `claude ×N` (at most
-  one per harness per group). `merged_line` (`crates/tui/src/home.rs`) labels by harness but still prints
-  `0 codex children` on a Codex merged row: drop that for Codex when 4.4 reworks home lines. App refresh keeps
+  one per harness per group). Step 4.4 now omits `0 codex children` on Codex merged rows. App refresh keeps
   a merged row selected by (repo, harness); merged-row `enter` expansion stays keyed by repo (expands both).
   Core test `crates/core/tests/overview.rs` already pins the phase4 key; render the 4.4 golden from that key.
 - **What 4.3 / 4.4 need from 4.2:** contract in `docs/output-schema.md` → Overview → Rows (Merge) and
@@ -88,6 +99,99 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 4.4: TUI: header summary and collapsed quiet repos — Codex
+- Did: Added U4 summary from all overview rows, children and merged members; full hand-off total
+  uses `Refresh.links`. Quiet repos render one selectable summary with step and Verify before the
+  path; stale sessions (including children and merged members) prevent collapse. Repo expansion
+  and merged expansion use separate sets; refresh keeps expansion by repo path and selects a
+  newly collapsed summary instead of a hidden session. Removed child-count text for Codex merges.
+  Added Phase 4 golden (repo-i expanded with both merges), navigation/refresh/stale tests, explicit
+  header totals and selection-highlight coverage. Fixed Claude's review findings: Enter expands
+  the quiet repo in the CLI safety test; the timestamp is included only when the entire header fits;
+  warnings/repos/sessions/hand-offs use `plural`; shared stable identity capture/restore keeps
+  refresh and timeline Escape in the same repo with first-visible-target fallback and clamping.
+  Added regression tests for busy/stale expansion, timeline visibility changes and singular counts;
+  reflowed the render_home doc comment.
+- Changed: `crates/tui/src/{app.rs,home.rs,lib.rs}`, `crates/tui/tests/home.rs`,
+  `crates/cli/src/tui.rs` (test module only),
+  `fixtures/expected/tui/{home.txt,home-full.txt,home-hook.txt,home-hook-full.txt,home-phase4.txt}`,
+  `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo fmt --all` → no output, exit 0.
+  `UPDATE_SNAPSHOTS=1 cargo test -p multi-link-tui --test home` → exit 0; actual result:
+  ```text
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  ```
+  Compared all five home goldens against copies of the pre-review working tree: every line after
+  the header is identical (79 lines in each full golden; 29 in each other golden). Snapshot mode
+  was limited to the home test target; timeline goldens were not regenerated.
+  Required `cargo test --workspace` → exit 0; actual result lines, in execution order:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.99s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Includes `drawn_finished_but_fresh_running_never_resumes_and_errors_never_execute`,
+  `refresh_keeps_newly_expanded_repo_summary_in_the_same_repo`,
+  `timeline_escape_restores_home_identity_after_repo_visibility_changes`,
+  `header_counts_hidden_members_children_and_the_full_link_report` (100/160 columns), and
+  `header_uses_singular_counts`, all `ok`.
+  Required `cargo clippy --workspace -- -D warnings` → exit 0; actual output:
+  ```text
+    Blocking waiting for file lock on build directory
+    Checking multi-link-tui v0.1.0 (/Users/jarednarvaez/multi-link/crates/tui)
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.31s
+  ```
+  `git diff --check` → no output, exit 0.
+- Review: Claude, 2026-10-30, 1 fix round. Round 1 findings (all fixed): CLI test needed `enter` on
+  the collapsed repo (planner widened Files to `crates/cli/src/tui.rs` test module); P2 header clipped
+  mid-timestamp at 100 cols; P3 `1 warnings`; P3 refresh fallback to a raw index when a selected
+  collapsed repo expands; P3 timeline `esc` restoring a raw index; doc wrap. No files outside the step.
+  Claude re-ran Verify: 29 `test result: ok`, 0 failed; clippy `--all-targets -D warnings` and fmt clean.
+  Goldens checked against the overview keys (state counts per group via jq, tiers, `concurrency`, and
+  13 links in `links.json` / `hook/links.json`): `home.txt` / `home-full.txt` header 0/2/0, 1 warning,
+  8 repos, 28 sessions, 13 hand-offs; repo-c busy 00000000…0010, 6358ec7e…cedc, unknown 11c1f13c…3b43,
+  85a715ba…66f9, FR17 warning, hand-off 11c1f13c → - unlinked; collapsed project (1 idle), repo-a
+  (6 unknown, step 0.4 Verify ?), repo-b (9 unknown, step 3), repo-a-wt (2 unknown), scratch (1 idle),
+  repo-d (2 idle · 1 unknown), repo-e (2 unknown). `home-hook*.txt` header 2/2/0, 29 sessions; repo-a
+  waiting d1f3b188, codex 01a189e5, 80cce3e4 └ 01a189e4, ef72378c └ 01a189e2 (2 hand-offs), bb792d9c,
+  hand-off 80cce3e4 → 01a189e4 exact; repo-c waiting 11c1f13c, busy 00000000…0010, 6358ec7e, unknown
+  85a715ba, warning, hand-off; collapsed project, repo-b, repo-a-wt, scratch, repo-d, repo-e (short golden
+  clips after scratch). `home-phase4.txt` header 0/1/1, 0 warnings, 5 repos, 18 sessions, 0 hand-offs;
+  repo-h busy …40b4 then unknown …40b3/…40b2/…40b1 (no merge); repo-j collapsed 1 idle, step 0.4
+  Verify ?; repo-k stale …40e1 expanded; repo-g collapsed 4 unknown; repo-i expanded `codex ×4` (no
+  child text) then `claude ×4`. All match. Approved.
+- Gotchas: Standalone `render_home` lacks a link report and displays `? hand-offs`; callers
+  needing full counts use `render_home_with_options`. App always supplies the full report.
+  The old CLI scope blocker is resolved by the planner's test-only allowance. No production CLI
+  code changed. PLAN.md's existing planner edit is untouched. Nothing staged or committed.
 
 ### 2026-10-30 — Step 4.3: Core: `codex ×N` merge — Codex
 - Did: Merge quiet top-level rows independently by harness at four members, retaining each harness's

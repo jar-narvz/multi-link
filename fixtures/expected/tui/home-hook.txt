@@ -1,4 +1,4 @@
-multi-link  8 repos  now 2026-10-29T23:15:00.000Z
+multi-link  2 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 29 sessions · 13 hand-offs
 ◆ repo-a  1 waiting · 6 unknown  /home/dev/multi-link-sandbox/repo-a
   steps  latest 0.4 Parse sample records · Verify ? (2026-10-29)
   ◆ claude d1f3b188…cc3a  waiting    6h ahead
@@ -19,12 +19,12 @@ multi-link  8 repos  now 2026-10-29T23:15:00.000Z
   ! 2 busy sessions in one folder /home/dev/repo-c: 00000000…0010, 6358ec7e…cedc
   ↳ hand-off 11c1f13c…3b43 → -  unlinked exec bg · 37h ago
 
-  project  1 idle  /home/dev/project
-  steps  no PLAN.md
-  ○ claude bed52539…67ef  idle       2m ago
+▸ project  1 idle  steps  no PLAN.md · /home/dev/project
 
-  repo-b  9 unknown  /home/dev/multi-link-sandbox/repo-b
-  steps  latest 3 Parse sample records · Verify ? (2026-10-29)
-  ▸ claude ×5  4 codex children · newest 14m ago · enter expands
-  ↓ 22 more lines
+▸ repo-b  9 unknown  steps  latest 3 Parse sample records · Verify ? (2026-10-29) · /home/dev/multi-
+
+▸ repo-a-wt  2 unknown  steps  no PLAN.md · /home/dev/multi-link-sandbox/repo-a-wt
+
+▸ scratch-2026-10-29-338fd3  1 idle  steps  no PLAN.md · /home/dev/Library/Application Support/Claud
+  ↓ 4 more lines
 ↑↓ select · enter expand/timeline · t timeline · o open · f fork · q quit

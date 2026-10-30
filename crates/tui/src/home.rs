@@ -1,5 +1,7 @@
 //! Home screen (design "Screen 6"): every repo in the overview, needs-you first, one block each.
 
+use std::collections::HashSet;
+
 use multi_link_model::{
     Convention, Harness, Link, Match, MergedRow, OverviewReport, RepoGroup, Row, SessionRow, State,
     Tier, Timestamp, VerifyResult,
@@ -25,15 +27,16 @@ const STATE_ORDER: [State; 6] = [
     State::Finished,
 ];
 
-/// A selectable line of the home screen: one top-level row or one Codex child row.
+/// A selectable session, merged row, or collapsed repo summary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target<'a> {
     Session(&'a SessionRow),
     Merged(&'a MergedRow),
+    Repo(&'a RepoGroup),
 }
 
-/// Every selectable line in screen order; `render_home`'s `selection` indexes this list.
-/// Merged members are not listed: a `claude ×N` row is one line until expanded (T11).
+/// Every row in screen order, ignoring repo collapse (also used by the timeline).
+/// Merged members are not listed until expanded (T11).
 pub fn selectable(report: &OverviewReport) -> Vec<(&str, Target<'_>)> {
     let mut targets = Vec::new();
     for group in &report.repos {
@@ -52,8 +55,51 @@ pub fn selectable(report: &OverviewReport) -> Vec<(&str, Target<'_>)> {
     targets
 }
 
-/// Draw the home screen into `area`. `selection` is an index into [`selectable`]; an index past
-/// the end highlights nothing. Content taller than the area is clipped; the body scrolls only as
+/// Presentation state for home; absent link data is shown as unavailable, never inferred.
+#[derive(Default)]
+pub struct HomeOptions<'a> {
+    pub expanded_repos: HashSet<String>,
+    pub links: Option<&'a multi_link_model::LinksReport>,
+    pub hide_footer: bool,
+}
+
+fn collapsed(group: &RepoGroup, expanded: &HashSet<String>) -> bool {
+    group.tier == Tier::Other
+        && !expanded.contains(&group.repo)
+        && !group_sessions(group).any(|row| row.state == State::Stale)
+}
+
+/// Visible targets only; a collapsed repo takes the place of all its rows.
+pub fn selectable_home<'a>(
+    report: &'a OverviewReport,
+    expanded: &HashSet<String>,
+) -> Vec<(&'a str, Target<'a>)> {
+    let mut targets = Vec::new();
+    for group in &report.repos {
+        if collapsed(group, expanded) {
+            targets.push((group.repo.as_str(), Target::Repo(group)));
+        } else {
+            for row in &group.rows {
+                match row {
+                    Row::Session(row) => {
+                        targets.push((group.repo.as_str(), Target::Session(row)));
+                        targets.extend(
+                            row.children
+                                .iter()
+                                .map(|child| (group.repo.as_str(), Target::Session(child))),
+                        );
+                    }
+                    Row::Merged(row) => targets.push((group.repo.as_str(), Target::Merged(row))),
+                }
+            }
+        }
+    }
+    targets
+}
+
+/// Draw home with quiet repos collapsed. `selection` indexes [`selectable_home`] with an empty
+/// expanded set; an index past the end highlights nothing. Content taller than the area is clipped;
+/// the body scrolls only as
 /// far as needed to keep the selected line visible. Never panics, whatever the size.
 pub fn render_home(
     report: &OverviewReport,
@@ -61,13 +107,13 @@ pub fn render_home(
     area: Rect,
     buf: &mut Buffer,
 ) {
-    render_home_with_footer(report, selection, true, area, buf);
+    render_home_with_options(report, selection, &HomeOptions::default(), area, buf);
 }
 
-pub(crate) fn render_home_with_footer(
+pub fn render_home_with_options(
     report: &OverviewReport,
     selection: Option<usize>,
-    keys: bool,
+    options: &HomeOptions<'_>,
     area: Rect,
     buf: &mut Buffer,
 ) {
@@ -75,7 +121,7 @@ pub(crate) fn render_home_with_footer(
     if area.is_empty() {
         return;
     }
-    let lines = body_lines(report);
+    let lines = body_lines(report, &options.expanded_repos);
 
     // Title on top and keys at the bottom when there is room for a body line between them.
     let (title_rows, mut footer_rows) = match area.height {
@@ -83,18 +129,11 @@ pub(crate) fn render_home_with_footer(
         2 => (0, 1),
         _ => (1, 1),
     };
-    if !keys {
+    if options.hide_footer {
         footer_rows = 0;
     }
     if title_rows == 1 {
-        let title = Line::from(vec![
-            Span::from("multi-link").bold(),
-            Span::from(format!(
-                "  {}  now {}",
-                plural(report.repos.len(), "repo", "repos"),
-                report.now
-            )),
-        ]);
+        let title = summary_line(report, options.links, area.width);
         buf.set_line(area.x, area.y, &title, area.width);
     }
     if footer_rows == 1 {
@@ -171,9 +210,8 @@ struct BodyLine {
     target: Option<usize>,
 }
 
-/// The body in screen order. Walks the report exactly as `selectable` does, so the n-th
-/// selectable line here is `selectable(report)[n]`.
-fn body_lines(report: &OverviewReport) -> Vec<BodyLine> {
+/// The body in screen order; target indices match `selectable_home(report, expanded)`.
+fn body_lines(report: &OverviewReport, expanded: &HashSet<String>) -> Vec<BodyLine> {
     let now = epoch_seconds(&report.now);
     let mut lines = Vec::new();
     let mut next_target = 0;
@@ -188,6 +226,19 @@ fn body_lines(report: &OverviewReport) -> Vec<BodyLine> {
     for (index, group) in report.repos.iter().enumerate() {
         if index > 0 {
             push(&mut lines, Line::default(), false);
+        }
+        if collapsed(group, expanded) {
+            let mut line = header_line(group);
+            line.spans[0] = Span::from("▸ ").bold();
+            // Put the step before the full path so Verify remains visible at typical widths.
+            let path = line.spans.pop().unwrap();
+            let plan = plan_line(group);
+            line.spans
+                .push(Span::from(plan.to_string().trim_start().to_string()));
+            line.spans.push(Span::from(" · "));
+            line.spans.push(path);
+            push(&mut lines, line, true);
+            continue;
         }
         push(&mut lines, header_line(group), false);
         push(&mut lines, plan_line(group), false);
@@ -223,6 +274,48 @@ fn body_lines(report: &OverviewReport) -> Vec<BodyLine> {
         }
     }
     lines
+}
+
+fn summary_line(
+    report: &OverviewReport,
+    links: Option<&multi_link_model::LinksReport>,
+    width: u16,
+) -> Line<'static> {
+    let mut sessions = 0;
+    let mut counts = [0usize; 3];
+    for row in report.repos.iter().flat_map(group_sessions) {
+        sessions += 1;
+        match row.state {
+            State::Waiting => counts[0] += 1,
+            State::Busy => counts[1] += 1,
+            State::Stale => counts[2] += 1,
+            _ => {}
+        }
+    }
+    let warnings: usize = report
+        .repos
+        .iter()
+        .map(|group| group.concurrency.len())
+        .sum();
+    let handoffs = links.map_or_else(
+        || "? hand-offs".to_string(),
+        |links| plural(links.links.len(), "hand-off", "hand-offs"),
+    );
+    let text = format!(
+        "multi-link  {} waiting · {} busy · {} stale · {} · {} · {} · {handoffs}",
+        counts[0],
+        counts[1],
+        counts[2],
+        plural(warnings, "warning", "warnings"),
+        plural(report.repos.len(), "repo", "repos"),
+        plural(sessions, "session", "sessions"),
+    );
+    let with_now = Line::from(format!("{text}  now {}", report.now));
+    if with_now.width() <= usize::from(width) {
+        with_now
+    } else {
+        Line::from(text)
+    }
 }
 
 /// `◆` waiting / `●` busy marker, repo name, session counts by state, full repo path.
@@ -355,10 +448,14 @@ fn merged_line(merged: &MergedRow, now: Option<i64>) -> Line<'static> {
         Harness::Claude => "claude",
         Harness::Codex => "codex",
     };
+    let children = if merged.harness == Harness::Claude {
+        format!("{} · ", plural(children, "codex child", "codex children"))
+    } else {
+        String::new()
+    };
     Line::from(format!(
-        "  ▸ {harness} ×{}  {} · newest {newest} · enter expands",
+        "  ▸ {harness} ×{}  {children}newest {newest} · enter expands",
         merged.count,
-        plural(children, "codex child", "codex children")
     ))
 }
 

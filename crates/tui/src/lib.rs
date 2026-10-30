@@ -5,7 +5,9 @@
 mod home;
 mod timeline;
 
-pub use home::{Target, render_home, selectable};
+pub use home::{
+    HomeOptions, Target, render_home, render_home_with_options, selectable, selectable_home,
+};
 pub use timeline::{DEFAULT_WINDOW, TimeWindow, render_timeline};
 
 mod app;
