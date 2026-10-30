@@ -1,22 +1,24 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- **Step 2.7 done (2026-10-30, Codex, reviewed by Claude, committed). Next: Step 2.8 (Claude)**, the real
-  sandbox check that closes Phase 2. What 2.8 needs:
-  - Build: `cargo build --release` → `/Users/jarednarvaez/multi-link/target/release/multi-link`.
-  - Get the snippet: `cd ~/multi-link-sandbox/repo-a && MULTI_LINK_HOME=<scratch> <abs bin> hook install
-    --scope local`. JSON alone on stdout (pipe to `jq`), the target file on stderr
-    (`~/multi-link-sandbox/repo-a/.claude/settings.local.json`). The command embeds `current_exe()`, so
-    run the release binary by absolute path. `MULTI_LINK_HOME` is NOT baked into the snippet: prefix it
-    in each `command` by hand, e.g. `MULTI_LINK_HOME=<scratch> '<abs bin>' hook record`.
-  - Snippet shape (each `hooks` entry `{"type":"command","command":"'<abs bin>' hook record","async":true,
-    "timeout":60}`): `PostToolUse` matcher `Bash`; `PostToolUseFailure` matcher `Bash`;
-    `PermissionRequest` no matcher; `Notification` matcher `permission_prompt|elicitation_dialog`.
-  - Records land in `<scratch>/hook/<session_id>.jsonl`. Read them with `multi-link links --json` /
-    `sessions --json` run with the same `MULTI_LINK_HOME` (no `--root`, so real `~/.claude` / `~/.codex`).
-    `hook_conflicts: N` appears on stderr only when N > 0.
-  - Release builds ignore `MULTI_LINK_HOOK_TEST`; the watchdog is a hard 30 s, the background poll 25 s.
-  - Remove the sandbox `settings.local.json` afterwards (Step 2.8's last line).
+- **Phase 2 closed (2026-10-30, Step 2.8, Claude; Codex-reviewed). Next: plan Phase 3** (still "to be
+  split later" in PLAN.md). Results: `docs/phase2-hook.md` → "Step 2.8 results (Phase 2 Verify)"; raw
+  evidence in git-ignored `fixtures/raw/hook/step-2.8/`. Verify passed with two qualified wordings:
+  the `/dev/null` hand-off came out `ambiguous` (not `heuristic` / `unlinked`; still never `exact`), and
+  the held prompt showed `waiting` / `session_record` (H11), with the hook's `waiting` records agreeing.
+  PLAN.md's Phase 2 / 2.8 Verify text still says `waiting` / `hook` and "heuristic or unlinked"; the
+  planner may want to align it.
+- **Open decision for Phase 3 planning: background hook evidence fails in clean-environment `claude -p`.**
+  On Claude Code 2.1.314 a `claude -p` started under `env -i` sent `PostToolUse` payloads with no
+  `scratchpad_dir` (12 keys), so the recorder can't derive the task output path and writes only the
+  `child: null` record. The same prompt with the desktop session's environment had the field and gave
+  `exact` / `hook`. Once the temp task file is gone such links fall to heuristic/ambiguous. Possible
+  fallback: read the "Output is being written to: <path>" text in the transcript's `tool_result` for the
+  same `tool_use_id` (needs polling; 2.1 (i) found transcript writes buffered). Not decided; one clean and
+  one inherited run is the whole sample, and the controlling env var was not isolated.
+- Sandbox state: hook config removed from `repo-a/.claude/` (directory gone); sandbox hook records stay
+  in `~/multi-link-sandbox/state/hook/` (6 files). Running `multi-link` against real `~` now lists the
+  2.8 sandbox sessions too.
 - Step 1.10 done (Codex, reviewed by Claude): `RealProcessProbe` runs `ps` with `TZ=UTC`; real data shows
   `{"busy":2,"idle":17}` for 19 live records.
 - Step 0.1 done, committed and reviewed by Codex (4 findings, all fixed).
@@ -193,6 +195,33 @@
   awaiting review, see the newest entry).
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.8: Real hand-off and waiting check in the sandbox — Claude
+- Did: Built release `multi-link`; put the `hook install --scope local` snippet (each command prefixed with
+  `MULTI_LINK_HOME=~/multi-link-sandbox/state`) in `~/multi-link-sandbox/repo-a/.claude/settings.local.json`.
+  After a marker, ran `claude -p` hand-offs tagged `Step 9.1`: fg, bg, devnull under `env -i`; bg2 (`env -i`)
+  and bg3 (inherited env) after bg's hook child came back `null`, with a temporary payload-saving hook; then an
+  `expect` session held at a permission prompt for 60 s and answered. Deleted the three background task output
+  files, ran `links --json` / `sessions --json` with the sandbox `MULTI_LINK_HOME`, removed the hook config.
+- Changed: `docs/phase2-hook.md` (new "Step 2.8 results" section), `PROGRESS.md`.
+- Verify: `find ~/.codex/sessions -newer <marker> -name 'rollout-*.jsonl' | wc -l` → `5`, one per marker.
+  Per-case compare of `session_meta.payload.id` with the hook's last non-null `child`:
+  `fg … hook_child=01a18ba2-f020-… rollout=01a18ba2… equal`; `bg3 … hook_records=2 hook_child=01a18ba5-1239-…
+  rollout=01a18ba5… equal`; bg, bg2, devnull `hook_child=null`. `links --json`: fg `exact`/`stdout`/`9.1`;
+  bg3 `exact`/`hook`/`9.1`, 0 candidates; devnull `ambiguous`/`null`/`9.1`, 2 candidates; bg `ambiguous`;
+  bg2 `heuristic` (correct child). `sessions --json` for 80f7add3 during the hold (07:11:08):
+  `{"state":"waiting","state_evidence":"session_record"}`, hook file had 2 `waiting` records
+  (`PermissionRequest`, `Notification`/`permission_prompt`); after the answer: `idle`/`session_record`; after
+  exit: `unknown`/`no_signal`. `ls ~/multi-link-sandbox/repo-a/.claude/settings.local.json` → No such file.
+- Review: Codex (read-only, `review-2.8.txt` in the session scratchpad), 2 findings, both accepted and fixed:
+  the verdict now says "qualified" (devnull `ambiguous`, waiting via `session_record`, both against PLAN.md's
+  wording), and bg's missing `scratchpad_dir` is marked an inference (only bg2's key list was observed).
+  Codex confirmed ids, counts, times and link values match the evidence and the section holds no conversation
+  content.
+- Gotchas: clean-env `claude -p` (2.1.314) omits `scratchpad_dir` → no hook child for background hand-offs
+  (open decision in Current state). `rm "$VAR/…"` is blocked by a safety check; use literal paths. The
+  `touch` in the perm session leaves no hook record (only Codex hand-offs are recorded). The
+  links JSON field is `match` (there is no `confidence`).
 
 ### 2026-10-30 — Step 2.7: CLI `hook record | install | uninstall` — Codex
 - Did: Added CLI-only I/O wiring to `multi-link-hook`. `hook record` enters before clap parsing, installs

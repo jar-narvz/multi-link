@@ -169,3 +169,111 @@ second record likely, but not guaranteed, in `-p`.
 
 Commands and their output are in the PROGRESS.md entry for Step 2.1. Because Step 2.2 runs in
 parallel, the coordinator adds that entry. `git status --short` then also lists 2.2's files.
+
+## Step 2.8 results (Phase 2 Verify)
+
+Run 2026-10-30 07:07–07:12 UTC in `~/multi-link-sandbox/repo-a`, Claude Code 2.1.314, codex-cli 0.164.0,
+release `multi-link` built from commit `ecf403b`. The `hook install --scope local` snippet went into
+`repo-a/.claude/settings.local.json` with each `command` prefixed by
+`MULTI_LINK_HOME=<sandbox>/state` (the real `~/.multi-link/` and `~/.claude/settings.json` were not
+touched). That file was removed afterwards (`ls …/settings.local.json` fails). Raw evidence (case → id
+list, hook records, `links.json`, `sessions-*.json`, the `expect` log and script, and two captured raw payloads: bg3's background call and the perm
+session's `touch`) is in the git-ignored `fixtures/raw/hook/step-2.8/`. Sandbox prompts were placeholders tagged
+`Step 9.1` with a unique marker each. This section names fields, ids (shortened) and counts only.
+
+Cases (`claude -p --model claude-haiku-5-5 --session-id <uuid> --allowedTools "Bash(codex exec:*)"`,
+prompt first):
+
+| Case | Environment | What ran |
+| --- | --- | --- |
+| fg | clean (`env -i HOME PATH USER LOGNAME SHELL TERM LANG`) | foreground `codex exec` |
+| bg | clean | `codex exec` with `run_in_background`, waited for it |
+| devnull | clean | `codex exec … > /dev/null 2>&1` |
+| bg2 | clean | same as bg, plus a second throwaway `PostToolUse` hook that saved the raw payload |
+| bg3 | inherited (this Claude desktop session's environment, as Step 2.1's `-p` runs had) | same as bg2 |
+| perm (interactive, `expect`) | clean, `--permission-mode default` | non-allowed `touch`, prompt held 60 s, then answered Yes |
+
+bg2 and bg3 were added after bg's hook record came back with no child (see the limitation below). The
+payload-saving hook stayed in place for bg2, bg3 and perm.
+
+### Child id: hook record vs `~/.codex/sessions`
+
+`find ~/.codex/sessions -newer <marker> -name 'rollout-*.jsonl'` gave 5 rollouts, one per Codex
+hand-off. Each marker string was found in exactly 1 of them. The rollout's `session_meta.payload.id` was
+compared with the last non-null `child` in that session's hook file:
+
+| Case | Hook records | Hook `child` / `child_evidence` | Rollout id | Compare |
+| --- | --- | --- | --- | --- |
+| fg | 1 | `01a18ba2…` / `stdout` | `01a18ba2…` | equal |
+| bg3 | 2 (handoff with `child: null` at 07:10:13.492, then the child at 07:10:13.747) | `01a18ba5…` / `task_output` | `01a18ba5…` | equal |
+| bg | 1 | `null` / `null` | `01a18ba3-2fb8…` | no hook child |
+| bg2 | 1 | `null` / `null` | `01a18ba4…` | no hook child |
+| devnull | 1 | `null` / `null` | `01a18ba3-6ba4…` | no hook child (expected) |
+
+bg3's second record came 255 ms after the first, confirming 2.5's write-then-append design in `-p`.
+
+### `multi-link links --json` on real data
+
+Run with the sandbox `MULTI_LINK_HOME` and no `--root`, after the three background task output files
+(bg, bg2, bg3; sandbox temp files under `<tmp>/claude-<uid>/…/tasks/`) were deleted, so only the hook
+could make a background link exact:
+
+| Case | `match` | `evidence` | `step` | `child` | `candidates` |
+| --- | --- | --- | --- | --- | --- |
+| fg | `exact` | `stdout` | `9.1` | `01a18ba2…` | 0 |
+| bg3 | `exact` | `hook` | `9.1` | `01a18ba5…` | 0 |
+| devnull | `ambiguous` | `null` | `9.1` | `null` | 2 (devnull's own rollout at 489 ms, bg2's at 52.6 s) |
+| bg | `ambiguous` | `null` | `9.1` | `null` | 2 (bg's own at 536 ms, devnull's at 15.9 s) |
+| bg2 | `heuristic` | `null` | `9.1` | `01a18ba4…` (correct) | 1 |
+
+Exactly 1 link in the whole output has `evidence: "hook"` (bg3). No conflicts were printed on stderr.
+devnull is `ambiguous`, which is neither `exact` nor `heuristic`/`unlinked` as PLAN.md's Verify words
+it, but it meets the requirement behind it: no observable id → never `exact`, `evidence: null`.
+
+### Waiting during a held permission prompt
+
+`expect` (Step 2.1's `hold.exp`, file name changed) saw the prompt at 07:10:56.740 and answered at
+07:11:56.851.
+- **During the hold** (07:11:08): `multi-link sessions --json` showed the session `waiting` /
+  `session_record`. Its record (`~/.claude/sessions/<pid>.json`) had `status: "waiting"`,
+  `waitingFor: "permission prompt"`. The hook agreed: 2 `waiting` records, `PermissionRequest` at
+  07:10:56.723 and `Notification` (`notification_type: "permission_prompt"`) at 07:11:02.742.
+  Per H11 the record wins, so `state_evidence` is `session_record`, not `hook`. PLAN.md's
+  "`waiting` / `hook`" predates H11. The hook fallback (`waiting` / `hook` with no record) is covered by
+  Step 2.4's Hook fixture variant, not by this run: a `-p` session has no record and auto-denies the
+  prompt, so it can't be held.
+- **After the answer** (07:11:59, process still running): `idle` / `session_record` (record
+  `status: "idle"`, no `waitingFor`). After the process exited: `unknown` / `no_signal`. Neither is
+  `waiting`, even though the two hook `waiting` records remain (H8: newer transcript lines clear them).
+- The `touch` call left no hook record. The recorder only records Codex hand-offs.
+
+### Limitation found: no `scratchpad_dir` in a clean-environment `claude -p`
+
+bg2's `PostToolUse` payload lacked `scratchpad_dir`. It had 12 top-level keys
+(`cwd`, `duration_ms`, `effort`, `hook_event_name`, `permission_mode`, `prompt_id`, `session_id`,
+`tool_input`, `tool_name`, `tool_response`, `tool_use_id`, `transcript_path`). `tool_input.run_in_background`
+was `true` and `tool_response.backgroundTaskId` was present. bg3, the same prompt run with the inherited
+environment and the same Claude Code version, had 13 keys including `scratchpad_dir`. (bg2's payload
+file was deleted before bg3 ran; its key list was printed during the run and is recorded here.) Step
+2.1's payloads all had `scratchpad_dir`: its `-p` runs inherited the desktop environment, and its two
+`env -i` interactive sessions (d1f3b188, 2e930733) had it too. So the field is absent in at least
+clean-environment `-p` sessions. bg's payload was not saved: that bg lacked the field too is an inference
+(same environment and prompt as bg2, same `child: null` outcome). One clean and one inherited run is
+the whole sample, and which environment variable controls the field was not isolated.
+
+Effect: the recorder can't derive the task output path (2.1 (g)), so a background hand-off from such a
+session gets a hook record with `child: null` and no second record. The link is then exact only while
+the temp task file exists (`task_output`, source 4), and heuristic or ambiguous after it is gone. The
+transcript's `tool_result` still names the path ("Output is being written to: …", seen in bg), so a
+fallback is possible. That is a design decision for PLAN.md, not this step.
+
+### Verdict
+
+Phase 2 Verify passes, qualified on two wordings that predate the results. For one foreground (fg)
+and one background (bg3) hand-off it passes as written: ids equal, `exact` / `stdout` and `exact` /
+`hook`, both `step: "9.1"`. The no-id hand-off is `ambiguous`, not the `heuristic` / `unlinked` the
+wording names, but it meets the requirement behind it (never `exact`, `evidence: null`). The held prompt
+shows `waiting` / `session_record`, not `waiting` / `hook`: H11 made the record the primary source, and
+the hook agreed. It stops showing `waiting` after the answer. The
+limitation above means hook evidence for background hand-offs does not work in clean-environment
+`claude -p` sessions on Claude Code 2.1.314.
