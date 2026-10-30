@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 multi-link-model.workspace = true
+multi-link-hook = { path = "../hook" }
 multi-link-core = { path = "../core" }
 multi-link-plan = { path = "../plan" }
 serde.workspace = true

@@ -1,3 +1,5 @@
+mod hook;
+
 use std::{
     collections::HashSet,
     io::{self, Write},
@@ -19,6 +21,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    Hook {
+        #[command(subcommand)]
+        command: hook::HookCommand,
+    },
     Sessions(CommonArgs),
     Links(CommonArgs),
     Steps {
@@ -80,6 +86,12 @@ fn clock_now() -> Result<Timestamp, Box<dyn std::error::Error>> {
         Err(error) => -i64::try_from(error.duration().as_millis())?,
     };
     Ok(Timestamp::from_epoch_ms(milliseconds)?)
+}
+
+fn hook_conflicts(count: usize) {
+    if count > 0 {
+        eprintln!("hook_conflicts: {count}");
+    }
 }
 
 fn diagnostic<T>(label: &str, entries: &[T]) {
@@ -215,7 +227,12 @@ fn steps_text(writer: &mut impl Write, report: &StepsReport) -> io::Result<()> {
 }
 
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    let cli = match cli.command {
+        Command::Hook { command } => return hook::run(command),
+        command => Cli { command },
+    };
     let common = match &cli.command {
+        Command::Hook { .. } => unreachable!(),
         Command::Sessions(common) | Command::Links(common) | Command::Steps { common, .. } => {
             common
         }
@@ -246,8 +263,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut stdout = io::stdout().lock();
     match &cli.command {
+        Command::Hook { .. } => unreachable!(),
         Command::Sessions(_) => {
             let output = multi_link_core::sessions_report(&root, &options)?;
+            hook_conflicts(multi_link_core::links_report(&root, &options)?.hook_conflicts);
             diagnostic("bad_records", &output.bad_records);
             diagnostic("incomplete", &output.incomplete);
             diagnostic("unreadable", &output.unreadable);
@@ -259,6 +278,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Links(_) => {
             let output = multi_link_core::links_report(&root, &options)?;
+            hook_conflicts(output.hook_conflicts);
             diagnostic("bad_records", &output.bad_records);
             diagnostic("incomplete", &output.incomplete);
             diagnostic("unreadable", &output.unreadable);
@@ -294,6 +314,11 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() {
+    // Enter the fail-silent boundary before argument parsing for hook invocations.
+    if std::env::args_os().skip(1).take(2).eq(["hook", "record"]) {
+        hook::record();
+        std::process::exit(0);
+    }
     if let Err(error) = run(Cli::parse()) {
         eprintln!("multi-link: {error}");
         std::process::exit(1);

@@ -1,22 +1,22 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- **Phase 2 planned (2026-10-29, Claude, Codex critique):** Steps 2.1–2.8 in PLAN.md, decisions H1–H10 in
-  `docs/design.md` → "Phase 2 decisions (hook)". **Next: 2.1 and 2.2 in parallel** (2.1 = hook payload
-  spike in `~/multi-link-sandbox/repo-a`, Claude, docs only; 2.2 = output contract for step tags + `hook`
-  evidence, Claude). Then 2.3 (Codex) ∥ 2.4 (Claude); then 2.5 ∥ 2.6 (Codex); then 2.7; then 2.8 (real check).
-  What the next steps need:
-  - Hook facts are from the docs, not yet real data: `PostToolUse` has `tool_use_id`; `PermissionRequest`
-    exists; `async: true` hooks can't decide and have no enforced timeout; `-p` kills unfinished async
-    hooks at teardown; since Claude Code 2.1.302 `-p` starts in Manual permission mode, so sandbox
-    hand-offs need `--allowedTools` for codex. Background `tool_response` shape and when Notification
-    fires are undocumented: that is what 2.1 answers.
-  - tmux is not installed; `/usr/bin/expect` is (2.1 (j) tries it for an interactive permission prompt).
-  - After 2.2 commits, Phase 1 links tests are red on purpose until 2.3 lands (answer key first).
-  - 2.4's expected files go in `fixtures/expected/hook/` so the model round-trip test (non-recursive)
-    doesn't break 2.3 running in parallel.
-  - Stop and ask if 2.1 finds no way to join a hook record to a transcript call, or hooks run only from
-    `~/.claude/` settings.
+- **Step 2.7 done (2026-10-30, Codex, reviewed by Claude, committed). Next: Step 2.8 (Claude)**, the real
+  sandbox check that closes Phase 2. What 2.8 needs:
+  - Build: `cargo build --release` → `/Users/jarednarvaez/multi-link/target/release/multi-link`.
+  - Get the snippet: `cd ~/multi-link-sandbox/repo-a && MULTI_LINK_HOME=<scratch> <abs bin> hook install
+    --scope local`. JSON alone on stdout (pipe to `jq`), the target file on stderr
+    (`~/multi-link-sandbox/repo-a/.claude/settings.local.json`). The command embeds `current_exe()`, so
+    run the release binary by absolute path. `MULTI_LINK_HOME` is NOT baked into the snippet: prefix it
+    in each `command` by hand, e.g. `MULTI_LINK_HOME=<scratch> '<abs bin>' hook record`.
+  - Snippet shape (each `hooks` entry `{"type":"command","command":"'<abs bin>' hook record","async":true,
+    "timeout":60}`): `PostToolUse` matcher `Bash`; `PostToolUseFailure` matcher `Bash`;
+    `PermissionRequest` no matcher; `Notification` matcher `permission_prompt|elicitation_dialog`.
+  - Records land in `<scratch>/hook/<session_id>.jsonl`. Read them with `multi-link links --json` /
+    `sessions --json` run with the same `MULTI_LINK_HOME` (no `--root`, so real `~/.claude` / `~/.codex`).
+    `hook_conflicts: N` appears on stderr only when N > 0.
+  - Release builds ignore `MULTI_LINK_HOOK_TEST`; the watchdog is a hard 30 s, the background poll 25 s.
+  - Remove the sandbox `settings.local.json` afterwards (Step 2.8's last line).
 - Step 1.10 done (Codex, reviewed by Claude): `RealProcessProbe` runs `ps` with `TZ=UTC`; real data shows
   `{"busy":2,"idle":17}` for 19 live records.
 - Step 0.1 done, committed and reviewed by Codex (4 findings, all fixed).
@@ -189,9 +189,97 @@
   hook waiting only without a record; 2.5: write the child-null record first, append the child.
 - Steps 2.5 + 2.6 done: hook crate has record / write / record_and_write (writes first, polls ≤ 25 s); core reads
   hook records (`LinksOutput.hook_conflicts`, `Options.state_dir`). 2.7: call record_and_write with a real clock,
-  build HookEnv from env vars, register PostToolUseFailure, print hook_conflicts on stderr.
+  build HookEnv from env vars, register PostToolUseFailure, print hook_conflicts on stderr (implemented;
+  awaiting review, see the newest entry).
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.7: CLI `hook record | install | uninstall` — Codex
+- Did: Added CLI-only I/O wiring to `multi-link-hook`. `hook record` enters before clap parsing, installs
+  the no-op panic hook and starts the watchdog before stdin, retains at most 1 MiB and drains excess,
+  rejects oversized input, builds HookEnv from HOME / MULTI_LINK_HOME, and calls record_and_write inside
+  catch_unwind with SystemTime / Instant / thread::sleep. Missing HOME, input/write errors and panics
+  return silently with exit 0. Debug-only panic/deadline injection is ignored by release builds.
+  Install/uninstall print only JSON on stdout and target / cleanup instructions on stderr, with all four
+  events, shell-quoted current_exe, async true and timeout 60; user/local scopes resolve the required
+  targets without writing settings. Both reports print nonzero hook_conflicts on stderr.
+- Changed: `crates/cli/Cargo.toml`, `Cargo.lock`, `crates/cli/src/{main.rs,hook.rs}`,
+  `crates/cli/tests/cli.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0. Actual result lines below,
+  labeled by target (full local output: `/tmp/multi-link-2.7-workspace.log`):
+  - unittests src/main.rs: `test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/cli.rs: `test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s`
+  - unittests src/lib.rs: `test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/fixtures.rs: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s`
+  - tests/invocation.rs: `test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s`
+  - unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/fixtures.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s`
+  - unittests src/lib.rs: `test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/hook.rs: `test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s`
+  - tests/links.rs: `test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s`
+  - tests/repo_probe.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s`
+  - tests/sessions.rs: `test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s`
+  - unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/hook.rs: `test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s`
+  - unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/model.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - tests/fixtures.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_claude: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_codex: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_core: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_hook: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_model: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_plan: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  CLI integration tests cover the synthetic foreground/resume/plugin/failure/waiting/background
+  payloads, exact written metadata and wall-time bounds, custom state, malformed/oversized input,
+  unwritable state, missing HOME, silent panic, open stdin with 500 ms deadline and 2 s upper bound,
+  both setup scopes/defaults, unchanged temporary-home files/directories, executable path quoting,
+  stderr-only conflicts and Phase 1 answer keys.
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `cargo build --release -p multi-link` → exit 0:
+  ```text
+    Finished `release` profile [optimized] target(s) in 2.75s
+  ```
+- Verify: `/usr/bin/time -p sh -c 'for i in $(seq 50); do target/release/multi-link hook record < /tmp/multi-link-2.7-non-codex.json; done'`
+  (synthetic PostToolUse Bash payload with command `echo synthetic`) → exit 0; actual timing:
+  ```text
+real 0.31
+user 0.06
+sys 0.05
+  ```
+- Verify: Each Phase 1 command from `docs/output-schema.md`, using `target/release/multi-link`, piped
+  through `jq -S .` and compared with `diff` to `jq -S . fixtures/expected/<command>.json`, followed by
+  `&& echo same` → exit 0; actual output in sessions / links / steps order:
+  ```text
+same
+same
+same
+  ```
+- Verify: Release subprocesses with each test env value, stdin held open for 50 ms before sending a
+  PermissionRequest, stayed alive and then wrote exactly one waiting record, exit 0, empty stdout/stderr:
+  ```text
+release ignores panic: ok
+release ignores deadline_ms=1: ok
+  ```
+- Review: Claude, 0 rounds. No code path opens a file for writing (install/uninstall only print; temp-HOME
+  snapshot test); `hook record` enters before clap, panic hook + catch_unwind + watchdog first, no stdout,
+  exit 0; snippet = 2.1's events/matchers, all `async: true`; CLI holds no parsing/linking logic. Claude
+  re-ran: workspace tests all ok, clippy clean, Phase 1 diffs `same` ×3, speed `real 0m0.125s` (bash
+  `time`, 50 non-Codex payloads), release watchdog with stdin held open by a FIFO → exit 0 after 30 s,
+  0 bytes output; Hook variant `links` / `sessions` → stderr `hook_conflicts: 1`. Nits not fixed:
+  `sessions` runs `links_report` just for the count (double parse; a links error fails `sessions`);
+  input over 1 MiB is dropped whole rather than truncated (a truncated payload couldn't parse anyway);
+  `unreachable!()` Hook arms in `run`.
+- Gotchas: `hook_conflicts` exists only on LinksOutput, so `sessions` calls links_report in addition
+  to sessions_report to obtain it within this step's file list (extra reads and linker I/O).
+  Setup output is directly parseable JSON on stdout; instructions are exclusively on stderr.
+  Oversized stdin is drained without retaining excess and produces no record. Watchdog thread spawn
+  failure returns before reading stdin. The debug panic/deadline controls are for tests only.
 
 ### 2026-10-30 — Step 2.6: Core reads hook records: hook evidence and waiting — Codex
 - Did: New `crates/core/src/hook.rs`: fail-soft reader for `<state>/hook/<uuid>.jsonl` (fixture mode

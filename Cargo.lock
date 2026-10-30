@@ -185,6 +185,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "multi-link-core",
+ "multi-link-hook",
  "multi-link-model",
  "multi-link-plan",
  "serde",
