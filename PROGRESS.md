@@ -3,7 +3,10 @@
 ## Current state
 **Resume here (2026-10-30).** Phases 0–3 / **Release 1 are done**, including Step **3.8**.
 Whole-phase Verify passes with documented limitations; Step 3.8 reviewed by Claude and committed locally (not pushed).
-Next is the ordered, uncommitted backlog in PLAN.md; the owner decides what to take on.
+Next: **Phase 4 (home screen cleanup, Release 1.1)**, planned 2026-10-30 after the owner found the real
+home screen far noisier than mockup screen 6. Start **4.1** and **4.2** in parallel (one fresh step session
+each; neither commits, the coordinator commits each and runs the workspace gate), then 4.3 → 4.6 in order.
+4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
 stub/missing-program child handling and terminal restoration. The child checks used a synthetic
 record in a scratch HOME because real `~` had 0 finished sessions. The crossterm 0.29 lost-key

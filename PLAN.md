@@ -695,10 +695,129 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 - Files: `README.md`, `docs/phase3-check.md`
 - Verify: the timings and checks above pasted in `docs/phase3-check.md`; whole-phase Verify passes.
 
+### Phase 4 — Home screen cleanup (Release 1.1)
+Need: from the home screen I can tell in a few seconds which repo needs me and what is running, the way
+mockup screen 6 promises. The real screen buries that (owner, 2026-10-30, after Release 1).
+- **Measured (2026-10-30, real `~`, release build, `links --since 24h` / `sessions --since 24h`):**
+  multi-link has 69 Codex sessions and 1 is linked; its 43 Codex calls are 42 `unlinked` with 0 candidates
+  and 1 `heuristic`, although a Codex rollout in the same cwd starts 1–5 s after most of them. Cause: our own
+  command passes `-C "$PWD"`, and `recognise` treats any `-C` as a directory move, so `link::resolve` skips
+  the heuristic. All 143 Codex sessions are `unknown` (`turns_complete`). Unparented Codex rows never merge,
+  so route-impact shows ~30 one-line Codex rows; idle repos render in full; the header has no counts.
+- **U1 `-C` that names the current directory is not a move.** `-C` / `--cd` whose value is `.`, or `$PWD` /
+  `${PWD}` written unquoted or inside double quotes, leaves `dir_moved` false. Single-quoted or
+  backslash-escaped `$PWD` is literal text and still counts as moved, as does any other value. The
+  tokeniser keeps, per word, whether a `$` was expandable. Why: the grammar does no expansion, but these
+  forms always mean the shell's cwd, which is the call's checkout. A literal absolute path equal to the cwd
+  is out of scope (the recogniser never sees the cwd).
+- **U2 `codex ×N`.** Quiet top-level Codex rows (unparented; same quiet states and threshold of 4 as
+  `claude ×N`) merge into one MergedRow; MergedRow gains `harness`. Never merges `waiting` / `busy` /
+  `stale`, and never mixes harnesses. Why: same rule as Claude rows; a finished unlinked run is history.
+- **U3 Quiet repos collapse.** A group whose tier is `other` and that has no `stale` session renders as one
+  line (repo, counts, latest step and Verify) until `enter` expands it. TUI state only; the overview report
+  is unchanged. Why: mockup screen 6 shrinks idle repos; `stale` can be unfinished work, so it stays visible.
+- **U4 Header summary.** The top line counts waiting, busy and stale sessions, FR17 warnings, repos and
+  sessions from the overview, and hand-offs as the listed links in `Refresh.links` (the overview keeps only
+  each group's latest). Why: answers "does anything need me" before scrolling.
+- **U5 Mini time bars.** Each session lane gets its session span (`started_at`..`last_activity`, idle
+  gaps included, so a bar means "existed", not "running") on one axis, `TimeWindow::default_for(report)`,
+  drawn in a fixed bar column shared by every lane (none below 60 columns). Merged rows get no bar (their
+  members' spans may be disjoint). Why: the mockup's main visual; state glyphs still say what is running.
+- Non-goals: Codex waiting detection; changing the default `--since 2h`; timeline changes; colour themes.
+- Verify (whole phase, 4.6 runs it): `cargo test --workspace` and clippy clean; on real `~`, the
+  multi-link link counts re-run and pasted next to the measured ones (no predicted numbers); pty captures
+  of the home screen; the owner looks at the real screen and confirms the need is met (a stop-and-ask).
+
+### Step 4.1 — Linker: `-C .` / `-C "$PWD"` is not a directory move (Codex)
+- Depends on: Phase 3. Parallel with: 4.2 (claude crate only; the coordinator commits each and runs the
+  workspace gate once both are in).
+- `crates/claude/src/invocation.rs`: per U1, the `-C` / `-Cvalue` / `--cd value` / `--cd=value` forms take
+  their value; the tokeniser records per word whether `$` was expandable. A preceding `cd` segment still
+  moves.
+- Files: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`
+- Verify (crate-local while 4.2 runs): `cargo test -p multi-link-claude` → all `ok`, with table cases:
+  `codex exec -C "$PWD" …`, `-C $PWD`, `-C .`, `-C${PWD}`, `--cd=$PWD`, `--cd .` → not moved;
+  `-C '$PWD'`, `-C \$PWD`, `-C /tmp/x`, `-C "$HOME/x"`, `-C "$PWD/x"`, `cd x && codex exec -C .` → moved;
+  `-C` after `--` ignored; `cargo clippy -p multi-link-claude -- -D warnings` clean. Coordinator gate:
+  `cargo test --workspace` → all `ok` with no fixture answer key changed (if one changes, stop and report).
+  Claude then re-runs `links --since 24h --json` on real `~` and pastes the multi-link unlinked /
+  heuristic / ambiguous counts next to the measured 42 / 1 / 0.
+
+### Step 4.2 — Contract: `codex ×N`, collapsed repos, header (Claude)
+- Depends on: Phase 3. Parallel with: 4.1.
+- Write U1–U5 into `docs/design.md` ("Phase 4 decisions"). `docs/output-schema.md`: MergedRow gains
+  `harness`; the merge rule covers quiet unparented Codex rows. New isolated fixture root
+  `fixtures/sessions-phase4/` (existing `fixtures/sessions` untouched, so parser counts and CLI tests keep
+  their numbers): one repo with 4 quiet unparented Codex rows (merge), one with 3 (no merge) and a busy
+  Codex row between quiet ones, one with both Claude and Codex quiet rows (two merged rows), one idle repo
+  and one stale-only repo (not collapsed). Hand-written key `fixtures/expected/phase4/overview.json`.
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase4/**`,
+  `fixtures/expected/phase4/**`
+- Verify: the new key is valid JSON and every row in it traces to a fixture file (Review line lists them);
+  `cargo test --workspace` → all `ok` (nothing reads the new files yet).
+
+### Step 4.3 — Core: `codex ×N` merge (Codex)
+- Depends on: 4.1, 4.2.
+- `core::overview` merges quiet unparented Codex rows per the 4.2 contract; MergedRow `harness` in model,
+  added to the existing overview keys' merged rows (`"harness": "claude"`). The App identifies a merged
+  row by (repo, harness), so a refresh keeps `codex ×N` selected rather than jumping to `claude ×N`.
+- Files: `crates/core/src/overview.rs`, `crates/core/tests/**`, `crates/model/src/**`,
+  `crates/model/tests/**`, `crates/tui/src/{home,app}.rs`, `fixtures/expected/overview.json`,
+  `fixtures/expected/hook/overview.json`, `fixtures/expected/tui/home*.txt` (only if the label changes)
+- Verify: `cargo test --workspace` → all `ok`; a core test that `overview` on `fixtures/sessions-phase4`
+  matches `fixtures/expected/phase4/overview.json`; unit tests for 3 vs 4 quiet Codex rows, a busy Codex
+  row between quiet ones, and two merged rows in one group; an App test that a refresh keeps `codex ×N`
+  selected; `cargo clippy --workspace -- -D warnings` clean.
+
+### Step 4.4 — TUI: header summary and collapsed quiet repos (Codex)
+- Depends on: 4.3.
+- `render_home`: U4 header line; U3 one-line quiet groups. `App`: per-repo expanded set; `enter` on a
+  collapsed repo expands it, `esc` collapses; selection never lands on hidden rows; expansion survives
+  refresh by repo path.
+- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/home*.txt`
+- Verify: `cargo test --workspace` → all `ok`, a new home golden rendered from the phase4 key, all goldens
+  reviewed by Claude against the overview keys (Review line names each checked row); App tests for
+  expand/collapse, selection skipping collapsed rows, a stale-only group staying expanded and expansion
+  surviving a refresh; clippy clean.
+
+### Step 4.5 — TUI: mini time bars on home lanes (Codex)
+- Depends on: 4.4.
+- Per U5: fixed bar column, shared axis labels on the header line, no bar on merged rows, none below 60
+  columns.
+- Files: `crates/tui/src/home.rs`, `crates/tui/tests/**`, `fixtures/expected/tui/home*.txt`
+- Verify: `cargo test -p multi-link-tui` → `ok`, goldens reviewed as in 4.4, tests for a span clipped by the
+  window, a zero-length span, a merged row (no bar), bars starting in the same column across lanes with
+  different label lengths, and a width under 60; clippy clean.
+
+### Step 4.6 — Real check and README (Claude)
+- Depends on: 4.5.
+- On real `~`: link counts re-run; pty captures (repo names only) of `tui` with the default window and with
+  `--since all`, each run back to back with a release build of `9b1b374` (scratch copy, not this checkout)
+  at the same pinned `--now`, so before / after differ only by what changed between the two runs. Then stop
+  and ask the owner to look at the real screen and confirm the need. README: update what the home screen
+  shows; numbers only from these outputs.
+- Files: `README.md`, `docs/phase4-check.md`
+- Verify: outputs pasted in `docs/phase4-check.md`; whole-phase Verify passes; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-30 — Phase 4 plan (Claude, Codex critique, read-only)
+Codex (`codex exec -s read-only`) checked Steps 4.1–4.6 against the code. Verdict: revise before implementing.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: tokeniser drops quoting, so `'$PWD'` / `\$PWD` (literal) look like `"$PWD"` | Accepted: U1 keeps per-word expandability; negative cases added to 4.1 |
+| 2 | P2: tier `other` includes stale-only groups (unfinished work) | Accepted: U3 collapses only groups with no `stale` session; test in 4.4 |
+| 3 | P2: 4.2's "fails only on overview keys" is wrong (model round-trip, snapshots, counts) | Accepted: 4.2 adds an isolated `fixtures/sessions-phase4` root; existing keys change only in 4.3 |
+| 4 | P2: new fixtures break hard-coded counts outside 4.3's files | Accepted: isolated fixture root (as #3); 4.3 Files list widened |
+| 5 | P2: 4.1 and 4.2 both run the workspace gate in parallel | Accepted: 4.1 verifies crate-local; coordinator runs the workspace gate |
+| 6 | P2: App restores a merged selection as (repo, None), so two merged rows swap on refresh | Accepted: 4.3 owns `app.rs`, identity is (repo, harness), with a test |
+| 7 | P2: overview keeps only the latest hand-off per group, so it can't give a hand-off count | Accepted: U4 counts `Refresh.links` |
+| 8 | P2: merged-row bars undefined; "remaining width" breaks the shared axis | Accepted: no bar on merged rows; fixed bar column; test in 4.5 |
+| 9 | P3: cutting 4.5 depended on 4.6, which depended on 4.5 | Accepted by dropping the cut: 4.5 is in scope (bars are what the owner missed most) |
+| 10 | P3: two live scans differ; captures don't prove the need | Partly accepted: pinned `--now`, back-to-back runs and an owner confirmation stop. Rejected a frozen scrubbed copy of real `~` (hundreds of MB of private transcripts; fixtures already give the controlled check) |
 
 ### 2026-10-30 — Step 3.3 review (Claude, adversarial Claude review, Codex-off mode)
 A fresh subagent saw only the diff, Step 3.3 and the schema's Session + overview sections. It re-ran Verify
