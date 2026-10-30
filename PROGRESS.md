@@ -70,8 +70,40 @@
   Claude prepends it and commits with `git add <paths>` then `git commit -m "…" -- <paths>` (PLAN.md Phase 1 rules).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
+- Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
+  `Discovery { rollouts, skipped, unreadable }`; `rollouts` sorted by root-relative path, `skipped` holds
+  `invalid_json` / `empty_line` / `unknown_type`. `Rollout { id, transcript, cwd, branch, started_at,
+  last_activity, turns }`, `Turn { turn_id, started_at, completed_at: Option }` in `task_started` order.
+  For 1.7: `Rollout::last_turn_complete()` → `None` (no `task_started` → `no_signal`), `Some(false)` (open
+  turn → busy/stale by `last_activity`), `Some(true)` (`turns_complete`). Build `Session` yourself:
+  `repo` = `cwd` in fixture mode, `subagents: []`, one segment. `unreadable` (file read errors) is not a
+  schema `skipped` reason; 1.7 decides whether to surface it. Known gaps: a directory traversal error
+  (e.g. permission denied on a subfolder) returns `Err` for the whole discovery; a `task_started` without a
+  parseable top-level `timestamp` is dropped, so the "latest turn" falls back to the one before it.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.3: Codex rollouts — Codex
+- Did: Sorted recursive discovery of `.codex/sessions/**/rollout-*.jsonl`, first-`session_meta` fields
+  (replayed parent metadata ignored), `task_started`/`task_complete` pairing by `turn_id`, latest-turn
+  completion helper, skipped lines incl. `unknown_type`. All 9 fixture sessions match.
+- Changed: `crates/codex/src/lib.rs`, `crates/codex/tests/fixtures.rs`
+- Verify: `cargo test -p multi-link-codex` →
+  ```text
+  test fixture_sessions_turns_and_skips_match_answer_key ... ok
+  (+ 8 unit tests: missing dir, open last turn, earlier unmatched + completed last turn, unknown_type,
+   blank/invalid/partial tail, first metadata wins, unusable metadata, recursive sorted discovery)
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  ```
+  `cargo clippy -p multi-link-codex --all-targets` → no warnings.
+- Review: Claude, re-ran Verify (same 9 passed, clippy clean). Fields match `docs/phase0.md`
+  (`session_meta.payload.{id,cwd,git.branch,timestamp}`, `event_msg.payload.{type,turn_id}`); fail-soft
+  on unknown records (skip + count, later lines read); no network; only the step's files changed.
+  2 low findings accepted, not fixed (recorded in Current state): `crates/codex/src/lib.rs:85` a
+  traversal error aborts the whole discovery; `crates/codex/src/lib.rs:177` a `task_started` without a
+  timestamp is dropped.
+- Gotchas: File read failures go to `Discovery.unreadable` and scanning continues; symlinks are not
+  followed; turn times are top-level record timestamps, not `payload.started_at`.
 
 ### 2026-10-29 — Step 1.1: Workspace, output model, JSONL reader — Codex
 - Did: Created the six-package workspace with shared Phase 1 dependencies; internal dependencies are
