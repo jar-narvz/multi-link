@@ -1,0 +1,12 @@
+[package]
+name = "multi-link-plan"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+multi-link-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

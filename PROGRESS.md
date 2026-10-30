@@ -45,15 +45,78 @@
   Step ids may carry one letter suffix (`0.2a`). Schema changes this step (`docs/output-schema.md`): id
   suffix, Codex "latest turn governs" + `no_signal` row, no heuristic when a `cd` / `-C` moves the launch.
   Expected files unchanged (no fixture hits these cases).
-- **Next: Step 1.1** (workspace, output model, JSONL reader) — runs alone; it creates every crate skeleton
-  and `Cargo.lock`. After it, **1.2, 1.3, 1.4, 1.5 can run in parallel** (separate crates: claude, codex,
-  plan, core). Then 1.6 (after 1.2; parallel with 1.3–1.5), 1.7 (after 1.2, 1.3, 1.5; not with 1.6),
-  1.8 (after 1.6, 1.7), 1.9 (after 1.4, 1.7, 1.8). Parallel steps: Codex doesn't edit PROGRESS.md (it
-  returns the entry text); Claude prepends it and commits with `git commit -- <paths>` (PLAN.md Phase 1 rules).
+- Step 1.1 done (Codex, reviewed by Claude, 1 round): Cargo workspace `crates/*`, edition 2024.
+  For 1.2–1.5 (run in parallel, one crate each; **no Cargo.toml / Cargo.lock edits**):
+  - Packages: `multi-link-model`, `-claude`, `-codex`, `-plan`, `-core`; CLI package and binary `multi-link`.
+    Test one crate with `cargo test -p <package>` (Rust PATH from AGENTS.md first).
+  - Deps already declared (`[workspace.dependencies]`): claude/codex/core: model, serde, serde_json, time;
+    plan: model, serde, serde_json; cli: model, clap, serde_json; tempfile as dev-dep everywhere.
+    core does not depend on claude/codex/plan (1.7 adds them); cli gets core/plan in 1.9.
+  - `multi_link_model` exports the schema types (`Session`, `Segment`, `Skipped`, `Link`, `Candidate`,
+    `SessionsReport`, `LinksReport`, `StepsReport`, `RepoSteps`, `Step`, `Entry`, `Verify`) and enums
+    (`Harness`, `State`, `StateEvidence`, `StepSource`, `SkipReason`, `InvocationForm`, `Match`,
+    `LinkEvidence`, `Convention`, `VerifyResult`, `VerifySource`); all derive Serialize + Deserialize, so
+    tests can load `fixtures/expected/*.json` into them. `Link.match` is `r#match` in Rust.
+  - `Timestamp::parse(rfc3339)` / `Timestamp::from_epoch_ms(i64)`; truncated to whole ms at construction,
+    prints `YYYY-MM-DDTHH:MM:SS.mmmZ`; Ord/Eq match the printed form.
+  - `jsonl::JsonlReader::from_path(path, display_path)` (or `::new(BufRead, display_path)`) iterates
+    `io::Result<Result<(line_no, Value), Skipped>>`; 1-based lines, CRLF stripped, blank/whitespace →
+    `empty_line`, bad JSON → `invalid_json`; an unterminated last line is held in `pending()`, never
+    yielded. `display_path` is copied into `Skipped.file` (pass the root-relative path). `unknown_type`
+    is the parser's job.
+- **Next: 1.2, 1.3, 1.4, 1.5 can run in parallel** (separate crates: claude, codex, plan, core). Then 1.6
+  (after 1.2; parallel with 1.3–1.5), 1.7 (after 1.2, 1.3, 1.5; not with 1.6), 1.8 (after 1.6, 1.7),
+  1.9 (after 1.4, 1.7, 1.8). Parallel steps: Codex doesn't edit PROGRESS.md (it returns the entry text);
+  Claude prepends it and commits with `git add <paths>` then `git commit -m "…" -- <paths>` (PLAN.md Phase 1 rules).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.1: Workspace, output model, JSONL reader — Codex
+- Did: Created the six-package workspace with shared Phase 1 dependencies; internal dependencies are
+  model-only. Added every schema object and enum (Serialize + Deserialize), UTC Timestamp with
+  millisecond precision, and a path/BufRead JSONL iterator with recoverable skips and a pending byte
+  remainder. Added CLI subcommands/flags with the temporary exit-2 behavior. Nine model tests cover
+  the schema, all four expected report round trips, timestamps, malformed fixture continuation,
+  CRLF/whitespace, invalid UTF-8, pending valid/incomplete JSON, and I/O errors. Fixed Claude review
+  round 1: truncate timestamps at construction, assert same-millisecond equality, and compact this log.
+- Changed: `Cargo.toml`, `Cargo.lock`, `crates/model/{Cargo.toml,src/lib.rs,src/time.rs,src/jsonl.rs,tests/model.rs}`,
+  `crates/{claude,codex,plan,core}/{Cargo.toml,src/lib.rs}`, `crates/cli/{Cargo.toml,src/main.rs}`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md; review-fix reruns:
+  `cargo fmt --all -- --check` → no output, exit 0;
+  `cargo test --workspace` → exit 0, decisive output by package/target:
+  - multi-link (unit): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-claude (unit and doc, each): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-codex (unit and doc, each): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-core (unit and doc, each): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-model (unit and doc, each): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-model (tests/model.rs): `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - multi-link-plan (unit and doc, each): `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+- Verify: `cargo build --workspace --all-targets --locked` → ``Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s``, exit 0.
+- Verify: `cargo run -q -p multi-link -- --help` → exit 0; Commands list:
+  ```text
+  Commands:
+    sessions
+    links
+    steps
+    help      Print this message or the help of the given subcommand(s)
+  ```
+- Verify: `cargo run -q -p multi-link -- sessions --root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json` → `not implemented`, exit 2;
+  `cargo run -q -p multi-link -- links --root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json` → `not implemented`, exit 2;
+  `cargo run -q -p multi-link -- steps --root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json --repo repos/repo-a --repo repos/repo-b` → `not implemented`, exit 2.
+- Review: Claude, 1 round. #1 `crates/model/src/time.rs:10` Timestamp kept sub-ms precision for Eq/Ord while
+  printing ms, breaking the schema's (started_at, id) order → fixed (truncate at construction). #2 Verify
+  paste was ~200 lines → compacted. Checked: all 13 Session keys, enum strings vs schema, round trip of all
+  4 expected files, no `skip_serializing_if`, no network code. Claude re-ran fmt, `cargo test -p` for all
+  6 packages, `cargo test --workspace` (12 ok results, 9 model tests), `--locked` build, `--help`, stub
+  exit 2: matches the paste. All fixture `.jsonl` files end in a newline, so pending-line buffering drops nothing.
+- Gotchas: The malformed fixture has six lines, not seven; the initial test assertion was corrected
+  after inspecting the fixture (initial test run: 8 passed, 1 failed; review-fix rerun: 9 passed).
+  Even complete valid JSON without a newline remains pending. Pending bytes preserve partial UTF-8.
+  Timestamp construction truncates to whole milliseconds, including before the Unix epoch, so
+  Eq/Ord/Hash match serialized precision. Parser, state-machine and linker logic remain for later
+  steps. Options serialize as null without omission.
 
 ### 2026-10-29 — Step 0.6: Revise design from Phase 0 — Claude
 - Did: Merged `docs/phase0-deps.md` into `docs/phase0.md` as (c) and (d) (content kept; added a results
