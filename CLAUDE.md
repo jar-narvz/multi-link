@@ -26,6 +26,9 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
+**Codex-off mode is OFF (owner, 2026-10-30, from Step 3.7 on): use the normal Codex loop above.**
+The rules below are kept for the next time the owner turns it on; they do not apply now.
+
 **Codex-off mode (owner, 2026-10-30) — TEMPORARY, not a permanent change.** It applies only while the
 owner's Codex usage is used up. When the owner says usage is back, return to the normal Codex loop above
 (Codex implements, Codex critiques plans) from the next step on. Steps finished in this mode stay as they are.

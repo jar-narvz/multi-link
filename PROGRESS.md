@@ -4,8 +4,8 @@
 **Resume here (paused 2026-10-30 by the owner after Step 3.6).** Phases 0–2 and Steps **3.1–3.6** + **3.6a** done
 and committed locally (not pushed). Next: **Step 3.7** (`multi-link tui`: refresh loop, keys, bell, open with
 terminal suspend/restore), then **3.8** (real check on `~`, README; closes Release 1). Start 3.7 with one fresh
-step session (CLAUDE.md "Autonomous mode"). Codex-off mode is still on (temporary): if the owner says Codex usage
-is back, 3.7 goes to Codex instead of a Claude implementer subagent.
+step session (CLAUDE.md "Autonomous mode"). **Codex-off mode is off** (owner, 2026-10-30): 3.7 goes to Codex
+(`codex exec`), with Claude as planner and reviewer.
 
 - **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
 - **What 3.7 needs from 3.6:** `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)` and
