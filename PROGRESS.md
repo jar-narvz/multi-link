@@ -104,8 +104,31 @@
   For 1.9: `links --json` = `links_report(root, &Options)` with the same Options as `sessions`
   (`--root` → `RepoMode::Fixture` + `FixtureProcessProbe`); print `bad_records`/`incomplete`/`unreadable`
   to stderr like `sessions`.
-- **Next: 1.9** (after 1.4, 1.7, 1.8). Open follow-up for 1.9: 4 clippy `collapsible_if` warnings in
-  `crates/claude/src/invocation.rs` (Step 1.6 code).
+- Step 1.9 done (Codex, reviewed by Claude, 1 fix round): `multi-link sessions | links | steps` with
+  `--root/--now/--since/--json/--repo`; the CLI only builds `Options` and prints the core/plan reports
+  (aligned text tables or JSON). Exit 0 ok, 1 report I/O error, 2 bad flags; diagnostics are counts on stderr.
+  Clippy `collapsible_if` follow-up from 1.6 fixed (separate commit). `cargo clippy --workspace
+  --all-targets -- -D warnings` is clean.
+- **Phase 1 complete** (2026-10-29): `cargo test --workspace` passes and the three Phase 1 Verify
+  commands equal their expected files (Claude re-ran them: `same` ×3); negative fixtures and the
+  ambiguous variant are covered by core tests (`fixture_report_equals_answer_key`,
+  `ambiguous_variant_equals_answer_key`).
+- **Next: Phase 2 (hook) needs a planning step first** — PLAN.md still says "to be split later".
+  Claude splits it (Codex critique, Review log) before any implementation. Known issues for that
+  planning, found in the Step 1.9 real-`~` smoke (counts only):
+  1. **Bug (Step 1.5 probe):** every live Claude session shows `finished`. Claude writes `procStart`
+     in UTC (`Fri Oct 30 00:08:22 2026`) while `ps -o lstart=` prints local time (`Thu Oct 29
+     17:08:22`), so the real probe always says `Gone`. `TZ=UTC0 ps -p <pid> -o lstart=` matches;
+     fix `RealProcessProbe` to run ps with `TZ=UTC0` (and probably `LC_ALL=C`) plus a test. Should
+     land before Phase 2 relies on state.
+  2. 1324 `unknown_type` skips, all Claude, all new record types not in the schema's known list:
+     `ai-title`, `permission-mode`, `frame-link`, `artifact-comment-monitor`, `bridge-session`,
+     `relocated`, `artifact-autoreact-ledger`. Counted, not fatal (as designed); adding them is a
+     schema edit for Claude.
+  3. Speed (release build): `sessions` 5.6 s, `links` 7.8 s over 259 sessions (all history parsed).
+     Phase 3's ≤ 2 s home refresh needs the planned incremental tailing.
+  4. Real links: 35 total, 0 exact (heuristic + unlinked only) in the default 2 h window; expected
+     since real task-output files vanish, but worth checking once the hook records child ids.
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 - Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
@@ -148,6 +171,76 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.9: CLI commands — Codex
+- Did: Wired sessions/links to `multi_link_core` report functions with the same Options, and steps to
+  `multi_link_plan::steps_report`. Explicit root selects fixture repo mode and process probe; HOME
+  selects real mode/probe. Clap validates RFC 3339 now and checked integer s/m/h/d durations (or all).
+  Default step repos preserve first-seen listed-session order and absolute strings; explicit repos
+  preserve caller order and duplicates. JSON stays on stdout, non-empty diagnostics get one stderr
+  count line per category, report I/O errors exit 1, invalid flags exit 2. Text tables include item
+  rows and report-specific count footers. Eight built-binary tests cover answer keys, exact text rows, flags,
+  duration units/offsets, repo defaults/order, I/O failure, and all three diagnostic categories.
+  Round 1: removed the extra links session scan; links footer counts unparented sessions; steps
+  footer counts repos and missing/unsupported repos get rows. Tables pad to column maxima including
+  headers, use two-space separators, omit trailing spaces, and put steps titles last. Enum labels
+  use serde names; a unit test checks `ProcessExit` → `process_exit`. JSON remains unchanged.
+- Separate cleanup (no behavior change): collapsed the four clippy-reported nested conditionals in
+  `crates/claude/src/invocation.rs` into equivalent let chains, only within the approved cleanup scope.
+- Changed: `crates/cli/src/main.rs`, `crates/cli/tests/cli.rs`, `crates/cli/Cargo.toml`, `Cargo.lock`,
+  `PROGRESS.md`; separate cleanup: `crates/claude/src/invocation.rs`.
+- Verify: Round 1 rerun, Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0;
+  actual result lines in execution order:
+  ```text
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: the three Step 1.9 `diff <(cargo run ... | jq -S .) <(jq -S . fixtures/expected/...) && echo same`
+  commands, run verbatim for sessions, links, steps → each exit 0, actual stdout:
+  ```text
+same
+same
+same
+  ```
+- Verify: `rustfmt --edition 2024 --check crates/cli/src/main.rs crates/cli/tests/cli.rs`
+  → no output, exit 0; `cargo clippy --workspace --all-targets -- -D warnings` → exit 0,
+  actual completion line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+  ```
+- Prior implementation real-data smoke (not rerun in Round 1): exit 0; counts were:
+  ```text
+19
+1324
+  ```
+- Review: Claude, 1 fix round. Round 1 findings (all fixed): links text re-ran sessions_report for a
+  footer (double scan); steps footer said "0 skipped lines" with --repo and hid missing repos; enum labels
+  came from lowercased Debug, not serde names; columns unaligned. Checked: cli has no parsing/state/linking
+  logic; --root → Fixture + FixtureProcessProbe; JSON unchanged. Claude re-ran Verify: workspace tests ok,
+  `same` ×3, clippy -D warnings clean, fmt clean. Smoke (release, real ~): sessions 22 listed / 259 all,
+  1324 skipped (all Claude unknown_type), 5.6 s; links 35 / 2 unparented, 7.8 s; no crash. Found the
+  probe UTC bug (see Current state). Codex's smoke numbers (19 / 1324) were real at its run time.
+- Gotchas: Initial Round 1 workspace run caught one missing space in the expected steps header
+  (7 integration tests passed, 1 failed); corrected the expectation and reran the whole workspace
+  successfully. Plan report I/O behavior keeps its existing missing/unsupported conventions.
 
 ### 2026-10-29 — Step 1.8: Linker and links report — Codex
 - Did: Implemented evidence priority (resume_arg, stdout, thread_ready, task_output), UUID validation,

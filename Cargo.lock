@@ -184,7 +184,10 @@ name = "multi-link"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "multi-link-core",
  "multi-link-model",
+ "multi-link-plan",
+ "serde",
  "serde_json",
  "tempfile",
 ]
