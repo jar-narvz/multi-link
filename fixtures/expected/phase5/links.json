@@ -1,0 +1,82 @@
+{
+  "links": [
+    {
+      "step": "4.1",
+      "parent": "00000000-0000-4000-8000-000000005011",
+      "invocation": "toolu_phase5_s41",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-10-29T21:48:30.000Z",
+      "checkout": "/home/dev/repo-l",
+      "match": "exact",
+      "child": "00000000-0000-4000-8000-000000005021",
+      "evidence": "stdout",
+      "candidates": []
+    },
+    {
+      "step": "4.3",
+      "parent": "00000000-0000-4000-8000-000000005013",
+      "invocation": "toolu_phase5_s43",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-10-29T21:58:00.000Z",
+      "checkout": "/home/dev/repo-l",
+      "match": "heuristic",
+      "child": "00000000-0000-4000-8000-000000005023",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "00000000-0000-4000-8000-000000005023",
+          "gap_ms": 3000
+        }
+      ]
+    },
+    {
+      "step": "4.4",
+      "parent": "00000000-0000-4000-8000-000000005014",
+      "invocation": "toolu_phase5_s44",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-10-29T22:02:00.000Z",
+      "checkout": "/home/dev/repo-l",
+      "match": "heuristic",
+      "child": "00000000-0000-4000-8000-000000005024",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "00000000-0000-4000-8000-000000005024",
+          "gap_ms": 2000
+        }
+      ]
+    },
+    {
+      "step": "4.5",
+      "parent": "00000000-0000-4000-8000-000000005015",
+      "invocation": "toolu_phase5_s45",
+      "subagent": null,
+      "form": "exec",
+      "background": true,
+      "at": "2026-10-29T22:09:30.000Z",
+      "checkout": "/home/dev/repo-l",
+      "match": "heuristic",
+      "child": "00000000-0000-4000-8000-000000005026",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "00000000-0000-4000-8000-000000005026",
+          "gap_ms": 3000
+        }
+      ]
+    }
+  ],
+  "unparented": [
+    "00000000-0000-4000-8000-000000005025",
+    "00000000-0000-4000-8000-000000005041",
+    "00000000-0000-4000-8000-000000005042",
+    "00000000-0000-4000-8000-000000005051",
+    "00000000-0000-4000-8000-000000005052"
+  ]
+}

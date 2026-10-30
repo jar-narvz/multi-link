@@ -221,6 +221,130 @@ Phase 4 header has the real-`~` measurement; Codex critique in PLAN.md → Revie
 Non-goals for Phase 4: Codex waiting detection; changing the default `--since 2h`; timeline changes; colour
 themes.
 
+### Phase 5 decisions (home redesign to the approved target)
+
+Planned 2026-10-30 after the owner found the Phase 4 screen shorter but "still very hard to easily read and
+understand, nothing like the mockup". The owner approved **board 7** on the mockup canvas (claude.ai
+artifact R5Bh9iX6bsn3jSu8F8D58C, "7 · Home target: real data, 30 Oct 16:19") as the acceptance picture and
+asked to prioritise UX/UI, readability and colour (PLAN.md → Phase 5; Codex critique in PLAN.md → Review
+log). Binding JSON rules: `docs/output-schema.md` (SessionRow `made`, Overview `hook`, Phase 5 fixture
+results). Binding picture: the styled target golden `fixtures/expected/tui/home-phase5.txt` +
+`home-phase5.styles.txt` (Step 5.1, drawn by hand from these rules; Step 5.4 must match it cell for cell).
+
+Why Phase 4 missed: it was built rule by rule (merge, collapse, header) with colour a non-goal and no
+picture to check against. Rows were named by id prefixes, most rows were old `unknown` sessions, bars were
+a thin dotted track, links used internal words (`heuristic exec`).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| V0 | JSON stays stable; presentation lives in the TUI. Core JSON gains only additive fields (V1 `made`, V8 `hook`); every existing value and row order is unchanged. Windowing, ordering, the cap and combined lanes are a home view model in the TUI (`crates/tui/src/view.rs`) built from the overview + links | The JSON is a contract other front ends and tests rely on; what fits on one screen is a display decision |
+| V1 | Rows are named by step. SessionRow gains `made`: steps of the links this row made, newest first. A Claude row's label is its latest made step; a Codex row's is its placing link's step. No step: `claude · no hand-off`, `codex · no parent found`. A Claude row with no made step that needs attention names its branch and state: `claude main · busy now`, `claude main · waiting since <time>`, `claude main · stale since <time>` (branch left out when `null`; `<time>` is the row's `last_activity`, the only status time the overview has). Id prefixes leave the home screen (the timeline and `o` keep ids) | The owner thinks in PLAN.md steps, not ids; `handoffs` lists only links into a Codex row, so the parent side needed its own field |
+| V2 | One lane per step, only when it is true: a Claude row with exactly one Codex child whose placing step equals the parent's latest made step (or either is `null`) is one lane, label `step X · claude → codex · <link words>`; the Claude span is drawn as `━`, the Codex span as `█`, each mapped on its own times, Codex drawn last (on top). Otherwise parent and children are separate lanes. A combined lane sorts by the Claude row's `started_at` and is inside the window when either row's `last_activity` is. On a combined lane `o` opens the Claude session and `enter` splits it into two lanes | Halves the rows for the normal one-step hand-off without hiding a second child or a mismatched step; a child may start or end outside its parent's span |
+| V3 | Rows per repo: `waiting`, `busy` and `stale` lanes always show, whatever their age and outside any cap, ranked by the lane's own state and its child's (waiting, busy, stale). Then quiet lanes by `started_at` ascending (the step chain reads top to bottom), only those whose `last_activity` is inside the bar window, at most 8. Every other quiet lane is counted in one line `N earlier session(s) · enter shows all`. The TUI stops drawing `claude ×N` / `codex ×N` (core still emits MergedRow; the view flattens it) | A prompt can wait overnight (Codex P1); history is reachable but does not crowd out what is running |
+| V4 | Colour is a requirement with tested contrast: one theme of explicit fg/bg pairs (table below); bright colours for busy/waiting, dim for idle/done/unknown bars; truecolor when `COLORTERM` is `truecolor`/`24bit`, else 256-colour indexes; every text pair ≥ 4.5:1 on its background in both palettes. The app paints its own background, so the ratios hold whatever the terminal theme. No DIM modifier anywhere (its rendering is terminal-defined, so its contrast cannot be tested); only BOLD. `NO_COLOR`: no colour, the track becomes `·`, spans keep `━` / `█`, every state keeps its glyph. Cards have rounded borders: waiting yellow, busy orange, else the border grey; the border, the tint and the title glyph follow the group's `tier` (waiting > busy > other), so a card with both waiting and busy sessions is yellow | Readability was the owner's first complaint; untested colour can make text unreadable on some themes |
+| V5 | Bars like the mockup: a fixed bar column right of the label column; track cells are blanks on the track background; Claude `━` orange, Codex `█` blue; clipped ends `◂` / `▸`; a zero-length span is one cell. Axis labels above the first card in local time, the last one `HH:MM now` | The bar is the screen's main visual; a solid block reads at a glance where a dotted track did not |
+| V6 | Plain words: exact → `confirmed`, heuristic → `matched by time`, ambiguous → `N possible runs`, unlinked → `no run found`. Last line per expanded repo: `last: claude handed step X to codex at HH:MM (<link words>)` from `latest_handoff` (`step ?` when the link has no step) | Internal words (`heuristic exec`) meant nothing to the owner |
+| V7 | Local time: the UTC offset is read once per refresh for the report's `now` (`time` crate `local-offset`); fallback UTC, with the axis saying `UTC` after the first label. Fractional offsets work. When the window crosses local midnight the first axis label carries the date (`Oct 29 23:20`); a time not on `now`'s local date carries it too (`waiting since Oct 28 17:05`). JSON timestamps stay UTC. Limitation: a window across a DST change uses the offset at `now` | The owner reads clock time, not UTC; one offset per refresh keeps a frame consistent |
+| V8 | Header: `All repos · last 2h` (bold; the bar window), `● N busy` orange, `○ N idle · N done or unknown` grey (done = `finished`), `N repos · N hand-offs` grey (hand-offs = listed links in `Refresh.links`), `◌ N stale` red after the busy count only when N > 0, `⚠ N shared checkouts` red after that only when there are FR17 warnings. At the right `◆ N need you` yellow whenever any session is waiting; with zero waiting and no hook records seen (`hook.records == 0`), `◆ needs-you partial: no hook records seen` yellow instead of `0 need you`; with zero waiting and records seen, nothing. Counts cover every session in the report (rows, children, merged members). Overview gains `hook: {records, latest}` (observed evidence, never "installed") | Answers "does anything need me" first; session records report waiting without a hook, so the count is always real, and only a zero is uncertain |
+| V9 | Idle repos, truthful: a group whose tier is `other` with no `stale` session and no FR17 warning is one bordered line: `○`, name (bold, 18 cells), the plan wording (`latest step <id> <title>`, `no PLAN.md`, `PLAN.md not in the step format`, `no step logged yet`), then right-aligned counts by harness and real state (`1 claude idle · 2 codex done or unknown`, claude first, states idle then done or unknown) and `last HH:MM`; no path, no Verify. `enter` expands | The Phase 4 collapsed line claimed states and showed paths the owner did not need; stale or FR17 repos may be unfinished work, so they never collapse |
+| V10 | Widths: ≥ 100 columns: board 7 layout, 46-cell labels. 80–99: 30-cell labels, the last line shortened to `last: step X → codex · <link words>`. 60–79: 24-cell labels, header drops the hand-off count. < 60: no bars, text rows only. Labels end with `…` on a word boundary; field priority: state glyph, step, harness, link words. Lists taller than the screen scroll with the selection | Board 7 is drawn at 120 columns; narrower terminals must degrade without cut words |
+
+#### Target screen (Step 5.1): layout rules the golden is drawn from
+Fixture `fixtures/sessions-phase5`, `--now 2026-10-29T23:20:00Z`, overview and links with `--since all`
+(the keys in `fixtures/expected/phase5/`), fixed offset UTC−7, truecolor palette, nothing selected,
+120 × 40 cells. The bar window is `TimeWindow::default_for(report)` (2 h ending at `now`: 21:20–23:20 UTC,
+14:20–16:20 local) whatever `--since` was; so the quiet session that ended before 21:20 is in the report
+and is counted by V3's `earlier` line. Columns are 0-based; `w` is the width.
+- **Rows:** 0 header; 1 rule `─` across the width (border colour); 2 legend + axis; then cards, one blank row
+  between cards; `h−2` rule; `h−1` footer. Rows in between are blank.
+- **Header (row 0):** starts at column 1, parts separated by 3 blanks; the right part's last character is
+  in column `w−2`, aligned with the card's right border.
+- **Cards:** border columns 1 and `w−2`, rounded corners (`╭╮╰╯`, `─`, `│`), border cells on the screen
+  background; inside cells (columns 2..`w−3`) on the card background (waiting and busy cards tinted, others
+  the screen background); content from column 3 to `w−4`. Title row: state glyph, blank, repo name (bold),
+  3 blanks, plan wording (V9 words, default colour), then ` · Verify ✓` grey, ` · Verify ✗` red,
+  ` · Verify unclear` grey, or nothing when there is no entry (the ` · ` takes the Verify part's colour); right-aligned to column `w−4`: `N waiting`
+  yellow, `N busy` orange, `N stale` red, `N idle` grey, joined by grey ` · `, zero counts left out (done or unknown are not counted here: those lanes are on screen; the idle line, which hides its lanes, counts them). On the title row and the idle line the plan wording is cut with `…` on a word boundary so at least 3 blanks remain before the right-aligned counts.
+- **Lanes:** label at columns 3..48 (46 cells): state glyph (`◆` waiting yellow, `●` busy orange,
+  `◌` stale red, `○` idle grey, `?` unknown grey, `✓` finished grey; a combined lane takes the first of its
+  two states in the order waiting, busy, stale, idle, unknown, finished), a blank, then the V1/V2 text: the
+  step words (`step X`) and a branch in the default colour, the word `claude` orange on busy/waiting lanes,
+  ` · waiting since …` yellow (its separator included), everything else grey. Columns 49–50 blank. Bar cells: columns 51..`w−4`
+  (`W = w − 54` cells; 66 at 120).
+- **Bar mapping:** window `[s, e]`; a time `t` maps to cell `floor((t − s) · W / (e − s))` (integer
+  milliseconds), capped at `W − 1`. A span `[a, b]` fills cells `cell(a)..cell(b)` (at least one); `a < s`
+  starts at cell 0 and draws `◂` there; `b > e` ends at `W − 1` and draws `▸` there; a span entirely
+  before the window is a single `◂` in cell 0, entirely after a single `▸` in cell `W − 1`. Span colour:
+  bright on waiting/busy lanes, dim otherwise; the clip glyph takes the span's colour.
+- **Legend + axis (row 2):** columns 3..48: `━ claude  █ codex  bright busy · dim idle/done` (`━` orange,
+  `█` blue, words grey). Axis grey: start time left-aligned at column 51; the time at `s + window/2`
+  centred on its cell (`col = 51 + floor(W/2)`, the 5-character label starts 2 cells left of it);
+  `HH:MM now` right-aligned to column `w−4`.
+- **Below the lanes:** `N earlier session(s) · enter shows all` (only when N > 0), then the V6 `last:`
+  line, both grey from column 3.
+- **Idle line (V9):** `○` grey at column 3, name bold default colour at 5..22, plan wording grey from 24,
+  counts + ` · last HH:MM` grey right-aligned to column `w−4`.
+- **Footer (row `h−1`):** from column 1, keys in the default colour, their words grey, joined by grey ` · `:
+  `↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit`; at the right, ending
+  at column `w−2`, `times in UTC-7` grey (`times in UTC` on the fallback; the offset as `UTC+5:30` when
+  fractional).
+
+**Palette** (V4). Contrast ratios are WCAG 2.x relative-luminance ratios, computed for Step 5.1; Step 5.3's
+test recomputes them.
+
+| Role | Truecolor | 256 |
+| --- | --- | --- |
+| Screen background | `#0E1014` | 233 |
+| Card background, waiting | `#17150E` | 234 |
+| Card background, busy | `#17130F` | 234 |
+| Selected row background | `#262C3A` | 235 |
+| Text | `#D7DAE0` | 253 |
+| Secondary grey | `#9AA1AE` | 248 |
+| Claude orange (bright) | `#F2A36B` | 215 |
+| Claude orange (dim, bars only) | `#8A6448` | 137 |
+| Codex blue (bright) | `#7DB3FF` | 111 |
+| Codex blue (dim, bars only) | `#4F79B3` | 67 |
+| Needs-you yellow | `#E8C468` | 221 |
+| Warning red | `#E86F6F` | 203 |
+| Track (bar background) | `#22262F` | 236 |
+| Card border, rules | `#2A2F3A` | 238 |
+
+| Text colour | on screen | on waiting card | on busy card | on selected | 256: screen | waiting/busy card | selected |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Text | 13.60 | 13.04 | 13.19 | 9.97 | 13.40 | 12.19 | 10.83 |
+| Grey | 7.33 | 7.03 | 7.11 | 5.38 | 7.88 | 7.17 | 6.36 |
+| Orange | 9.27 | 8.89 | 9.00 | 6.80 | 10.30 | 9.37 | 8.32 |
+| Blue | 8.85 | 8.49 | 8.59 | 6.49 | 8.57 | 7.80 | 6.92 |
+| Yellow | 11.36 | 10.89 | 11.02 | 8.33 | 13.50 | 12.28 | 10.91 |
+| Red | 6.29 | 6.03 | 6.10 | 4.61 | 6.29 | 5.72 | 5.08 |
+
+Dim bar colours are not text and are not held to 4.5:1 (on the track: orange-dim 2.88, blue-dim 3.40
+truecolor). The track is lighter than board 7's `#1A1D24` (1.13:1 on the screen) so a one-cell strip still reads as a track in a terminal: `#22262F` is 1.26:1 on the screen and 1.21:1 on the waiting card; the state glyph, not the bar, carries the state. 256-colour index values are the xterm cube
+(`16 + 36r + 6g + b`, levels 0/95/135/175/215/255) and grey ramp (`8 + 10(i − 232)`).
+
+**Styled golden format** (`*.styles.txt`, Step 5.3 writes the dumper): first line a `#` comment; then one
+line per run, rows top to bottom, columns left to right, covering every cell:
+`<row> <first>-<last> <fg> <bg> <modifiers>` (0-based, inclusive). `fg` / `bg` are `#RRGGBB` in the
+truecolor palette (`-` for the terminal default); `modifiers` is `-` or `+`-joined ratatui names (`BOLD`,
+`UNDERLINED`, `REVERSED`, …). A blank cell (`" "`) is written with fg `-` and without BOLD / DIM / ITALIC,
+which do not show on a blank (UNDERLINED, REVERSED and CROSSED_OUT stay); a run is a maximal stretch of
+cells equal after that rule. So the golden fixes what is visible, not how spans were split.
+
+**What the target differs from board 7 in, and why:** the fixture adds a waiting row from yesterday (the
+plan's acceptance case for V3), so the header shows `◆ 1 need you` instead of the hook note, the
+repo-l card is yellow with a waiting tint instead of orange, and a `◆ claude main · waiting since Oct 28
+17:05` lane with a lone `◂` comes first. Lanes start with a state glyph (V10's first field; needed for
+`NO_COLOR`). Quiet lanes follow `started_at` (V3), so `codex · no parent found` sits between steps 4.4
+and 4.5 rather than last. The hidden-session count is its own line (V3), not appended to `last:`. The
+title has no `Phase 4 ·` (the plan parser has no phases) and says `Verify unclear` where board 7 said
+`Verify not reported`: a logged Verify whose result is neither pass nor fail is reported, just not
+recognised. Idle lines name harness and state counts (`1 claude idle · 2 codex done or unknown`) instead
+of `5 codex runs`. The footer adds `f fork` and says which offset times use instead of the mockup's data
+note. Step 4.1 reads `confirmed` (the plan asks for one exact link) where board 7 has `matched by time`. The second idle repo is Codex-only (`no PLAN.md`, `2 codex done or unknown`) where board 7's had an idle Claude session on a branch. The plan wording has no pill border (a terminal cannot draw one inline). The hook note, when shown, reads `needs-you partial: no hook records seen` instead of `needs-you off: hook not installed` (V8: records are evidence, not installation). The track is lighter (Palette). Repo names are fixture placeholders (`repo-l`, `repo-m`, `repo-n`).
+
+Non-goals for Phase 5: Codex waiting detection; installing the hook for the owner (it stays print-only);
+the timeline screen; themes beyond the one palette.
+
 ### Linking algorithm
 
 1. **Recognised invocations only.** A hand-off is a Bash `tool_use` in an `assistant` record whose command has a segment (split on `&&`, `||`, `;`, `|`, newlines outside quotes) of the form `codex exec …`, `codex [exec] resume <uuid>`, or `node …/codex-companion.mjs task …` (the plugin, called from a subagent). Other commands that merely mention `codex` are ignored. Exact grammar: `docs/output-schema.md`.
@@ -372,7 +496,10 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
    - Verify: for one real hand-off, the child id the hook records equals the id read independently from `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
 4. **Phase 3: TUI home + timeline + open (Release 1).** Screens 6 and 2, needs-you sorting, bell, FR18 resume and app link. Needs-you sorting and the bell depend on the Phase 2 hook; without it, those sessions show as unknown.
    - Verify: snapshot tests of both screens on fixtures pass; home refresh on my real `~` is 2 s or less; opening a running fixture session never calls resume.
-5. **Backlog (ordered, uncommitted):** step graph (screen 3), live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
+5. **Phase 4: Home screen cleanup (Release 1.1).** `codex ×N`, collapsed quiet repos, header counts, mini time bars (U1–U5). Built, but the owner judged the real screen still hard to read, so it closed as not meeting the need.
+6. **Phase 5: Home redesign to the approved target (Release 1.2).** Board 7 as the acceptance picture: step-named rows, combined lanes, tested colour, mockup-like bars, plain words, local time (V0–V10).
+   - Verify: the board-7 fixture's styled render equals the hand-drawn target golden cell for cell; a real-`~` render sits next to board 7 in `docs/phase5-check.md`; the owner confirms.
+7. **Backlog (ordered, uncommitted):** step graph (screen 3), live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
 
 ### Open questions
 

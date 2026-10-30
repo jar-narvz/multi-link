@@ -937,6 +937,23 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-10-30 — Step 5.1 review (adversarial Claude subagent, diff + Step 5.1 + board 7 HTML)
+The reviewer checked by script: the styles file covers all 4800 cells; every bar cell agrees with the mapping;
+columns, counts and local times are right; the CLI output equals both keys apart from `made`/`hook`; the
+fixture has every shape item; the contrast table holds; nothing personal is in the files. 10 findings, all accepted.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | The waiting lane's ` · ` is yellow; the docs said only `waiting since …` is yellow | Accepted: the docs now say the separator is included (the golden is unchanged; the phrase reads as one unit) |
+| 2 | No precedence for border, tint and title glyph when a card has waiting and busy sessions | Accepted: they follow the group `tier` (waiting > busy > other) |
+| 3 | Which times sort a combined lane and put it in the window | Accepted: sorted by the Claude row's `started_at`; in the window when either row's `last_activity` is |
+| 4 | Source of `waiting since <time>` not stated | Accepted: the row's `last_activity` |
+| 5 | Verify colours ambiguous | Accepted: ✓ grey, ✗ red, unclear grey |
+| 6 | Plan wording overflowing into the counts undefined | Accepted: cut with `…` on a word boundary, at least 3 blanks kept |
+| 7 | The title counts leave out done/unknown, but the idle line counts them | Accepted as intended, now written down (those lanes are on screen) |
+| 8 | Board-7 differences list incomplete | Accepted: confirmed vs matched, Codex-only idle repo, no pill, hook note wording, lighter track added |
+| 9 | Track `#1A1D24` nearly invisible on the card (1.08:1) | Accepted: track `#22262F` (1.21–1.26:1; dim bars on it 2.88 / 3.40); golden regenerated |
+| 10 | `made` key order in the key differs from the schema | Accepted: the key now puts `made` before `children` |
+
 ### 2026-10-30 — Phase 5 plan (Claude, Codex critique, read-only)
 Owner approved board 7 and asked to prioritise UX/UI, readability and colour. Codex checked 5.1–5.5 against
 the code. Verdict: revise before implementing. All 10 accepted.

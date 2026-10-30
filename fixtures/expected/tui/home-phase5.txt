@@ -1,0 +1,40 @@
+ All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos · 4 hand-offs                    ◆ 1 need you
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   ━ claude  █ codex  bright busy · dim idle/done  14:20                          15:20                     16:20 now
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ◆ repo-l   latest step 4.6 Real check and README · Verify unclear                      1 waiting · 1 busy · 6 idle │
+ │ ◆ claude main · waiting since Oct 28 17:05      ◂                                                                  │
+ │ ● claude main · busy now                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+ │ ○ step 4.1 · claude → codex · confirmed                        ██━                                                 │
+ │ ○ claude · no hand-off                                          ━━━━━                                              │
+ │ ○ step 4.3 · claude → codex · matched by time                      ━███━                                           │
+ │ ○ step 4.4 · claude → codex · matched by time                         ━██━━                                        │
+ │ ? codex · no parent found                                                █                                         │
+ │ ○ step 4.5 · claude → codex · matched by time                             ━█████                                   │
+ │ ○ claude · no hand-off                                                       ━━━━━━━━                              │
+ │ 1 earlier session · enter shows all                                                                                │
+ │ last: claude handed step 4.5 to codex at 15:09 (matched by time)                                                   │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ repo-m             latest step 2.3 Export the summary       1 claude idle · 2 codex done or unknown · last 16:19 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ repo-n             no PLAN.md                                               2 codex done or unknown · last 16:05 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit                           times in UTC-7

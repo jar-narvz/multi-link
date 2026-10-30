@@ -1,0 +1,455 @@
+{
+  "now": "2026-10-29T23:20:00.000Z",
+  "hook": {
+    "records": 0,
+    "latest": null
+  },
+  "repos": [
+    {
+      "repo": "/home/dev/repo-l",
+      "tier": "waiting",
+      "last_activity": "2026-10-29T23:19:30.000Z",
+      "plan": {
+        "convention": "supported",
+        "latest_step": {
+          "id": "4.6",
+          "title": "Real check and README",
+          "entry": {
+            "date": "2026-10-29",
+            "agent": "Claude",
+            "verify": {
+              "command": "cargo test --workspace",
+              "result": "unknown",
+              "result_text": "all suites green (synthetic sample).",
+              "source": "reported"
+            }
+          }
+        }
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": {
+        "step": "4.5",
+        "parent": "00000000-0000-4000-8000-000000005015",
+        "invocation": "toolu_phase5_s45",
+        "subagent": null,
+        "form": "exec",
+        "background": true,
+        "at": "2026-10-29T22:09:30.000Z",
+        "checkout": "/home/dev/repo-l",
+        "match": "heuristic",
+        "child": "00000000-0000-4000-8000-000000005026",
+        "evidence": null,
+        "candidates": [
+          {
+            "id": "00000000-0000-4000-8000-000000005026",
+            "gap_ms": 3000
+          }
+        ]
+      },
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005001",
+          "harness": "claude",
+          "state": "waiting",
+          "state_evidence": "session_record",
+          "checkout": "/home/dev/repo-l",
+          "branch": "main",
+          "started_at": "2026-10-28T23:40:00.000Z",
+          "last_activity": "2026-10-29T00:05:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005002",
+          "harness": "claude",
+          "state": "busy",
+          "state_evidence": "session_record",
+          "checkout": "/home/dev/repo-l",
+          "branch": "main",
+          "started_at": "2026-10-29T21:20:00.000Z",
+          "last_activity": "2026-10-29T23:19:30.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        },
+        {
+          "kind": "merged",
+          "harness": "claude",
+          "count": 7,
+          "rows": [
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005016",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T22:14:00.000Z",
+              "last_activity": "2026-10-29T22:26:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005015",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T22:09:00.000Z",
+              "last_activity": "2026-10-29T22:14:00.000Z",
+              "handoffs": [],
+              "made": [
+                "4.5"
+              ],
+              "children": [
+                {
+                  "kind": "session",
+                  "id": "00000000-0000-4000-8000-000000005026",
+                  "harness": "codex",
+                  "state": "unknown",
+                  "state_evidence": "turns_complete",
+                  "checkout": "/home/dev/repo-l",
+                  "branch": null,
+                  "started_at": "2026-10-29T22:09:33.000Z",
+                  "last_activity": "2026-10-29T22:17:00.000Z",
+                  "handoffs": [
+                    {
+                      "step": "4.5",
+                      "parent": "00000000-0000-4000-8000-000000005015",
+                      "invocation": "toolu_phase5_s45",
+                      "subagent": null,
+                      "form": "exec",
+                      "background": true,
+                      "at": "2026-10-29T22:09:30.000Z",
+                      "checkout": "/home/dev/repo-l",
+                      "match": "heuristic",
+                      "child": "00000000-0000-4000-8000-000000005026",
+                      "evidence": null,
+                      "candidates": [
+                        {
+                          "id": "00000000-0000-4000-8000-000000005026",
+                          "gap_ms": 3000
+                        }
+                      ]
+                    }
+                  ],
+                  "made": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005014",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T22:01:00.000Z",
+              "last_activity": "2026-10-29T22:09:00.000Z",
+              "handoffs": [],
+              "made": [
+                "4.4"
+              ],
+              "children": [
+                {
+                  "kind": "session",
+                  "id": "00000000-0000-4000-8000-000000005024",
+                  "harness": "codex",
+                  "state": "unknown",
+                  "state_evidence": "turns_complete",
+                  "checkout": "/home/dev/repo-l",
+                  "branch": null,
+                  "started_at": "2026-10-29T22:02:02.000Z",
+                  "last_activity": "2026-10-29T22:05:00.000Z",
+                  "handoffs": [
+                    {
+                      "step": "4.4",
+                      "parent": "00000000-0000-4000-8000-000000005014",
+                      "invocation": "toolu_phase5_s44",
+                      "subagent": null,
+                      "form": "exec",
+                      "background": false,
+                      "at": "2026-10-29T22:02:00.000Z",
+                      "checkout": "/home/dev/repo-l",
+                      "match": "heuristic",
+                      "child": "00000000-0000-4000-8000-000000005024",
+                      "evidence": null,
+                      "candidates": [
+                        {
+                          "id": "00000000-0000-4000-8000-000000005024",
+                          "gap_ms": 2000
+                        }
+                      ]
+                    }
+                  ],
+                  "made": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005013",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T21:55:00.000Z",
+              "last_activity": "2026-10-29T22:02:00.000Z",
+              "handoffs": [],
+              "made": [
+                "4.3"
+              ],
+              "children": [
+                {
+                  "kind": "session",
+                  "id": "00000000-0000-4000-8000-000000005023",
+                  "harness": "codex",
+                  "state": "unknown",
+                  "state_evidence": "turns_complete",
+                  "checkout": "/home/dev/repo-l",
+                  "branch": null,
+                  "started_at": "2026-10-29T21:58:03.000Z",
+                  "last_activity": "2026-10-29T22:00:00.000Z",
+                  "handoffs": [
+                    {
+                      "step": "4.3",
+                      "parent": "00000000-0000-4000-8000-000000005013",
+                      "invocation": "toolu_phase5_s43",
+                      "subagent": null,
+                      "form": "exec",
+                      "background": false,
+                      "at": "2026-10-29T21:58:00.000Z",
+                      "checkout": "/home/dev/repo-l",
+                      "match": "heuristic",
+                      "child": "00000000-0000-4000-8000-000000005023",
+                      "evidence": null,
+                      "candidates": [
+                        {
+                          "id": "00000000-0000-4000-8000-000000005023",
+                          "gap_ms": 3000
+                        }
+                      ]
+                    }
+                  ],
+                  "made": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005012",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T21:50:00.000Z",
+              "last_activity": "2026-10-29T21:57:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005011",
+              "harness": "claude",
+              "state": "idle",
+              "state_evidence": "session_record",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T21:48:00.000Z",
+              "last_activity": "2026-10-29T21:51:00.000Z",
+              "handoffs": [],
+              "made": [
+                "4.1"
+              ],
+              "children": [
+                {
+                  "kind": "session",
+                  "id": "00000000-0000-4000-8000-000000005021",
+                  "harness": "codex",
+                  "state": "unknown",
+                  "state_evidence": "turns_complete",
+                  "checkout": "/home/dev/repo-l",
+                  "branch": null,
+                  "started_at": "2026-10-29T21:48:32.000Z",
+                  "last_activity": "2026-10-29T21:49:30.000Z",
+                  "handoffs": [
+                    {
+                      "step": "4.1",
+                      "parent": "00000000-0000-4000-8000-000000005011",
+                      "invocation": "toolu_phase5_s41",
+                      "subagent": null,
+                      "form": "exec",
+                      "background": false,
+                      "at": "2026-10-29T21:48:30.000Z",
+                      "checkout": "/home/dev/repo-l",
+                      "match": "exact",
+                      "child": "00000000-0000-4000-8000-000000005021",
+                      "evidence": "stdout",
+                      "candidates": []
+                    }
+                  ],
+                  "made": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-000000005003",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-l",
+              "branch": "main",
+              "started_at": "2026-10-29T20:30:00.000Z",
+              "last_activity": "2026-10-29T20:50:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005025",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-l",
+          "branch": null,
+          "started_at": "2026-10-29T22:06:00.000Z",
+          "last_activity": "2026-10-29T22:07:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-m",
+      "tier": "other",
+      "last_activity": "2026-10-29T23:19:00.000Z",
+      "plan": {
+        "convention": "supported",
+        "latest_step": {
+          "id": "2.3",
+          "title": "Export the summary",
+          "entry": {
+            "date": "2026-10-29",
+            "agent": "Codex",
+            "verify": {
+              "command": "cargo test export",
+              "result": "pass",
+              "result_text": "ok (synthetic sample).",
+              "source": "reported"
+            }
+          }
+        }
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005031",
+          "harness": "claude",
+          "state": "idle",
+          "state_evidence": "session_record",
+          "checkout": "/home/dev/repo-m",
+          "branch": null,
+          "started_at": "2026-10-29T22:40:00.000Z",
+          "last_activity": "2026-10-29T23:19:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005042",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-m",
+          "branch": null,
+          "started_at": "2026-10-29T22:55:00.000Z",
+          "last_activity": "2026-10-29T22:58:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005041",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-m",
+          "branch": null,
+          "started_at": "2026-10-29T22:45:00.000Z",
+          "last_activity": "2026-10-29T22:47:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-n",
+      "tier": "other",
+      "last_activity": "2026-10-29T23:05:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005052",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-n",
+          "branch": null,
+          "started_at": "2026-10-29T22:58:00.000Z",
+          "last_activity": "2026-10-29T23:05:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-000000005051",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-n",
+          "branch": null,
+          "started_at": "2026-10-29T22:30:00.000Z",
+          "last_activity": "2026-10-29T22:35:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "children": []
+        }
+      ]
+    }
+  ]
+}

@@ -2,10 +2,25 @@
 
 ## Current state
 **Resume here (2026-10-30, latest).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
-screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Next: Phase
-5** (home redesign to the owner-approved **board 7** on the mockup canvas; priority UX/UI, readability,
-colour). Run 5.1 → 5.5 in order, one fresh step session each; 5.5 ends with a stop-and-ask for the owner.
-The older notes below are history.
+screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
+(home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
+Next: Step 5.2** (Codex). Run 5.2 → 5.5 in order, one fresh step session each; 5.5 ends with a
+stop-and-ask for the owner. The older notes below are history.
+
+- **What 5.2 needs from 5.1:** the field rules are in `docs/output-schema.md`: SessionRow `made` (after
+  `handoffs`, before `children`; distinct non-null link steps where `parent` = this id, newest first, any
+  `match`, `[]` on Codex rows) and the report's top-level `hook` `{records, latest}` (valid v1 records in all
+  hook files, `--since` ignored, unreadable dir → zeros plus a stderr diagnostic). Test target:
+  `overview --root fixtures/sessions-phase5 --now 2026-10-29T23:20:00Z --since all --json` ==
+  `fixtures/expected/phase5/overview.json`; `links` with the same flags == `phase5/links.json` (that one
+  already passes on today's code). The phase5 key is the CLI output at 7d399ba plus `made` / `hook`, so 5.2
+  should only need to add the two fields. The existing keys get `made` / `hook` and nothing else.
+- **What 5.3 / 5.4 need from 5.1:** design.md → "Phase 5 decisions" → "Target screen" has the layout,
+  bar mapping, palette (truecolor + 256), contrast table and the styled-golden format (blank cells: fg `-`,
+  no BOLD/DIM/ITALIC). The target is `fixtures/expected/tui/home-phase5.txt` + `.styles.txt` (120×40, UTC−7,
+  truecolor, nothing selected, bar window 2 h ending at `now` whatever `--since` is). The golden was drawn
+  by a scratch Python script (not committed); a copy for reference is in the coordinator's notes folder
+  (`step-5.1/draw_target.py`, plus `to_html.py`, which renders a golden pair to HTML for an eye check).
 
 Phases 0–3 / **Release 1 are done**, including Step **3.8**.
 Whole-phase Verify passes with documented limitations; Step 3.8 reviewed by Claude and committed locally (not pushed).
@@ -117,6 +132,49 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 5.1: Contract and target screen — Claude
+- Did: Wrote V0–V10 and the target-screen rules into `docs/design.md` (Phase 5 decisions: layout, bar
+  mapping, palette with contrast ratios, styled-golden format, differences from board 7) and the additive
+  `made` / `hook` fields plus the Phase 5 fixture results into `docs/output-schema.md`. Built the isolated
+  synthetic root `fixtures/sessions-phase5/` in board 7's shape: repo-l has a waiting session from
+  yesterday, a busy main session, four step chains 4.1/4.3/4.4/4.5 (4.1 exact by stdout; the others matched
+  by time; child 5026 ends after its parent), two no-hand-off sessions, one manual Codex run and one quiet
+  session before the window. repo-m has a PLAN.md; repo-n is Codex-only. I predicted every row by hand from
+  the fixture design, then checked it against the CLI output at 7d399ba, which agreed. Wrote
+  `phase5/{overview,links}.json` from that output and added `made` / `hook` by hand. Drew the 120×40 target
+  golden (text + styles) with a scratch script from the written layout, rendered it to HTML and checked it
+  by eye against board 7.
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase5/**` (9 Claude transcripts,
+  9 session records, 9 Codex rollouts, repo-l and repo-m PLAN/PROGRESS), `fixtures/expected/phase5/overview.json`,
+  `fixtures/expected/phase5/links.json`, `fixtures/expected/tui/home-phase5.txt`,
+  `fixtures/expected/tui/home-phase5.styles.txt`, `PLAN.md` (Review log only)
+- Verify: both keys parse; key == CLI output with `made`/`hook` removed → `overview ... True`, `links ...
+  True`; styles cover `4800` cells, text `40` rows; `cargo test --workspace` → `29 test result: ok`, 0
+  failed; scrub `rg -l "/Users/|\bsk-|api_key" fixtures …` → nothing (exit 1).
+  Traceability: repo-l rows ← `.claude/projects/-home-dev-repo-l/…{5001,5002,5003,5011–5016}.jsonl`,
+  `.claude/sessions/{70501,70502,70511–70516}.json`, Codex `rollout-…-{5021,5023,5024,5025,5026}.jsonl`;
+  links ← the Bash `tool_use` in 5011/5013/5014/5015 (+ the `session id:` tool result in 5011); plan ←
+  `repos/repo-l/`; repo-m ← `70531.json`, `rollout-…-{5041,5042}`, `repos/repo-m/`; repo-n ←
+  `rollout-…-{5051,5052}`.
+  Contrast (truecolor, on screen / waiting card / busy card / selected): text 13.60/13.04/13.19/9.97,
+  grey 7.33/7.03/7.11/5.38, orange 9.27/8.89/9.00/6.80, blue 8.85/8.49/8.59/6.49, yellow
+  11.36/10.89/11.02/8.33, red 6.29/6.03/6.10/4.61. 256 (screen / card / selected): text 13.40/12.19/10.83,
+  grey 7.88/7.17/6.36, orange 10.30/9.37/8.32, blue 8.57/7.80/6.92, yellow 13.50/12.28/10.91, red
+  6.29/5.72/5.08. All ≥ 4.5.
+- Review: adversarial Claude subagent (given the diff, Step 5.1 and board 7's HTML); 10 findings, all accepted
+  (PLAN.md → Review log). Eye check against board 7, region by region. Header: same parts and colours;
+  `◆ 1 need you` instead of the hook note, because the fixture has a waiting row. Axis: `14:20 · 15:20 · 16:20
+  now` above the bars, legend on the left. Card: yellow border and tint (tier waiting, not board 7's busy
+  orange); title `◆ repo-l  latest step 4.6 Real check and README · Verify unclear` with
+  `1 waiting · 1 busy · 6 idle`. Step lanes: a thin dim `━` with a `█` block for 4.1/4.3/4.4/4.5, like board 7;
+  an extra waiting lane first, with a lone `◂`; the Codex no-parent lane sits by `started_at`. Below the lanes:
+  `1 earlier session · enter shows all` on its own line, then `last: … 15:09 (matched by time)`. Idle lines:
+  one bordered line each, with harness/state counts and `last HH:MM`. Footer: keys plus `times in UTC-7`.
+- Gotchas: board 7's track colour was almost invisible as a one-cell strip, so the track is `#22262F`.
+  The golden assumes the bar window stays 2 h even with `--since all`; that is how the quiet session before the
+  window shows up as `1 earlier session`. A logged Verify that is neither pass nor fail reads
+  `Verify unclear`, not board 7's `not reported`.
 
 ### 2026-10-30 — Step 4.6: Real check and README — Claude
 - Did: Built release at `383537e` and `9b1b374` (detached `git worktree` in Claude's scratch dir, removed

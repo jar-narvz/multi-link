@@ -1,12 +1,13 @@
 # Output schema — `multi-link sessions | links | steps | overview --json`, `open`
 
-Binding contract for Phases 1–4. `docs/design.md` → Data model is illustrative only; this file wins.
+Binding contract for Phases 1–5. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
 `fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
 `fixtures/expected/links-tagged.json` (Links → Tagged variant); Phase 2 hook answer keys in
 `fixtures/expected/hook/` (Hook records → Hook variant); Phase 3 `fixtures/expected/overview.json` and
 `fixtures/expected/hook/overview.json` (Overview); Phase 4 `fixtures/expected/phase4/overview.json`
-(Overview → Phase 4 fixture results).
+(Overview → Phase 4 fixture results); Phase 5 `fixtures/expected/phase5/{overview,links}.json` (Overview →
+Phase 5 fixture results).
 
 **Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
 `state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
@@ -20,6 +21,12 @@ a `waiting` session is always listed; hook lines appear in `sessions` → `skipp
 New isolated fixture root `fixtures/sessions-phase4/` with answer key `fixtures/expected/phase4/overview.json`
 (Overview → Phase 4 fixture results); `fixtures/sessions` and every earlier key are untouched until Step 4.3
 adds `"harness": "claude"` to the existing keys' merged rows.
+
+**Phase 5 changes (Step 5.1, both additive, design V0/V1/V8):** SessionRow gains `made`; the overview report
+gains `hook`. No existing value, key or row order changes. New isolated fixture root
+`fixtures/sessions-phase5/` (board 7's shape) with answer keys `fixtures/expected/phase5/overview.json` and
+`links.json` (Overview → Phase 5 fixture results). Step 5.2 adds `made` / `hook` to the existing overview
+keys (`overview.json`, `hook/overview.json`, `phase4/overview.json`) and nothing else.
 
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
@@ -460,9 +467,18 @@ per repo) is not compared by any test.
 ```json
 {
   "now": "2026-10-29T23:15:00.000Z",
+  "hook": {"records": 0, "latest": null},
   "repos": [ RepoGroup, ... ]
 }
 ```
+
+**`hook` (Phase 5, design V8):** what the reader observed of the optional hook, never a claim that it is
+installed. `records`: the number of valid `v: 1` records in every `<uuid>.jsonl` file of the hook folder
+(Hook records → File layout and Reader rules; every `kind`, every age: `--since` does not filter it;
+skipped lines are not counted). `latest`: the greatest record `at`, or `null` when `records` is 0. No folder
+or an empty folder: `{"records": 0, "latest": null}`. A folder that exists but cannot be read gives the same
+value plus a diagnostic on stderr (the report never fails for it). The TUI shows `◆ needs-you partial: no
+hook records seen` only when no session is `waiting` and `records` is 0.
 
 **Inputs.** One refresh (`Scanner::refresh`, Step 3.1) gives the listed sessions and listed links, exactly
 as `sessions` and `links` with the same flags would list them; the plan comes from the steps parser.
@@ -488,10 +504,16 @@ ascending.
 A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
 
 SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
-"started_at", "last_activity", "handoffs": Link[], "children": SessionRow[]}`. The plain fields are copied
+"started_at", "last_activity", "handoffs": Link[], "made": string[], "children": SessionRow[]}`. The plain fields are copied
 from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
 (`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
 under this Claude row (below); always `[]` on a Codex row.
+`made` (Phase 5, design V1): for a Claude row, the distinct non-null `step` values of the listed links whose
+`parent` is this id, ordered by each step's newest link (`at`, `invocation`), newest first; a step that
+several links carry appears once, at its newest link's place. Any `match` counts (an `unlinked` launch still
+names the step Claude handed off). `[]` for a Claude row with no such link or only untagged links, and
+always `[]` on a Codex row (its step is its placing link's `step`, already in `handoffs`). Children and
+merged members carry `made` like any SessionRow.
 
 **Codex placement (design T11).** A Codex session's *placing hand-off* is the greatest (`at`,
 `invocation`) among listed links whose `child` is its id and whose `parent` is a listed session with the
@@ -594,6 +616,44 @@ runs but sorts first and does not count towards the 4).
   interleaved by activity (Codex first). Rows: MergedRow `codex` ×4 (`…40c4`, `…40c3`, `…40c2`, `…40c1`),
   then MergedRow `claude` ×4 (`…41c4`, `…41c3`, `…41c2`, `…41c1`).
 - Plans: `missing` everywhere except repo-j.
+
+
+### Phase 5 fixture results (`phase5/overview.json`, `phase5/links.json`, `--since all`)
+Verify commands (Step 5.2 adds the test): `multi-link overview --root fixtures/sessions-phase5 --now
+2026-10-29T23:20:00Z --since all --json` must equal `fixtures/expected/phase5/overview.json`, and `links`
+with the same flags `fixtures/expected/phase5/links.json` (parsed). The root is synthetic, in the same
+synthetic formats as `fixtures/sessions-phase4` (Claude transcript lines, `.claude/sessions/<pid>.json`
+records, Codex rollouts with `session_meta` + one turn), plus Bash `tool_use` / `tool_result` pairs shaped
+like the sandbox hand-offs in `fixtures/sessions`. Ids are `00000000-0000-4000-8000-00000000<4 hex>`; below
+they are named by their last 4 digits. Times are UTC (board 7's local times are UTC−7). No hook folder:
+`hook` is `{"records": 0, "latest": null}`. 19 sessions, 0 skipped lines.
+- 3 groups: `/home/dev/repo-l` is `waiting` (23:19:30); `other` by `last_activity`: `repo-m` (23:19:00),
+  `repo-n` (23:05:00). No `active_steps` (no hand-off touches a waiting/busy/stale session), no FR17
+  warning (one busy session).
+- repo-l rows: `5001` `waiting` / `session_record` (record `70501.json`, transcript 2026-10-28 23:40 →
+  2026-10-29 00:05, yesterday in local time; listed whatever the window); `5002` `busy` / `session_record`
+  (record `70502.json`, `statusUpdatedAt` 23:19:30, 30 s old; transcript 21:20:00 → 23:19:30); then one
+  MergedRow `claude` ×7 (all quiet: six `idle` records and one transcript-only `unknown`), by
+  `last_activity`: `5016` (22:14 → 22:26, no hand-off), `5015` (22:09 → 22:14, child `5026`), `5014`
+  (22:01 → 22:09, child `5024`), `5013` (21:55 → 22:02, child `5023`), `5012` (21:50 → 21:57, no hand-off),
+  `5011` (21:48 → 21:51, child `5021`), `5003` (20:30 → 20:50, `unknown` / `no_signal`, before the 2 h bar
+  window); then Codex `5025` (22:06 → 22:07, `unknown` / `turns_complete`, no link: the manual run). One
+  quiet top-level Codex row, so no `codex ×N`. `made`: `5011` `["4.1"]`, `5013` `["4.3"]`, `5014`
+  `["4.4"]`, `5015` `["4.5"]`, every other row `[]`. Plan `supported`, latest step `4.6` "Real check and
+  README", Verify result `unknown` (`→ all suites green …` is neither pass nor fail). `latest_handoff`: the
+  step 4.5 link.
+- Links (4, all `form: "exec"`, step tags from `Read AGENTS.md, then do Step <id> in PLAN.md.`):
+  `5011` → `5021` `exact` / `stdout` (tool result has `session id: …5021`), step `4.1`;
+  `5013` → `5023` `heuristic` (gap 3000 ms), step `4.3`; `5014` → `5024` `heuristic` (gap 2000 ms), step
+  `4.4`; `5015` → `5026` `heuristic` (gap 3000 ms, `background: true`), step `4.5`. Child `5026` runs
+  22:09:33 → 22:17:00, after its parent's last activity (22:14). `unparented`: `5025`, `5041`, `5042`,
+  `5051`, `5052`.
+- repo-m: record-only Claude `5031` `idle` (`70531.json`, 22:40 → 23:19), Codex `5042` (22:55 → 22:58) and
+  `5041` (22:45 → 22:47), both `unknown`. Plan `supported`, latest step `2.3` "Export the summary", Verify
+  `pass`.
+- repo-n: Codex only, `5052` (22:58 → 23:05) and `5051` (22:30 → 22:35), both `unknown`; plan `missing`.
+- Header counts for the target golden (design V8): 1 busy, 7 idle, 10 done or unknown (`5003`, five Codex
+  in repo-l, two in repo-m, two in repo-n), 1 waiting, 3 repos, 4 hand-offs.
 
 ## Open
 
