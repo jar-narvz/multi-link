@@ -1,3 +1,4 @@
+mod hook;
 mod link;
 pub mod links;
 pub mod probe;

@@ -24,6 +24,7 @@ pub fn claude_state(
     let state = match record.status.as_str() {
         "busy" => activity_state(now, record.status_updated_at),
         "idle" => State::Idle,
+        "waiting" => State::Waiting,
         _ => State::Unknown,
     };
     (state, StateEvidence::SessionRecord)

@@ -14,10 +14,32 @@ pub(crate) fn resolve(
     mode: RepoMode,
     invocations: &[Invocation],
     rollouts: &[Rollout],
-) -> io::Result<Vec<Link>> {
+    hooks: &crate::hook::Records,
+) -> io::Result<(Vec<Link>, usize)> {
     let mut links = Vec::new();
+    let mut hook_conflicts = 0;
     for invocation in invocations {
-        let exact = exact_evidence(root, mode, invocation)?;
+        let mut exact = exact_evidence(root, mode, invocation)?;
+        let children: HashSet<_> = hooks
+            .records
+            .iter()
+            .filter(|record| {
+                record.session_id == invocation.parent
+                    && record.tool_use_id.as_deref() == Some(invocation.invocation.as_str())
+            })
+            .filter_map(|record| record.child.as_ref())
+            .collect();
+        if children.len() > 1 {
+            hook_conflicts += 1;
+        } else if let Some(child) = children.into_iter().next() {
+            if let Some((id, _)) = &exact {
+                if id != child {
+                    hook_conflicts += 1;
+                }
+            } else {
+                exact = Some((child.clone(), LinkEvidence::Hook));
+            }
+        }
         links.push(Link {
             step: invocation.step.clone(),
             parent: invocation.parent.clone(),
@@ -69,7 +91,7 @@ pub(crate) fn resolve(
         };
     }
     links.sort_by(|a, b| (a.at, &a.invocation).cmp(&(b.at, &b.invocation)));
-    Ok(links)
+    Ok((links, hook_conflicts))
 }
 
 fn gap_ms(later: Timestamp, earlier: Timestamp) -> i64 {

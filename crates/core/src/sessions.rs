@@ -1,10 +1,17 @@
 //! Session assembly without hand-off discovery or linking.
 
-use std::{collections::BTreeMap, io, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    io,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use multi_link_claude::SessionRecord;
 use multi_link_codex::ReadFailure;
-use multi_link_model::{Harness, Segment, Session, SessionsReport, StepSource, Timestamp};
+use multi_link_model::{
+    Harness, Segment, Session, SessionsReport, State, StateEvidence, StepSource, Timestamp,
+};
 
 use crate::{
     Liveness, ProcessProbe, RepoMode,
@@ -12,6 +19,8 @@ use crate::{
 };
 
 pub struct Options<'a> {
+    /// Real-mode state directory; fixture mode always uses root/.multi-link.
+    pub state_dir: PathBuf,
     pub now: Timestamp,
     /// None lists all history; record-backed sessions are always visible.
     pub since: Option<Duration>,
@@ -34,6 +43,7 @@ pub struct SessionsOutput {
 /// Read every transcript before applying the output-only history window.
 pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<SessionsOutput> {
     let claude = multi_link_claude::scan(root)?;
+    let hooks = crate::hook::read(root, options)?;
     let codex = multi_link_codex::discover(root)?;
     let mut records: BTreeMap<String, SessionRecord> = BTreeMap::new();
     for record in claude.records {
@@ -48,6 +58,8 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
     let mut sessions = Vec::new();
     let mut incomplete = Vec::new();
     for transcript in claude.transcripts {
+        let hook_waiting = !records.contains_key(&transcript.id)
+            && crate::hook::waiting(root, &transcript, &hooks)?;
         let (Some(cwd), Some(started_at), Some(last_activity)) = (
             transcript.cwd,
             transcript.started_at,
@@ -59,7 +71,11 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
             continue;
         };
         let record = records.remove(&transcript.id);
-        let (state, state_evidence) = record_state(options, record.as_ref());
+        let (state, state_evidence) = if hook_waiting {
+            (State::Waiting, StateEvidence::Hook)
+        } else {
+            record_state(options, record.as_ref())
+        };
         sessions.push(Session {
             id: transcript.id,
             harness: Harness::Claude,
@@ -114,6 +130,7 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
     }
     sessions.retain(|session| {
         session.record.is_some()
+            || session.state == State::Waiting
             || options
                 .since
                 .is_none_or(|window| within_window(options.now, session.last_activity, window))
@@ -121,6 +138,7 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
     sessions.sort_by(|a, b| (a.started_at, &a.id).cmp(&(b.started_at, &b.id)));
     let mut skipped = claude.skipped;
     skipped.extend(codex.skipped);
+    skipped.extend(hooks.skipped);
     skipped.sort_by(|a, b| (&a.file, a.line).cmp(&(&b.file, b.line)));
     incomplete.sort();
     Ok(SessionsOutput {

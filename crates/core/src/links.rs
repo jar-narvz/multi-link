@@ -9,6 +9,8 @@ use crate::{Options, link, sessions_report};
 
 #[derive(Debug)]
 pub struct LinksOutput {
+    /// Count of conflicting invocations, excluded from the JSON report.
+    pub hook_conflicts: usize,
     pub report: LinksReport,
     pub bad_records: Vec<String>,
     pub incomplete: Vec<String>,
@@ -22,7 +24,14 @@ pub fn links_report(root: &Path, options: &Options<'_>) -> io::Result<LinksOutpu
     let claude = multi_link_claude::scan(root)?;
     let invocations = multi_link_claude::invocations(root, &claude)?;
     let codex = multi_link_codex::discover(root)?;
-    let mut links = link::resolve(root, options.repo_mode, &invocations, &codex.rollouts)?;
+    let hooks = crate::hook::read(root, options)?;
+    let (mut links, hook_conflicts) = link::resolve(
+        root,
+        options.repo_mode,
+        &invocations,
+        &codex.rollouts,
+        &hooks,
+    )?;
     let parented: HashSet<_> = links
         .iter()
         .filter_map(|link| link.child.as_deref())
@@ -51,6 +60,7 @@ pub fn links_report(root: &Path, options: &Options<'_>) -> io::Result<LinksOutpu
                 .is_some_and(|child| listed.contains(child))
     });
     Ok(LinksOutput {
+        hook_conflicts,
         report: LinksReport { links, unparented },
         bad_records: sessions.bad_records,
         incomplete: sessions.incomplete,

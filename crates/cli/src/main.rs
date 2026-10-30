@@ -233,6 +233,9 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         ),
     };
     let options = Options {
+        state_dir: std::env::var_os("MULTI_LINK_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.join(".multi-link")),
         now: match common.now {
             Some(now) => now,
             None => clock_now()?,

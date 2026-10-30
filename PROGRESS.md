@@ -187,8 +187,30 @@
 - Step 2.4 done (Claude, Codex-reviewed): "Hook records" contract in docs/output-schema.md; Hook variant →
   fixtures/expected/hook/{links,sessions,sessions-2h}.json (expect hook_conflicts = 1). 2.6: record waiting first,
   hook waiting only without a record; 2.5: write the child-null record first, append the child.
+- Steps 2.5 + 2.6 done: hook crate has record / write / record_and_write (writes first, polls ≤ 25 s); core reads
+  hook records (`LinksOutput.hook_conflicts`, `Options.state_dir`). 2.7: call record_and_write with a real clock,
+  build HookEnv from env vars, register PostToolUseFailure, print hook_conflicts on stderr.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.6: Core reads hook records: hook evidence and waiting — Codex
+- Did: New `crates/core/src/hook.rs`: fail-soft reader for `<state>/hook/<uuid>.jsonl` (fixture mode
+  `<root>/.multi-link`, else `Options.state_dir`). Linker joins handoff records on (parent, tool_use_id):
+  transcript sources win, a differing hook child → `hook_conflicts` (on `LinksOutput`, not JSON); otherwise an
+  observed hook child → exact / hook, claimed before heuristics. State: record `status: "waiting"` → waiting /
+  session_record (H11); waiting / hook only for a transcript session without a record whose latest hook record
+  is waiting and later than every main + subagent line; waiting sessions bypass `--since`. CLI fills
+  `state_dir` only.
+- Changed: crates/core/src/{lib.rs,hook.rs,link.rs,links.rs,sessions.rs,state.rs},
+  crates/core/tests/{hook.rs,links.rs,sessions.rs}, crates/cli/src/main.rs
+- Verify: `cargo test -p multi-link-core` → all ok (unit 2, hook 6, links 15, repo_probe 9, sessions 11), incl.
+  hook_variant_equals_all_three_answer_keys (hook_conflicts == 1); clippy and fmt clean. Coordinator: workspace
+  24 binaries ok, clippy clean.
+- Review: Claude, 0 rounds. Exact only with an observed child; H11/H8 order right; equal timestamp clears
+  waiting; Codex-id hook records ignored. Nits not fixed: a non-NotFound read error on the hook dir fails the
+  report; hook_conflicts counts before the `--since` filter; links_report reads hook files twice.
+- Gotchas: the Hook variant test copies hidden `.multi-link` and `.claude` dirs explicitly. Printing
+  hook_conflicts on stderr is Step 2.7's job.
 
 ### 2026-10-30 — Step 2.5: Hook recorder library — Codex
 - Did: `multi_link_hook::record(payload, &HookEnv) -> Option<HookRecord>` (no I/O), `write(&HookRecord,

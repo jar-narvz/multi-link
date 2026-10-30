@@ -24,6 +24,7 @@ fn expected(name: &str) -> LinksReport {
 }
 fn options(since: Option<Duration>) -> Options<'static> {
     Options {
+        state_dir: PathBuf::new(),
         now: Timestamp::parse("2026-10-29T23:15:00Z").unwrap(),
         since,
         repo_mode: RepoMode::Fixture,
@@ -535,4 +536,139 @@ fn tags_are_preserved_for_every_match_kind() {
         assert_eq!(actual.links[0].r#match, match_kind);
         assert_eq!(actual.links[0].step.as_deref(), Some("2.3"));
     }
+}
+
+fn hook_handoffs(root: &Path, parent: &str, children: &[Option<&str>]) {
+    let records: String = children
+        .iter()
+        .map(|child| {
+            format!(
+                "{}\n",
+                json!({
+                    "v":1, "kind":"handoff", "at":RECENT, "session_id":parent,
+                    "agent_id":null, "event":"PostToolUse", "tool_use_id":parent,
+                    "cwd":"/repo", "child":child,
+                    "child_evidence":child.map(|_| "stdout"), "notification_type":null,
+                })
+            )
+        })
+        .collect();
+    write(root, &format!(".multi-link/hook/{parent}.jsonl"), &records);
+}
+
+#[test]
+fn hook_child_conflicts_are_counted_once_per_invocation() {
+    for (stdout, children, expected_child, expected_evidence, conflicts) in [
+        ("", vec![Some(B), Some(C)], None, None, 1),
+        ("", vec![None], None, None, 0),
+        (
+            "",
+            vec![None, Some(B), Some(B)],
+            Some(B),
+            Some(LinkEvidence::Hook),
+            0,
+        ),
+        (B, vec![Some(B)], Some(B), Some(LinkEvidence::Stdout), 0),
+        (B, vec![Some(C)], Some(B), Some(LinkEvidence::Stdout), 1),
+        (
+            B,
+            vec![Some(B), Some(C)],
+            Some(B),
+            Some(LinkEvidence::Stdout),
+            1,
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let result = if stdout.is_empty() {
+            String::new()
+        } else {
+            format!("session id: {stdout}")
+        };
+        call(temp.path(), A, RECENT, "codex exec 'x'", &result);
+        hook_handoffs(temp.path(), A, &children);
+        // No rollout is needed: only an observed non-null child supplies exact evidence.
+        let output = links_report(temp.path(), &options(None)).unwrap();
+        assert_eq!(output.hook_conflicts, conflicts);
+        assert_eq!(
+            output.report.links,
+            vec![link(
+                A,
+                RECENT,
+                InvocationForm::Exec,
+                expected_child,
+                expected_evidence,
+                vec![]
+            )]
+        );
+    }
+}
+
+#[test]
+fn hook_exact_claims_child_before_heuristics_except_for_resume() {
+    for resume in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let command = if resume {
+            format!("codex exec resume {B} 'x'")
+        } else {
+            "codex exec 'x'".into()
+        };
+        call(temp.path(), A, RECENT, &command, "");
+        call(temp.path(), C, RECENT, "codex exec 'x'", "");
+        child(temp.path(), B, RECENT, "/repo");
+        hook_handoffs(temp.path(), A, &[Some(B)]);
+        let output = links_report(temp.path(), &options(None)).unwrap();
+        assert_eq!(output.hook_conflicts, 0);
+        let first = output.report.links.iter().find(|l| l.parent == A).unwrap();
+        assert_eq!(
+            first.evidence,
+            Some(if resume {
+                LinkEvidence::ResumeArg
+            } else {
+                LinkEvidence::Hook
+            })
+        );
+        let other = output.report.links.iter().find(|l| l.parent == C).unwrap();
+        assert_eq!(
+            other.r#match,
+            if resume {
+                Match::Heuristic
+            } else {
+                Match::Unlinked
+            }
+        );
+        assert_eq!(other.child.as_deref(), resume.then_some(B));
+        assert_eq!(
+            other.candidates,
+            if resume {
+                vec![Candidate {
+                    id: B.into(),
+                    gap_ms: 0,
+                }]
+            } else {
+                vec![]
+            }
+        );
+    }
+}
+
+#[test]
+fn hook_join_requires_both_parent_and_tool_use_id() {
+    let temp = tempfile::tempdir().unwrap();
+    call(temp.path(), A, RECENT, "codex exec 'x'", "");
+    hook_handoffs(temp.path(), C, &[Some(B)]);
+    let file = temp.path().join(format!(".multi-link/hook/{C}.jsonl"));
+    let mut value: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    value["tool_use_id"] = json!(A);
+    fs::write(file, format!("{value}\n")).unwrap();
+    hook_handoffs(temp.path(), A, &[Some(B)]);
+    let file = temp.path().join(format!(".multi-link/hook/{A}.jsonl"));
+    value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    value["tool_use_id"] = json!(C);
+    fs::write(file, format!("{value}\n")).unwrap();
+    let output = links_report(temp.path(), &options(None)).unwrap();
+    assert_eq!(output.hook_conflicts, 0);
+    assert_eq!(
+        output.report.links,
+        vec![link(A, RECENT, InvocationForm::Exec, None, None, vec![])]
+    );
 }

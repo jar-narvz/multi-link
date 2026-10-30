@@ -28,6 +28,7 @@ fn expected() -> Value {
 }
 fn options(since: Option<Duration>) -> Options<'static> {
     Options {
+        state_dir: PathBuf::new(),
         now: now(),
         since,
         repo_mode: RepoMode::Fixture,
@@ -376,4 +377,35 @@ fn since_boundary_is_inclusive_and_future_activity_is_retained() {
             .len(),
         1
     );
+}
+
+#[test]
+fn waiting_record_has_no_freshness_limit_and_process_exit_wins() {
+    let mut record = record("waiting");
+    record.status_updated_at = stamp("2026-10-27T00:00:00Z");
+    for (liveness, expected) in [
+        (
+            Liveness::Alive,
+            (State::Waiting, StateEvidence::SessionRecord),
+        ),
+        (
+            Liveness::Unavailable,
+            (State::Waiting, StateEvidence::SessionRecord),
+        ),
+        (
+            Liveness::Gone,
+            (State::Finished, StateEvidence::ProcessExit),
+        ),
+    ] {
+        assert_eq!(claude_state(now(), Some(&record), liveness), expected);
+        let temp = tempfile::tempdir().unwrap();
+        write_record(temp.path(), 42, 1793315700000, "waiting");
+        let mut probe = FakeProcessProbe::default();
+        probe.results.insert((42, "start".into()), liveness);
+        let mut opts = options(None);
+        opts.probe = &probe;
+        let output = sessions_report(temp.path(), &opts).unwrap();
+        let session = &output.report.sessions[0];
+        assert_eq!((session.state, session.state_evidence), expected);
+    }
 }
