@@ -806,6 +806,19 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-10-30 — Step 4.6 review (adversarial Claude subagent)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: "worktree was removed" was not yet true | Accepted: removed with `git worktree remove` before commit |
+| 2 | P2: non-blank counts called "full length"; blank separator rows hide real height (31 → 18, 262 → 46) | Accepted: heights added; README says "non-blank" |
+| 3 | P2: classifier counted the `↓ N more lines` hint as a session row (35 → 34) | Accepted: number fixed, rule's leak noted |
+| 4 | P2: an earlier 200-row trial's "18 lines" had no kept output | Accepted: number dropped |
+| 5 | P3: "~150-line" script is an estimate (126) | Accepted: exact count |
+| 6 | P3: clippy log was a cached run without exit status | Accepted: re-run uncached, exit recorded |
+| 7 | P3: unpinned links file identical to pinned after file | Accepted: stated in the doc |
+| 8 | P3: bars also need height ≥ 4 | Accepted: README says so |
+| 9 | P3: emulator limits (one column per char, no scroll regions, chunked UTF-8) | Accepted: listed as method limits |
+
 ### 2026-10-30 — Step 4.5 review (Claude)
 | # | Finding | Decision |
 | --- | --- | --- |

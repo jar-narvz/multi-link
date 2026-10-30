@@ -1,13 +1,32 @@
 # multi-link
 
 A local terminal dashboard for Claude Code and Codex sessions across your repos.
-Release 1 is complete (see [check results](docs/phase3-check.md)).
+Release 1 is complete (see [check results](docs/phase3-check.md)). Release 1.1 (home screen
+cleanup) is built and measured; it awaits the owner's check of the real screen
+([before / after](docs/phase4-check.md)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
 - Shows session spans in a repo timeline, with scrolling, zoom and pan.
 - Opens supported Claude desktop sessions or resumes sessions confirmed finished; rechecks the
   action before executing. Unsupported actions show a command for you to run.
+
+## Home screen
+
+- **Top line:** waiting, busy and stale sessions, warnings, repos, sessions and hand-offs, so you can
+  see whether anything needs you before scrolling. A second line labels the time axis.
+- **Busy and waiting repos expanded first.** Each shows its latest PLAN.md step and Verify result,
+  its sessions with a state glyph, and its latest hand-off with the link kind.
+- **Quiet repos as one line each** (repo, counts, latest step and Verify) until you press Enter on them.
+  A repo with a `stale` session stays expanded.
+- **Merged rows:** four or more quiet top-level Claude or Codex sessions in a repo become one
+  `claude ×N` / `codex ×N` row; Enter expands it.
+- **Mini time bars:** at 60 columns or wider (and 4 rows or taller), each session row ends in a
+  bar of its span (start to last activity, idle gaps included) over the last 2 hours. Merged rows and collapsed repos have none.
+
+On the owner's real home directory, at one pinned time, the default 2-hour window went from 28 to 15
+non-blank lines and `--since all` from 246 to 30 non-blank lines, compared with Release 1 (full
+output and method in [docs/phase4-check.md](docs/phase4-check.md); counts change with what is running).
 
 Scanning only reads local agent files (`~/.claude`, `~/.codex`), repo metadata and optional
 hook state in `~/.multi-link`. It makes no network calls. Opening a session launches the
@@ -22,7 +41,7 @@ cargo build --release -p multi-link
 target/release/multi-link tui
 ```
 
-Use ↑/↓ to select, Enter to expand a merged row or open its timeline, `t` for the timeline,
+Use ↑/↓ to select, Enter to expand a quiet repo or merged row or open its timeline, `t` for the timeline,
 `o` to open, `f` to fork, Esc to return/collapse, and `q` to quit. In the timeline,
 `+`/`-` zoom, ←/→ pan, and `0` resets the window. The default history window is `2h`;
 use `--since all` for all history.
@@ -56,8 +75,9 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
   (crossterm 0.29).
 - macOS only for now.
 
-Workspace tests and clippy passed in the Step 3.8 run. Real-home timing output, terminal evidence
-and validation limits are in [docs/phase3-check.md](docs/phase3-check.md).
+Workspace tests and clippy passed in the Step 3.8 run and again in the Step 4.6 run. Real-home
+timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
+the home screen before / after check is in [docs/phase4-check.md](docs/phase4-check.md).
 
 ## Docs
 

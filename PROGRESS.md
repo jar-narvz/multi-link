@@ -11,9 +11,13 @@ home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coo
 **4.4 is committed** (Claude-reviewed, 1 Codex fix round; Claude re-ran `cargo test --workspace`
 → 29 `test result: ok`, 0 failed; clippy `-D warnings` clean).
 **4.5 is committed** (Claude-reviewed, 0 fix rounds; Claude re-ran `cargo test --workspace` → 29
-`test result: ok`, 0 failed; clippy `-D warnings` clean). Next: **4.6** (real check, README, owner stop-and-ask).
-One fresh step session each.
-4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
+`test result: ok`, 0 failed; clippy `-D warnings` clean).
+**4.6 is committed but Phase 4 is NOT closed: waiting on the owner.** Real-`~` before/after is in
+`docs/phase4-check.md` (home non-blank rows 28 → 15 default, 246 → 30 `--since all`; multi-link links at one
+pinned time 48 → 12 unlinked). Next: the owner runs `target/release/multi-link tui` (and `--since all`), says
+whether the need is met, and Claude records the answer in `docs/phase4-check.md` ("Owner check") and here.
+If not met, the owner's notes become new Phase 4 steps. Open trade-off: collapsed repos hide their latest
+hand-off line. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
 stub/missing-program child handling and terminal restoration. The child checks used a synthetic
 record in a scratch HOME because real `~` had 0 finished sessions. The crossterm 0.29 lost-key
@@ -107,6 +111,35 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 4.6: Real check and README — Claude
+- Did: Built release at `383537e` and `9b1b374` (detached `git worktree` in Claude's scratch dir, removed
+  afterwards; this checkout's branch never switched). Re-ran multi-link link counts on real `~`, unpinned and
+  with both builds at pinned `--now 2026-10-30T22:15:00Z`. Captured `tui` in a pty (stdlib Python VT
+  emulator, 600×100 and 40×100, default window and `--since all`, each before/after pair back to back).
+  Wrote `docs/phase4-check.md` (repo names, header lines and counts only) and a README "Home screen"
+  section. No code changed.
+- Changed: `README.md`, `docs/phase4-check.md`, `PROGRESS.md`, `PLAN.md` (Review log only).
+- Verify: link counts, checkout exactly this repo's path, `links --since 24h --json`:
+  ```text
+  baseline (Phase 4 plan): 43 calls → 42 unlinked / 1 heuristic / 0 ambiguous
+  unpinned 22:14 UTC:      49 calls → 12 unlinked / 33 heuristic / 4 ambiguous (12 unlinked, 0 candidates)
+  pinned, 9b1b374:         49 calls → 48 unlinked / 1 heuristic / 0 ambiguous
+  pinned, 383537e:         49 calls → 12 unlinked / 33 heuristic / 4 ambiguous
+  ```
+  Home screen, non-blank rows excluding footer (600-row pty): `--since 2h` 28 → 15; `--since all` 246 → 30.
+  Real list height (last non-blank row): 31 → 18 and 262 → 46. All 8 tui runs exit 0.
+  `cargo test --workspace` → exit 0, 29 `test result: ok`, 0 failed. `cargo clippy --workspace --all-targets
+  -- -D warnings` → exit 0, 0 warning/error lines (re-run after touching crate roots).
+  Owner's answer: **pending** (stop-and-ask).
+- Review: adversarial Claude subagent given only the diff, Step 4.6 and the raw captures; 9 findings
+  (0 P1, 4 P2, 5 P3), all accepted and applied (see PLAN.md Review log). It re-derived every pasted count
+  from the evidence files and found them matching.
+- Gotchas: No pty emulator package is installed (no `pyte`), so a 126-line stdlib emulator was written in
+  scratch; it treats every character as one column. zsh does not word-split `$var` in `for` loops. Pinned
+  `--now` earlier than live activity shows `… ahead` and `▸` bar ends. Counting non-blank rows
+  undercounts screen height (one blank row per repo); both are recorded. Collapsed repos hide their latest
+  hand-off line (4 → 2 hand-off lines with `--since all`): a trade-off for the owner to judge.
 
 ### 2026-10-30 — Step 4.5: TUI: mini time bars on home lanes — Codex
 - Did: Added a fixed right-hand bar column for individual home lanes, including children, using
