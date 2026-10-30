@@ -1,6 +1,7 @@
 mod hook;
 mod link;
 pub mod links;
+pub mod open;
 pub mod overview;
 pub mod probe;
 pub mod repo;

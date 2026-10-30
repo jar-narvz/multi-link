@@ -56,6 +56,86 @@ not commit, the coordinator does). Order: (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.
 
 ## Log (newest first)
 
+### 2026-10-30 — Step 3.4: Core open actions + CLI `open --dry-run` — Claude (implementer)
+- Did: New `core::open`: `OpenAction` (`Resume{program,args,cwd}` | `AppLink{url}` |
+  `Unavailable{reason,command,cwd}`, serde tag `action`, snake_case, the schema's JSON shape) and
+  `Reason`; `action(&Session, fork)` is a pure function walking output-schema "Open" top to bottom
+  (unsafe id → Codex → finished+transcript → finished record-only → running with `^local_[A-Za-z0-9-]+$`
+  host (app link / fork refused) → running without → unknown). `is_safe_id` (lowercase 8-4-4-4-12 hex,
+  hand-written, no new dep) and `is_app_host_id`. Lookup: `open::find(scanner, root, options, prefix)`
+  does a fresh `Scanner::sessions` pass with `since: None` and returns `Lookup::{Found, NoMatch, Ambiguous}`
+  (prefix match on full ids; empty prefix = no match); `open::fresh_action(…, full_id, fork)` is the
+  helper 3.7's TUI calls right before executing (exact id only, `None` when gone).
+  CLI `multi-link open <id-prefix> [--fork] [--dry-run] [--root] [--now]` (no `--since`: the window is
+  always off for open). `--dry-run` prints the action JSON on stdout. Exit codes are the same in both
+  modes: 0 runnable (dry-run) or child exited 0 (executed); child non-zero or killed by a signal →
+  `"<program>" exited with <status>` on stderr, exit 1 (the child's own code is never passed through, so it
+  cannot collide with 2/3/4); `Unavailable` → `cannot open "<id>": <reason>; run it yourself in "<cwd>":
+  <command>` on stderr, exit 3 (dry-run prints the JSON first, then exits 3, so
+  the exit code always answers "can this be opened"); several matches → `N sessions match <p>:` plus one
+  `"<id>"  harness  state` line each on stderr, exit 2; none → `no session matches <p>`, exit 4. Executing:
+  `open_command` builds a `std::process::Command` (program + argv, `current_dir(cwd)`, no shell; app link
+  = absolute `/usr/bin/open <url>`, no PATH lookup; `claude` stays a PATH lookup on purpose), run with `.status()` (inherited stdio, waits). Spawn failure → exit 1 with the error.
+  Untrusted text on stderr (session id, `cwd`) is printed with `{:?}` (control characters escaped, paths
+  with spaces quoted); `command` holds only a validated uuid and stays plain.
+  Review round 1 (adversarial Claude review) applied: child exit code mapping, `{:?}` on stderr,
+  `/usr/bin/open`, fixture table also asserts no fixture session is `finished`. Rejected there: an exact
+  id that is a prefix of another → exit 2 (matches the spec; uuids cannot collide that way).
+- Changed: `crates/core/src/open.rs` (new), `crates/core/src/lib.rs` (`pub mod open`),
+  `crates/cli/src/main.rs` (`Open` subcommand, `open`, `open_command`, `child_exit`, `home()` / `state_dir()` helpers
+  shared with the other commands, 2 unit tests), `crates/cli/tests/cli.rs` (4 open tests)
+- Verify: `cargo test -p multi-link-core -p multi-link` → all `ok`: core lib 31 passed (10 new `open::tests`),
+  core hook 6, links 15, repo_probe 10, sessions 12; cli unit 3 (2 new), cli integration 20 (4 new); 0 failed (after review round 1).
+  `cargo clippy -p multi-link-core -p multi-link -- -D warnings` (also with `--all-targets`) → clean.
+  Verify bullets → tests:
+  - fixture table, every session × {open, fork}, plain (28) and hook variant (29), no session `finished` and no `Resume`, reasons per
+    schema "Fixture coverage" with exact counts (5 desktop app_link / fork_needs_finished, 70001 + hook
+    d1f3b188 / 11c1f13c running_without_app_link, 9 Codex codex_not_supported, 13 / 12 transcript-only
+    not_known_finished): `open::tests::fixture_table_never_resumes_and_matches_schema_coverage`
+  - FakeProcessProbe: record + transcript + Gone → Resume (args, `--fork-session`, transcript cwd):
+    `record_transcript_and_gone_process_resume_in_cwd`; record-only + Gone → `no_transcript`:
+    `record_only_gone_is_no_transcript`; two records, newer Gone + older Alive → app_link / fork refused,
+    never Resume: `one_gone_and_one_alive_record_never_resumes`; Alive with/without host:
+    `alive_record_with_and_without_host_id`; probe Unavailable (busy/idle/waiting/other status) never
+    Resume: `unavailable_probe_follows_record_status_and_never_resumes`; transcript-only Claude and
+    completed-turn Codex with command text: `transcript_only_claude_and_completed_codex_offer_commands`;
+    unsafe ids (`-rf`, uppercase, wrong length, bad separator), Codex in every state, bad host ids:
+    `pure_rules_cover_unsafe_ids_codex_states_and_bad_host_ids`; JSON shape: `json_shape_matches_the_schema`
+  - id older than `--since`: core `lookup_finds_old_ids_and_reports_none_or_ambiguous` (0d7faed4 absent
+    from a 2h `sessions` pass, found by `find` with the same 2h options) and CLI
+    `open_lookup_no_match_ambiguous_and_old_ids` (absent from `sessions` default window, found by `open`)
+  - no match → exit 4, ambiguous (`01a189e4`, 4 Codex) → exit 2: `open_lookup_no_match_ambiguous_and_old_ids`
+  - `--dry-run` CLI: app-linked running Claude 6358ec7e (+ fork → fork_needs_finished, exit 3):
+    `open_dry_run_prints_app_link_for_a_running_desktop_session`; transcript-only Claude 0d7faed4 and
+    Codex 01a189e2 × {open, fork}: `open_dry_run_transcript_only_claude_and_codex_are_unavailable_exit_three`;
+    without `--dry-run` an Unavailable prints nothing on stdout and runs nothing:
+    `open_without_dry_run_runs_nothing_for_unavailable`
+  - execution argv/cwd without spawning: cli unit `open_commands_run_without_a_shell_in_cwd`
+    (inspects `Command::get_program/get_args/get_current_dir`; app link argv is `/usr/bin/open <url>`);
+    child exit mapping: cli unit `child_exit_never_passes_the_child_code_through` (0 → 0; exit 2/3/4 and
+    SIGKILL → 1 with message, via `ExitStatusExt::from_raw`). Escaped stderr: exact-text assertions in
+    `open_without_dry_run_runs_nothing_for_unavailable` and the ambiguous listing. No test executes a harness or opens a URL.
+- Review: Claude (step session) read the full diff: rule order, JSON shape, lookup and exit codes match
+  output-schema "Open"; only the 4 named files changed. Adversarial Claude review (fresh subagent, diff + step +
+  schema only): no Resume-safety hole in 3.4's code. Round 1, accepted and fixed: child exit code passed
+  through (collided with 2/3/4) → mapped to 1; untrusted id/cwd on stderr → `{:?}`; app link via
+  `/usr/bin/open`; fixture table also asserts no fixture is `finished`. Rejected: an exact id that is a prefix
+  of another gives exit 2 (spec says so; uuids cannot collide); PATH lookup for `claude` (the user's PATH).
+  **Open P1, upstream, outside 3.4's files:** `core/src/probe.rs` runs `ps` with only `TZ=UTC`; `lstart` is
+  locale-dependent (confirmed: `LC_ALL=de_DE.UTF-8` → `Fr 30 Okt …`), so under a non-English locale a live
+  record's start time mismatches → `Gone` → `finished` → 3.4 would offer `Resume` on a live session. Needs a
+  probe.rs fix (`LC_ALL=C` on both `ps` calls + test) before 3.7 at the latest. Verify re-run by Claude:
+  same counts (core lib 31, hook 6, links 15, repo_probe 10, sessions 12, cli unit 3, cli integration 20, 0
+  failed); clippy `--all-targets -D warnings` clean. Coordinator workspace gate (with 3.5 in the tree):
+  `cargo test --workspace` all ok, clippy `--workspace --all-targets -D warnings` clean, sessions / links /
+  overview fixture diffs `same`.
+- Gotchas: Fixture mode can never produce `finished`, so `Resume` and the real spawn are only unit-tested
+  (core via FakeProcessProbe, CLI via the built `Command`); the actual `claude --resume` / `open <url>`
+  run is untested until 3.7/3.8. Exit 2 is shared with clap usage errors. `open` without `--dry-run` in
+  fixture mode on a desktop record would really run `open claude://…` (fixture data, but a real call),
+  so tests only use `--dry-run` or Unavailable sessions. Cargo printed "Adding windows…" lock lines
+  during the run: that is 3.5's parallel `Cargo.toml` change, not this step (3.4 touched no Cargo file).
+
 ### 2026-10-30 — Step 3.3: Core: new Session fields, overview report, CLI `overview` — Claude (implementer)
 - Did: Model: `Session.host_session_id` + `checkout`; `OverviewReport`, `RepoGroup`, `Tier`, `Plan`,
   `LatestStep`, `ConcurrencyWarning`, `Row` (untagged; `SessionRow` / `MergedRow` each write their own

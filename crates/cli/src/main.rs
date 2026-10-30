@@ -8,7 +8,10 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand};
-use multi_link_core::{FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode};
+use multi_link_core::{
+    FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode,
+    open::{self, OpenAction},
+};
 use multi_link_model::{
     Convention, LinksReport, OverviewReport, Row, SessionsReport, StepsReport, Timestamp,
 };
@@ -31,6 +34,8 @@ enum Command {
     Links(CommonArgs),
     /// Home screen data: repo groups, rows, plan (one refresh pass).
     Overview(CommonArgs),
+    /// Resume a finished Claude session or open it in the app (FR18).
+    Open(OpenArgs),
     Steps {
         #[command(flatten)]
         common: CommonArgs,
@@ -54,6 +59,125 @@ struct CommonArgs {
     /// Print JSON.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Args)]
+struct OpenArgs {
+    /// Session id or a prefix of it (matched on full ids, history window off).
+    id_prefix: String,
+    /// Fork instead of resuming in place (`--fork-session`).
+    #[arg(long)]
+    fork: bool,
+    /// Print the action as JSON instead of executing it.
+    #[arg(long)]
+    dry_run: bool,
+    /// Home-shaped root (default: HOME); enables fixture mode.
+    #[arg(long)]
+    root: Option<PathBuf>,
+    /// Override the current time with an RFC 3339 timestamp.
+    #[arg(long)]
+    now: Option<Timestamp>,
+}
+
+/// Exit codes of `open`: several matches, nothing runnable, no match.
+const EXIT_AMBIGUOUS: i32 = 2;
+const EXIT_UNAVAILABLE: i32 = 3;
+const EXIT_NO_MATCH: i32 = 4;
+/// macOS `open`, used for app links.
+const OPEN_PROGRAM: &str = "/usr/bin/open";
+
+/// The process an executable action runs: no shell, ids only as argv items.
+/// `None` for `Unavailable`. Built separately so tests inspect it without spawning.
+fn open_command(action: &OpenAction) -> Option<std::process::Command> {
+    match action {
+        OpenAction::Resume { program, args, cwd } => {
+            let mut command = std::process::Command::new(program);
+            command.args(args).current_dir(cwd);
+            Some(command)
+        }
+        OpenAction::AppLink { url } => {
+            // Absolute path: an app link never depends on a PATH lookup.
+            let mut command = std::process::Command::new(OPEN_PROGRAM);
+            command.arg(url);
+            Some(command)
+        }
+        OpenAction::Unavailable { .. } => None,
+    }
+}
+
+/// Returns the process exit code. Unavailable → reason on stderr, exit 3, in
+/// both modes (`--dry-run` still prints the JSON first), so the exit code always
+/// says whether the session can be opened.
+fn open(
+    args: &OpenArgs,
+    root: &std::path::Path,
+    options: &Options<'_>,
+) -> Result<i32, Box<dyn std::error::Error>> {
+    let mut scanner = multi_link_core::Scanner::default();
+    let session = match open::find(&mut scanner, root, options, &args.id_prefix)? {
+        open::Lookup::Found(session) => session,
+        open::Lookup::NoMatch => {
+            eprintln!("no session matches {}", args.id_prefix);
+            return Ok(EXIT_NO_MATCH);
+        }
+        open::Lookup::Ambiguous(sessions) => {
+            eprintln!("{} sessions match {}:", sessions.len(), args.id_prefix);
+            for session in sessions {
+                eprintln!(
+                    "{:?}  {}  {}",
+                    session.id,
+                    label(session.harness),
+                    label(session.state)
+                );
+            }
+            return Ok(EXIT_AMBIGUOUS);
+        }
+    };
+    let action = open::action(&session, args.fork);
+    if args.dry_run {
+        json(&mut io::stdout().lock(), &action)?;
+    }
+    if let OpenAction::Unavailable {
+        reason,
+        command,
+        cwd,
+    } = &action
+    {
+        match command {
+            Some(command) => eprintln!(
+                "cannot open {:?}: {}; run it yourself in {cwd:?}: {command}",
+                session.id,
+                reason.as_str()
+            ),
+            None => eprintln!("cannot open {:?}: {}", session.id, reason.as_str()),
+        }
+        return Ok(EXIT_UNAVAILABLE);
+    }
+    if args.dry_run {
+        return Ok(0);
+    }
+    let mut command = open_command(&action).expect("executable action has a command");
+    let status = command
+        .status()
+        .map_err(|error| format!("cannot run {:?}: {error}", command.get_program()))?;
+    let (code, message) = child_exit(command.get_program(), status);
+    if let Some(message) = message {
+        eprintln!("{message}");
+    }
+    Ok(code)
+}
+
+/// The child's own code is not passed through: it would collide with 2/3/4.
+/// Success → 0; a non-zero exit or a signal → exit 1 with a message.
+fn child_exit(
+    program: &std::ffi::OsStr,
+    status: std::process::ExitStatus,
+) -> (i32, Option<String>) {
+    if status.success() {
+        (0, None)
+    } else {
+        (1, Some(format!("{program:?} exited with {status}")))
+    }
 }
 
 #[derive(Clone)]
@@ -90,6 +214,18 @@ fn clock_now() -> Result<Timestamp, Box<dyn std::error::Error>> {
         Err(error) => -i64::try_from(error.duration().as_millis())?,
     };
     Ok(Timestamp::from_epoch_ms(milliseconds)?)
+}
+
+fn home() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or("HOME is not set; supply --root")?)
+}
+
+fn state_dir(root: &std::path::Path) -> PathBuf {
+    std::env::var_os("MULTI_LINK_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join(".multi-link"))
 }
 
 fn hook_conflicts(count: usize) {
@@ -280,8 +416,31 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Hook { command } => return hook::run(command),
         command => Cli { command },
     };
+    if let Command::Open(args) = &cli.command {
+        let fixture_probe = FixtureProcessProbe;
+        let real_probe = RealProcessProbe::default();
+        let (root, repo_mode, probe): (_, _, &dyn ProcessProbe) = match &args.root {
+            Some(root) => (root.clone(), RepoMode::Fixture, &fixture_probe),
+            None => (home()?, RepoMode::Real, &real_probe),
+        };
+        let options = Options {
+            state_dir: state_dir(&root),
+            now: match args.now {
+                Some(now) => now,
+                None => clock_now()?,
+            },
+            since: None,
+            repo_mode,
+            probe,
+        };
+        let code = open(args, &root, &options)?;
+        if code != 0 {
+            std::process::exit(code);
+        }
+        return Ok(());
+    }
     let common = match &cli.command {
-        Command::Hook { .. } => unreachable!(),
+        Command::Hook { .. } | Command::Open(_) => unreachable!(),
         Command::Sessions(common)
         | Command::Links(common)
         | Command::Overview(common)
@@ -291,18 +450,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let real_probe = RealProcessProbe::default();
     let (root, repo_mode, probe): (_, _, &dyn ProcessProbe) = match &common.root {
         Some(root) => (root.clone(), RepoMode::Fixture, &fixture_probe),
-        None => (
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .ok_or("HOME is not set; supply --root")?,
-            RepoMode::Real,
-            &real_probe,
-        ),
+        None => (home()?, RepoMode::Real, &real_probe),
     };
     let options = Options {
-        state_dir: std::env::var_os("MULTI_LINK_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| root.join(".multi-link")),
+        state_dir: state_dir(&root),
         now: match common.now {
             Some(now) => now,
             None => clock_now()?,
@@ -313,7 +464,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut stdout = io::stdout().lock();
     match &cli.command {
-        Command::Hook { .. } => unreachable!(),
+        Command::Hook { .. } | Command::Open(_) => unreachable!(),
         Command::Sessions(_) => {
             let output = multi_link_core::sessions_report(&root, &options)?;
             hook_conflicts(multi_link_core::links_report(&root, &options)?.hook_conflicts);
@@ -399,6 +550,56 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn argv(command: &std::process::Command) -> Vec<String> {
+        std::iter::once(command.get_program())
+            .chain(command.get_args())
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    /// Builds, never spawns: tests must not start a harness or open a URL.
+    #[test]
+    fn open_commands_run_without_a_shell_in_cwd() {
+        let id = "aaaaaaaa-0000-4000-8000-000000000001";
+        let resume = OpenAction::Resume {
+            program: "claude".into(),
+            args: vec!["--resume".into(), id.into(), "--fork-session".into()],
+            cwd: "/some/repo".into(),
+        };
+        let command = open_command(&resume).unwrap();
+        assert_eq!(argv(&command), ["claude", "--resume", id, "--fork-session"]);
+        assert_eq!(
+            command.get_current_dir(),
+            Some(std::path::Path::new("/some/repo"))
+        );
+        let url = "claude://code/continue?session=local_abc";
+        let command = open_command(&OpenAction::AppLink { url: url.into() }).unwrap();
+        assert_eq!(argv(&command), ["/usr/bin/open", url]);
+        assert_eq!(command.get_current_dir(), None);
+        assert!(
+            open_command(&OpenAction::Unavailable {
+                reason: open::Reason::NotKnownFinished,
+                command: Some(format!("claude --resume {id}")),
+                cwd: "/some/repo".into(),
+            })
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn child_exit_never_passes_the_child_code_through() {
+        use std::os::unix::process::ExitStatusExt;
+        let program = std::ffi::OsStr::new("claude");
+        assert_eq!(child_exit(program, ExitStatusExt::from_raw(0)), (0, None));
+        // Exit codes 2, 3, 4 (wait status = code << 8) and SIGKILL (raw 9) all become 1.
+        for raw in [2 << 8, 3 << 8, 4 << 8, 9] {
+            let (code, message) = child_exit(program, ExitStatusExt::from_raw(raw));
+            assert_eq!(code, 1, "{raw}");
+            let message = message.unwrap();
+            assert!(message.starts_with("\"claude\" exited with "), "{message}");
+        }
+    }
 
     #[test]
     fn labels_use_serde_names_for_multiword_variants() {

@@ -751,3 +751,139 @@ fn hook_conflicts_are_stderr_only_for_sessions_links_and_overview() {
         assert_eq!(actual, answer);
     }
 }
+
+fn open(extra: &[&str]) -> Output {
+    let mut args = vec!["--now", "2026-10-29T23:15:00Z"];
+    args.extend_from_slice(extra);
+    run("open", &args)
+}
+
+fn stdout_json(output: &Output) -> Value {
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+// Every `open` test below either passes --dry-run or targets an Unavailable
+// session, so no harness is started and no URL is opened.
+#[test]
+fn open_dry_run_prints_app_link_for_a_running_desktop_session() {
+    let output = open(&["6358ec7e", "--dry-run"]);
+    success(&output);
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        stdout_json(&output),
+        json!({"action": "app_link",
+               "url": "claude://code/continue?session=local_05642b81-99a7-4391-9a40-d3f85fc0a460"})
+    );
+    // Fork of a running session: refused, command offered, exit 3.
+    let output = open(&["6358ec7e", "--fork", "--dry-run"]);
+    assert_eq!(output.status.code(), Some(3));
+    let id = "6358ec7e-ab3b-40b4-a75d-87f6da09cedc";
+    assert_eq!(
+        stdout_json(&output),
+        json!({"action": "unavailable", "reason": "fork_needs_finished",
+               "command": format!("claude --resume {id} --fork-session"),
+               "cwd": "/home/dev/repo-c"})
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("fork_needs_finished"));
+}
+
+#[test]
+fn open_dry_run_transcript_only_claude_and_codex_are_unavailable_exit_three() {
+    let claude = "0d7faed4-bfd7-40bc-9d56-c3652efeb876";
+    let codex = "01a189e2-d57f-7a91-b74c-ae85abd1a6a1";
+    for (prefix, fork, reason, command, cwd) in [
+        (
+            "0d7faed4",
+            false,
+            "not_known_finished",
+            format!("claude --resume {claude}"),
+            "/home/dev/repo-d",
+        ),
+        (
+            "0d7faed4",
+            true,
+            "not_known_finished",
+            format!("claude --resume {claude} --fork-session"),
+            "/home/dev/repo-d",
+        ),
+        (
+            "01a189e2",
+            false,
+            "codex_not_supported",
+            format!("codex resume {codex}"),
+            "/home/dev/multi-link-sandbox/repo-a",
+        ),
+        (
+            "01a189e2",
+            true,
+            "codex_not_supported",
+            format!("codex fork {codex}"),
+            "/home/dev/multi-link-sandbox/repo-a",
+        ),
+    ] {
+        let mut args = vec![prefix, "--dry-run"];
+        if fork {
+            args.push("--fork");
+        }
+        let output = open(&args);
+        assert_eq!(output.status.code(), Some(3), "{prefix} {fork}");
+        assert_eq!(
+            stdout_json(&output),
+            json!({"action": "unavailable", "reason": reason, "command": command, "cwd": cwd})
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(reason) && stderr.contains(&command),
+            "{stderr}"
+        );
+    }
+}
+
+#[test]
+fn open_without_dry_run_runs_nothing_for_unavailable() {
+    let output = open(&["01a189e2"]);
+    assert_eq!(output.status.code(), Some(3));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "cannot open \"01a189e2-d57f-7a91-b74c-ae85abd1a6a1\": codex_not_supported; run it yourself \
+         in \"/home/dev/multi-link-sandbox/repo-a\": codex resume 01a189e2-d57f-7a91-b74c-ae85abd1a6a1\n"
+    );
+}
+
+#[test]
+fn open_lookup_no_match_ambiguous_and_old_ids() {
+    let output = open(&["ffffffff", "--dry-run"]);
+    assert_eq!(output.status.code(), Some(4));
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"no session matches ffffffff\n");
+
+    let output = open(&["01a189e4", "--dry-run"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut expected = "4 sessions match 01a189e4:\n".to_owned();
+    for id in [
+        "01a189e4-7f31-7293-8ee6-516b81099fb5",
+        "01a189e4-8084-7fc2-93b5-0b202360b109",
+        "01a189e4-d501-71d2-97d8-0192e844ec5d",
+        "01a189e4-d953-7b63-b9b5-088a72542eb3",
+    ] {
+        expected.push_str(&format!("\"{id}\"  codex  unknown\n"));
+    }
+    assert_eq!(stderr, expected);
+
+    // 0d7faed4 is outside the default 2h window of `sessions`, but `open` finds it.
+    let listed = run("sessions", &["--now", "2026-10-29T23:15:00Z", "--json"]);
+    success(&listed);
+    assert!(
+        !String::from_utf8_lossy(&listed.stdout).contains("0d7faed4"),
+        "fixture should be windowed out of sessions"
+    );
+    let output = open(&["0d7faed4-bfd7-40bc-9d56-c3652efeb876", "--dry-run"]);
+    assert_eq!(output.status.code(), Some(3));
+    assert_eq!(
+        stdout_json(&output)["command"],
+        "claude --resume 0d7faed4-bfd7-40bc-9d56-c3652efeb876"
+    );
+}
