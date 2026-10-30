@@ -1,0 +1,16 @@
+repo-a  timeline  2026-10-29 22:58:00 → 23:02:00 UTC (4m)  /home/dev/multi-link-sandbox/repo-a
+UTC                            22:58            22:59            23:00            23:01
+                               ┬────────────────┬────────────────┬────────────────┬────────────────┬
+unk   codex  01a189e5…a4fb                                                            ━━━
+unk   claude 80cce3e4…b3f7                                           ●━━━━
+ └  unk   codex  01a189e4…9fb5                                        ━━━
+unk   claude ef72378c…1171                  ━━●━━━
+ └  unk   codex  01a189e2…a6a1        ━━━━━━━━━━
+unk   claude bb792d9c…affa           ━●━━━━━
+
+
+
+
+━ session span: start → last activity, idle gaps included (not busy time) · ◂▸ past window edge
+hand-off (parent's row): ● exact  ○ heuristic  ?N ambiguous, N candidates  × unlinked  + more
+child: └ placed by an exact hand-off  └~ by a heuristic one · state: unk unknown, done finished

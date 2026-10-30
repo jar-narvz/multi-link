@@ -419,7 +419,7 @@ fn match_name(r#match: Match) -> &'static str {
 /// first 8 hex digits are a timestamp shared by sessions started close together (four fixture
 /// ids start `01a189e4`), so a plain 8-character prefix would show different sessions alike.
 /// Char-safe; ids are ASCII in practice.
-fn short_id(id: &str) -> String {
+pub(crate) fn short_id(id: &str) -> String {
     let chars: Vec<char> = id.chars().collect();
     if chars.len() <= 13 {
         return id.to_string();
@@ -434,7 +434,7 @@ fn plural(count: usize, one: &str, many: &str) -> String {
 }
 
 /// Last `/`-separated component of a recorded path.
-fn basename(path: &str) -> &str {
+pub(crate) fn basename(path: &str) -> &str {
     path.trim_end_matches('/')
         .rsplit('/')
         .next()

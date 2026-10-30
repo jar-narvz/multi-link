@@ -1,11 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.5**, **3.6a** done (3.4 open actions, 3.5 TUI home render).
-3.6a (`ps` C locale) done. Next: finish **Step 3.6** (timeline render, in progress), then **3.7**, **3.8**
-(Codex-off mode).
+**Resume here (paused 2026-10-30 by the owner after Step 3.6).** Phases 0–2 and Steps **3.1–3.6** + **3.6a** done
+and committed locally (not pushed). Next: **Step 3.7** (`multi-link tui`: refresh loop, keys, bell, open with
+terminal suspend/restore), then **3.8** (real check on `~`, README; closes Release 1). Start 3.7 with one fresh
+step session (CLAUDE.md "Autonomous mode"). Codex-off mode is still on (temporary): if the owner says Codex usage
+is back, 3.7 goes to Codex instead of a Claude implementer subagent.
 
 - **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
+- **What 3.7 needs from 3.6:** `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)` and
+  `TimeWindow::default_for(report)`; it has no selection or scroll state, so 3.7 adds keys for it (and the window).
+
 - **What 3.7 needs from 3.4:** before `o` / `f`, call `open::fresh_action(&mut scanner, root, &options, full_id, fork)`
   (fresh pass, window off; `None` → footer "session no longer found"). Execute `Resume` as
   `Command::new(program).args(args).current_dir(cwd).status()` and `AppLink` as `/usr/bin/open <url>`, wrapped in T9's
@@ -62,6 +67,41 @@
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.6: TUI repo timeline render — Claude (implementer)
+- Did: `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)`, pure, no clock reads;
+  `TimeWindow::{new, ending_at, default_for}` (default 2 h ending at the report's `now`). One row per session in
+  overview order; merged `claude ×N` rows expanded into their members; Codex children under their parent as the
+  overview nests them (T11), unplaced Codex rows top-level. Child branch shows placement: exact placing hand-off →
+  ` └ `, otherwise ` └~`. Row labels name the state as a word (`wait busy stale idle unk done`), because `●` `○` `?`
+  are markers here. Bar = session span `started_at`..`last_activity`; legend says "idle gaps included (not busy
+  time)"; no busy swimlanes. Hand-off markers at `at` on the parent's row: exact `●`, heuristic `○`, ambiguous `?N`
+  (`?` with no candidates), unlinked `×`. Collisions: least certain wins the cell; several in one cell → `+` next to
+  it; `?N` anchored at its column, digits only if they fit. Spans clipped with `◂`/`▸`; links outside not drawn;
+  zero-length span = 1 cell; empty/inverted window lists rows without lanes; unknown repo shows a note; cut rows
+  counted ("↓ N more rows"). Ticks: smallest step leaving label + 3 cells. Goldens at 100×16: repo-a and repo-b
+  ambiguous (links-amb-hidden.json), each at the default 2 h window and a 22:58–23:02 zoom. `home.rs`: only
+  `short_id`, `basename` made `pub(crate)` (home goldens unchanged).
+- Changed: crates/tui/src/timeline.rs (new), crates/tui/src/lib.rs, crates/tui/src/home.rs,
+  crates/tui/tests/timeline.rs (new), fixtures/expected/tui/timeline-repo-a{,-zoom}.txt,
+  timeline-repo-b-amb{,-zoom}.txt (new)
+- Verify: `cargo test -p multi-link-tui` → unit `ok. 9 passed`; tests/home.rs `ok. 15 passed`; tests/timeline.rs
+  `ok. 22 passed` (incl. the four snapshots, span_clipped_by_the_window, link_outside_the_window_is_not_drawn,
+  zero_length_span_draws_one_cell, small_sizes_do_not_panic); 0 failed. `cargo clippy -p multi-link-tui --all-targets
+  -- -D warnings` → clean.
+- Review: Claude (step session) re-ran both commands (same results). Goldens checked column by column against
+  overview.json / links.json / links-amb-hidden.json (zoom 240 s / 69 cells): repo-a bb792d9c ● 7, ef72378c ● 15 with
+  child 01a189e2 under it (latest of exec + resume, T11), 80cce3e4 ● 38 with child 01a189e4…9fb5, 01a189e5 top-level;
+  repo-b-amb 11bf1b58 `?2` at 45, f4d83303 ○ 45 with d953 as `└~`, d501 top-level. Adversarial Claude review round 1
+  accepted: state glyphs collided with markers, markers hid each other, non-exact placement looked exact, one-row body
+  dropped its note, `?N` shifted off its time, empty candidates drew `?0`. Rejected: both-edge clip arrow (cosmetic),
+  East-Asian-ambiguous glyph width (same as home), RFC 3339 round-trip in epoch_ms (needs a model accessor; backlog).
+  Coordinator workspace gate: `cargo test --workspace` 28 binaries ok, clippy `--workspace --all-targets -D warnings`
+  clean, sessions / links / overview fixture diffs `same`.
+- Gotchas: overview.json nests d501 under 11bf1b58 (computed from links.json), so the ambiguous golden uses a
+  test-derived overview (`amb_overview` in tests/timeline.rs); if core's placement rule changes, that helper must
+  follow. `●○◂▸━` are East-Asian-ambiguous width. `UPDATE_SNAPSHOTS=1` rewrites the home goldens too. No
+  selection/scroll state in the timeline yet; 3.7 adds keys.
 
 ### 2026-10-30 — Step 3.6a: `ps` runs in the C locale — Claude (implementer)
 - Did: Both `ps` calls (batch and single) now go through one helper, `RealProcessProbe::ps_command`, which removes

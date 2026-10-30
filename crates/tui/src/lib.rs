@@ -3,5 +3,7 @@
 //! merging come from core's `OverviewReport` as given; this crate only lays it out.
 
 mod home;
+mod timeline;
 
 pub use home::{Target, render_home, selectable};
+pub use timeline::{DEFAULT_WINDOW, TimeWindow, render_timeline};
