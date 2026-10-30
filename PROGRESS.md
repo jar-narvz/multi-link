@@ -1,21 +1,27 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2, **Step 3.1** (refresh speed) and **Step 3.2** (Phase 3 output
-contract) done. Next: **Step 3.3** (core Session fields, overview report, CLI `overview`; Codex-off mode, so a
-Claude implementer subagent). Order: 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
+**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1** (refresh speed), **3.2** (Phase 3 output contract)
+and **3.3** (Session `checkout` / `host_session_id`, `overview` report, CLI `overview`) done. `cargo test` is
+green again. Next: **Step 3.4 ∥ Step 3.5** (Codex-off mode: Claude implementer subagents; parallel sessions do
+not commit, the coordinator does). Order: (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
 
-- **What 3.3 needs from 3.2:** the contract is `docs/output-schema.md` → Session (`checkout`, `host_session_id`,
-  the several-records-per-id rule on `record`), "`overview`" (RepoGroup, Rows, Codex placement, merge, Plan,
-  the "Required 3.3 unit tests" list) and "Open" (for 3.4). Keys: `fixtures/expected/overview.json`,
-  `fixtures/expected/hook/overview.json` (hook variant command: `overview --since all`), plus the two new fields
-  in `sessions.json` and `hook/sessions*.json`. `cargo test` is **red until 3.3**: every sessions key gained the
-  two fields and the new synthetic busy record `fixtures/sessions/.claude/sessions/70001.json` (row
-  `00000000-0000-4000-8000-000000000010`), and the model round-trip test has no type for `overview.json` yet.
-- `checkout` already exists as `RepoPaths::checkout` in `crates/core/src/repo.rs`; `hostSessionId` must be kept
-  by `claude::read_session_record` (today dropped).
-- A key-consistency checker for the overview keys (independent of the code) is in the shared notes folder,
-  `step-3.2/check_keys.py` (run from the repo root); not committed.
+- **What 3.4 needs from 3.3:** `Session.host_session_id` and `Session.record` already follow the
+  several-records-per-id rule (`core/src/sessions.rs::choose_record`: `finished` only when every record is
+  `Gone`). `open::action` can work on a `Session` alone. For the lookup by id prefix with the window off, call
+  `Scanner::sessions` / `refresh` with `since: None`.
+- **What 3.5 needs from 3.3:** the types are `multi_link_model::{OverviewReport, RepoGroup, Tier, Plan,
+  LatestStep, ConcurrencyWarning, Row, SessionRow, MergedRow}`. `Row` is `#[serde(untagged)]`, and each struct
+  writes its own `"kind"`. Render from `fixtures/expected/overview.json` and `hook/overview.json`, which
+  deserialize into `OverviewReport` (model round-trip test).
+- **Plan lookup is injected:** `Scanner::overview(root, &options, &mut plans)`, where `plans: FnMut(&Path) ->
+  RepoSteps`. Core does not depend on `multi-link-plan` at runtime; it is a dev-dependency for the example only.
+  The CLI and `refresh_timing` pass `multi_link_plan::steps_report`. 3.7's refresh worker must pass the same
+  closure. `core::overview::plan_folder` decides the folder.
+- **3.3 timing (Claude, real `~`, warm release build, now includes overview + plan parse):** `refresh_timing --
+  3` → pass 1 3460 ms, pass 2 25 ms (k=0), pass 3 45 ms (k=2, 2.1 MB). Warm refresh stays far under 2000 ms.
+- **Backlog nit:** the CLI plan lookup turns the folder into a string with `to_string_lossy`, so a non-UTF-8 repo
+  path shows `missing` (review round 1, rejected for 3.3).
 - **3.1 result (Claude, real `~`, real `ps`, warm release build):** `refresh_timing -- 3` → pass 1 3058 ms,
   pass 2 29 ms (k=1), pass 3 31 ms (k=2). Warm refresh ≤ 2000 ms with k ≥ 1, so **offset tailing is not needed**
   before 3.7 (T1 holds as written). Passes with k=0 also occur (live sessions write in bursts).
@@ -31,9 +37,9 @@ Claude implementer subagent). Order: 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 →
 - **Baseline for 3.1 (measured 2026-10-30, warm release build, real `~`):** `sessions --json` 16.4–16.9 s
   (10.4 s user, 4.5 s sys); `--root ~` (no ps/git) 6.0 s; `links` 9.8 s; `steps` 7.0 s. Cause: one `git
   rev-parse` per session before the window filter, one `ps` per record, and a full re-parse of every file.
-- **What exists:** Core `Scanner::{sessions,links,refresh}` caches per-file parsed results and git mappings,
+- **What exists:** Core `Scanner::{sessions,links,refresh,overview}` caches per-file parsed results and git mappings,
   with one batch process probe per refresh. Rust workspace `crates/{model,claude,codex,plan,core,hook,cli}`. `multi-link sessions | links |
-  steps` (JSON or text; `--root` fixture mode, `--now`, `--since`) and `multi-link hook record | install |
+  steps | overview` (JSON or text; `--root` fixture mode, `--now`, `--since`) and `multi-link hook record | install |
   uninstall` (install only prints). `cargo test --workspace` → 24 binaries ok; clippy `-D warnings` clean.
 - **Answer keys:** `fixtures/expected/{sessions,links,steps}.json` (Phase 1), `links-tagged.json`,
   `links-amb-hidden.json`, `fixtures/expected/hook/*` (Hook variant). Verify commands are in PLAN.md 1.9 / 2.x.
@@ -49,6 +55,65 @@ Claude implementer subagent). Order: 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 →
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.3: Core: new Session fields, overview report, CLI `overview` — Claude (implementer)
+- Did: Model: `Session.host_session_id` + `checkout`; `OverviewReport`, `RepoGroup`, `Tier`, `Plan`,
+  `LatestStep`, `ConcurrencyWarning`, `Row` (untagged; `SessionRow` / `MergedRow` each write their own
+  `"kind"`, since the keys put `"kind": "session"` on children and merged members too), `SessionRow`,
+  `MergedRow`. Claude: `SessionRecord.host_session_id` kept verbatim (non-string → `None`). Core: several
+  records per id per the schema (`finished` only when every record is `Gone`; else the not-gone record with
+  the greatest `updatedAt`; all gone → greatest `updatedAt`; ties by file name); `checkout` from the memoised
+  git mapping (fixture = `cwd`); new `core::overview` (`build`, `plan_folder`, merge at `MERGE_AT = 4`) and
+  `Scanner::overview(root, options, plans)` = one `refresh` + build, returning `OverviewOutput {report,
+  sessions, links}`. CLI `overview [--root] [--now] [--since] [--json]` uses one Scanner pass; text mode is
+  one line per repo (tier, session count, last activity, latest step or convention, repo, FR17 marker).
+  `refresh_timing` now runs `Scanner::overview` each pass (with the CLI's plan lookup) and prints the repo
+  count.
+  Review round 1 fixes (P3, planner-decided): `plan_folder` returns `None` → plan `missing` without calling
+  the lookup when the fixture basename would escape `<root>/repos` (`/`, `""`, `.`, `..`); a placed Codex
+  child attaches once, to the first matching parent in member order (two listed sessions sharing an id);
+  comment on the stricter Claude-parent check; `multi-link-plan` is a dev-dependency of core so the example
+  times the real plan parse (planner widened 3.3's files to `crates/core/Cargo.toml` + `Cargo.lock` for this).
+  Tests: overview unit tests for every "Required 3.3 unit test" (cross-repo link, merge at 3 / 4, busy and
+  stale Codex child under an `unknown` parent, stale/finished order, equal-activity repos by name, one plan
+  basename for two repos, several records for one id in `core/tests/sessions.rs`) plus T11 placement,
+  FR17 / active steps and logged-step-not-in-plan; claude `hostSessionId` absent / different from the
+  transcript id / non-string; real-mode `checkout` on a temp repo with a worktree; model round-trip of
+  `overview.json` and the hook keys; CLI overview JSON + text tests; hook-variant CLI test covers `overview`.
+- Changed: `crates/model/src/lib.rs`, `crates/model/tests/model.rs`, `crates/claude/src/lib.rs`,
+  `crates/claude/tests/fixtures.rs`, `crates/core/src/{lib.rs,scanner.rs,sessions.rs,overview.rs (new)}`,
+  `crates/core/tests/{sessions.rs,repo_probe.rs}`, `crates/core/examples/refresh_timing.rs`,
+  `crates/cli/src/main.rs`, `crates/cli/tests/cli.rs`, `crates/core/Cargo.toml` + `Cargo.lock` (dev-dep only,
+  round 1), `PROGRESS.md`. Answer keys untouched.
+- Verify (re-run after round 1): `cargo test --workspace` → 24 `test result: ok` lines, 137 tests, 0 failed.
+  JSON diffs (parsed compare) →
+  ```text
+sessions: same
+links: same
+overview: same
+steps: same
+hook/links: same
+hook/sessions: same
+hook/overview: same
+hook/sessions-2h: same
+  ```
+  (`overview --root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json` vs `overview.json`; hook
+  variant = fixtures/sessions + fixtures/hook overlay, `task-output/be01y5dv6.output` removed, `overview
+  --since all --json` vs `hook/overview.json`.) `cargo clippy --workspace --all-targets -- -D warnings` →
+  clean. `cargo build --release -p multi-link-core --example refresh_timing` → `Finished`. Not run on real
+  `~` (left to the reviewer).
+- Review: Claude (planner) read the diff against Step 3.3 and the schema: matches the contract. An adversarial
+  Claude review found 0 P1 / 0 P2 and 6 P3. Accepted: plan folder escape → `missing`; child attached once;
+  placement comment; plan dev-dependency so the timing is real (planner widened the step's files). Rejected:
+  non-UTF-8 plan folder (backlog nit). Test gaps were covered by the two new tests. One round. Planner re-ran
+  Verify: 24 binaries ok (137 tests); all 8 parsed diffs `same`; clippy clean. `refresh_timing -- 3` on real
+  `~` → `pass 1: 3460 ms, 44 sessions, 5 repos, 374 files re-parsed, 468392182 bytes re-parsed` / `pass 2: 25
+  ms, 44 sessions, 5 repos, 0 files re-parsed, 0 bytes re-parsed` / `pass 3: 45 ms, 44 sessions, 5 repos, 2
+  files re-parsed, 2147839 bytes re-parsed`. Approved.
+- Gotchas: core does not depend on `multi-link-plan` at runtime (only as a dev-dependency for the example), so
+  `Scanner::overview` takes a `plans: &mut dyn FnMut(&Path) -> RepoSteps` lookup; the CLI and `refresh_timing`
+  pass the plan crate's `steps_report`. Core decides the folder (`plan_folder`: real `<repo>`, fixture
+  `<root>/repos/<basename>`, `None` if it would escape). The record choice now probes every record of an id (the batch probe already covered all of them, so still one `ps` per pass).
 
 ### 2026-10-30 — Step 3.2: Output contract: checkout, host id, overview, open rules — Claude
 - Did: Wrote the Phase 3 contract. `docs/design.md`: "Phase 3 decisions" T1–T11 plus 3.2 clarifications, NFR

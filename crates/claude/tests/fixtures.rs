@@ -78,10 +78,10 @@ fn transcript_fields_and_skips_match_answer_key() {
 fn all_session_record_fields_match_source_files() {
     let root = fixtures().join("sessions");
     let actual = scan(&root).unwrap();
-    assert_eq!(actual.records.len(), 5);
+    assert_eq!(actual.records.len(), 6);
     assert_eq!(
         actual.records.iter().filter(|r| r.status == "busy").count(),
-        1
+        2
     );
     assert_eq!(
         actual.records.iter().filter(|r| r.status == "idle").count(),
@@ -99,6 +99,7 @@ fn all_session_record_fields_match_source_files() {
             ".claude/sessions/65362.json",
             ".claude/sessions/65681.json",
             ".claude/sessions/69401.json",
+            ".claude/sessions/70001.json",
         ]
     );
     for record in actual.records {
@@ -109,6 +110,8 @@ fn all_session_record_fields_match_source_files() {
         assert_eq!(json!(record.session_id), source["sessionId"]);
         assert_eq!(json!(record.cwd), source["cwd"]);
         assert_eq!(json!(record.status), source["status"]);
+        // Absent in the synthetic 70001.json; present (and kept verbatim) elsewhere.
+        assert_eq!(json!(record.host_session_id), source["hostSessionId"]);
         for (actual, field) in [
             (record.status_updated_at, "statusUpdatedAt"),
             (record.started_at, "startedAt"),
@@ -359,4 +362,56 @@ fn unreadable_session_record_is_counted() {
     assert_eq!(actual.bad_records, [".claude/sessions/unreadable.json"]);
     assert!(actual.records.is_empty());
     assert!(actual.skipped.is_empty());
+}
+
+#[test]
+fn host_session_id_is_kept_verbatim_absent_or_non_string_is_none() {
+    let root = tempfile::tempdir().unwrap();
+    let base = json!({"pid": 7, "procStart": "start", "sessionId": "transcript-id",
+        "cwd": "/repo", "status": "idle", "startedAt": 0,
+        "updatedAt": 2, "statusUpdatedAt": 1});
+    write(
+        root.path(),
+        ".claude/sessions/a-absent.json",
+        &base.to_string(),
+    );
+    let mut different = base.clone();
+    different["hostSessionId"] = json!("local_0000-host");
+    write(
+        root.path(),
+        ".claude/sessions/b-host.json",
+        &different.to_string(),
+    );
+    let mut number = base.clone();
+    number["hostSessionId"] = json!(5);
+    write(
+        root.path(),
+        ".claude/sessions/c-number.json",
+        &number.to_string(),
+    );
+    let actual = scan(root.path()).unwrap();
+    assert!(actual.bad_records.is_empty());
+    let hosts: Vec<_> = actual
+        .records
+        .iter()
+        .map(|r| {
+            (
+                r.record.as_str(),
+                r.session_id.as_str(),
+                r.host_session_id.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        hosts,
+        [
+            (".claude/sessions/a-absent.json", "transcript-id", None),
+            (
+                ".claude/sessions/b-host.json",
+                "transcript-id",
+                Some("local_0000-host")
+            ),
+            (".claude/sessions/c-number.json", "transcript-id", None),
+        ]
+    );
 }

@@ -1,6 +1,7 @@
 mod hook;
 mod link;
 pub mod links;
+pub mod overview;
 pub mod probe;
 pub mod repo;
 pub mod sessions;
@@ -13,4 +14,4 @@ pub use sessions::{Options, SessionsOutput, sessions_report};
 pub use links::{LinksOutput, links_report};
 
 mod scanner;
-pub use scanner::{ParseStats, Scanner};
+pub use scanner::{OverviewOutput, ParseStats, Scanner};

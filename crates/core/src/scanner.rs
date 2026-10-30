@@ -10,7 +10,7 @@ use std::{
 
 use multi_link_claude::{ClaudeScan, ParsedFile, SessionRecord, SubagentFile};
 use multi_link_codex::{Discovery, ReadFailure, Rollout};
-use multi_link_model::{Skipped, Timestamp};
+use multi_link_model::{OverviewReport, RepoSteps, Skipped, Timestamp};
 
 use crate::{LinksOutput, Liveness, Options, ProcessProbe, RepoMode, SessionsOutput};
 
@@ -87,6 +87,15 @@ impl<T: Clone> Cache<T> {
     fn prune(&mut self) {
         self.0.retain(|path, _| path.exists());
     }
+}
+
+/// One refresh's full result: the overview plus the sessions and links it was
+/// built from (their diagnostics and reports, for the CLI and the timeline).
+#[derive(Debug)]
+pub struct OverviewOutput {
+    pub report: OverviewReport,
+    pub sessions: SessionsOutput,
+    pub links: LinksOutput,
 }
 
 /// Own one scanner per refresh worker. Changing roots clears all caches.
@@ -352,16 +361,15 @@ impl Scanner {
             &inputs.waiting,
         )?;
         for session in &mut output.report.sessions {
-            session.repo = if options.repo_mode == RepoMode::Fixture {
-                session.cwd.clone()
-            } else {
-                self.repos
+            // Fixture mode keeps repo = checkout = cwd (set by assembly).
+            if options.repo_mode == RepoMode::Real {
+                let paths = self
+                    .repos
                     .entry(session.cwd.clone())
-                    .or_insert_with(|| options.repo_mode.map(Path::new(&session.cwd)))
-                    .repo
-                    .to_string_lossy()
-                    .into_owned()
-            };
+                    .or_insert_with(|| options.repo_mode.map(Path::new(&session.cwd)));
+                session.repo = paths.repo.to_string_lossy().into_owned();
+                session.checkout = paths.checkout.to_string_lossy().into_owned();
+            }
         }
         Ok(output)
     }
@@ -397,6 +405,29 @@ impl Scanner {
         let sessions = self.assemble(options, inputs)?;
         let links = crate::links::assemble(&sessions, links, conflicts)?;
         Ok((sessions, links))
+    }
+
+    /// One `refresh` plus the overview built from it. `plans` reads a plan
+    /// folder with the `steps` rules (the CLI passes the plan crate's parser).
+    pub fn overview(
+        &mut self,
+        root: &Path,
+        options: &Options<'_>,
+        plans: &mut dyn FnMut(&Path) -> RepoSteps,
+    ) -> io::Result<OverviewOutput> {
+        let (sessions, links) = self.refresh(root, options)?;
+        let report = crate::overview::build(
+            root,
+            options.repo_mode,
+            &sessions.report,
+            &links.report,
+            plans,
+        );
+        Ok(OverviewOutput {
+            report,
+            sessions,
+            links,
+        })
     }
 }
 

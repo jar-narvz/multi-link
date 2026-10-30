@@ -56,6 +56,8 @@ pub struct SessionRecord {
     pub started_at: Timestamp,
     pub updated_at: Timestamp,
     pub record: String,
+    /// `hostSessionId` (desktop app id, `local_…`) verbatim; None when absent or not a string.
+    pub host_session_id: Option<String>,
 }
 
 /// Scan the home-shaped root. Missing discovery directories are empty.
@@ -187,6 +189,7 @@ pub fn read_session_record(root: &Path, path: &Path) -> Option<SessionRecord> {
         started_at: timestamp("startedAt")?,
         updated_at: timestamp("updatedAt")?,
         record: relative_path(root, path),
+        host_session_id: string("hostSessionId"),
     })
 }
 

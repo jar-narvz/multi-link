@@ -9,15 +9,17 @@ fn fixtures() -> PathBuf {
 }
 
 #[test]
-fn session_preserves_all_thirteen_keys_and_nulls() {
+fn session_preserves_all_fifteen_keys_and_nulls() {
     let instant = Timestamp::from_epoch_ms(0).unwrap();
     let session = Session {
         id: "session".into(),
         harness: Harness::Claude,
         transcript: None,
         record: None,
+        host_session_id: None,
         cwd: "/repo".into(),
         repo: "/repo".into(),
+        checkout: "/repo".into(),
         branch: None,
         started_at: instant,
         last_activity: instant,
@@ -27,12 +29,13 @@ fn session_preserves_all_thirteen_keys_and_nulls() {
         subagents: vec![],
     };
     let value = serde_json::to_value(session).unwrap();
-    assert_eq!(value.as_object().unwrap().len(), 13);
+    assert_eq!(value.as_object().unwrap().len(), 15);
     assert_eq!(
         value,
         json!({
             "id": "session", "harness": "claude", "transcript": null,
-            "record": null, "cwd": "/repo", "repo": "/repo", "branch": null,
+            "record": null, "host_session_id": null, "cwd": "/repo", "repo": "/repo",
+            "checkout": "/repo", "branch": null,
             "started_at": "1970-01-01T00:00:00.000Z",
             "last_activity": "1970-01-01T00:00:00.000Z",
             "state": "unknown", "state_evidence": "no_signal",
@@ -113,6 +116,14 @@ fn round_trip<T: DeserializeOwned + Serialize>(path: &std::path::Path) {
 
 #[test]
 fn every_expected_report_round_trips() {
+    for name in ["overview.json", "sessions.json", "sessions-2h.json"] {
+        let path = fixtures().join("expected/hook").join(name);
+        if name == "overview.json" {
+            round_trip::<OverviewReport>(&path);
+        } else {
+            round_trip::<SessionsReport>(&path);
+        }
+    }
     let mut names = Vec::new();
     for entry in fs::read_dir(fixtures().join("expected")).unwrap() {
         let path = entry.unwrap().path();
@@ -126,6 +137,7 @@ fn every_expected_report_round_trips() {
                 round_trip::<LinksReport>(&path)
             }
             "steps.json" => round_trip::<StepsReport>(&path),
+            "overview.json" => round_trip::<OverviewReport>(&path),
             _ => panic!("new expected report needs a type: {name}"),
         }
         names.push(name.to_owned());
@@ -137,6 +149,7 @@ fn every_expected_report_round_trips() {
             "links-amb-hidden.json",
             "links-tagged.json",
             "links.json",
+            "overview.json",
             "sessions.json",
             "steps.json"
         ]
@@ -156,7 +169,8 @@ fn reserved_enum_values_serialize_as_schema_strings() {
         StepSource::PromptTag => "prompt_tag", StateEvidence::Hook => "hook", LinkEvidence::Hook => "hook",
         SkipReason::UnknownType => "unknown_type", Convention::Missing => "missing",
         Convention::Unsupported => "unsupported", VerifyResult::Pass => "pass",
-        VerifyResult::Fail => "fail", VerifySource::Observed => "observed");
+        VerifyResult::Fail => "fail", VerifySource::Observed => "observed",
+        Tier::Waiting => "waiting", Tier::Busy => "busy", Tier::Other => "other");
 }
 
 #[test]

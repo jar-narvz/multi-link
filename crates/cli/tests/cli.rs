@@ -59,13 +59,44 @@ fn phase_one_json_matches_answer_keys() {
 }
 
 #[test]
+fn overview_json_matches_answer_key_and_text_has_one_line_per_repo() {
+    let mut extra = args("overview");
+    extra.push("--json");
+    let output = run("overview", &extra);
+    success(&output);
+    assert!(output.stderr.is_empty());
+    let actual: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(actual, expected("overview"));
+
+    let output = run("overview", &args("overview"));
+    success(&output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<_> = text.lines().collect();
+    let repos = expected("overview")["repos"].as_array().unwrap().clone();
+    assert_eq!(lines.len(), repos.len() + 2);
+    assert_eq!(
+        lines[0],
+        "TIER   SESSIONS  LAST_ACTIVITY             STEP     REPO"
+    );
+    for (line, group) in lines[1..=repos.len()].iter().zip(&repos) {
+        assert!(line.starts_with(group["tier"].as_str().unwrap()), "{line}");
+        assert!(line.contains(group["repo"].as_str().unwrap()), "{line}");
+    }
+    assert_eq!(
+        lines[1],
+        "busy   4         2026-10-29T23:13:30.000Z  missing  /home/dev/repo-c (!2 busy in one cwd)"
+    );
+    assert_eq!(lines.last(), Some(&"8 repos"));
+}
+
+#[test]
 fn text_has_one_row_per_item_and_a_footer() {
     for (command, header, count, footer) in [
         (
             "sessions",
             "ID        HARNESS  STATE    LAST_ACTIVITY             REPO",
-            27,
-            "27 sessions, 4 skipped lines",
+            28,
+            "28 sessions, 4 skipped lines",
         ),
         (
             "links",
@@ -685,7 +716,7 @@ fn setup_quotes_binary_paths_with_spaces_and_apostrophes() {
 }
 
 #[test]
-fn hook_conflicts_are_stderr_only_for_sessions_and_links() {
+fn hook_conflicts_are_stderr_only_for_sessions_links_and_overview() {
     fn copy_tree(source: &std::path::Path, target: &std::path::Path) {
         fs::create_dir_all(target).unwrap();
         for entry in fs::read_dir(source).unwrap() {
@@ -702,7 +733,7 @@ fn hook_conflicts_are_stderr_only_for_sessions_and_links() {
     copy_tree(&fixtures().join("sessions"), root.path());
     copy_tree(&fixtures().join("hook"), root.path());
     fs::remove_file(root.path().join("task-output/be01y5dv6.output")).unwrap();
-    for command in ["sessions", "links"] {
+    for command in ["sessions", "links", "overview"] {
         let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
             .arg(command)
             .arg("--root")

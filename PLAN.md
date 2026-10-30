@@ -686,6 +686,18 @@ Hook reads the background task output path (T10) · offset tailing if T1 is not 
 
 ## Review log
 
+### 2026-10-30 — Step 3.3 review (Claude, adversarial Claude review, Codex-off mode)
+A fresh subagent saw only the diff, Step 3.3 and the schema's Session + overview sections. It re-ran Verify
+(all `same`) and found 0 P1 / 0 P2. Verdict: approve. One fix round.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P3: fixture plan folder of `/`, `""` or `..` escapes `<root>/repos` | Accepted: `plan_folder` → `None`, plan `missing`, no lookup; unit test |
+| 2 | P3: two listed sessions with one id both get the placed child (breaks "exactly once") | Accepted: the child attaches to the first matching parent; unit test |
+| 3 | P3: CLI plan lookup uses `to_string_lossy` (non-UTF-8 repo paths) | Rejected for 3.3: the plan crate takes strings everywhere; backlog nit |
+| 4 | P3: `refresh_timing` stubbed the plan parse (core doesn't depend on plan) | Accepted: planner widened 3.3's files to `crates/core/Cargo.toml` + `Cargo.lock` for a dev-dependency only; the example uses the real parser. The injected lookup stays (core runtime deps unchanged) |
+| 5 | P3: placement also requires a Claude parent (stricter than the contract) | Accepted as is, with a comment: link parents are always Claude |
+| 6 | P3: test gaps (odd basename, exactly-once) | Covered by the tests for #1 and #2 |
+
 ### 2026-10-30 — Step 3.2 contract (Claude, adversarial Claude review, Codex-off mode)
 A fresh general-purpose subagent saw only the diff, the Phase 3 header, Steps 3.2–3.4 and the fixtures.
 Round 1: answer keys all correct by hand-check; 10 findings on the contract. Round 2 (fixes only): 2 P3

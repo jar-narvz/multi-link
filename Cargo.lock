@@ -223,6 +223,7 @@ dependencies = [
  "multi-link-claude",
  "multi-link-codex",
  "multi-link-model",
+ "multi-link-plan",
  "serde",
  "serde_json",
  "tempfile",

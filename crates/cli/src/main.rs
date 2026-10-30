@@ -9,7 +9,9 @@ use std::{
 
 use clap::{Args, Parser, Subcommand};
 use multi_link_core::{FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode};
-use multi_link_model::{Convention, LinksReport, SessionsReport, StepsReport, Timestamp};
+use multi_link_model::{
+    Convention, LinksReport, OverviewReport, Row, SessionsReport, StepsReport, Timestamp,
+};
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -27,6 +29,8 @@ enum Command {
     },
     Sessions(CommonArgs),
     Links(CommonArgs),
+    /// Home screen data: repo groups, rows, plan (one refresh pass).
+    Overview(CommonArgs),
     Steps {
         #[command(flatten)]
         common: CommonArgs,
@@ -226,6 +230,51 @@ fn steps_text(writer: &mut impl Write, report: &StepsReport) -> io::Result<()> {
     writeln!(writer, "{count} steps in {} repos", report.repos.len())
 }
 
+/// One line per repo: tier, session count, last activity, latest step, repo.
+fn overview_text(writer: &mut impl Write, report: &OverviewReport) -> io::Result<()> {
+    let rows = report
+        .repos
+        .iter()
+        .map(|group| {
+            let sessions: usize = group
+                .rows
+                .iter()
+                .map(|row| match row {
+                    Row::Session(row) => 1 + row.children.len(),
+                    Row::Merged(merged) => {
+                        merged.rows.iter().map(|row| 1 + row.children.len()).sum()
+                    }
+                })
+                .sum();
+            let step = match &group.plan.latest_step {
+                Some(step) => step.id.clone(),
+                None => label(group.plan.convention),
+            };
+            let warning = if group.concurrency.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " (!{} busy in one cwd)",
+                    group.concurrency[0].sessions.len()
+                )
+            };
+            [
+                label(group.tier),
+                sessions.to_string(),
+                group.last_activity.to_string(),
+                step,
+                format!("{}{warning}", group.repo),
+            ]
+        })
+        .collect();
+    table(
+        writer,
+        ["TIER", "SESSIONS", "LAST_ACTIVITY", "STEP", "REPO"],
+        rows,
+    )?;
+    writeln!(writer, "{} repos", report.repos.len())
+}
+
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let cli = match cli.command {
         Command::Hook { command } => return hook::run(command),
@@ -233,9 +282,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let common = match &cli.command {
         Command::Hook { .. } => unreachable!(),
-        Command::Sessions(common) | Command::Links(common) | Command::Steps { common, .. } => {
-            common
-        }
+        Command::Sessions(common)
+        | Command::Links(common)
+        | Command::Overview(common)
+        | Command::Steps { common, .. } => common,
     };
     let fixture_probe = FixtureProcessProbe;
     let real_probe = RealProcessProbe::default();
@@ -286,6 +336,27 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 json(&mut stdout, &output.report)?;
             } else {
                 links_text(&mut stdout, &output.report)?;
+            }
+        }
+        Command::Overview(_) => {
+            let mut plans = |folder: &std::path::Path| {
+                multi_link_plan::steps_report(
+                    std::path::Path::new(""),
+                    &[folder.to_string_lossy().into_owned()],
+                )
+                .repos
+                .remove(0)
+            };
+            let output =
+                multi_link_core::Scanner::default().overview(&root, &options, &mut plans)?;
+            hook_conflicts(output.links.hook_conflicts);
+            diagnostic("bad_records", &output.sessions.bad_records);
+            diagnostic("incomplete", &output.sessions.incomplete);
+            diagnostic("unreadable", &output.sessions.unreadable);
+            if common.json {
+                json(&mut stdout, &output.report)?;
+            } else {
+                overview_text(&mut stdout, &output.report)?;
             }
         }
         Command::Steps { repo, .. } => {

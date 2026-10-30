@@ -52,16 +52,19 @@ pub(crate) fn assemble(
     hooks: crate::hook::Records,
     waiting: &std::collections::HashSet<String>,
 ) -> io::Result<SessionsOutput> {
-    let mut records: BTreeMap<String, SessionRecord> = BTreeMap::new();
+    // Several records can share one sessionId (a crashed record left behind plus
+    // a live resume). Pick one per id: see `choose_record`.
+    let mut grouped: BTreeMap<String, Vec<SessionRecord>> = BTreeMap::new();
     for record in claude.records {
-        let slot = records
+        grouped
             .entry(record.session_id.clone())
-            .or_insert_with(|| record.clone());
-        // Equal timestamps resolve deterministically to the ascending-first path.
-        if record.updated_at > slot.updated_at {
-            *slot = record;
-        }
+            .or_default()
+            .push(record);
     }
+    let mut records: BTreeMap<String, (SessionRecord, Liveness)> = grouped
+        .into_iter()
+        .map(|(id, group)| (id, choose_record(options, group)))
+        .collect();
     let mut sessions = Vec::new();
     let mut incomplete = Vec::new();
     for transcript in claude.transcripts {
@@ -81,14 +84,23 @@ pub(crate) fn assemble(
         let (state, state_evidence) = if hook_waiting {
             (State::Waiting, StateEvidence::Hook)
         } else {
-            record_state(options, record.as_ref())
+            match &record {
+                Some((record, liveness)) => claude_state(options.now, Some(record), *liveness),
+                None => claude_state(options.now, None, Liveness::Unavailable),
+            }
+        };
+        let (record, host_session_id) = match record {
+            Some((record, _)) => (Some(record.record), record.host_session_id),
+            None => (None, None),
         };
         sessions.push(Session {
             id: transcript.id,
             harness: Harness::Claude,
             transcript: Some(transcript.transcript),
-            record: record.map(|record| record.record),
+            record,
+            host_session_id,
             repo: cwd.clone(),
+            checkout: cwd.clone(),
             cwd,
             branch: transcript.branch,
             started_at,
@@ -99,14 +111,16 @@ pub(crate) fn assemble(
             subagents: transcript.subagents,
         });
     }
-    for record in records.into_values() {
-        let (state, state_evidence) = record_state(options, Some(&record));
+    for (record, liveness) in records.into_values() {
+        let (state, state_evidence) = claude_state(options.now, Some(&record), liveness);
         sessions.push(Session {
             id: record.session_id,
             harness: Harness::Claude,
             transcript: None,
             record: Some(record.record),
+            host_session_id: record.host_session_id,
             repo: record.cwd.clone(),
+            checkout: record.cwd.clone(),
             cwd: record.cwd,
             branch: None,
             started_at: record.started_at,
@@ -124,7 +138,9 @@ pub(crate) fn assemble(
             harness: Harness::Codex,
             transcript: Some(rollout.transcript),
             record: None,
+            host_session_id: None,
             repo: rollout.cwd.clone(),
+            checkout: rollout.cwd.clone(),
             cwd: rollout.cwd,
             branch: rollout.branch,
             started_at: rollout.started_at,
@@ -160,15 +176,30 @@ pub(crate) fn assemble(
     })
 }
 
-fn record_state(
-    options: &Options<'_>,
-    record: Option<&SessionRecord>,
-) -> (multi_link_model::State, multi_link_model::StateEvidence) {
-    let liveness = match record {
-        Some(record) => options.probe.probe(record.pid, &record.proc_start),
-        _ => Liveness::Unavailable,
-    };
-    claude_state(options.now, record, liveness)
+/// Output-schema Session `record`: the session is `finished` only when every
+/// record is confirmed gone. Otherwise the record not confirmed gone with the
+/// greatest `updatedAt` wins; when all are gone, the greatest `updatedAt`.
+/// Ties go to the ascending-first file name.
+fn choose_record(options: &Options<'_>, group: Vec<SessionRecord>) -> (SessionRecord, Liveness) {
+    let mut probed: Vec<_> = group
+        .into_iter()
+        .map(|record| {
+            let liveness = options.probe.probe(record.pid, &record.proc_start);
+            (record, liveness)
+        })
+        .collect();
+    let all_gone = probed.iter().all(|(_, live)| *live == Liveness::Gone);
+    if !all_gone {
+        probed.retain(|(_, live)| *live != Liveness::Gone);
+    }
+    probed
+        .into_iter()
+        .reduce(|best, next| {
+            let later = next.0.updated_at > best.0.updated_at
+                || (next.0.updated_at == best.0.updated_at && next.0.record < best.0.record);
+            if later { next } else { best }
+        })
+        .expect("a record group is never empty")
 }
 
 fn segment(from: Timestamp, to: Timestamp) -> Vec<Segment> {

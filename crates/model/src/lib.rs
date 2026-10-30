@@ -66,6 +66,11 @@ string_enum!(VerifyResult {
     Unknown
 });
 string_enum!(VerifySource { Reported, Observed });
+string_enum!(Tier {
+    Waiting,
+    Busy,
+    Other
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionsReport {
@@ -80,8 +85,12 @@ pub struct Session {
     pub harness: Harness,
     pub transcript: Option<String>,
     pub record: Option<String>,
+    /// Claude record `hostSessionId` (desktop app id); None without one and for Codex.
+    pub host_session_id: Option<String>,
     pub cwd: String,
     pub repo: String,
+    /// Git toplevel of `cwd` (the worktree or main checkout); `cwd` in fixture mode.
+    pub checkout: String,
     pub branch: Option<String>,
     pub started_at: Timestamp,
     pub last_activity: Timestamp,
@@ -168,4 +177,75 @@ pub struct Verify {
     pub result: VerifyResult,
     pub result_text: String,
     pub source: VerifySource,
+}
+
+/// `multi-link overview`: the home screen's data (output-schema "overview").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OverviewReport {
+    pub now: Timestamp,
+    pub repos: Vec<RepoGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepoGroup {
+    pub repo: String,
+    pub tier: Tier,
+    pub last_activity: Timestamp,
+    pub plan: Plan,
+    pub active_steps: Vec<String>,
+    pub concurrency: Vec<ConcurrencyWarning>,
+    pub latest_handoff: Option<Link>,
+    pub rows: Vec<Row>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Plan {
+    pub convention: Convention,
+    pub latest_step: Option<LatestStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LatestStep {
+    pub id: String,
+    pub title: Option<String>,
+    pub entry: Option<Entry>,
+}
+
+/// FR17: two or more `busy` sessions shown in one group with the same `cwd`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConcurrencyWarning {
+    pub cwd: String,
+    pub sessions: Vec<String>,
+}
+
+/// Each variant writes its own `"kind"` (a SessionRow carries `"kind": "session"`
+/// everywhere, including as a child or a merged member).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Row {
+    Session(SessionRow),
+    Merged(MergedRow),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename = "session")]
+pub struct SessionRow {
+    pub id: String,
+    pub harness: Harness,
+    pub state: State,
+    pub state_evidence: StateEvidence,
+    pub checkout: String,
+    pub branch: Option<String>,
+    pub started_at: Timestamp,
+    pub last_activity: Timestamp,
+    pub handoffs: Vec<Link>,
+    pub children: Vec<SessionRow>,
+}
+
+/// `claude ×N`: four or more quiet top-level Claude rows. Not actionable (T11).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename = "merged")]
+pub struct MergedRow {
+    pub count: usize,
+    pub rows: Vec<SessionRow>,
 }

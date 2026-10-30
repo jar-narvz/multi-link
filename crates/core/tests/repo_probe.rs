@@ -210,3 +210,73 @@ fn reaped_child_is_gone() {
     assert!(child.wait().unwrap().success());
     assert_eq!(probe.probe(pid, "any start"), Liveness::Gone);
 }
+
+#[test]
+fn session_checkout_is_the_worktree_and_repo_the_main_checkout() {
+    let temp = tempfile::tempdir().unwrap();
+    let main = temp.path().join("main");
+    let worktree = temp.path().join("worktree");
+    std::fs::create_dir(&main).unwrap();
+    git(&main, &["init"]);
+    git(
+        &main,
+        &[
+            "-c",
+            "user.name=Test User",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Initial",
+        ],
+    );
+    git(
+        &main,
+        &["worktree", "add", "-b", "wt", worktree.to_str().unwrap()],
+    );
+    let main = main.canonicalize().unwrap();
+    let worktree = worktree.canonicalize().unwrap();
+    let home = temp.path().join("home");
+    let project = home.join(".claude/projects/p");
+    std::fs::create_dir_all(&project).unwrap();
+    for (id, cwd) in [
+        ("in-main", main.join("sub")),
+        ("in-wt", worktree.join("sub")),
+    ] {
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::fs::write(
+            project.join(format!("{id}.jsonl")),
+            format!(
+                "{}\n",
+                serde_json::json!({"type": "user", "cwd": cwd, "timestamp": "2026-10-29T23:00:00Z"})
+            ),
+        )
+        .unwrap();
+    }
+    let options = multi_link_core::Options {
+        state_dir: home.join(".multi-link"),
+        now: multi_link_model::Timestamp::parse("2026-10-29T23:15:00Z").unwrap(),
+        since: None,
+        repo_mode: RepoMode::Real,
+        probe: &FixtureProcessProbe,
+    };
+    let report = multi_link_core::sessions_report(&home, &options)
+        .unwrap()
+        .report;
+    let actual: Vec<_> = report
+        .sessions
+        .iter()
+        .map(|s| (s.id.as_str(), s.repo.clone(), s.checkout.clone()))
+        .collect();
+    let path = |p: &Path| p.to_string_lossy().into_owned();
+    assert_eq!(
+        actual,
+        [
+            ("in-main", path(&main), path(&main)),
+            ("in-wt", path(&main), path(&worktree)),
+        ]
+    );
+}

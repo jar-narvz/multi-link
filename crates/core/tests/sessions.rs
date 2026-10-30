@@ -46,6 +46,7 @@ fn record(status: &str) -> SessionRecord {
         started_at: stamp("2026-10-29T20:00:00Z"),
         updated_at: now(),
         record: ".claude/sessions/42.json".into(),
+        host_session_id: None,
     }
 }
 
@@ -210,7 +211,8 @@ fn merge_uses_transcript_fields_latest_record_and_bypasses_since() {
         json!({
             "now":"2026-10-29T23:15:00.000Z", "skipped":[], "sessions":[{
                 "id":"merged", "harness":"claude", "transcript":".claude/projects/project/merged.jsonl",
-                "record":".claude/sessions/42.json", "cwd":"/transcript-cwd", "repo":"/transcript-cwd", "branch":"main",
+                "record":".claude/sessions/42.json", "host_session_id":null, "cwd":"/transcript-cwd",
+                "repo":"/transcript-cwd", "checkout":"/transcript-cwd", "branch":"main",
                 "started_at":"2026-10-29T19:00:00.000Z", "last_activity":"2026-10-29T20:00:00.000Z",
                 "state":"busy", "state_evidence":"session_record", "subagents":[],
                 "segments":[{"from":"2026-10-29T19:00:00.000Z", "to":"2026-10-29T20:00:00.000Z", "step":null, "step_source":"unknown"}]
@@ -408,4 +410,101 @@ fn waiting_record_has_no_freshness_limit_and_process_exit_wins() {
         let session = &output.report.sessions[0];
         assert_eq!((session.state, session.state_evidence), expected);
     }
+}
+
+#[test]
+fn several_records_for_one_id_follow_the_not_gone_record() {
+    // (pid, updatedAt, status, hostSessionId)
+    let write_host = |root: &Path, pid: u32, updated_at: i64, status: &str, host: &str| {
+        write(
+            root,
+            &format!(".claude/sessions/{pid}.json"),
+            &json!({
+                "pid": pid, "procStart": "start", "sessionId": "merged", "cwd": "/record-cwd",
+                "status": status, "statusUpdatedAt": 1793315700000_i64,
+                "startedAt": 1793304000000_i64, "updatedAt": updated_at,
+                "hostSessionId": host,
+            })
+            .to_string(),
+        );
+    };
+    let run = |records: &[(u32, i64, &str, Liveness)]| {
+        let temp = tempfile::tempdir().unwrap();
+        write_transcript(temp.path());
+        let mut probe = FakeProcessProbe::default();
+        for (pid, updated_at, status, liveness) in records {
+            write_host(
+                temp.path(),
+                *pid,
+                *updated_at,
+                status,
+                &format!("local_{pid}"),
+            );
+            probe.results.insert((*pid, "start".into()), *liveness);
+        }
+        let mut options = options(None);
+        options.probe = &probe;
+        let output = sessions_report(temp.path(), &options).unwrap();
+        assert_eq!(output.report.sessions.len(), 1);
+        let session = output.report.sessions.into_iter().next().unwrap();
+        (
+            session.record.unwrap(),
+            session.host_session_id.unwrap(),
+            session.state,
+            session.state_evidence,
+        )
+    };
+    let record = |pid: u32| format!(".claude/sessions/{pid}.json");
+    // A crashed record (newer, gone) never hides the live resume.
+    assert_eq!(
+        run(&[
+            (42, 1793315700000, "busy", Liveness::Gone),
+            (43, 1793315600000, "idle", Liveness::Alive),
+        ]),
+        (
+            record(43),
+            "local_43".into(),
+            State::Idle,
+            StateEvidence::SessionRecord
+        )
+    );
+    // An unavailable probe is "not confirmed gone": it wins over a gone record.
+    assert_eq!(
+        run(&[
+            (42, 1793315600000, "idle", Liveness::Unavailable),
+            (43, 1793315700000, "busy", Liveness::Gone),
+        ])
+        .0,
+        record(42)
+    );
+    // Every record gone: finished, from the greatest updatedAt.
+    assert_eq!(
+        run(&[
+            (42, 1793315600000, "idle", Liveness::Gone),
+            (43, 1793315700000, "busy", Liveness::Gone),
+        ]),
+        (
+            record(43),
+            "local_43".into(),
+            State::Finished,
+            StateEvidence::ProcessExit
+        )
+    );
+    // Among not-gone records the greatest updatedAt wins; ties by file name.
+    assert_eq!(
+        run(&[
+            (42, 1793315600000, "idle", Liveness::Alive),
+            (43, 1793315700000, "busy", Liveness::Alive),
+        ])
+        .0,
+        record(43)
+    );
+    assert_eq!(
+        run(&[
+            (43, 1793315700000, "busy", Liveness::Alive),
+            (44, 1793315700000, "idle", Liveness::Alive),
+        ])
+        .2,
+        State::Busy
+    );
 }

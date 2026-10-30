@@ -30,11 +30,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             repo_mode: RepoMode::Real,
             probe: &probe,
         };
-        let (sessions, _) = scanner.refresh(&root, &options)?;
+        // The CLI's lookup: the plan crate's steps parser on the group's folder.
+        let mut plans = |folder: &std::path::Path| {
+            multi_link_plan::steps_report(
+                std::path::Path::new(""),
+                &[folder.to_string_lossy().into_owned()],
+            )
+            .repos
+            .remove(0)
+        };
+        let output = scanner.overview(&root, &options, &mut plans)?;
         println!(
-            "pass {pass}: {} ms, {} sessions, {} files re-parsed, {} bytes re-parsed",
+            "pass {pass}: {} ms, {} sessions, {} repos, {} files re-parsed, {} bytes re-parsed",
             start.elapsed().as_millis(),
-            sessions.report.sessions.len(),
+            output.sessions.report.sessions.len(),
+            output.report.repos.len(),
             scanner.stats.files,
             scanner.stats.bytes
         );
