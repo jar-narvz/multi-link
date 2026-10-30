@@ -40,7 +40,11 @@ pub struct Invocation {
 pub fn recognise(command: &str) -> Option<Launch> {
     let mut dir_moved = false;
     for segment in segments(command) {
-        let words: Vec<_> = segment.tokens.iter().map(String::as_str).collect();
+        let words: Vec<_> = segment
+            .tokens
+            .iter()
+            .map(|word| word.text.as_str())
+            .collect();
         let (form, resume_id) = match words.as_slice() {
             ["codex", "exec", "resume", id, ..] | ["codex", "resume", id, ..]
                 if uuid_shaped(id) =>
@@ -56,14 +60,8 @@ pub fn recognise(command: &str) -> Option<Launch> {
                 continue;
             }
         };
-        // A literal -- ends options; later tokens are prompt/positional text.
-        let changes_directory = words.first() == Some(&"codex")
-            && words.iter().take_while(|word| **word != "--").any(|word| {
-                *word == "-C"
-                    || word.starts_with("-C")
-                    || *word == "--cd"
-                    || word.starts_with("--cd=")
-            });
+        let changes_directory =
+            words.first() == Some(&"codex") && changes_directory(&segment.tokens);
         return Some(Launch {
             step: multi_link_plan::step_tag(&command[segment.span]),
             form,
@@ -72,6 +70,34 @@ pub fn recognise(command: &str) -> Option<Launch> {
         });
     }
     None
+}
+
+fn changes_directory(words: &[Word]) -> bool {
+    let mut words = words.iter();
+    while let Some(word) = words.next() {
+        let text = word.text.as_str();
+        // A literal -- ends options; later tokens are prompt/positional text.
+        if text == "--" {
+            break;
+        }
+        let (value, expandable_dollar) = if matches!(text, "-C" | "--cd") {
+            let Some(value) = words.next() else {
+                return true;
+            };
+            (value.text.as_str(), value.expandable_dollar)
+        } else if let Some(value) = text
+            .strip_prefix("-C")
+            .or_else(|| text.strip_prefix("--cd="))
+        {
+            (value, word.expandable_dollar)
+        } else {
+            continue;
+        };
+        if value != "." && !(expandable_dollar && matches!(value, "$PWD" | "${PWD}")) {
+            return true;
+        }
+    }
+    false
 }
 
 fn uuid_shaped(text: &str) -> bool {
@@ -89,14 +115,21 @@ fn uuid_shaped(text: &str) -> bool {
 /// Backslash escapes outside single quotes; double quotes preserve backslashes
 /// except before shell-escapable characters. Unclosed quotes fail soft.
 struct Segment {
-    tokens: Vec<String>,
+    tokens: Vec<Word>,
     span: std::ops::Range<usize>,
+}
+
+#[derive(Default)]
+struct Word {
+    text: String,
+    // Quoting/escaping is removed from text, but literal $PWD must stay distinct.
+    expandable_dollar: bool,
 }
 
 fn segments(command: &str) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut words = Vec::new();
-    let mut word = String::new();
+    let mut word = Word::default();
     let mut started = false;
     let mut quote = None;
     let mut chars = command.char_indices().peekable();
@@ -109,7 +142,7 @@ fn segments(command: &str) -> Vec<Segment> {
         {
             chars.next();
             if next != '\n' {
-                word.push(next);
+                word.text.push(next);
                 started = true;
             }
             continue;
@@ -118,7 +151,8 @@ fn segments(command: &str) -> Vec<Segment> {
             if ch == delimiter {
                 quote = None;
             } else {
-                word.push(ch);
+                word.text.push(ch);
+                word.expandable_dollar |= ch == '$' && delimiter == '"';
             }
         } else if matches!(ch, '\'' | '"') {
             quote = Some(ch);
@@ -130,7 +164,7 @@ fn segments(command: &str) -> Vec<Segment> {
             }
             // A single & is not a segment separator in the supported grammar.
             if ch == '&' && chars.peek().map(|(_, ch)| *ch) != Some('&') {
-                word.push(ch);
+                word.text.push(ch);
                 started = true;
             } else if matches!(ch, ';' | '|' | '&' | '\n') {
                 if matches!(ch, '|' | '&') && chars.peek().map(|(_, next)| *next) == Some(ch) {
@@ -144,7 +178,8 @@ fn segments(command: &str) -> Vec<Segment> {
                 segment_start = segment_end;
             }
         } else {
-            word.push(ch);
+            word.text.push(ch);
+            word.expandable_dollar |= ch == '$';
             started = true;
         }
     }

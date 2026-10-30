@@ -77,6 +77,43 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 ## Log (newest first)
 
+### 2026-10-30 — Step 4.1: Linker current-directory options — Codex
+- Did: Tokeniser preserves whether a word contains an expandable dollar sign. Directory-option
+  recognition consumes separate or attached values for `-C` / `--cd`; `.` and expandable `$PWD` /
+  `${PWD}` keep `dir_moved` false. Literal/escaped dollar signs, other values, and preceding `cd`
+  still count as moves; `--` ends option scanning. Added exact table assertions for these cases,
+  repeated options, missing/empty values, and option-shaped values.
+- Changed: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test -p multi-link-claude` → exit 0; actual result lines
+  (unit, fixtures, invocation, doc-tests respectively):
+  ```text
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy -p multi-link-claude -- -D warnings` → exit 0; actual output:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+  ```
+- Review: Claude, 2026-10-30. Diff stays in the step's files; matches U1 (separate/attached `-C`,
+  `--cd value`, `--cd=value`; `--` ends scanning; a preceding `cd` still moves). No fix round. Accepted
+  limitation: `expandable_dollar` is one flag per word (as the plan specified), so contrived mixed-quote
+  forms such as `-C "$P"WD` or `-C $'PWD'` read as "not moved"; nobody writes these. Claude re-ran
+  `cargo test -p multi-link-claude` → same four `test result: ok.` lines (1 / 9 / 6 / 0 passed) and
+  clippy `-D warnings` → clean. Workspace gate left to the coordinator (4.2 runs in parallel).
+  Real-`~` re-measure (Claude, `cargo build --release -p multi-link`, then
+  `target/release/multi-link links --since 24h --json`, run 2026-10-30 21:49 UTC). The 24h window has moved
+  since the Phase 4 baseline, so the call totals differ. Checkout exactly `/Users/jarednarvaez/multi-link`:
+  46 calls → 30 `heuristic`, 4 `ambiguous`, 12 `unlinked` (all 0 candidates). Counting
+  `multi-link/fixtures/expected` too: 47 → 30 / 4 / 13. Baseline: 43 → 1 `heuristic`, 0 `ambiguous`,
+  42 `unlinked`. The latest unlinked call (21:07 UTC) is probably this step's own still-running Codex
+  run; not verified. Why the other 12 are unlinked was not investigated.
+- Gotchas: Only crate-local verification ran while Step 4.2 runs in this checkout. Workspace gate
+  and real-home link-count rerun remain with the coordinator/Claude. Existing fixture answer keys
+  are untouched. Missing/empty directory-option values conservatively remain moved. PROGRESS.md
+  updated under the user's explicit authorization for this parallel step.
+
 ### 2026-10-30 — Step 3.8: Real check, README, Release 1 close — Codex
 - Did: Read AGENTS.md, PLAN Step 3.8 and Current state. Built release CLI; ran real-home timing,
   workspace tests, clippy and Expect PTYs. Recorded the original sandbox observations and folded

@@ -119,6 +119,57 @@ fn recognition_table() {
 }
 
 #[test]
+fn directory_options_distinguish_current_directory_from_moves() {
+    for (options, moved) in [
+        (r#"-C "$PWD""#, false),
+        ("-C $PWD", false),
+        ("-C .", false),
+        ("-C${PWD}", false),
+        ("--cd=$PWD", false),
+        ("--cd .", false),
+        (r#"-C "${PWD}""#, false),
+        ("-C$PWD", false),
+        ("-C.", false),
+        ("--cd=${PWD}", false),
+        (r#"--cd="$PWD""#, false),
+        ("--cd $PWD", false),
+        ("-C '.'", false),
+        ("-C '$PWD'", true),
+        (r"-C \$PWD", true),
+        (r#"-C "\$PWD""#, true),
+        ("-C'${PWD}'", true),
+        (r"--cd=\${PWD}", true),
+        ("-C /tmp/x", true),
+        (r#"-C "$HOME/x""#, true),
+        (r#"-C "$PWD/x""#, true),
+        ("-C ${PWD}/x", true),
+        ("--cd=", true),
+        ("-C", true),
+        ("--cd", true),
+        ("-C . --cd /tmp/x", true),
+        ("-C /tmp/x --cd .", true),
+        ("-C . --cd=$PWD", false),
+        ("-- -C /tmp/x", false),
+        ("-- --cd=/tmp/x", false),
+        ("-C . -- -C /tmp/x", false),
+        // The next word is consumed as the option's value, even if option-shaped.
+        ("--cd -C .", true),
+    ] {
+        let command = format!("codex exec {options}");
+        let launch = recognise(&command).unwrap();
+        assert_eq!(launch.form, Exec, "{command}");
+        assert_eq!(launch.dir_moved, moved, "{command}");
+    }
+    for command in [
+        "cd x && codex exec -C .",
+        "cd x; codex exec --cd=$PWD",
+        r#"cd x && codex exec -C "$PWD""#,
+    ] {
+        assert!(recognise(command).unwrap().dir_moved, "{command}");
+    }
+}
+
+#[test]
 fn fixture_invocations_match_all_answer_key_tuples() {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
     let expected: Value =
