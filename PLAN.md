@@ -401,6 +401,8 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   null-child link is `unlinked`, the conflict link keeps its transcript evidence; `hook/sessions.json` and
   `hook/sessions-2h.json` each have exactly one `waiting` session (the old one); `git diff --stat` touches
   no existing expected file; Codex reviews (read-only).
+- H11 (added after 2.1): also add a scrubbed live session record with `status: "waiting"` + `waitingFor`
+  (from `fixtures/raw/hook/` snapshots) and its expected `sessions` row: `waiting` / `session_record`.
 
 ### Step 2.5 — Hook recorder library (Codex)
 - Depends on: 2.3, 2.4. Parallel with: 2.6 (hook compiles model + claude, core compiles neither hook nor
@@ -439,6 +441,9 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   window equal `hook/sessions-2h.json`; the plain fixture reports still equal
   `links.json` / `sessions.json` (no `.multi-link/` there); unit tests: waiting then a later transcript line
   → not waiting; waiting + process gone → `finished`; waiting on a Codex session id → ignored.
+- H11 (added after 2.1): state reads `waiting` first from a live session record (`status: "waiting"`,
+  evidence `session_record`), then from the hook (`hook`); test: record waiting + process alive → `waiting`;
+  record waiting + process gone → `finished`.
 
 ### Step 2.7 — CLI `hook record | install | uninstall` (Codex)
 - Depends on: 2.5, 2.6
@@ -481,7 +486,7 @@ confirms them on real payloads, like Phase 0 did for transcripts.
 - Remove the sandbox hook afterwards (`ls …/settings.local.json` fails).
 
 ### Phase 3 — TUI home + timeline + open (Release 1) — to be split later
-- Forced by Phase 0 (b): needs-you sorting and the bell use only the hook's `waiting`; without the hook
+- Forced by Phase 0 (b), relaxed by H11: needs-you sorting and the bell use the session record's `waiting` first, then the hook's; without either
   those sessions show as unknown, not as needing me.
 - Incremental tailing (read from the last offset; truncation → re-read) is built here, where refresh
   speed matters; Phase 1 reads each file whole.
@@ -494,6 +499,13 @@ confirms them on real payloads, like Phase 0 did for transcripts.
 Step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-30 — Step 2.1 finding: session records show waiting (H11)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | During a held permission prompt, `~/.claude/sessions/<pid>.json` showed `status: "waiting"` + `waitingFor`, back to `idle` after the answer. Phase 0 P3 said no record field signals waiting (only 5 records sampled, none waiting) | Accepted as H11: record first, hook as fallback. Folded into 2.4 (fixture + expected row) and 2.6 (state). Why: no hook install needed for needs-me; the hook still covers `-p` sessions and missing records |
+| 2 | Failed commands fire `PostToolUseFailure` with the Codex id in `error` | Accepted: already flagged for 2.5 in PROGRESS "Current state"; 2.7's snippet must register it |
+| 3 | `-p` kills unfinished async hooks at teardown | Accepted: 2.5 writes the hand-off record first, then appends the child |
 
 ### 2026-10-29 — Phase 2 plan (Claude, Codex critique, read-only)
 Hook facts were checked against the Claude Code hooks docs (claude-code-guide agent, 2026-10-29): 33 events

@@ -171,6 +171,8 @@ Planned 2026-10-29. Hook facts come from the Claude Code hooks docs (code.claude
 | H9 | Hook crate depends on model + claude, not core, and has its own `session id:` parser | Keeps the per-Bash-call hook path small and lets Steps 2.5 and 2.6 run in parallel; ~10 duplicated lines, tested on the same evidence lines |
 | H10 | One file per session, `<state>/hook/<session_id>.jsonl`, single `O_APPEND` writes under 4 KiB, ids and enums only; `<state>` = `$MULTI_LINK_HOME` or `~/.multi-link` | Parallel tool calls append without locks; a UUID check on `session_id`, refusing a state dir inside `~/.claude` / `~/.codex`, and never following symlinks keep every write inside the state dir; no conversation content leaves the transcripts |
 
+| H11 | Waiting for Claude comes first from the live session record (`status: "waiting"`, `waitingFor`), process identity checked as for busy/idle; the hook's `waiting` (H8) is the fallback when no record exists. Supersedes P3's "no record field signals waiting" | Step 2.1 saw the record switch to `waiting` during a held permission prompt and back to `idle` after it; Phase 0 sampled only 5 records, none waiting. The record needs no hook install, so needs-me works out of the box; the hook still covers `-p` sessions and missing records |
+
 Codex waiting stays unsupported (no Codex hook in scope). Enabling the hook in real repos is the owner's paste.
 
 ### Linking algorithm
@@ -198,13 +200,13 @@ Confirmed in Phase 0 (b) on real data; rule order and exact conditions are in `d
 | State | Evidence |
 | --- | --- |
 | Busy | Claude: session record `status=busy`, updated ≤ 300 s ago. Codex: last `task_started` turn has no `task_complete`, last activity ≤ 300 s ago. |
-| Waiting on me | Phase 2 hook only (`PermissionRequest` / `Notification`, H3, H8). No transcript or record field signals it (P3). Codex: unsupported. |
+| Waiting on me | Claude: the live session record's `status: "waiting"` + `waitingFor` (H11, found in Step 2.1); Phase 2 hook `waiting` as fallback when no record exists (H3, H8). Codex: unsupported. |
 | Idle | Claude: session record `status=idle`, at any age (P4). |
 | Finished | Claude: the record's process is gone, or its pid now has a different start time than `procStart` (P5). |
 | Stale | `busy` evidence older than 300 s (record or open Codex turn). |
 | Unknown | No usable signal: transcript-only sessions, Codex sessions whose turns all completed (P6). |
 
-Silence alone never means busy or waiting. Alerts (FR14) fire only on the hook's waiting signal.
+Silence alone never means busy or waiting. Alerts (FR14) fire only on a supported waiting signal (session record or hook).
 
 ### Data model (CLI output)
 
