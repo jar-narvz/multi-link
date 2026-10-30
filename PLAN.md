@@ -241,6 +241,16 @@ Split in Step 0.6. The binding contract is `docs/output-schema.md`; the answer k
   /tmp/ml-smoke.json && jq '(.sessions|length), (.skipped|length)' /tmp/ml-smoke.json && rm
   /tmp/ml-smoke.json` exits 0 and prints two numbers; paste only the numbers.
 
+### Step 1.10 — Probe compares start times in UTC (bug found by the 1.9 real-data smoke test)
+- Cause: `~/.claude/sessions/<pid>.json` `procStart` is UTC; `ps -o lstart=` prints local time, so every
+  live session's start time mismatches and is reported `finished` (19/19 Claude sessions on real data).
+- Fix: run `ps` with `TZ=UTC` in its environment; add a unit test that feeds a UTC `procStart` and a
+  matching UTC `lstart` line, and one where only the local-time rendering would match (must not be alive).
+- Files: `crates/core/src/probe.rs`, `crates/core/tests/repo_probe.rs`
+- Verify: `cargo test --workspace` → all `ok`; and on real data
+  `cargo run -q -p multi-link -- sessions --json | jq '[.sessions[]|select(.harness=="claude")|.state]|group_by(.)|map({(.[0]):length})|add'`
+  shows at least one Claude session that is not `finished` while a desktop session is open.
+
 ### Phase 2 — Hook — to be split later
 - multi-link never writes to `~/.claude/`, including settings. `multi-link hook install` **prints** the
   settings snippet and the file to paste it into; the owner pastes it. `hook uninstall` prints what to remove.
