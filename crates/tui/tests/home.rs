@@ -1,0 +1,384 @@
+//! Home screen snapshots (design T4): render the overview answer keys and compare with reviewed
+//! goldens in `fixtures/expected/tui/`. `UPDATE_SNAPSHOTS=1` rewrites the goldens instead.
+
+use std::{fs, path::PathBuf};
+
+use multi_link_model::{Link, OverviewReport, Row, State};
+use multi_link_tui::{Target, render_home, selectable};
+use ratatui::{buffer::Buffer, layout::Rect, style::Modifier, text::Span};
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn load(path: &str) -> OverviewReport {
+    let text = fs::read_to_string(repo_root().join(path)).expect("read overview fixture");
+    serde_json::from_str(&text).expect("overview fixture is an OverviewReport")
+}
+
+fn render(report: &OverviewReport, selection: Option<usize>, width: u16, height: u16) -> Buffer {
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    render_home(report, selection, area, &mut buf);
+    buf
+}
+
+/// One line per buffer row, trailing spaces trimmed. A wide character's trailing cell is
+/// skipped so the text reads as the terminal shows it.
+fn text(buf: &Buffer) -> String {
+    let mut out = String::new();
+    for y in 0..buf.area.height {
+        let mut line = String::new();
+        let mut x = 0;
+        while x < buf.area.width {
+            let symbol = buf[(x, y)].symbol();
+            line.push_str(symbol);
+            x += Span::raw(symbol).width().max(1) as u16;
+        }
+        out.push_str(line.trim_end());
+        out.push('\n');
+    }
+    out
+}
+
+fn check_snapshot(fixture: &str, golden: &str, width: u16, height: u16) {
+    let rendered = text(&render(&load(fixture), None, width, height));
+    let path = repo_root().join("fixtures/expected/tui").join(golden);
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some_and(|value| value == "1") {
+        fs::write(&path, &rendered).expect("write golden");
+        return;
+    }
+    let expected = fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing golden {golden}; run with UPDATE_SNAPSHOTS=1"));
+    assert_eq!(rendered, expected, "{golden} differs from the render");
+}
+
+#[test]
+fn home_snapshot_100x30() {
+    check_snapshot("fixtures/expected/overview.json", "home.txt", 100, 30);
+}
+
+#[test]
+fn home_hook_snapshot_100x30() {
+    check_snapshot(
+        "fixtures/expected/hook/overview.json",
+        "home-hook.txt",
+        100,
+        30,
+    );
+}
+
+/// Tall enough for every group, so each overview row can be reviewed against the answer key.
+#[test]
+fn home_full_snapshot_100x80() {
+    check_snapshot("fixtures/expected/overview.json", "home-full.txt", 100, 80);
+}
+
+#[test]
+fn home_hook_full_snapshot_100x80() {
+    check_snapshot(
+        "fixtures/expected/hook/overview.json",
+        "home-hook-full.txt",
+        100,
+        80,
+    );
+}
+
+#[test]
+fn small_sizes_do_not_panic() {
+    for fixture in [
+        "fixtures/expected/overview.json",
+        "fixtures/expected/hook/overview.json",
+    ] {
+        let report = load(fixture);
+        let count = selectable(&report).len();
+        for (width, height) in [
+            (0, 0),
+            (1, 1),
+            (0, 5),
+            (5, 0),
+            (20, 5),
+            (40, 10),
+            (2, 2),
+            (3, 3),
+        ] {
+            for selection in [None, Some(0), count.checked_sub(1), Some(count + 5)] {
+                render(&report, selection, width, height);
+            }
+        }
+    }
+}
+
+#[test]
+fn area_outside_the_buffer_is_ignored() {
+    let report = load("fixtures/expected/overview.json");
+    let mut buf = Buffer::empty(Rect::new(0, 0, 10, 4));
+    render_home(&report, Some(0), Rect::new(5, 2, 50, 50), &mut buf);
+    render_home(&report, Some(0), Rect::new(20, 20, 5, 5), &mut buf);
+}
+
+/// Rows whose every cell is reversed: the selection bar.
+fn highlighted_rows(buf: &Buffer) -> Vec<u16> {
+    (0..buf.area.height)
+        .filter(|&y| (0..buf.area.width).all(|x| buf[(x, y)].modifier.contains(Modifier::REVERSED)))
+        .collect()
+}
+
+fn row_text(buf: &Buffer, y: u16) -> String {
+    text(buf)
+        .lines()
+        .nth(usize::from(y))
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[test]
+fn selection_highlights_the_selected_row() {
+    let report = load("fixtures/expected/overview.json");
+    let targets = selectable(&report);
+
+    // Index 2 is repo-c's third row, 11c1f13c (rows come from the report as given).
+    let Target::Session(third) = targets[2].1 else {
+        panic!("expected a session row")
+    };
+    assert_eq!(&third.id[..8], "11c1f13c");
+    let buf = render(&report, Some(2), 100, 30);
+    let rows = highlighted_rows(&buf);
+    assert_eq!(rows.len(), 1, "exactly one highlighted row");
+    assert!(row_text(&buf, rows[0]).contains("11c1f13c"));
+
+    // No selection, no highlight.
+    assert!(highlighted_rows(&render(&report, None, 100, 30)).is_empty());
+    // Past the end: no highlight, no panic.
+    assert!(highlighted_rows(&render(&report, Some(targets.len()), 100, 30)).is_empty());
+}
+
+#[test]
+fn selection_below_the_fold_scrolls_into_view() {
+    let report = load("fixtures/expected/overview.json");
+    let targets = selectable(&report);
+    let last = targets.len() - 1;
+    let Target::Session(session) = targets[last].1 else {
+        panic!("expected a session row")
+    };
+    let buf = render(&report, Some(last), 100, 30);
+    let rows = highlighted_rows(&buf);
+    assert_eq!(rows.len(), 1);
+    // The last body row (just above the footer) holds the selection.
+    assert_eq!(rows[0], 28);
+    assert!(row_text(&buf, rows[0]).contains(&session.id[..8]));
+    // Title and footer stay in place.
+    assert!(row_text(&buf, 0).starts_with("multi-link"));
+    assert!(row_text(&buf, 29).contains("q quit"));
+}
+
+#[test]
+fn selectable_lists_children_and_one_line_per_merged_row() {
+    let report = load("fixtures/expected/overview.json");
+    let targets = selectable(&report);
+    let mut expected = 0;
+    for group in &report.repos {
+        for row in &group.rows {
+            expected += match row {
+                Row::Session(session) => 1 + session.children.len(),
+                Row::Merged(_) => 1,
+            };
+        }
+    }
+    assert_eq!(targets.len(), expected);
+    let merged = targets
+        .iter()
+        .filter(|(_, target)| matches!(target, Target::Merged(_)))
+        .count();
+    assert_eq!(merged, 1, "repo-b's claude ×5 is one line");
+}
+
+/// No fixture has a worktree checkout, a step tag, an active step or an ambiguous latest
+/// hand-off, so pin those on a modified report.
+#[test]
+fn checkout_label_step_tag_and_ambiguous_handoff() {
+    let mut report = load("fixtures/expected/overview.json");
+    let group = report
+        .repos
+        .iter_mut()
+        .find(|group| group.repo.ends_with("/repo-a"))
+        .expect("repo-a group");
+    group.active_steps = vec!["3.5".to_string()];
+    let Row::Session(parent) = group
+        .rows
+        .iter_mut()
+        .find(|row| matches!(row, Row::Session(s) if s.id.starts_with("ef72378c")))
+        .expect("ef72378c row")
+    else {
+        unreachable!()
+    };
+    parent.checkout = "/home/dev/multi-link-sandbox/repo-a-wt2".to_string();
+    let child = &mut parent.children[0];
+    let link: &mut Link = child.handoffs.last_mut().expect("child hand-off");
+    link.step = Some("3.5".to_string());
+    let mut latest = link.clone();
+    latest.child = None;
+    latest.r#match = multi_link_model::Match::Ambiguous;
+    latest.candidates = vec![
+        multi_link_model::Candidate {
+            id: "a".into(),
+            gap_ms: 1,
+        },
+        multi_link_model::Candidate {
+            id: "b".into(),
+            gap_ms: 2,
+        },
+    ];
+    group.latest_handoff = Some(latest);
+
+    let screen = text(&render(&report, None, 100, 80));
+    let line = |needle: &str| {
+        screen
+            .lines()
+            .find(|line| line.contains(needle))
+            .unwrap_or_else(|| panic!("no line with {needle}:\n{screen}"))
+            .to_string()
+    };
+    assert!(line("ef72378c").contains("@repo-a-wt2"));
+    assert!(line("01a189e2").contains("step 3.5"));
+    assert!(line("Parse sample records").contains("active 3.5"));
+    assert!(line("↳ hand-off ef72378c").contains("? (2 candidates)  ambiguous"));
+    // A row whose checkout is the repo carries no label.
+    assert!(!line("bb792d9c").contains('@'));
+}
+
+/// A long unicode title is cut at the area edge, on a character boundary, without panicking.
+#[test]
+fn long_unicode_title_is_truncated() {
+    let mut report = load("fixtures/expected/overview.json");
+    let group = report
+        .repos
+        .iter_mut()
+        .find(|group| group.plan.latest_step.is_some())
+        .expect("a group with a latest step");
+    group.plan.latest_step.as_mut().unwrap().title = Some("ステップ".repeat(40));
+    for width in [10, 21, 40, 99] {
+        let screen = text(&render(&report, None, width, 80));
+        for line in screen.lines() {
+            assert!(
+                Span::raw(line).width() <= usize::from(width),
+                "{line:?} wider than {width}"
+            );
+        }
+    }
+}
+
+#[test]
+fn waiting_repo_gets_the_marker() {
+    let report = load("fixtures/expected/hook/overview.json");
+    let screen = text(&render(&report, None, 100, 80));
+    let headers: Vec<&str> = screen
+        .lines()
+        .filter(|line| line.starts_with('◆'))
+        .collect();
+    assert_eq!(headers.len(), 2, "repo-a and repo-c wait:\n{screen}");
+    assert!(headers[0].contains("1 waiting"));
+    let waiting = report.repos[0]
+        .rows
+        .iter()
+        .filter(|row| matches!(row, Row::Session(s) if s.state == State::Waiting))
+        .count();
+    assert_eq!(waiting, 1);
+}
+
+/// A Rect at the very end of the u16 range must not overflow the row arithmetic.
+#[test]
+fn area_at_the_bottom_of_the_u16_range_does_not_overflow() {
+    let report = load("fixtures/expected/overview.json");
+    for rect in [Rect::new(0, 65534, 1, 1), Rect::new(0, 65533, 3, 2)] {
+        let mut buf = Buffer::empty(rect);
+        for selection in [None, Some(0), Some(3)] {
+            render_home(&report, selection, rect, &mut buf);
+        }
+    }
+}
+
+/// A child row shows its placing hand-off (T11: the latest link from its parent), not a later
+/// link from another parent.
+#[test]
+fn child_row_shows_its_placing_handoff() {
+    let mut report = load("fixtures/expected/overview.json");
+    let group = report
+        .repos
+        .iter_mut()
+        .find(|group| group.repo.ends_with("/repo-a"))
+        .expect("repo-a group");
+    let Row::Session(parent) = group
+        .rows
+        .iter_mut()
+        .find(|row| matches!(row, Row::Session(s) if s.id.starts_with("ef72378c")))
+        .expect("ef72378c row")
+    else {
+        unreachable!()
+    };
+    let parent_id = parent.id.clone();
+    let child = &mut parent.children[0];
+    let placing = child
+        .handoffs
+        .iter_mut()
+        .rev()
+        .find(|link| link.parent == parent_id)
+        .expect("placing hand-off");
+    placing.step = Some("3.5".to_string());
+    let mut other = placing.clone();
+    other.parent = "bb792d9c-7f69-410b-a571-b6d97d3aaffa".to_string();
+    other.r#match = multi_link_model::Match::Heuristic;
+    other.step = Some("9.9".to_string());
+    child.handoffs.push(other);
+
+    let screen = text(&render(&report, None, 100, 80));
+    let line = screen
+        .lines()
+        .find(|line| line.contains("01a189e2"))
+        .expect("child row");
+    assert!(
+        line.contains("step 3.5") && line.contains("exact"),
+        "{line}"
+    );
+    assert!(
+        !line.contains("heuristic") && !line.contains("9.9"),
+        "{line}"
+    );
+    assert!(line.contains("3 hand-offs"), "{line}");
+    // A top-level Codex row with no links says so without claiming there was no hand-off.
+    let manual = screen
+        .lines()
+        .find(|line| line.contains("01a189e5"))
+        .expect("manual run");
+    assert!(manual.ends_with("no linked hand-off"), "{manual}");
+}
+
+/// Clipped content says how much is hidden below, and the selection stays visible above it.
+#[test]
+fn clipped_body_shows_lines_below() {
+    let report = load("fixtures/expected/overview.json");
+    let full = text(&render(&report, None, 100, 200));
+    // Body lines = rows between the title and the footer, up to the last non-empty one.
+    let rows: Vec<&str> = full.lines().collect();
+    let body = &rows[1..rows.len() - 1];
+    let body_total = body.iter().rposition(|line| !line.is_empty()).unwrap() + 1;
+    let buf = render(&report, None, 100, 30);
+    let marker = row_text(&buf, 28);
+    assert_eq!(marker, format!("  ↓ {} more lines", body_total - 27));
+
+    // Selecting the first row below the fold scrolls it just above the marker.
+    let screen = text(&buf);
+    let targets = selectable(&report);
+    let hidden = targets
+        .iter()
+        .position(|(_, target)| match target {
+            Target::Session(session) => !screen.contains(&session.id[..8]),
+            Target::Merged(_) => false,
+        })
+        .expect("a row below the fold");
+    let buf = render(&report, Some(hidden), 100, 30);
+    assert_eq!(highlighted_rows(&buf), vec![27]);
+    assert!(row_text(&buf, 28).contains("more lines"));
+    // Nothing hidden: no marker.
+    assert!(!text(&render(&report, None, 100, 80)).contains("more lines"));
+}

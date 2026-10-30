@@ -13,3 +13,5 @@ time = { version = "0.3.44", features = ["formatting", "parsing", "macros"] }
 clap = { version = "4.5.50", features = ["derive"] }
 tempfile = "3.23.0"
 multi-link-model = { path = "crates/model" }
+ratatui = "0.29.0"
+crossterm = "0.28.1"

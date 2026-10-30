@@ -1,0 +1,30 @@
+multi-link  8 repos  now 2026-10-29T23:15:00.000Z
+● repo-c  2 busy · 2 unknown  /home/dev/repo-c
+  steps  no PLAN.md
+  ● claude 00000000…0010  busy       1m ago
+  ● claude 6358ec7e…cedc  busy       2m ago
+  ? claude 11c1f13c…3b43  unknown   37h ago
+  ? claude 85a715ba…66f9  unknown   37h ago
+  ! 2 busy sessions in one folder /home/dev/repo-c: 00000000…0010, 6358ec7e…cedc
+  ↳ hand-off 11c1f13c…3b43 → -  unlinked exec bg · 37h ago
+
+  project  1 idle  /home/dev/project
+  steps  no PLAN.md
+  ○ claude bed52539…67ef  idle       2m ago
+
+  repo-a  6 unknown  /home/dev/multi-link-sandbox/repo-a
+  steps  latest 0.4 Parse sample records · Verify ? (2026-10-29)
+  ? codex  01a189e5…a4fb  unknown   13m ago    no linked hand-off
+  ? claude 80cce3e4…b3f7  unknown   14m ago
+    └ ? codex  01a189e4…9fb5  unknown   14m ago    exact
+  ? claude ef72378c…1171  unknown   15m ago
+    └ ? codex  01a189e2…a6a1  unknown   16m ago    exact · 2 hand-offs
+  ? claude bb792d9c…affa  unknown   16m ago
+  ↳ hand-off 80cce3e4…b3f7 → 01a189e4…9fb5  exact exec · 14m ago
+
+  repo-b  9 unknown  /home/dev/multi-link-sandbox/repo-b
+  steps  latest 3 Parse sample records · Verify ? (2026-10-29)
+  ▸ claude ×5  4 codex children · newest 14m ago · enter expands
+  ↳ hand-off f4d83303…f0c7 → 01a189e4…2eb3  exact exec · 14m ago
+  ↓ 21 more lines
+↑↓ select · enter expand/timeline · t timeline · o open · f fork · q quit

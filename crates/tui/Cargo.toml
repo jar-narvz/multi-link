@@ -1,0 +1,13 @@
+[package]
+name = "multi-link-tui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+multi-link-model.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

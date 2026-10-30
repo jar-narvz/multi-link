@@ -1,10 +1,19 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1** (refresh speed), **3.2** (Phase 3 output contract)
-and **3.3** (Session `checkout` / `host_session_id`, `overview` report, CLI `overview`) done. `cargo test` is
-green again. Next: **Step 3.4 ∥ Step 3.5** (Codex-off mode: Claude implementer subagents; parallel sessions do
-not commit, the coordinator does). Order: (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
+**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.5** done (3.4 open actions, 3.5 TUI home render).
+Next: **Step 3.6** (timeline render) in Codex-off mode. **Before 3.7:** a small step for the `ps` locale P1
+(below). Order: 3.6 → probe locale fix → 3.7 → 3.8.
+
+- **Open P1 (found in 3.4 review):** `core/src/probe.rs` runs `ps` with only `TZ=UTC`; `lstart` is locale-dependent
+  (`LC_ALL=de_DE.UTF-8` → `Fr 30 Okt …`), so a non-English locale makes a live session `finished` and `open` would
+  offer `Resume`. Fix: `LC_ALL=C` on both `ps` calls + a test. Must land before 3.7.
+- **What 3.7 needs from 3.4:** before `o` / `f`, call `open::fresh_action(&mut scanner, root, &options, full_id, fork)`
+  (fresh pass, window off; `None` → footer "session no longer found"). Execute `Resume` as
+  `Command::new(program).args(args).current_dir(cwd).status()` and `AppLink` as `/usr/bin/open <url>`, wrapped in T9's
+  terminal suspend/restore; show `Unavailable` with its reason and command. The CLI's `open_command` builds these.
+- **What 3.7 needs from 3.5:** `selection` indexes `selectable(report)`; a merged row is one line until expanded, and
+  `render_home` has no expanded state yet, so 3.7 adds it. crossterm is already a tui dependency.
 
 - **What 3.4 needs from 3.3:** `Session.host_session_id` and `Session.record` already follow the
   several-records-per-id rule (`core/src/sessions.rs::choose_record`: `finished` only when every record is
@@ -55,6 +64,34 @@ not commit, the coordinator does). Order: (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.5: TUI crate: home screen render — Claude (implementer)
+- Did: New lib crate `multi-link-tui` (deps: model, ratatui 0.29.0, crossterm 0.28.1, time). `render_home(&OverviewReport, Option<usize>, Rect, &mut Buffer)` is pure (ages from `report.now`). Layout: a title line (`N repos`, now), then one block per repo in report order: header (`◆` waiting / `●` busy, basename, session counts by state in T5 order, full path); steps line (no PLAN.md / unsupported / none logged / `latest <id> <title> · Verify ✓|✗|? (<date>)`, plus `active …`); one lane per session (state glyph, harness, short id, state, age, `@<checkout basename>` when checkout ≠ repo, then step tag and match from the lane's link: for a child its placing hand-off (latest link from that parent, T11), for a top-level row its latest link, `N hand-offs` when more than one, `no linked hand-off` when none); Codex children indented with `├`/`└`; a MergedRow as one `▸ claude ×N` line; FR17 `!` warning lines; the `↳ hand-off parent → child` line (`? (N candidates)` when ambiguous). Footer keys: ↑↓ select · enter expand/timeline · t timeline · o open · f fork · q quit. `selectable(report)` lists the selectable lines (top rows, children, one per merged row) in screen order. `selection` indexes it and the body scrolls just enough to keep it visible. When the body is clipped, the last body row reads `↓ N more lines`. Order, nesting and merging are taken from the report as given. Review round 1: u16-safe row math, placing hand-off for child lanes, `no linked hand-off`, clip marker, plurals, test guard.
+- Changed: Cargo.toml, Cargo.lock, crates/tui/{Cargo.toml,src/lib.rs,src/home.rs,tests/home.rs}, fixtures/expected/tui/{home,home-hook,home-full,home-hook-full}.txt
+- Verify: `cargo test -p multi-link-tui` → unit `test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`;
+  tests/home.rs `test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` (incl. `home_snapshot_100x30`,
+  `home_hook_snapshot_100x30`, `home_full_snapshot_100x80`, `home_hook_full_snapshot_100x80`, `small_sizes_do_not_panic`
+  at 0×0, 1×1, 0×5, 5×0, 20×5, 40×10, 2×2, 3×3 with selection None / first / last / past the end).
+  `cargo clippy -p multi-link-tui -- -D warnings` → clean (also with `--all-targets`).
+- Review: Claude (step session) re-ran both Verify commands: 3 + 15 tests ok, clippy clean. Goldens checked line by line
+  against the overview keys (T4). `overview.json` → home-full.txt: repo-c ● busy, 2 busy · 2 unknown, rows 00000000…0010
+  busy, 6358ec7e busy, 11c1f13c / 85a715ba unknown, FR17 warning with both busy ids, latest hand-off unlinked exec bg;
+  project bed52539 idle; repo-a plan latest 0.4 Verify ?, manual Codex 01a189e5 top-level first, 80cce3e4 → 01a189e4…9fb5
+  exact, ef72378c → 01a189e2 exact · 2 hand-offs (placed under the later resume parent), bb792d9c no child; repo-b plan
+  latest 3, `claude ×5` with 4 Codex children; repo-a-wt c86d374f → 01a189e4…b109; scratch 9d02a552 idle; repo-d three
+  rows; repo-e Claude …000e and top-level Codex …000f with no linked hand-off. `hook/overview.json` → home-hook-full.txt:
+  waiting tier repo-a then repo-c, both ◆; d1f3b188 and 11c1f13c waiting first in their repos; FR17 warning kept; other
+  tiers unchanged. The 100×30 goldens equal rows 2–28 of the full goldens plus `↓ 21/22 more lines`.
+  Adversarial Claude review: goldens clean; 9 findings elsewhere. Fixed in round 1: u16 overflow near y≈65535, "no
+  hand-off" overclaimed for ambiguous candidates, child lane uses its placing hand-off (T11), clip marker, plurals, test
+  underflow; `time` dep noted in Gotchas. Rejected: scroll anchoring (3.7 owns scroll state); `@basename` for a worktree
+  with the repo's folder name (backlog). Coordinator workspace gate (with 3.4 in the tree): `cargo test --workspace`
+  all ok, clippy `--workspace --all-targets -D warnings` clean.
+- Gotchas: Codex ids are UUIDv7, so the first 8 hex digits are a shared timestamp; lanes show the first 8 and last 4
+  characters (`01a189e4…2eb3`). `time` is an extra dependency, only to turn `Timestamp` into epoch seconds (model has no
+  accessor). crossterm is declared but unused until 3.7. A last activity after the fixed `now` reads `6h ahead`. No
+  fixture has a checkout ≠ repo, a step tag, active steps, an ambiguous latest hand-off or a second parent with a later
+  link, so tests pin those on modified reports.
 
 ### 2026-10-30 — Step 3.4: Core open actions + CLI `open --dry-run` — Claude (implementer)
 - Did: New `core::open`: `OpenAction` (`Resume{program,args,cwd}` | `AppLink{url}` |
