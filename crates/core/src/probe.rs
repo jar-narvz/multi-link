@@ -40,6 +40,7 @@ impl ProcessProbe for RealProcessProbe {
         }
         let Ok(output) = Command::new(&self.ps_binary)
             .args(["-p", &pid.to_string(), "-o", "lstart="])
+            .env("TZ", "UTC")
             .output()
         else {
             return Liveness::Unavailable;

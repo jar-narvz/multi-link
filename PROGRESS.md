@@ -1,6 +1,8 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+- Step 1.10 implemented (Codex), awaiting Claude review and real-data Verify outside the sandbox:
+  `RealProcessProbe` runs `ps` with `TZ=UTC`; comparison logic unchanged. Workspace tests pass.
 - Step 0.1 done, committed and reviewed by Codex (4 findings, all fixed).
 - Autonomous loop set up (CLAUDE.md "Autonomous mode"): Claude commits locally after review, never pushes.
   Rust 1.99.1 installed; Codex sandbox smoke-tested building a crate with a crates.io dependency.
@@ -171,6 +173,41 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.10: Probe compares start times in UTC — Codex
+- Did: Set `TZ=UTC` on the probe's `ps` command; kept comparison logic unchanged.
+  Added a deterministic stub-ps regression test: matching UTC start → `Alive`, local-time
+  rendering → `Gone`. Aligned the own-pid test's reference `ps` command with UTC.
+- Changed: `crates/core/src/probe.rs`, `crates/core/tests/repo_probe.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md; `cargo test --workspace` → exit 0;
+  actual result lines by target:
+  - Running unittests src/main.rs: `test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/cli.rs: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s`
+  - Running unittests src/lib.rs: `test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/fixtures.rs: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s`
+  - Running tests/invocation.rs: `test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s`
+  - Running unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/fixtures.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s`
+  - Running unittests src/lib.rs: `test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/links.rs: `test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s`
+  - Running tests/repo_probe.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s`
+  - Running tests/sessions.rs: `test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s`
+  - Running unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/model.rs: `test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running unittests src/lib.rs: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Running tests/fixtures.rs: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_claude: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_codex: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_core: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_model: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+  - Doc-tests multi_link_plan: `test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`
+- Verify: `cargo fmt --all -- --check` → no output, exit 0.
+- Review: Claude, 2026-10-29. Diff is the one-line `TZ=UTC` plus a fake-`ps` regression test; no findings.
+  Real-data Verify run outside the sandbox: Claude states `{"busy":2,"idle":17}`, matching the 19 live
+  `~/.claude/sessions` records exactly (2 busy, 17 idle); before the fix all 19 were `finished`.
+- Gotchas: Real-data Verify was not run, per the owner's instruction; left for Claude to run
+  outside the sandbox with a desktop session open. Existing real-ps tests can return early
+  when the probe is unavailable; the new stub test does not require real process access.
 
 ### 2026-10-29 — Step 1.9: CLI commands — Codex
 - Did: Wired sessions/links to `multi_link_core` report functions with the same Options, and steps to

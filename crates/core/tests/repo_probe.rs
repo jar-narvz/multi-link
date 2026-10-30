@@ -161,6 +161,24 @@ fn missing_ps_is_unavailable() {
 }
 
 #[test]
+#[cfg(unix)]
+fn probe_uses_utc_start_time_instead_of_local_rendering() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let ps = temp.path().join("ps");
+    std::fs::write(
+        &ps,
+        "#!/bin/sh\nif [ \"$TZ\" = UTC ]; then\n  echo 'Fri Oct 30 00:08:22 2026'\nelse\n  echo 'Thu Oct 29 17:08:22 2026'\nfi\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&ps, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let probe = RealProcessProbe::new(ps);
+    assert_eq!(probe.probe(12, "Fri Oct 30 00:08:22 2026"), Liveness::Alive);
+    assert_eq!(probe.probe(12, "Thu Oct 29 17:08:22 2026"), Liveness::Gone);
+}
+
+#[test]
 fn own_pid_matches_start_time_and_rejects_reused_identity() {
     let probe = RealProcessProbe::default();
     let pid = std::process::id();
@@ -170,6 +188,7 @@ fn own_pid_matches_start_time_and_rejects_reused_identity() {
     }
     let output = Command::new("/bin/ps")
         .args(["-p", &pid.to_string(), "-o", "lstart="])
+        .env("TZ", "UTC")
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
