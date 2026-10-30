@@ -92,8 +92,20 @@
   greatest `updated_at` (ties: ascending-first record path). Incomplete Claude transcripts are omitted
   and counted in `incomplete`; a matching record remains record-only. No invented metadata.
   Every transcript has one unknown-step segment; record-only sessions have none.
-- **Next: 1.8** (after 1.6, 1.7), then 1.9 (after 1.4, 1.7, 1.8). Open follow-up: 4 clippy `collapsible_if`
-  warnings in `crates/claude/src/invocation.rs` (Step 1.6 code).
+- Step 1.8 done (Codex, reviewed by Claude, 1 fix round): public
+  `multi_link_core::links_report(root: &Path, &Options<'_>) -> io::Result<LinksOutput>`
+  (also in `links` module). Reuses sessions `Options`; `LinksOutput { report: LinksReport,
+  bad_records: Vec<String>, incomplete: Vec<String>, unreadable: Vec<multi_link_codex::ReadFailure> }`
+  exposes the session discovery diagnostics for Step 1.9. Exact ids resolve before heuristics;
+  all invocations and rollouts participate before output-only `since` filtering. `RepoMode::Fixture`
+  selects task-output lookup under `<root>/task-output/<basename>`; real mode reads the named path.
+  Full reports equal both links answer keys; all Step 1.8 Verify cases pass. Core Clippy is clean.
+  Round 1: unreadable/non-regular task outputs give no evidence; links sort by (at, invocation).
+  For 1.9: `links --json` = `links_report(root, &Options)` with the same Options as `sessions`
+  (`--root` → `RepoMode::Fixture` + `FixtureProcessProbe`); print `bad_records`/`incomplete`/`unreadable`
+  to stderr like `sessions`.
+- **Next: 1.9** (after 1.4, 1.7, 1.8). Open follow-up for 1.9: 4 clippy `collapsible_if` warnings in
+  `crates/claude/src/invocation.rs` (Step 1.6 code).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 - Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
@@ -136,6 +148,99 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.8: Linker and links report — Codex
+- Did: Implemented evidence priority (resume_arg, stdout, thread_ready, task_output), UUID validation,
+  missing-output fallback, inclusive 60 s exact-checkout heuristic, exclusion by exact non-resume
+  links, directory-move suppression, deterministic ordering, unparented sessions, and output-only
+  history filtering. Added public links_report using sessions Options and diagnostic output fields.
+  Ten integration tests compare both complete answer-key reports as LinksReport model values and
+  cover all Step 1.8 Verify cases, plus window endpoints, exact path strings, evidence precedence,
+  moved commands with exact evidence, and real task-output lookup. Round 1 fixes: check metadata
+  for a regular file before reading task output, ignore all metadata/read errors, and sort links
+  by (at, invocation). Added a real-mode directory-output regression matching missing-file fallback.
+- Changed: `crates/core/src/lib.rs`, `crates/core/src/link.rs`, `crates/core/src/links.rs`,
+  `crates/core/tests/links.rs`, `PROGRESS.md`.
+- Verify: Round 1 rerun, Rust PATH set per AGENTS.md; `cargo test -p multi-link-core` exited 0.
+  Actual test output (runner paths and compilation preamble omitted):
+  ```text
+  running 2 tests
+  test repo::tests::groups_only_common_dirs_named_dot_git ... ok
+  test probe::tests::classifies_ps_output_conservatively ... ok
+
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+  running 10 tests
+  test resume_does_not_claim_child_from_earlier_exec ... ok
+  test old_exact_link_excludes_child_from_recent_heuristic_even_when_hidden ... ok
+  test heuristic_window_is_inclusive_and_checkout_is_an_exact_string ... ok
+  test since_lists_links_when_either_endpoint_is_visible_and_only_visible_unparented ... ok
+  test moved_launch_directory_disables_heuristic_but_preserves_exact ... ok
+  test directory_task_output_falls_back_like_missing_output_in_real_mode ... ok
+  test exact_evidence_precedence_and_real_task_path ... ok
+  test fixture_report_equals_answer_key ... ok
+  test missing_background_output_falls_back_to_heuristic ... ok
+  test ambiguous_variant_equals_answer_key ... ok
+
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+  running 8 tests
+  test fixture_mode_preserves_even_nonexistent_relative_paths ... ok
+  test fake_and_fixture_probes_are_deterministic ... ok
+  test own_pid_matches_start_time_and_rejects_reused_identity ... ok
+  test reaped_child_is_gone ... ok
+  test missing_ps_is_unavailable ... ok
+  test real_mapper_falls_back_outside_git_or_for_missing_directory ... ok
+  test mapper_ignores_inherited_git_environment ... ok
+  test nested_main_and_worktree_map_to_shared_repo ... ok
+
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+  running 10 tests
+  test latest_codex_turn_governs_and_open_turn_uses_last_activity ... ok
+  test claude_freshness_status_and_probe_precedence ... ok
+  test file_diagnostics_are_separate_from_schema_skips ... ok
+  test report_trusts_stale_busy_record_when_probe_is_unavailable ... ok
+  test since_boundary_is_inclusive_and_future_activity_is_retained ... ok
+  test merge_uses_transcript_fields_latest_record_and_bypasses_since ... ok
+  test transcript_only_and_incomplete_transcripts_have_no_invented_fields ... ok
+  test report_uses_gone_probe_for_merged_and_record_only_sessions ... ok
+  test fixture_report_equals_every_expected_field ... ok
+  test since_two_hours_filters_only_transcript_history ... ok
+
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+  running 0 tests
+
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Round 1 rerun: `cargo clippy -p multi-link-core --tests` exited 0. Actual output excerpts (four existing
+  Claude dependency warnings; diagnostic source excerpts/help omitted):
+  ```text
+  warning: this `if` statement can be collapsed
+     --> crates/claude/src/invocation.rs:96:9
+  warning: this `if` statement can be collapsed
+     --> crates/claude/src/invocation.rs:97:13
+  warning: this `if` statement can be collapsed
+     --> crates/claude/src/invocation.rs:202:17
+  warning: this `if` statement can be collapsed
+     --> crates/claude/src/invocation.rs:267:13
+  warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix --lib -p multi-link-claude -- ` to apply 4 suggestions)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
+  ```
+- Review: Claude, 1 fix round. #1 `link.rs:122` a task-output read error other than NotFound (directory,
+  permission, invalid UTF-8) aborted the whole report, and a FIFO named in a transcript could block the read:
+  now only regular files are read and any failure gives no evidence (test with a directory path). #2 `link.rs:70`
+  links sorted by (at, parent, invocation); schema says (at, invocation). Re-ran Verify: core 2+10+8+10 passed
+  (same as pasted), `cargo test --workspace -q` all ok, clippy warnings only the 4 known in crates/claude.
+  Checked against the step: exact only from observed ids in schema order; heuristic uses the exact checkout
+  string and inclusive [at, at+60 s]; resume links don't claim children; `dir_moved` → unlinked, `[]`;
+  `since` filters output only. Noted, not fixed: transcripts are scanned twice per report (Phase 3 cache).
+- Gotchas: Links reuse sessions_report for visibility/diagnostics and separately scan all evidence,
+  so transcripts are read more than once per report (no cache yet). All task-output metadata/read
+  errors (including non-NotFound and invalid UTF-8) and non-regular paths give no evidence and allow
+  heuristic fallback. Only paths whose metadata identifies a regular file are read. Exact ids need not have a
+  discovered rollout. PLAN.md, schema, answer keys, crates/claude, and Cargo files unchanged.
 
 ### 2026-10-29 — Step 1.7: Session state and sessions report — Codex
 - Did: Added pure Claude/Codex state functions and a sessions report that assembles parser
