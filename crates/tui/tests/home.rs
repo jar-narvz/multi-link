@@ -145,6 +145,11 @@ fn small_sizes_do_not_panic() {
             (40, 10),
             (2, 2),
             (3, 3),
+            (60, 1),
+            (60, 2),
+            (60, 3),
+            (60, 4),
+            (100, 4),
         ] {
             for selection in [None, Some(0), count.checked_sub(1), Some(count + 5)] {
                 render(&report, selection, width, height);
@@ -275,7 +280,7 @@ fn checkout_label_step_tag_and_ambiguous_handoff() {
     ];
     group.latest_handoff = Some(latest);
 
-    let screen = text(&render(&report, None, 100, 80));
+    let screen = text(&render(&report, None, 160, 80));
     let line = |needle: &str| {
         screen
             .lines()
@@ -375,7 +380,7 @@ fn child_row_shows_its_placing_handoff() {
     other.step = Some("9.9".to_string());
     child.handoffs.push(other);
 
-    let screen = text(&render(&report, None, 100, 80));
+    let screen = text(&render(&report, None, 160, 80));
     let line = screen
         .lines()
         .find(|line| line.contains("01a189e2"))
@@ -394,7 +399,7 @@ fn child_row_shows_its_placing_handoff() {
         .lines()
         .find(|line| line.contains("01a189e5"))
         .expect("manual run");
-    assert!(manual.ends_with("no linked hand-off"), "{manual}");
+    assert!(manual.contains("no linked hand-off"), "{manual}");
 }
 
 /// Clipped content says how much is hidden below, and the selection stays visible above it.
@@ -404,11 +409,11 @@ fn clipped_body_shows_lines_below() {
     let full = text(&render(&report, None, 100, 200));
     // Body lines = rows between the title and the footer, up to the last non-empty one.
     let rows: Vec<&str> = full.lines().collect();
-    let body = &rows[1..rows.len() - 1];
+    let body = &rows[2..rows.len() - 1];
     let body_total = body.iter().rposition(|line| !line.is_empty()).unwrap() + 1;
     let buf = render(&report, None, 100, 30);
     let marker = row_text(&buf, 28);
-    assert_eq!(marker, format!("  ↓ {} more lines", body_total - 27));
+    assert_eq!(marker, format!("  ↓ {} more lines", body_total - 26));
 
     // Selecting the first row below the fold scrolls it just above the marker.
     let screen = text(&buf);
@@ -503,4 +508,135 @@ fn default_collapse_highlights_only_repo_summaries_and_stale_lanes() {
         };
         assert!(row_text(&buf, rows[0]).contains(&expected));
     }
+}
+
+/// A single expanded repo with controlled spans on the default 21:15..23:15 UTC axis.
+fn mini_bar_report() -> OverviewReport {
+    let mut report = load("fixtures/expected/phase4/overview.json");
+    report.repos.retain(|group| group.repo.ends_with("/repo-h"));
+    let group = &mut report.repos[0];
+    group.rows.truncate(1);
+    let Row::Session(row) = &mut group.rows[0] else {
+        panic!("session")
+    };
+    row.id = "parent".into();
+    row.started_at = "2026-10-29T21:00:00Z".parse().unwrap();
+    row.last_activity = "2026-10-29T21:25:00Z".parse().unwrap();
+    row.children.clear();
+    let mut child = row.clone();
+    child.id = "child".into();
+    child.checkout = "/home/dev/a-long-worktree-label".into();
+    child.started_at = "2026-10-29T22:15:00Z".parse().unwrap();
+    child.last_activity = child.started_at;
+    row.children.push(child);
+    report
+}
+
+fn cells(buf: &Buffer, y: u16, from: u16, to: u16) -> String {
+    (from..to).map(|x| buf[(x, y)].symbol()).collect()
+}
+
+#[test]
+fn mini_bars_clip_spans_and_draw_zero_length_children_on_the_shared_axis() {
+    let mut report = mini_bar_report();
+    let buf = render(&report, Some(1), 100, 10);
+    assert_eq!(
+        row_text(&buf, 0),
+        "multi-link  0 waiting · 2 busy · 0 stale · 0 warnings · 1 repo · 2 sessions · ? hand-offs"
+    );
+    assert_eq!(cells(&buf, 1, 76, 100), "21:15              23:15");
+    assert!(row_text(&buf, 1).contains("session span · idle gaps included · UTC"));
+    assert_eq!(cells(&buf, 4, 76, 100), "◂━━·····················");
+    assert_eq!(cells(&buf, 5, 76, 100), "············━···········");
+    assert_eq!(highlighted_rows(&buf), vec![5]);
+
+    let Row::Session(row) = &mut report.repos[0].rows[0] else {
+        panic!("session")
+    };
+    row.started_at = "2026-10-29T22:15:00Z".parse().unwrap();
+    row.last_activity = "2026-10-29T23:30:00Z".parse().unwrap();
+    let buf = render(&report, None, 100, 10);
+    assert_eq!(cells(&buf, 4, 76, 100), "············━━━━━━━━━━━▸");
+    // Parent and child have different indentation and metadata lengths, but identical starts.
+    assert_eq!(buf[(88, 4)].symbol(), "━");
+    assert_eq!(buf[(88, 5)].symbol(), "━");
+}
+
+#[test]
+fn mini_bars_show_empty_tracks_for_spans_outside_the_window() {
+    let mut report = mini_bar_report();
+    let Row::Session(row) = &mut report.repos[0].rows[0] else {
+        panic!("session")
+    };
+    row.started_at = "2026-10-29T20:00:00Z".parse().unwrap();
+    row.last_activity = "2026-10-29T21:00:00Z".parse().unwrap();
+    row.children[0].started_at = "2026-10-30T00:00:00Z".parse().unwrap();
+    row.children[0].last_activity = "2026-10-30T00:01:00Z".parse().unwrap();
+    let buf = render(&report, None, 100, 10);
+    assert_eq!(cells(&buf, 4, 76, 100), "························");
+    assert_eq!(cells(&buf, 5, 76, 100), "························");
+}
+
+#[test]
+fn mini_bars_start_at_sixty_columns_and_respect_offset_areas() {
+    let report = mini_bar_report();
+    let narrow = text(&render(&report, None, 59, 10));
+    assert!(!narrow.contains("session span"));
+    assert!(!narrow.contains(['━', '◂', '▸']));
+    let buf = render(&report, None, 60, 10);
+    assert_eq!(cells(&buf, 1, 48, 60), "21:15  23:15");
+    assert_eq!(cells(&buf, 4, 48, 60), "◂━··········");
+    let area = Rect::new(7, 3, 100, 10);
+    let mut offset = Buffer::empty(Rect::new(0, 0, 120, 20));
+    render_home(&report, None, area, &mut offset);
+    assert_eq!(cells(&offset, 7, 83, 107), "◂━━·····················");
+    assert_eq!(offset[(107, 7)].symbol(), " ");
+}
+
+#[test]
+fn merged_and_collapsed_repo_rows_have_no_mini_bar() {
+    let report = load("fixtures/expected/phase4/overview.json");
+    let buf = render(&report, None, 160, 80);
+    let screen = text(&buf);
+    let merged: Vec<_> = screen
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains("×4"))
+        .collect();
+    assert_eq!(merged.len(), 3);
+    for (y, _) in merged {
+        assert_eq!(cells(&buf, y as u16, 136, 160), "                        ");
+    }
+    let mut buf = Buffer::empty(Rect::new(0, 0, 160, 30));
+    render_home(&report, None, buf.area, &mut buf);
+    let screen = text(&buf);
+    let collapsed: Vec<_> = screen
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("▸ "))
+        .collect();
+    assert_eq!(collapsed.len(), 3);
+    for (y, _) in collapsed {
+        assert_eq!(cells(&buf, y as u16, 136, 160), "                        ");
+    }
+}
+
+#[test]
+fn mini_bars_include_both_window_endpoints_and_follow_report_now() {
+    let mut report = mini_bar_report();
+    let Row::Session(row) = &mut report.repos[0].rows[0] else {
+        panic!("session")
+    };
+    row.started_at = "2026-10-29T21:15:00Z".parse().unwrap();
+    row.last_activity = "2026-10-29T23:15:00Z".parse().unwrap();
+    row.children[0].started_at = row.last_activity;
+    row.children[0].last_activity = row.last_activity;
+    let buf = render(&report, None, 100, 10);
+    assert_eq!(cells(&buf, 4, 76, 100), "━━━━━━━━━━━━━━━━━━━━━━━━");
+    assert_eq!(cells(&buf, 5, 76, 100), "·······················━");
+    report.now = "2026-10-30T00:15:00Z".parse().unwrap();
+    let buf = render(&report, None, 100, 10);
+    assert_eq!(cells(&buf, 1, 76, 100), "22:15              00:15");
+    assert_eq!(cells(&buf, 4, 76, 100), "◂━━━━━━━━━━━━···········");
+    assert_eq!(cells(&buf, 5, 76, 100), "············━···········");
 }

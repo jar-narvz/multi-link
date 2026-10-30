@@ -2,6 +2,8 @@
 
 use std::collections::HashSet;
 
+use crate::timeline::TimeWindow;
+
 use multi_link_model::{
     Convention, Harness, Link, Match, MergedRow, OverviewReport, RepoGroup, Row, SessionRow, State,
     Tier, Timestamp, VerifyResult,
@@ -124,7 +126,7 @@ pub fn render_home_with_options(
     let lines = body_lines(report, &options.expanded_repos);
 
     // Title on top and keys at the bottom when there is room for a body line between them.
-    let (title_rows, mut footer_rows) = match area.height {
+    let (mut title_rows, mut footer_rows) = match area.height {
         1 => (0, 0),
         2 => (0, 1),
         _ => (1, 1),
@@ -139,6 +141,13 @@ pub fn render_home_with_options(
     if footer_rows == 1 {
         let footer = Line::from(FOOTER).dim();
         buf.set_line(area.x, area.bottom() - 1, &footer, area.width);
+    }
+
+    // A separate shared axis preserves U4's full summary at typical widths.
+    let axis = MiniAxis::new(report, area.width).filter(|_| area.height >= 4);
+    if let Some(axis) = &axis {
+        axis.draw_header(area.x, area.y + 1, buf);
+        title_rows += 1;
     }
 
     let body_top = area.y.saturating_add(title_rows);
@@ -160,7 +169,15 @@ pub fn render_home_with_options(
             // Fill the whole row so the highlight reads as a bar, not just the text.
             buf.set_style(Rect::new(area.x, y, area.width, 1), Modifier::REVERSED);
         }
-        buf.set_line(area.x, y, &text, area.width);
+        let text_width = if line.span.is_some() {
+            axis.as_ref().map_or(area.width, |axis| axis.column - 1)
+        } else {
+            area.width
+        };
+        buf.set_line(area.x, y, &text, text_width);
+        if let (Some(axis), Some((start, end))) = (&axis, line.span) {
+            axis.draw_span(start, end, area.x, y, buf);
+        }
     }
     if window.hidden_below > 0 {
         let more = Line::from(format!("  ↓ {} more lines", window.hidden_below)).dim();
@@ -170,6 +187,90 @@ pub fn render_home_with_options(
         {
             buf.set_line(area.x, y, &more, area.width);
         }
+    }
+}
+
+/// A fixed right-hand column: every lane uses the same two-hour window, including children.
+/// Endpoint labels are UTC; the track shows the window, not activity or busy time.
+struct MiniAxis {
+    column: u16,
+    cells: u16,
+    start: i128,
+    end: i128,
+    labels: (String, String),
+}
+
+impl MiniAxis {
+    fn new(report: &OverviewReport, width: u16) -> Option<Self> {
+        if width < 60 {
+            return None;
+        }
+        let window = TimeWindow::default_for(report);
+        let parse = |at: Timestamp| OffsetDateTime::parse(&at.to_string(), &Rfc3339).ok();
+        let start = parse(window.start)?;
+        let end = parse(window.end)?;
+        if start >= end {
+            return None;
+        }
+        let cells = 24.min(width - 48);
+        let clock = |at: OffsetDateTime| format!("{:02}:{:02}", at.hour(), at.minute());
+        Some(Self {
+            column: width - cells,
+            cells,
+            start: start.unix_timestamp_nanos() / 1_000_000,
+            end: end.unix_timestamp_nanos() / 1_000_000,
+            labels: (clock(start), clock(end)),
+        })
+    }
+
+    fn draw_header(&self, x: u16, y: u16, buf: &mut Buffer) {
+        buf.set_line(
+            x,
+            y,
+            &Line::from("  session span · idle gaps included · UTC").dim(),
+            self.column - 1,
+        );
+        let label = format!(
+            "{:<width$}{}",
+            self.labels.0,
+            self.labels.1,
+            width = usize::from(self.cells) - self.labels.1.len()
+        );
+        buf.set_line(x + self.column, y, &Line::from(label).dim(), self.cells);
+    }
+
+    fn draw_span(&self, start: Timestamp, end: Timestamp, x: u16, y: u16, buf: &mut Buffer) {
+        let mut cells = vec!["·"; usize::from(self.cells)];
+        let millis = |at: Timestamp| {
+            OffsetDateTime::parse(&at.to_string(), &Rfc3339)
+                .ok()
+                .map(|at| at.unix_timestamp_nanos() / 1_000_000)
+        };
+        if let Some((from, to)) = millis(start).zip(millis(end)) {
+            let (from, to) = (from.min(to), from.max(to));
+            if to >= self.start && from <= self.end {
+                let col = |at: i128| {
+                    (((at.clamp(self.start, self.end) - self.start) * i128::from(self.cells)
+                        / (self.end - self.start)) as usize)
+                        .min(cells.len() - 1)
+                };
+                let (first, last) = (col(from), col(to));
+                cells[first..=last].fill("━");
+                if from < self.start {
+                    cells[first] = "◂";
+                }
+                if to > self.end {
+                    cells[last] = "▸";
+                }
+            }
+        }
+        // set_line patches the existing cell style, preserving the selected row's reversal.
+        buf.set_line(
+            x + self.column,
+            y,
+            &Line::from(cells.concat()).cyan(),
+            self.cells,
+        );
     }
 }
 
@@ -208,6 +309,7 @@ struct BodyLine {
     text: Line<'static>,
     /// Index into `selectable` when this line is a selectable row.
     target: Option<usize>,
+    span: Option<(Timestamp, Timestamp)>,
 }
 
 /// The body in screen order; target indices match `selectable_home(report, expanded)`.
@@ -215,17 +317,17 @@ fn body_lines(report: &OverviewReport, expanded: &HashSet<String>) -> Vec<BodyLi
     let now = epoch_seconds(&report.now);
     let mut lines = Vec::new();
     let mut next_target = 0;
-    let mut push = |lines: &mut Vec<BodyLine>, text: Line<'static>, selectable: bool| {
+    let mut push = |lines: &mut Vec<BodyLine>, text: Line<'static>, selectable: bool, span| {
         let target = selectable.then(|| {
             next_target += 1;
             next_target - 1
         });
-        lines.push(BodyLine { text, target });
+        lines.push(BodyLine { text, target, span });
     };
 
     for (index, group) in report.repos.iter().enumerate() {
         if index > 0 {
-            push(&mut lines, Line::default(), false);
+            push(&mut lines, Line::default(), false, None);
         }
         if collapsed(group, expanded) {
             let mut line = header_line(group);
@@ -237,15 +339,20 @@ fn body_lines(report: &OverviewReport, expanded: &HashSet<String>) -> Vec<BodyLi
                 .push(Span::from(plan.to_string().trim_start().to_string()));
             line.spans.push(Span::from(" · "));
             line.spans.push(path);
-            push(&mut lines, line, true);
+            push(&mut lines, line, true, None);
             continue;
         }
-        push(&mut lines, header_line(group), false);
-        push(&mut lines, plan_line(group), false);
+        push(&mut lines, header_line(group), false, None);
+        push(&mut lines, plan_line(group), false, None);
         for row in &group.rows {
             match row {
                 Row::Session(session) => {
-                    push(&mut lines, session_line(session, group, now, None), true);
+                    push(
+                        &mut lines,
+                        session_line(session, group, now, None),
+                        true,
+                        Some((session.started_at, session.last_activity)),
+                    );
                     let last = session.children.len().saturating_sub(1);
                     for (position, child) in session.children.iter().enumerate() {
                         let branch = if position == last { "└ " } else { "├ " };
@@ -253,10 +360,11 @@ fn body_lines(report: &OverviewReport, expanded: &HashSet<String>) -> Vec<BodyLi
                             &mut lines,
                             session_line(child, group, now, Some((branch, &session.id))),
                             true,
+                            Some((child.started_at, child.last_activity)),
                         );
                     }
                 }
-                Row::Merged(merged) => push(&mut lines, merged_line(merged, now), true),
+                Row::Merged(merged) => push(&mut lines, merged_line(merged, now), true, None),
             }
         }
         for warning in &group.concurrency {
@@ -267,10 +375,10 @@ fn body_lines(report: &OverviewReport, expanded: &HashSet<String>) -> Vec<BodyLi
                 warning.cwd,
                 ids.join(", ")
             );
-            push(&mut lines, Line::from(text).yellow(), false);
+            push(&mut lines, Line::from(text).yellow(), false, None);
         }
         if let Some(link) = &group.latest_handoff {
-            push(&mut lines, handoff_line(link, now), false);
+            push(&mut lines, handoff_line(link, now), false, None);
         }
     }
     lines

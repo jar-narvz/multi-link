@@ -1,10 +1,11 @@
 multi-link  0 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 28 sessions · 13 hand-offs
+  session span · idle gaps included · UTC                                   21:15              23:15
 ● repo-c  2 busy · 2 unknown  /home/dev/repo-c
   steps  no PLAN.md
-  ● claude 00000000…0010  busy       1m ago
-  ● claude 6358ec7e…cedc  busy       2m ago
-  ? claude 11c1f13c…3b43  unknown   37h ago
-  ? claude 85a715ba…66f9  unknown   37h ago
+  ● claude 00000000…0010  busy       1m ago                                 ······················━━
+  ● claude 6358ec7e…cedc  busy       2m ago                                 ◂━━━━━━━━━━━━━━━━━━━━━━━
+  ? claude 11c1f13c…3b43  unknown   37h ago                                 ························
+  ? claude 85a715ba…66f9  unknown   37h ago                                 ························
   ! 2 busy sessions in one folder /home/dev/repo-c: 00000000…0010, 6358ec7e…cedc
   ↳ hand-off 11c1f13c…3b43 → -  unlinked exec bg · 37h ago
 
@@ -21,7 +22,6 @@ multi-link  0 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 28 session
 ▸ repo-d  2 idle · 1 unknown  steps  no PLAN.md · /home/dev/repo-d
 
 ▸ repo-e  2 unknown  steps  no PLAN.md · /home/dev/repo-e
-
 
 
 

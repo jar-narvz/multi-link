@@ -10,7 +10,8 @@ home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coo
 **4.3 is committed** (Claude-reviewed; `cargo test --workspace` 29 `test result: ok`, clippy clean).
 **4.4 is committed** (Claude-reviewed, 1 Codex fix round; Claude re-ran `cargo test --workspace`
 → 29 `test result: ok`, 0 failed; clippy `-D warnings` clean).
-Next: **4.5**, then 4.6.
+**4.5 is committed** (Claude-reviewed, 0 fix rounds; Claude re-ran `cargo test --workspace` → 29
+`test result: ok`, 0 failed; clippy `-D warnings` clean). Next: **4.6** (real check, README, owner stop-and-ask).
 One fresh step session each.
 4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
@@ -21,6 +22,13 @@ exited terminal Claude session deletes its record, leaving `unknown` / `Unavaila
 resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
 Codex-off mode is off: Codex implements, Claude plans and reviews.
 
+- **What 4.6 needs from 4.5:** home lanes (top-level and child session rows) end in a fixed bar column on the
+  right: 24 cells at width ≥ 72 (12–23 at 60–71, none below 60 or below height 4), window
+  `TimeWindow::default_for(report)` = 2 h ending at the report's `now`, `━` span, `·` empty track, `◂` / `▸`
+  clipped ends. The shared axis (`session span · idle gaps included · UTC` + `HH:MM … HH:MM`) is its own line
+  under the U4 summary (deviation from "on the header line", accepted in review: the summary already fills
+  ~92 of 100 columns), so the body is one row shorter. Lane text is cut one cell before the bar column, so at
+  100 columns long hand-off metadata clips; the 4.6 pty captures should show whether that hurts the need.
 - **What 4.5 needs from 4.4:** home draws through `render_home_with_options(report, selection,
   &HomeOptions { expanded_repos, links, hide_footer }, area, buf)`; `render_home` = default options (every
   quiet repo collapsed, `? hand-offs`). `selectable_home(report, expanded)` lists visible targets (adds
@@ -99,6 +107,57 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 4.5: TUI: mini time bars on home lanes — Codex
+- Did: Added a fixed right-hand bar column for individual home lanes, including children, using
+  `TimeWindow::default_for(report)`. A separate shared axis header below U4's summary shows UTC
+  endpoints and labels the span as including idle gaps. Tracks show the window; spans use `━`,
+  `◂` / `▸` mark clipped ends, and zero-length spans occupy one cell. No bars on merged or collapsed
+  rows, below 60 columns, or where the terminal is too short for summary, axis, body and footer.
+  Added exact-cell tests for clipping, zero-length child spans, shared alignment with different
+  metadata/indent lengths, out-of-window spans, endpoint inclusion, report-now changes across midnight,
+  59/60-column cutoff, offset areas, selection reversal, and merged/collapsed rows. Regenerated all
+  five home goldens. Existing long-metadata tests use 160 columns to leave room for both text and bars.
+- Changed: `crates/tui/src/home.rs`, `crates/tui/tests/home.rs`,
+  `fixtures/expected/tui/{home,home-full,home-hook,home-hook-full,home-phase4}.txt`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test -p multi-link-tui` → exit 0; actual result lines
+  (unit, home integration, timeline integration, doc tests respectively):
+  ```text
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.14s
+  ```
+  `cargo fmt --all -- --check` → no output, exit 0.
+  `git diff --check` → no output, exit 0.
+  `UPDATE_SNAPSHOTS=1 cargo test -p multi-link-tui --test home` → exit 0; actual result line
+  before the final endpoint test was added:
+  ```text
+  test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  ```
+- Review: Claude (2026-10-30): clean, 0 fix rounds; only step files changed. Goldens checked cell by cell
+  (2 h window, 5 min/cell, bars all start at col 76 of 100): phase4 repo-h 40b4 22:30–23:14 → cells 15–23,
+  40b3 / 40b2 / 40b1 one cell at 19 / 17 / 9, repo-k 40e1 22:59–23:02 → 20–21; repo-i `codex ×4` and
+  `claude ×4` and every collapsed `▸` line have no bar. Hook: repo-c 6358ec7e 19:40–23:12 → `◂` at 0 then
+  to 23 (clipped), 00000000…0010 23:05–23:13:30 → 22–23, 11c1f13c / 85a715ba (37h ago) empty tracks; repo-a
+  d1f3b188 (6h ahead, after the window) empty; parents 80cce3e4 / ef72378c and their `└` children share the
+  column despite different indents. Accepted deviation: the axis is its own line, not on the header line
+  (logged in PLAN.md Review log). Claude re-ran `cargo test -p multi-link-tui` → same 24/24/22/0 ok;
+  `cargo test --workspace` → 29 `test result: ok`, 0 failed; clippy `-D warnings` and fmt clean.
+  Codex's own note: Codex inspected all five
+  golden diffs: summary counts retained; phase4 repo-h's four lanes and repo-k's stale lane have bars;
+  repo-i's two merged rows and all collapsed summaries have none. Hook goldens include repo-a's
+  parent/child bars; repo-c's old sessions have empty tracks, its long busy span clips left. The short
+  hook golden now hides five lines rather than four because the axis consumes one body row.
+- Gotchas: Bar width is 24 cells, shrinking to 12–23 cells at widths 60–71, with at least 47 text
+  cells plus a gap. Long lane metadata clips before the bar column; full timeline remains available.
+  Initial focused test run had 17 passed / 1 failed because the synthetic child cloned its parent's
+  busy state but the summary expectation counted only the parent; corrected the expected count to 2.
+  No PLAN.md changes, staging, commits, or agent-data writes. Real-screen acceptance remains Step 4.6.
 
 ### 2026-10-30 — Step 4.4: TUI: header summary and collapsed quiet repos — Codex
 - Did: Added U4 summary from all overview rows, children and merged members; full hand-off total

@@ -1,16 +1,17 @@
 multi-link  0 waiting · 1 busy · 1 stale · 0 warnings · 5 repos · 18 sessions · 0 hand-offs  now 2026-10-29T23:15:00.000Z
+  session span · idle gaps included · UTC                                                                                               21:15              23:15
 ● repo-h  1 busy · 3 unknown  /home/dev/repo-h
   steps  no PLAN.md
-  ● codex  00000000…40b4  busy       1m ago    no linked hand-off
-  ? codex  00000000…40b3  unknown   24m ago    no linked hand-off
-  ? codex  00000000…40b2  unknown   34m ago    no linked hand-off
-  ? codex  00000000…40b1  unknown    1h ago    no linked hand-off
+  ● codex  00000000…40b4  busy       1m ago    no linked hand-off                                                                       ···············━━━━━━━━━
+  ? codex  00000000…40b3  unknown   24m ago    no linked hand-off                                                                       ···················━····
+  ? codex  00000000…40b2  unknown   34m ago    no linked hand-off                                                                       ·················━······
+  ? codex  00000000…40b1  unknown    1h ago    no linked hand-off                                                                       ·········━··············
 
 ▸ repo-j  1 idle  steps  latest 0.4 Parse sample records · Verify ? (2026-10-29) · /home/dev/repo-j
 
   repo-k  1 stale  /home/dev/repo-k
   steps  no PLAN.md
-  ◌ codex  00000000…40e1  stale     13m ago    no linked hand-off
+  ◌ codex  00000000…40e1  stale     13m ago    no linked hand-off                                                                       ····················━━··
 
 ▸ repo-g  4 unknown  steps  no PLAN.md · /home/dev/repo-g
 
@@ -18,7 +19,6 @@ multi-link  0 waiting · 1 busy · 1 stale · 0 warnings · 5 repos · 18 sessio
   steps  no PLAN.md
   ▸ codex ×4  newest 17m ago · enter expands
   ▸ claude ×4  0 codex children · newest 18m ago · enter expands
-
 
 
 

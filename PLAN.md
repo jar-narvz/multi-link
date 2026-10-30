@@ -806,6 +806,12 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-10-30 — Step 4.5 review (Claude)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | Deviation: shared axis labels drawn on their own line under the U4 summary, not on the header line | Accepted: at 100 columns the summary already uses ~92 columns (`now` dropped), so labels there would cut the counts U4 exists for; costs one body row |
+| 2 | P3: lane text is cut one cell before the bar column, so long hand-off metadata clips at 100 columns (two existing tests moved to 160 columns) | Accepted for now; 4.6's real pty captures decide whether it hurts the need |
+
 ### 2026-10-30 — Phase 4 plan (Claude, Codex critique, read-only)
 Codex (`codex exec -s read-only`) checked Steps 4.1–4.6 against the code. Verdict: revise before implementing.
 | # | Finding | Decision |
