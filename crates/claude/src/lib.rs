@@ -1,5 +1,9 @@
 //! Read-only discovery of Claude transcripts and live-session records.
 
+mod invocation;
+
+pub use invocation::{Invocation, Launch, invocations, recognise};
+
 use std::{
     fs, io,
     path::{Path, PathBuf},

@@ -64,10 +64,18 @@
     `empty_line`, bad JSON → `invalid_json`; an unterminated last line is held in `pending()`, never
     yielded. `display_path` is copied into `Skipped.file` (pass the root-relative path). `unknown_type`
     is the parser's job.
-- **Next: 1.2, 1.3, 1.4, 1.5 can run in parallel** (separate crates: claude, codex, plan, core). Then 1.6
-  (after 1.2; parallel with 1.3–1.5), 1.7 (after 1.2, 1.3, 1.5; not with 1.6), 1.8 (after 1.6, 1.7),
-  1.9 (after 1.4, 1.7, 1.8). Parallel steps: Codex doesn't edit PROGRESS.md (it returns the entry text);
-  Claude prepends it and commits with `git add <paths>` then `git commit -m "…" -- <paths>` (PLAN.md Phase 1 rules).
+- Step 1.6 done (Codex, reviewed by Claude, 1 fix round): `multi_link_claude::recognise(&str) -> Option<Launch
+  { form, resume_id, dir_moved }>` and `invocations(root, &ClaudeScan) -> io::Result<Vec<Invocation>>`, sorted by
+  (at, parent, invocation). `Invocation { parent, invocation, subagent, form, background, at, checkout, command,
+  resume_id, dir_moved, result_text: Option<String> }`; only recognised launches are returned (13 in the fixtures).
+  For 1.8: `result_text` is raw (tool_result string / text blocks, plus `toolUseResult.stdout` when the record
+  holds one tool_result), joined with `\n`; parse `session id:`, `[codex] Thread ready (<uuid>)` (not the Turn
+  uuid) and `Output is being written to: <path>` from it yourself, and do the task-output lookup there.
+  `resume_id` gives `resume_arg`. `dir_moved` = a `cd` segment before the launch or `-C`/`--cd` → no heuristic.
+  `codex exec resume --last` / non-UUID resume is `exec` per the schema grammar. For 1.7: nothing new; 1.7 must
+  not depend on `invocations`. Gotchas: a tool_use whose first occurrence lacks timestamp/cwd is dropped even if a
+  later copy is complete; result pairing is per file (a subagent's results are in its own file).
+- **Next: 1.7** (after 1.2, 1.3, 1.5), then 1.8 (after 1.6, 1.7), 1.9 (after 1.4, 1.7, 1.8).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 - Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
@@ -110,6 +118,73 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.6: Claude hand-off calls and invocation recogniser — Codex
+- Did: Added a hand-written quote/escape-aware tokenizer and first-launch recognition for exec,
+  UUID-argument resume, and plugin task. Extracted assistant Bash calls from main/subagent transcripts;
+  paired raw user tool results by tool_use_id within each file, including text blocks and stdout.
+  Added recognition table tests, exact comparison of all 13 fixture tuples, mention exclusion,
+  resume argument / plugin output checks, and synthetic metadata/result-pairing coverage.
+  Round 1: Kept the first assistant tool_use occurrence per file and id; attached top-level stdout
+  only to records with exactly one tool_result block. Added duplicate-record/file regression coverage
+  and checked both ids in the two-result record plus stdout on a single-result record.
+- Changed: `crates/claude/src/lib.rs`, `crates/claude/src/invocation.rs`,
+  `crates/claude/tests/invocation.rs`, `PROGRESS.md`.
+- Verify: `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"`;
+  `cargo test -p multi-link-claude` → exit 0, actual output (build path omitted):
+  ```text
+     Compiling multi-link-claude v0.1.0
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.90s
+       Running unittests src/lib.rs (target/debug/deps/multi_link_claude-289d071f5a06d4fb)
+
+  running 1 test
+  test tests::transcript_missing_at_open_is_omitted_but_empty_file_is_read ... ok
+
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+       Running tests/fixtures.rs (target/debug/deps/fixtures-d6481f144bfac96e)
+
+  running 8 tests
+  test unreadable_session_record_is_counted ... ok
+  test missing_directories_are_empty ... ok
+  test unexpected_transcript_shapes_do_not_panic_or_fabricate_metadata ... ok
+  test unknown_types_contribute_nothing_and_later_lines_are_read ... ok
+  test subagents_are_sorted_scanned_and_do_not_change_parent_metadata ... ok
+  test malformed_session_records_are_omitted_without_stopping_discovery ... ok
+  test transcript_fields_and_skips_match_answer_key ... ok
+  test all_session_record_fields_match_source_files ... ok
+
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+       Running tests/invocation.rs (target/debug/deps/invocation-c599b1c275de6260)
+
+  running 4 tests
+  test recognition_table ... ok
+  test repeated_tool_use_ids_keep_the_first_occurrence_in_each_file ... ok
+  test extracts_only_assistant_bash_and_pairs_results_by_id_within_each_file ... ok
+  test fixture_invocations_match_all_answer_key_tuples ... ok
+
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Doc-tests multi_link_claude
+
+  running 0 tests
+
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo fmt -p multi-link-claude -- --check` → exit 0, no output.
+- Review: Claude, 1 fix round. #1 `invocation.rs:186` a tool_use id repeated in two assistant records gave two
+  launches (schema: one per tool_use) → fixed (first occurrence per file + id; test). #2 `invocation.rs:195`
+  record-level `toolUseResult.stdout` was attached to every tool_result block in the record → fixed (only when
+  the record has exactly one; test). Checked: only schema forms count (`--version`, `ls ~/.codex/sessions`,
+  `echo codex exec`, `FOO=1`, `task-resume-candidate` → none); resume carries the UUID argument and equals the
+  expected child; plugin parent/subagent come from the subagent records; `api-request-blob` ignored; no
+  exact-evidence parsing, task-output lookup or linking (1.8 scope). Thread-vs-Turn id and missing task-output
+  are 1.8's to test. Scope: only the named files. Claude re-ran Verify: `test result: ok. 1 passed` / `8 passed`
+  / `4 passed` / `0 passed`, fmt clean; `cargo test --workspace -q` all ok. Matches the paste.
+- Gotchas: Recognition is the schema's limited grammar, not shell evaluation. `invocations` returns
+  `io::Result` so permission/read failures are visible. Raw text can repeat stdout present in both
+  content and toolUseResult on single-result records; it is retained without text deduplication. Exact evidence and linking remain 1.8.
 
 ### 2026-10-29 — Step 1.5: Repo mapper and process probe — Codex
 - Did: Repo mapper (`repo.rs`): real/fixture modes, shared main root for worktrees, cwd fallback. Process
