@@ -179,8 +179,32 @@
 - Step 2.2 done (Claude, Codex-reviewed): `Link.step`, `evidence: "hook"`, reserved `state_evidence: "hook"`
   and the Tagged variant are in `docs/output-schema.md`. Red until 2.3: model `every_expected_report_round_trips`
   and cli `phase_one_json_matches_answer_keys`.
+- Step 2.1 done (Claude, Codex-reviewed): `docs/phase2-hook.md`. Session records DO show `status: "waiting"` +
+  `waitingFor` during a held prompt (contradicts Phase 0 P3; decision in PLAN.md Review log). 2.5 must also hook
+  `PostToolUseFailure`, derive the bg output path from `scratchpad_dir` + `backgroundTaskId`, and write first.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.1: Hook payload spike — Claude
+- Did: Throwaway async capture hook (allowlist: ids, paths, enums; other strings → `<string:N>`) in
+  `~/multi-link-sandbox/repo-a/.claude/settings.local.json` on PostToolUse(Bash), PermissionRequest,
+  Notification, PostToolUseFailure, Stop. Ran 8 `claude -p` haiku sessions (fg, bg, bg2, resume, plugin,
+  denied permission, two failing codex runs) and 4 interactive ones via `/usr/bin/expect`. Removed the hook
+  afterwards. Results: (e) go, (f) go (PermissionRequest/Notification have no tool_use_id), (g) go (no path in
+  tool_response; path = dirname(scratchpad_dir)/tasks/<backgroundTaskId>.output), (h) go (-p: PermissionRequest
+  only; interactive: PermissionRequest, then Notification permission_prompt ~6 s later), (i) go (no transcript
+  line during the hold; the session record shows `status: "waiting"` + `waitingFor`), (j) go (needs env -i,
+  --permission-mode default, trust dialog), (k) no-go in -p (unfinished async hooks killed at teardown) →
+  write first, append the child later.
+- Changed: docs/phase2-hook.md (plus ignored fixtures/raw/hook/)
+- Verify: sections `## (e)`…`## (k)` each with a `Decision:` line; allowlist check → no output; sandbox
+  `settings.local.json` removed. Re-checked by the coordinator: 7 sections, 7 Decision lines, settings file gone.
+- Review: Codex (read-only), 4 findings, all accepted and fixed (kept session-record snapshots and expect logs
+  in fixtures/raw/hook/; cited exit stamps; timing reported as an upper bound).
+- Gotchas: --allowedTools takes several values and swallowed the prompt; put the prompt first. The trust
+  dialog defaults to "No, exit". An interactive session started with the desktop environment writes no
+  transcript or session record (use env -i). Esc on a prompt interrupts the turn and fires no Stop.
+  Failed commands fire PostToolUseFailure, with the Codex `session id:` line in `error`.
 
 ### 2026-10-29 — Step 2.2: Output contract: step tags, hook evidence, waiting — Claude
 - Did: output-schema.md: Link gains `step` (string|null) with a "Step tags" section (H6: first tag in the
