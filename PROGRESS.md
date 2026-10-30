@@ -1,8 +1,24 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- Step 1.10 implemented (Codex), awaiting Claude review and real-data Verify outside the sandbox:
-  `RealProcessProbe` runs `ps` with `TZ=UTC`; comparison logic unchanged. Workspace tests pass.
+- **Phase 2 planned (2026-10-29, Claude, Codex critique):** Steps 2.1–2.8 in PLAN.md, decisions H1–H10 in
+  `docs/design.md` → "Phase 2 decisions (hook)". **Next: 2.1 and 2.2 in parallel** (2.1 = hook payload
+  spike in `~/multi-link-sandbox/repo-a`, Claude, docs only; 2.2 = output contract for step tags + `hook`
+  evidence, Claude). Then 2.3 (Codex) ∥ 2.4 (Claude); then 2.5 ∥ 2.6 (Codex); then 2.7; then 2.8 (real check).
+  What the next steps need:
+  - Hook facts are from the docs, not yet real data: `PostToolUse` has `tool_use_id`; `PermissionRequest`
+    exists; `async: true` hooks can't decide and have no enforced timeout; `-p` kills unfinished async
+    hooks at teardown; since Claude Code 2.1.302 `-p` starts in Manual permission mode, so sandbox
+    hand-offs need `--allowedTools` for codex. Background `tool_response` shape and when Notification
+    fires are undocumented: that is what 2.1 answers.
+  - tmux is not installed; `/usr/bin/expect` is (2.1 (j) tries it for an interactive permission prompt).
+  - After 2.2 commits, Phase 1 links tests are red on purpose until 2.3 lands (answer key first).
+  - 2.4's expected files go in `fixtures/expected/hook/` so the model round-trip test (non-recursive)
+    doesn't break 2.3 running in parallel.
+  - Stop and ask if 2.1 finds no way to join a hook record to a transcript call, or hooks run only from
+    `~/.claude/` settings.
+- Step 1.10 done (Codex, reviewed by Claude): `RealProcessProbe` runs `ps` with `TZ=UTC`; real data shows
+  `{"busy":2,"idle":17}` for 19 live records.
 - Step 0.1 done, committed and reviewed by Codex (4 findings, all fixed).
 - Autonomous loop set up (CLAUDE.md "Autonomous mode"): Claude commits locally after review, never pushes.
   Rust 1.99.1 installed; Codex sandbox smoke-tested building a crate with a crates.io dependency.
@@ -115,22 +131,10 @@
   commands equal their expected files (Claude re-ran them: `same` ×3); negative fixtures and the
   ambiguous variant are covered by core tests (`fixture_report_equals_answer_key`,
   `ambiguous_variant_equals_answer_key`).
-- **Next: Phase 2 (hook) needs a planning step first** — PLAN.md still says "to be split later".
-  Claude splits it (Codex critique, Review log) before any implementation. Known issues for that
-  planning, found in the Step 1.9 real-`~` smoke (counts only):
-  1. **Bug (Step 1.5 probe):** every live Claude session shows `finished`. Claude writes `procStart`
-     in UTC (`Fri Oct 30 00:08:22 2026`) while `ps -o lstart=` prints local time (`Thu Oct 29
-     17:08:22`), so the real probe always says `Gone`. `TZ=UTC0 ps -p <pid> -o lstart=` matches;
-     fix `RealProcessProbe` to run ps with `TZ=UTC0` (and probably `LC_ALL=C`) plus a test. Should
-     land before Phase 2 relies on state.
-  2. 1324 `unknown_type` skips, all Claude, all new record types not in the schema's known list:
-     `ai-title`, `permission-mode`, `frame-link`, `artifact-comment-monitor`, `bridge-session`,
-     `relocated`, `artifact-autoreact-ledger`. Counted, not fatal (as designed); adding them is a
-     schema edit for Claude.
-  3. Speed (release build): `sessions` 5.6 s, `links` 7.8 s over 259 sessions (all history parsed).
-     Phase 3's ≤ 2 s home refresh needs the planned incremental tailing.
-  4. Real links: 35 total, 0 exact (heuristic + unlinked only) in the default 2 h window; expected
-     since real task-output files vanish, but worth checking once the hook records child ids.
+- Phase 1 real-`~` smoke findings still open (from Step 1.9): 1324 `unknown_type` skips from new Claude
+  record types (`ai-title`, `permission-mode`, `frame-link`, `artifact-comment-monitor`, `bridge-session`,
+  `relocated`, `artifact-autoreact-ledger`; schema edit, not yet planned); speed 5.6 s / 7.8 s (Phase 3
+  tailing); 0 exact real links in 2 h (the Phase 2 hook targets this). The probe UTC bug is fixed (1.10).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 - Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
@@ -173,6 +177,23 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Phase 2 plan: hook — Claude
+- Did: Split Phase 2 into Steps 2.1–2.8 with files, Verify, Depends on / Parallel with. Checked hook facts
+  against the current Claude Code hooks docs (claude-code-guide agent): events, `PostToolUse` fields,
+  `PermissionRequest`, `async` semantics, `-p` behaviour. Recorded decisions H1–H10 in `docs/design.md`
+  (spike first; `PostToolUse`/Bash for hand-offs; `PermissionRequest` + `Notification` for needs-me; async,
+  silent, watchdog-capped hook; hook evidence after transcript evidence; `Step <id>` tag from the launch
+  command; tag on links only; waiting rule; hook crate off core; one append-only file per session).
+  Codex critique (read-only): 10 findings, 8 accepted, 1 partly accepted, 1 rejected; table in PLAN.md
+  Review log "Phase 2 plan".
+- Changed: `PLAN.md`, `docs/design.md`, `PROGRESS.md`
+- Verify: PLAN.md has `### Step 2.1` … `### Step 2.8`, each with `- Verify:`, `- Depends on:` and a Review
+  log entry "Phase 2 plan" → see the commit; `grep -c '^### Step 2\.' PLAN.md` → `8`.
+- Review: Codex (critique of the plan, read-only), verdict "Revise before implementation"; revisions applied.
+- Gotchas: no code written. Nothing in the plan writes to `~/.claude/` or `~/.codex/`; the sandbox test uses
+  `repo-a/.claude/settings.local.json`. Waiting may need one owner-run interactive check if `expect` can't
+  hold a prompt (2.1 (j)); Phase 2 stays open until it passes.
 
 ### 2026-10-29 — Step 1.10: Probe compares start times in UTC — Codex
 - Did: Set `TZ=UTC` on the probe's `ps` command; kept comparison logic unchanged.

@@ -251,19 +251,233 @@ Split in Step 0.6. The binding contract is `docs/output-schema.md`; the answer k
   `cargo run -q -p multi-link -- sessions --json | jq '[.sessions[]|select(.harness=="claude")|.state]|group_by(.)|map({(.[0]):length})|add'`
   shows at least one Claude session that is not `finished` while a desktop session is open.
 
-### Phase 2 — Hook — to be split later
-- multi-link never writes to `~/.claude/`, including settings. `multi-link hook install` **prints** the
-  settings snippet and the file to paste it into; the owner pastes it. `hook uninstall` prints what to remove.
-- The hook writes its records only to multi-link's own state folder (`~/.multi-link/`), never into
-  `~/.claude/` or `~/.codex/`.
-- Forced by Phase 0 (b): the hook is the only source of "waiting on me" (Claude Code's `Notification`
-  hook, to confirm), so splitting this phase must add a step and a Verify for it: a sandbox session that
-  hits a permission prompt shows `waiting` with evidence `hook`. Codex waiting stays unsupported.
-- Verify: for one real hand-off, the child id the hook records equals the id read independently from
-  `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
-  The test hand-off runs in `~/multi-link-sandbox/repo-a` with the hook in that repo's own
-  `.claude/settings.local.json` (project scope, not `~/.claude/`), so Claude can run it unattended.
-  Enabling the hook for the owner's real repos stays the owner's paste.
+### Phase 2 — Hook
+An optional Claude Code hook records hand-offs and "needs me" moments as they happen. Decisions H1–H10:
+`docs/design.md` → "Phase 2 decisions". Hook facts below come from the Claude Code hooks docs
+(code.claude.com/docs/en/hooks, read 2026-10-29, Claude Code 2.1.303); they are assumptions until Step 2.1
+confirms them on real payloads, like Phase 0 did for transcripts.
+- **Safety rules (every step):**
+  - multi-link never writes to `~/.claude/` or `~/.codex/`, settings included. `multi-link hook install`
+    **prints** the settings snippet and the file to paste it into; `hook uninstall` prints what to remove.
+    Neither writes anything anywhere.
+  - The hook writes only below `$MULTI_LINK_HOME` (default `~/.multi-link`), in `hook/<session_id>.jsonl`;
+    a `session_id` that is not UUID-shaped is dropped, so a payload can't steer the path. Containment: the
+    state dir must be absolute, and after resolving it the hook refuses (writes nothing) if it is inside
+    `~/.claude` or `~/.codex`; `hook/` and the record file are opened without following symlinks
+    (`symlink_metadata` check + `O_NOFOLLOW`), so a planted link can't redirect the append (Codex P1 #1).
+  - Every hook entry is `"async": true`: Claude doesn't wait for it, and any decision it printed would be
+    ignored, so the hook can't approve, deny or block anything (docs: decision fields have no effect on
+    async hooks). It also prints nothing, always exits 0, and stops itself within 30 s (async hooks get no
+    enforced timeout): a watchdog thread started first calls `process::exit(0)` at the deadline, which also
+    covers stalled stdin or a blocked write; a no-op panic hook plus `catch_unwind` keep panics silent.
+  - Records hold ids, times and enum values only: no command text, prompt, or tool output.
+- **Events** (H2, H3): `PostToolUse` matcher `Bash` (hand-offs; `tool_use_id` ties the record to the
+  transcript's `tool_use.id`); `PermissionRequest` and `Notification` matcher
+  `permission_prompt|elicitation_dialog` ("needs me"). `idle_prompt` is not "needs me": an idle session
+  is already `idle` from its session record. Codex waiting stays unsupported.
+- **Step tags** (H6): the first `Step <id>` (case-insensitive `step`, `<id>` in the P11 grammar) in a
+  recognised launch segment's text is that hand-off's step. Read from the Bash command actually run,
+  because the Codex plugin's subagent rewrites the prompt it was given; a rewrite that drops the tag gives
+  `step: null`, never a guess. Convention for hand-off prompts (already in CLAUDE.md): start with
+  "Read AGENTS.md, then do Step <id> in PLAN.md." Parsed from transcripts, so it works without the hook
+  and on history.
+- Supported test environment: `~/multi-link-sandbox/repo-a` with the hook in that repo's own
+  `.claude/settings.local.json` (project scope; if 2.1 finds `-p` ignores that file, `.claude/settings.json`
+  in the same sandbox repo). Claude runs it unattended. Enabling the hook for the owner's real repos stays
+  the owner's paste of `hook install` output.
+- Parallel rules from Phase 1 apply (Codex returns the PROGRESS entry text; the step session prepends it
+  and commits with `git commit -- <paths>`). Only steps that say so change a `Cargo.toml` / `Cargo.lock`.
+- Verify (whole phase, Step 2.8 runs it): for one real background hand-off and one foreground hand-off,
+  the child id the hook records equals the id read independently from `~/.codex/sessions` (the only new
+  rollout since a marker file); a hand-off without an observable id (output sent to `/dev/null`) stays
+  `heuristic` (or `unlinked`), never `exact`; a sandbox session held at a permission prompt shows
+  `waiting` / `hook` in `multi-link sessions --json`, and no longer does after the prompt is answered.
+
+### Step 2.1 — Hook payload spike (Claude)
+- Depends on: Phase 1. Parallel with: 2.2
+- In the sandbox, a throwaway capture hook (`async: true`, `… || true`) in
+  `repo-a/.claude/settings.local.json` for `PostToolUse` (Bash), `PermissionRequest`, `Notification` (all
+  types), `PostToolUseFailure`, `Stop`. It stores an allowlist, not whole payloads (Codex P1 #2): a `jq`
+  filter keeps ids, times, paths and enum fields verbatim (`session_id`, `transcript_path`, `cwd`,
+  `hook_event_name`, `tool_name`, `tool_use_id`, `agent_id`, `notification_type`,
+  `tool_input.run_in_background`, any `/…\.output` path and `session id:` / `Thread ready (` uuid found in
+  `tool_response`) and replaces every other value with its JSON type and length, plus the hook's own
+  receive time; output to `~/.multi-link/spike/<event>.jsonl`. Claude runs `claude -p` hand-offs with
+  `--allowedTools` for codex: foreground `codex exec`, background `codex exec`, `codex exec resume <uuid>`,
+  the Codex plugin, and `codex exec … > /dev/null 2>&1`; then one non-allowed command to trigger a
+  permission request (`-p` denies it); then tries an interactive `claude` session driven by `/usr/bin/expect`
+  (tmux is not installed) held at a permission prompt and then answered.
+- Raw payloads go to `fixtures/raw/hook/` (git-ignored); the capture hook is removed afterwards.
+- Answer in `docs/phase2-hook.md`, field names only, each question ending `Decision: go` / `no-go`:
+  (e) do `settings.local.json` hooks run in `-p`? (f) does `session_id` equal the transcript stem and
+  `tool_use_id` the transcript's `tool_use.id`, including for the plugin's subagent call (`agent_id`)?
+  (g) what is `tool_response` for a background call, and where is the task output path (or how is it
+  derived)? how many ms after the hook fires does the `session id:` line appear in that file?
+  (h) which of `PermissionRequest` / `Notification` fire for a permission prompt (interactive and `-p`),
+  with which `notification_type`? (i) between the prompt appearing and being answered, does Claude write
+  any transcript line or session-record update (if so, `last_activity` can't clear `waiting`; name the
+  clearing signal instead)? (j) can an `expect`-driven interactive session be held at a prompt unattended
+  (needed for 2.8's waiting Verify)? (k) does an async hook still polling survive until it writes, in `-p`
+  (docs: unfinished async hooks are killed at teardown) and interactively? Test with a capture hook that
+  sleeps 10 s before writing, on a background hand-off; if killed in `-p`, 2.5 records the hand-off first
+  (child `null`) and appends a second record when the id appears (Codex P2 #8).
+- Files: `docs/phase2-hook.md` only (plus ignored `fixtures/raw/hook/`).
+- Verify: `docs/phase2-hook.md` has sections (e)–(k), each ending in `Decision: go` or `Decision: no-go`;
+  `jq -r '.. | strings' ~/.multi-link/spike/*.jsonl | rg -v '^(<[a-z]+:[0-9]+>|[0-9a-f-]{36}|toolu_\w+|/.+|[A-Za-z_]+|[0-9T:.Z-]+)$'`
+  prints nothing (only allowlisted value shapes were stored);
+  `ls ~/multi-link-sandbox/repo-a/.claude/settings.local.json` fails (capture hook removed);
+  `git status --short` shows only `docs/phase2-hook.md` (and PROGRESS.md).
+- Stop and ask if (f) is no-go (no way to tie a hook record to a transcript call) or if hooks can run only
+  from `~/.claude/` settings.
+
+### Step 2.2 — Output contract: step tags, hook evidence, waiting (Claude)
+- Depends on: Phase 1. Parallel with: 2.1 (nothing here depends on hook payloads; the `waiting` row,
+  which does, is in 2.4)
+- `docs/output-schema.md`: Link gains `step` (string|null, H6 tag of the launch segment); `evidence` gains
+  `"hook"`, checked after the four transcript sources (H5); `state_evidence` gains `hook` (row defined in
+  2.4); Segments stay one per session with `step: null` (H7: per-hand-off segments deferred);
+  `step_source` `hook` removed from the contract.
+- Answer key first: after this commit `links.json` has `step` and the Phase 1 tests are red until 2.3
+  lands (as in Phase 0.5 → 1.x). 2.3 starts right after; only docs steps may run in between.
+  A "Tagged variant": a temp copy in which the exec case's `tool_use.input.command` has
+  `Read AGENTS.md, then do Step 1.2 in PLAN.md. ` inserted at the start of its prompt argument (the
+  `tool_use` only; results and other records unchanged).
+- Expected files: every link in `links.json` and `links-amb-hidden.json` gains `"step": null` (fixture
+  prompts are placeholders); new `fixtures/expected/links-tagged.json` (exec link `step: "1.2"`, all
+  else equal to `links.json`).
+- Files: `docs/output-schema.md`, `fixtures/expected/{links,links-amb-hidden,links-tagged}.json`
+- Verify: `jq . fixtures/expected/*.json > /dev/null` succeeds;
+  `jq '[.links[]|has("step")]|all' fixtures/expected/links*.json` prints `true` ×3;
+  `diff <(jq -S 'del(.links[].step)' fixtures/expected/links.json) <(jq -S 'del(.links[].step)' fixtures/expected/links-tagged.json) && echo same`
+  prints `same`; `cargo test -p multi-link-core` fails only in the links answer-key tests (expected red,
+  paste the failing test names); Codex reviews the schema diff (read-only).
+
+### Step 2.3 — Step tags in links, model changes, hook crate skeleton (Codex)
+- Depends on: 2.2. Parallel with: 2.4 (2.4 puts its expected files in `fixtures/expected/hook/`, which the
+  model round-trip test's non-recursive scan skips, so 2.4 can't turn 2.3's Verify red)
+- Model: `Link.step: Option<String>`; `LinkEvidence::Hook`; `StateEvidence::Hook`; drop `StepSource::Hook`.
+- Tag parser: `multi_link_plan::step_tag(text) -> Option<String>` reusing the plan crate's id grammar (one
+  grammar, one place); `multi_link_claude::Invocation` gains `step` from the launch segment;
+  `multi-link-claude` depends on `multi-link-plan`. Linker copies it into `Link.step`.
+- Skeleton `crates/hook/{Cargo.toml,src/lib.rs}` (package `multi-link-hook`, deps model, claude, serde,
+  serde_json, time; tempfile dev) so Steps 2.5 and 2.6 never edit a manifest in parallel.
+- Model test: `every_expected_report_round_trips` learns `links-tagged.json`.
+- Files: `crates/model/src/lib.rs`, `crates/model/tests/model.rs`, `crates/plan/src/**`,
+  `crates/plan/tests/fixtures.rs`, `crates/claude/{Cargo.toml,src/invocation.rs}`,
+  `crates/claude/tests/invocation.rs`, `crates/core/src/link.rs`, `crates/core/tests/links.rs`,
+  `crates/hook/{Cargo.toml,src/lib.rs}`, `Cargo.lock`
+- Verify: `cargo test --workspace` → all `ok`, including: `step_tag` table tests (`do Step 1.2 in` → `1.2`;
+  `step 4` → `4`; `Step 0.2a` → `0.2a`; `Step 0.10` → `0.10`; `Steps 1` / `step1.2` / `Step 1.2.3` → none;
+  two tags → the first); the links report equals `links.json`; the Tagged variant test equals
+  `links-tagged.json`; and the three Phase 1 CLI diffs (Step 1.9 Verify) still print `same`.
+
+### Step 2.4 — Hook record contract and fixtures (Claude)
+- Depends on: 2.1, 2.2. Parallel with: 2.3 (no code, and its expected files live in a subfolder, see 2.3)
+- `docs/output-schema.md` → "Hook records": file layout (`<state>/hook/<session_id>.jsonl`, where
+  `<state>` = `$MULTI_LINK_HOME`, else `$HOME/.multi-link`; fixture mode `<root>/.multi-link`), one JSON
+  object per line, fields (draft, fixed by 2.1's findings): `v: 1`, `kind` (`handoff` | `waiting`),
+  `at` (hook clock, RFC 3339 UTC ms), `session_id`, `agent_id`, `event` (source hook event),
+  `tool_use_id`, `cwd`, `child`, `child_evidence` (`stdout` | `thread_ready` | `task_output` | null),
+  `notification_type`. Reader rules: unknown `v` / `kind` → `skipped` `unknown_type`; bad line →
+  `invalid_json`; hook files are listed in `skipped` like transcripts. State: the `waiting` / `hook` row
+  (H8), after `finished` and before `busy`, with the clearing signal chosen in 2.1 (i) (if (i) needs extra
+  clearing events, the snippet in 2.7 adds them; if (h) is no-go, `waiting` stays unemitted and this is
+  recorded, not worked around). Visibility: a session whose latest hook record is an uncleared `waiting`
+  is always listed, like a record session, so an overnight wait survives the 2 h window (Codex P2 #7).
+- Synthetic hook fixtures in `fixtures/hook/` (not real payloads, referencing existing fixture ids):
+  a `handoff` for the bg invocation (child = its known child, `task_output`); a `handoff` with `child: null`
+  for one organic repo-c invocation (stays `unlinked`: null gives no evidence); a `handoff` whose child
+  conflicts with a transcript-exact link; a `waiting` record for a transcript-only session older than 2 h
+  after its `last_activity`; a `waiting` record before another session's `last_activity` (cleared); one
+  malformed line and one `v: 2` line. "Hook variant": a temp copy of
+  `fixtures/sessions` with `fixtures/hook/` copied to `.multi-link/hook/` and `task-output/be01y5dv6.output`
+  removed. Expected `fixtures/expected/hook/{sessions,sessions-2h,links}.json` (`sessions-2h` = default
+  window at the fixture `--now`); existing expected files unchanged.
+- Files: `docs/output-schema.md`, `fixtures/hook/**`, `fixtures/expected/hook/*.json`,
+  `fixtures/README.md` (hook fixture section)
+- Verify: `jq . fixtures/expected/*.json fixtures/expected/hook/*.json > /dev/null` succeeds; in
+  `hook/links.json` the bg link is `exact` / `hook` with the same child as in `links.json`, the repo-c
+  null-child link is `unlinked`, the conflict link keeps its transcript evidence; `hook/sessions.json` and
+  `hook/sessions-2h.json` each have exactly one `waiting` session (the old one); `git diff --stat` touches
+  no existing expected file; Codex reviews (read-only).
+
+### Step 2.5 — Hook recorder library (Codex)
+- Depends on: 2.3, 2.4. Parallel with: 2.6 (hook compiles model + claude, core compiles neither hook nor
+  is compiled by it; neither edits a shared crate)
+- `multi_link_hook::record(payload: &[u8], env: &HookEnv) -> Option<HookRecord>` and `write(&HookRecord,
+  state_dir)`: `PostToolUse` + `Bash` + `multi_link_claude::recognise` → `handoff` (child from
+  `tool_response` stdout `session id:` / `Thread ready (`, else for a background call by polling the task
+  output file per 2.1 (g) every 250 ms up to 25 s, reading ≤ 64 KiB; two records if 2.1 (k) says so); `PermissionRequest` /
+  `Notification` (`permission_prompt`, `elicitation_dialog`) → `waiting`; anything else → `None`, nothing
+  written. One `write()` per record with `O_APPEND`, line < 4 KiB. Clock and sleep injected for tests.
+  Its own `session id:` line parser (H9: keeps the hook crate off core so 2.5 ∥ 2.6).
+- Files: `crates/hook/src/**`, `crates/hook/tests/hook.rs`
+- Verify: `cargo test -p multi-link-hook` → `test result: ok`, including: each payload shape from 2.1
+  (synthetic copies with field names from `docs/phase2-hook.md`, no real content) → the record expected by
+  the schema; non-codex Bash, `codex --version`, unknown event, invalid JSON, empty stdin, 10 MiB stdin →
+  `None`; `session_id` `../x` → nothing written; a background payload whose output file gains the
+  `session id:` line after 3 fake seconds → that child; never gains it → `child: null` after the 30 s cap
+  (fake clock); writing into a temp `HOME` with `.claude/` and `.codex/` dirs leaves both byte-identical
+  (recursive listing + hashes before/after) and creates only `.multi-link/hook/<uuid>.jsonl`; state dir
+  `<HOME>/.claude/x`, `<HOME>/.codex`, a relative path, `hook/` as a symlink to another temp dir, and the
+  record file as a symlink → nothing written anywhere (target dirs unchanged); an unwritable state dir →
+  `Err` returned, no panic; 8 threads appending 100 records each → 800 valid lines.
+
+### Step 2.6 — Core reads hook records: hook evidence and waiting (Codex)
+- Depends on: 2.3, 2.4. Parallel with: 2.5
+- Reader for `<state>/hook/*.jsonl` per the schema (fail-soft, `skipped`); linker adds `hook` evidence
+  after the transcript sources, matched on (`session_id` = parent, `tool_use_id` = invocation); a hook
+  child that disagrees with transcript evidence is ignored and counted in a new `hook_conflicts`
+  diagnostic; `child: null` gives no evidence. State: the `waiting` / `hook` row. `Options` gains the
+  state dir (fixture mode: `<root>/.multi-link`).
+- Files: `crates/core/src/{lib.rs,hook.rs,link.rs,links.rs,sessions.rs,state.rs}`,
+  `crates/core/tests/{hook.rs,links.rs,sessions.rs}`, `crates/cli/src/main.rs` (only to fill the new
+  `Options` field so the workspace builds)
+- Verify: `cargo test -p multi-link-core` → `test result: ok`, including: Hook variant links equal
+  `hook/links.json`, sessions (`--since all`) equal `hook/sessions.json`, sessions with the default 2 h
+  window equal `hook/sessions-2h.json`; the plain fixture reports still equal
+  `links.json` / `sessions.json` (no `.multi-link/` there); unit tests: waiting then a later transcript line
+  → not waiting; waiting + process gone → `finished`; waiting on a Codex session id → ignored.
+
+### Step 2.7 — CLI `hook record | install | uninstall` (Codex)
+- Depends on: 2.5, 2.6
+- `multi-link hook record` starts the 30 s watchdog and the silent panic hook first, then reads stdin
+  (≤ 1 MiB, rest discarded), calls the hook library, prints nothing, exits 0 on every path. A debug-build
+  only env var (`MULTI_LINK_HOOK_TEST`, `panic` / `deadline_ms=<n>`) lets tests inject a panic and shorten
+  the deadline; release builds ignore it. `hook install [--scope user|local]` prints the JSON snippet (the
+  events above, `async: true`, `timeout` 60, the absolute path of the running binary) and the file to
+  paste it into (`~/.claude/settings.json` or `<repo>/.claude/settings.local.json`); `hook uninstall`
+  prints the same entries to remove and the state folder the owner may delete. Neither opens any file
+  for writing. `sessions` / `links` print `hook_conflicts` on stderr like the other diagnostics.
+- Files: `crates/cli/{Cargo.toml,src/**,tests/cli.rs}`, `Cargo.lock`
+- Verify: `cargo test --workspace` → all `ok`, including: `hook install` / `uninstall` output parses as
+  JSON with the four entries and `async: true`; run with a temp `HOME`, the temp dir is unchanged after
+  both; `hook record` with each 2.5 payload → exit 0, empty stdout and stderr, expected file; malformed
+  stdin and an unwritable state dir → exit 0, empty stdout and stderr; injected panic → exit 0, empty
+  stderr; stdin held open and never written, deadline 500 ms → exits 0 within 2 s, empty output.
+  Speed (release build):
+  `time (for i in $(seq 50); do target/release/multi-link hook record < <non-codex Bash payload>; done)`
+  under 1 s total (paste the `real` line). The three Phase 1 CLI diffs still print `same`.
+
+### Step 2.8 — Real hand-off and waiting check in the sandbox (Claude)
+- Depends on: 2.7
+- Paste `hook install --scope local` output into `~/multi-link-sandbox/repo-a/.claude/settings.local.json`
+  (binary: absolute `target/release/multi-link`, `MULTI_LINK_HOME` set to a scratch dir in the command).
+  `touch` a marker, run three `claude -p` hand-offs (foreground exec, background exec, exec to
+  `/dev/null`), each tagged `Step 9.1`; then the `expect`-driven permission prompt if 2.1 (j) is go.
+  After the hook has recorded the background child, delete that call's task output file (a sandbox temp
+  file the sandbox run created), so only the hook can make that link exact (Codex P2 #9).
+- Results in `docs/phase2-hook.md` → "Phase 2 Verify" (ids compared, not pasted in full).
+- Files: `docs/phase2-hook.md`
+- Verify: `find ~/.codex/sessions -newer <marker> -name 'rollout-*.jsonl'` gives the new rollouts; for the
+  foreground and background hand-offs, `session_meta.payload.id` of the matching rollout equals the hook
+  record's `child` (printed `equal` per pair); `multi-link links --json` shows the foreground one `exact` /
+  `stdout` and the background one `exact` / `hook`, both with `step: "9.1"`; the `/dev/null` hand-off is
+  `heuristic` or `unlinked` with `evidence: null`; with the expect session at the prompt,
+  `multi-link sessions --json` shows that session `waiting` / `hook`, and after the answer it doesn't.
+  Phase 2 closes only when all of this passes. If 2.1 (j) was no-go, the waiting part is a stop-and-ask:
+  the owner runs it once interactively and the phase stays open until then.
+- Remove the sandbox hook afterwards (`ls …/settings.local.json` fails).
 
 ### Phase 3 — TUI home + timeline + open (Release 1) — to be split later
 - Forced by Phase 0 (b): needs-you sorting and the bell use only the hook's `waiting`; without the hook
@@ -279,6 +493,26 @@ Split in Step 0.6. The binding contract is `docs/output-schema.md`; the answer k
 Step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-29 — Phase 2 plan (Claude, Codex critique, read-only)
+Hook facts were checked against the Claude Code hooks docs (claude-code-guide agent, 2026-10-29): 33 events
+exist, including `PermissionRequest`; `PostToolUse` carries `tool_use_id`; `async: true` hooks can't decide
+and have no enforced timeout; `-p` runs project settings hooks and kills unfinished async hooks at
+teardown; background `tool_response` and Notification firing rules are undocumented (hence Step 2.1).
+Decisions H1–H10 in `docs/design.md`. No stop-and-ask: nothing needs a write to `~/.claude/` (the sandbox
+uses project-scope settings). Codex verdict: "Revise before implementation"; 3 P1, 6 P2, 1 P3.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P1: a UUID check doesn't contain writes; `$MULTI_LINK_HOME` or a symlink could point into `~/.claude` / `~/.codex` | Accepted: absolute state dir, refuse if inside `~/.claude` / `~/.codex`, no symlink following (`symlink_metadata` + `O_NOFOLLOW`); five refusal tests in 2.5 |
+| 2 | P1: the spike's `cat >>` stores whole payloads (commands, outputs) | Accepted: the capture hook keeps an allowlist (ids, times, paths, enums, found uuids) and reduces every other value to type + length; 2.1 Verify checks the stored value shapes. Sandbox prompts are placeholders anyway, but the rule should hold for the spike too |
+| 3 | P1: no process-wide deadline (stalled stdin, blocked write) and `catch_unwind` alone still prints the panic message | Accepted: watchdog thread `exit(0)` at 30 s started first, no-op panic hook; 2.7 tests an injected panic and held-open stdin via a debug-only env var |
+| 4 | P2: 2.2 adopts the waiting rule before the spike, so it can't run parallel with 2.1 | Partly accepted: the `waiting` row moved to 2.4 (after 2.1). Rejected serialising the rest: step tags and `hook` link evidence don't depend on any payload field, so 2.2 ∥ 2.1 stays |
+| 5 | P2: the model test rejects unknown expected filenames, so 2.4's new files turn 2.3 red; 2.4 can't edit that test | Accepted, fixed differently: 2.4's files go in `fixtures/expected/hook/` (the test's scan is non-recursive), keeping 2.3 ∥ 2.4; 2.3 adds `links-tagged.json` to the test. Also made explicit that 2.2's answer-key change leaves Phase 1 tests red until 2.3 |
+| 6 | P2: amb-1 keeps its transcript-exact child in the Hook variant, so "not exact" was wrong | Accepted: the null-child fixture now targets an organic repo-c invocation (stays `unlinked`) |
+| 7 | P2: a transcript-only session waiting overnight drops out of the 2 h window | Accepted: an uncleared `waiting` session is always listed; `hook/sessions-2h.json` tests the default window |
+| 8 | P2: `-p` kills unfinished async hooks, so background polling may never write | Accepted: spike question (k); if killed, 2.5 writes the hand-off first and appends the child later |
+| 9 | P2: the real Verify can pass on `task_output` without exercising the hook reader; phase could close without waiting | Accepted: 2.8 deletes the sandbox task output file after the hook records, then requires `exact` / `hook`; Phase 2 stays open until the waiting check passes (owner-run if `expect` can't do it) |
+| 10 | P3: 2.3 bundles five crates (model, tags, invocation, linker, hook skeleton) | Rejected: every piece is a few lines implementing one contract change from 2.2 under one Verify; the skeleton (2 files) sits there so 2.5 ∥ 2.6 never edit a manifest in parallel; a separate step would cost a full session round for no review benefit |
 
 ### 2026-10-29 — Phase 0: design revision and Phase 1 split (Step 0.6, Codex critique, read-only)
 Phase 0 decisions: (a) go, (b) no-go for waiting only, (c) no-go, (d) go; none changes the goal or the

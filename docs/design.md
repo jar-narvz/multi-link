@@ -140,7 +140,7 @@ Field names are observed on real data, not documented, and may change with a har
 | --- | --- | --- | --- |
 | P1 | (a) go: the child Codex id is observable for every launch form | Exact links per form: `exec` → `session id: <uuid>` line in the tool result; `resume` → the `<uuid>` argument; plugin → `[codex] Thread ready (<uuid>)` in the **subagent transcript** (`<session>/subagents/agent-<agentId>.jsonl`), linked to the parent session; background → the `session id:` line in the **task output file** named by the tool result | Each is an id the harness printed, so the link is a fact, not a guess |
 | P2 | (a) the task output file is a temp file | When it is gone, the background link falls through to the heuristic; never marked exact | Exact means observed; a vanished file is no evidence |
-| P3 | (b) no-go for *waiting*: neither harness writes a pending-approval signal | Phase 1 never emits `waiting`. "Needs me" comes from the Phase 2 hook (Claude Code's `Notification` hook, an assumption to confirm in Phase 2); without the hook it shows as unknown. Codex waiting stays unsupported | Showing "waiting" from silence would be a guess, and alerts (FR14) fire only on a real signal |
+| P3 | (b) no-go for *waiting*: neither harness writes a pending-approval signal | Phase 1 never emits `waiting`. "Needs me" comes from the Phase 2 hook (`PermissionRequest` / `Notification`, decision H3); without the hook it shows as unknown. Codex waiting stays unsupported | Showing "waiting" from silence would be a guess, and alerts (FR14) fire only on a real signal |
 | P4 | (b) busy / idle come from the session record's `status` | The 300 s freshness limit applies to `busy` only: an old `busy` → `stale`; `idle` at any age stays `idle` | Live idle desktop sessions were seen 1.7–2.6 h without an update; a busy session updates as it works |
 | P5 | (b) liveness is checkable | Live = `ps` shows the record's `pid` with a start time equal to `procStart`; gone or different start → `finished` (`process_exit`). If the probe can't run, trust the record and skip `finished` | pid + start time defeats pid reuse; confirmed outside the sandbox with `ps -p <pid> -o lstart=` |
 | P6 | (b) transcripts carry no exit evidence | A transcript-only session is `unknown`, never `finished` | A missing record proves nothing (`claude -p` may never write one); a completed Codex turn ends the turn, not the process |
@@ -152,6 +152,26 @@ Field names are observed on real data, not documented, and may change with a har
 | P12 | Heuristic needs a bounded window | Candidates: same exact checkout, Codex start within 60 s after the call | All sampled launches started within 2 s; 60 s leaves room for slow starts while keeping candidates few. A ranking value, not calibrated |
 
 The binding field-level contract for all of this is `docs/output-schema.md`.
+
+### Phase 2 decisions (hook)
+
+Planned 2026-10-29. Hook facts come from the Claude Code hooks docs (code.claude.com/docs/en/hooks, read
+2026-10-29, Claude Code 2.1.303) and stay assumptions until Step 2.1 checks them on real payloads.
+
+| # | Decision | Why |
+| --- | --- | --- |
+| H1 | A payload spike (Step 2.1) comes before the hook record contract and any hook code; it stores an allowlist of ids and shapes, not whole payloads | Payload fields for background calls, `-p` behaviour and when Notification fires are not documented; Phase 0 showed field guesses are where plans break |
+| H2 | Hand-offs from `PostToolUse` (matcher `Bash`) | It carries `tool_use_id`, the same id as the transcript's `tool_use.id`, so a record joins an invocation exactly; it fires after the call, when its output exists |
+| H3 | "Needs me" from `PermissionRequest` and `Notification` (`permission_prompt`, `elicitation_dialog`); not `idle_prompt` | These fire when Claude is blocked on me mid-task. An idle session already shows `idle` from its session record, so `idle_prompt` would only duplicate it |
+| H4 | Every entry `async: true`; the hook prints nothing, exits 0, swallows errors and panics (no-op panic hook), and a watchdog exits it at 30 s | Claude never waits on it, and the docs say decision fields of async hooks have no effect, so a bug can't approve, deny or block anything. Async hooks have no enforced timeout, and stdin or a write can stall, hence a process-wide watchdog |
+| H5 | Hook evidence (`hook`) ranks after the four transcript sources; on disagreement the transcript wins and the conflict is counted | The transcript is what the harness printed; the hook only adds value where the transcript lost evidence (a vanished background task file) |
+| H6 | Step tag = first `Step <id>` (P11 grammar) in the recognised launch segment, read from transcripts | The command actually run is what Codex received, even after the plugin rewrites the prompt; transcripts make it work without the hook and on history. CLAUDE.md's hand-off prompt already starts "Read AGENTS.md, then do Step <id> in PLAN.md." |
+| H7 | Phase 2 puts the step on the link (`Link.step`); session segments stay one per session | Splitting Codex sessions per hand-off would make `sessions` depend on the linker; the TUI can join links to lanes. Revisit in Phase 3 |
+| H8 | `waiting` = the session's latest hook `waiting` record is newer than every transcript line (or the clearing signal 2.1 picks); checked after `finished`, before `busy`; no freshness limit; an uncleared waiting session is always listed | A prompt answered or denied writes a transcript line (to confirm in 2.1); a session can wait overnight, so neither age nor the 2 h window may hide it; a dead process isn't waiting |
+| H9 | Hook crate depends on model + claude, not core, and has its own `session id:` parser | Keeps the per-Bash-call hook path small and lets Steps 2.5 and 2.6 run in parallel; ~10 duplicated lines, tested on the same evidence lines |
+| H10 | One file per session, `<state>/hook/<session_id>.jsonl`, single `O_APPEND` writes under 4 KiB, ids and enums only; `<state>` = `$MULTI_LINK_HOME` or `~/.multi-link` | Parallel tool calls append without locks; a UUID check on `session_id`, refusing a state dir inside `~/.claude` / `~/.codex`, and never following symlinks keep every write inside the state dir; no conversation content leaves the transcripts |
+
+Codex waiting stays unsupported (no Codex hook in scope). Enabling the hook in real repos is the owner's paste.
 
 ### Linking algorithm
 
@@ -167,7 +187,7 @@ The binding field-level contract for all of this is `docs/output-schema.md`.
    - PLAN.md step heading `### Step <id> — <title>`, where `<id>` is `N` or `N.M`, optionally followed by one lowercase letter (`0.2a`; decision P11), with a `- Verify:` or `- **Verify:**` line inside the step.
    - PROGRESS.md entries headed `### YYYY-MM-DD — Step <id>: <title>`, optionally `— <agent>`, newest first, with a Verify line.
    - Anything else → steps unknown.
-3. **Work segments.** A session is split into time ranges; each gets a step only from explicit evidence (hook tag, or a `step N` tag in the hand-off prompt), else `unknown`. A long Claude session that plans step 4 and reviews step 5 gets two segments. Phase 1 recognises no tags yet (decision P10): one segment per session, step `unknown`.
+3. **Work segments.** A session is split into time ranges; each gets a step only from explicit evidence (a `Step <id>` tag in the hand-off command, H6), else `unknown`. A long Claude session that plans step 4 and reviews step 5 gets two segments. Phase 1 recognises no tags yet (decision P10): one segment per session, step `unknown`. Phase 2 puts the tag on the link only (H7).
 4. **Verify per step.** `{command, result, time, checkout, source}` where source is `reported` (PROGRESS.md) or `observed` (the command's run seen in a transcript). Marked stale if the checkout changed since. There is no repo-level "last Verify".
 5. A repo without PLAN.md still shows; its sessions have no steps.
 
@@ -178,7 +198,7 @@ Confirmed in Phase 0 (b) on real data; rule order and exact conditions are in `d
 | State | Evidence |
 | --- | --- |
 | Busy | Claude: session record `status=busy`, updated ≤ 300 s ago. Codex: last `task_started` turn has no `task_complete`, last activity ≤ 300 s ago. |
-| Waiting on me | Phase 2 hook only (Claude Code `Notification` hook, to confirm). No transcript or record field signals it (P3). Codex: unsupported. |
+| Waiting on me | Phase 2 hook only (`PermissionRequest` / `Notification`, H3, H8). No transcript or record field signals it (P3). Codex: unsupported. |
 | Idle | Claude: session record `status=idle`, at any age (P4). |
 | Finished | Claude: the record's process is gone, or its pid now has a different start time than `procStart` (P5). |
 | Stale | `busy` evidence older than 300 s (record or open Codex turn). |
@@ -220,7 +240,7 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 | FR8 | `cli/` serialises the core's model |
 | FR9, FR10 | `tui/`: home overview and repo timeline |
 | FR11, FR12, FR15, FR16 | Backlog |
-| FR13 | `multi-link hook install` prints the hook entry for the owner to paste; the hook writes to `~/.multi-link/` |
+| FR13 | `multi-link hook install` prints the hook entry for the owner to paste; the hook writes to `~/.multi-link/` (H2, H4, H10); step tags from hand-off commands (H6) |
 | FR17 | Core compares the working folders of busy sessions |
 | FR18 | See "Opening a session" below; Phase 3 |
 
@@ -295,7 +315,7 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
    - **Done 2026-10-29:** (a) go, (b) no-go for waiting only, (c) no-go, (d) go. See Phase 0 results and decisions.
 2. **Phase 1: MVP, core + CLI.** Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions`, `multi-link links`, `multi-link steps`. A Cargo workspace with one crate per parser (Claude, Codex, PLAN/PROGRESS) plus shared model, core and CLI crates: a format change touches one crate (swappable parsers), and parallel steps can't break each other's build.
    - Verify: `cargo test` passes, and each of the three commands run with `--root fixtures/sessions --now <fixed time> --json` equals its expected file (exact commands in `docs/output-schema.md`). Negative fixtures produce no link; the ambiguous variant produces `ambiguous`.
-3. **Phase 2: Hook.** `multi-link hook install` (prints the snippet); exact links and step tags when the child id is observable. Since Phase 0 found no waiting signal in transcripts, the hook is also the only source of "waiting on me" (Claude `Notification` hook, to confirm).
+3. **Phase 2: Hook.** `multi-link hook install` (prints the snippet); exact links when the child id is observable, step tags from hand-off commands, and "waiting on me" from `PermissionRequest` / `Notification` (decisions H1–H10). Steps 2.1–2.8 in `PLAN.md`.
    - Verify: for one real hand-off, the child id the hook records equals the id read independently from `~/.codex/sessions`; a hand-off without an observable id stays heuristic.
 4. **Phase 3: TUI home + timeline + open (Release 1).** Screens 6 and 2, needs-you sorting, bell, FR18 resume and app link. Needs-you sorting and the bell depend on the Phase 2 hook; without it, those sessions show as unknown.
    - Verify: snapshot tests of both screens on fixtures pass; home refresh on my real `~` is 2 s or less; opening a running fixture session never calls resume.
@@ -306,10 +326,10 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
 - [x] Can a terminal program open a running desktop-app session? Yes: `open "claude://code/continue?session=local_<id>"` switched the app to a live route-impact session (tested 2026-10-29). Format found in repo-sessions' code; undocumented.
 - [x] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap. Answered in `docs/phase0.md`; decisions P1–P12 above.
 - [x] May step ids carry a letter suffix (`0.2a`)? Yes, one lowercase letter (P11).
-- [ ] Does Claude Code's `Notification` hook fire for every permission prompt and question, so it can drive "waiting"? (Phase 2)
+- [ ] Do `PermissionRequest` / `Notification` fire for every permission prompt and question, so they can drive "waiting"? Planned answer: Step 2.1 (h).
 - [ ] How to find the `local_` app id of a finished desktop-app session.
 - [ ] Does `codex://threads/<id>` open a Codex desktop thread?
-- [ ] Should Claude's hand-off prompts carry a `step N` tag by convention, so step assignment is explicit? (A `/progress-entry` or hand-off skill could add it.)
+- [x] Should hand-off prompts carry a step tag? Yes: the first `Step <id>` in the launch command (H6).
 - [x] Final project name: multi-link.
 
 ## Review log
