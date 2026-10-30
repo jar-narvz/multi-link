@@ -1,0 +1,2 @@
+{"v":1,"kind":"waiting","at":"2026-10-28T10:03:05.020Z","session_id":"11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43","agent_id":null,"event":"PermissionRequest","tool_use_id":null,"cwd":"/home/dev/repo-c","child":null,"child_evidence":null,"notification_type":null}
+{"v":1,"kind":"waiting","at":"2026-10-28T10:03:11.004Z","session_id":"11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43","agent_id":null,"event":"Notification","tool_use_id":null,"cwd":"/home/dev/repo-c","child":null,"child_evidence":null,"notification_type":"permission_prompt"}

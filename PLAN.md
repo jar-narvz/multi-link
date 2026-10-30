@@ -399,7 +399,7 @@ confirms them on real payloads, like Phase 0 did for transcripts.
 - Verify: `jq . fixtures/expected/*.json fixtures/expected/hook/*.json > /dev/null` succeeds; in
   `hook/links.json` the bg link is `exact` / `hook` with the same child as in `links.json`, the repo-c
   null-child link is `unlinked`, the conflict link keeps its transcript evidence; `hook/sessions.json` and
-  `hook/sessions-2h.json` each have exactly one `waiting` session (the old one); `git diff --stat` touches
+  `hook/sessions-2h.json` each have exactly one `waiting` / `hook` session (the old one) plus the H11 `waiting` / `session_record` row; `git diff --stat` touches
   no existing expected file; Codex reviews (read-only).
 - H11 (added after 2.1): also add a scrubbed live session record with `status: "waiting"` + `waitingFor`
   (from `fixtures/raw/hook/` snapshots) and its expected `sessions` row: `waiting` / `session_record`.

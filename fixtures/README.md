@@ -124,3 +124,28 @@ copies; withholding output evidence would make the pair ambiguous.
 **Not made: stale session.** The generated CLI sessions exited; no live-but-silent
 process was produced. Organic session records include old idle timestamps, but
 these static copies alone do not establish live process identity or liveness.
+
+## Hook fixtures (Phase 2, Step 2.4)
+
+`fixtures/hook/` is an overlay for the Hook variant (`docs/output-schema.md` → Hook records → Hook
+variant): copy `fixtures/sessions` to a temp dir, copy `fixtures/hook/` on top, delete
+`task-output/be01y5dv6.output`. Answer keys: `fixtures/expected/hook/{links,sessions,sessions-2h}.json`,
+written by hand as the edits to the Phase 1 keys listed in the schema (the subfolder keeps them out of
+the model round-trip test's non-recursive scan).
+
+```text
+hook/
+  .multi-link/hook/<session-id>.jsonl   synthetic hook records (8 files)
+  .claude/sessions/98798.json           scrubbed live session record, status "waiting"
+```
+
+- Hook records are **synthetic**: Step 2.1 stored only an allowlist of payload fields, and the records
+  reference existing fixture ids (sessions, `tool_use.id`s, Codex children). `at` values are chosen
+  relative to the fixture transcripts (the hook trails its event by ~0.15 s, a `Notification` follows a
+  `PermissionRequest` by ~6 s, as in 2.1). `0d7faed4-….jsonl` line 2 is deliberately truncated and line
+  3 has `v: 2`.
+- `98798.json` is the 2.1 perm-i snapshot from `fixtures/raw/hook/hold-perm-i.log` (`snap_start`),
+  scrubbed by the rules above: `cwd` → `/home/dev/multi-link-sandbox/repo-a`, socket path →
+  `/tmp/dev/cc-socks/98798.sock`, `name` → `<name>`. pid, `sessionId`, epoch times, `procStart`, status
+  fields and `waitingFor` are unchanged, so its times (2026-10-30T06:08Z) are later than the fixture `--now`.
+- `.multi-link` and `.claude` are hidden folders: add `--hidden` to the scrub check to scan them.

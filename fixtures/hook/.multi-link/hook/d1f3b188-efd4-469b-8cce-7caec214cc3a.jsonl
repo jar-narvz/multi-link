@@ -1,0 +1,2 @@
+{"v":1,"kind":"waiting","at":"2026-10-30T06:08:12.497Z","session_id":"d1f3b188-efd4-469b-8cce-7caec214cc3a","agent_id":null,"event":"PermissionRequest","tool_use_id":null,"cwd":"/home/dev/multi-link-sandbox/repo-a","child":null,"child_evidence":null,"notification_type":null}
+{"v":1,"kind":"waiting","at":"2026-10-30T06:08:18.433Z","session_id":"d1f3b188-efd4-469b-8cce-7caec214cc3a","agent_id":null,"event":"Notification","tool_use_id":null,"cwd":"/home/dev/multi-link-sandbox/repo-a","child":null,"child_evidence":null,"notification_type":"permission_prompt"}

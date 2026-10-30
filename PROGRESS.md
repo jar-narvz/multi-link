@@ -184,8 +184,34 @@
   `PostToolUseFailure`, derive the bg output path from `scratchpad_dir` + `backgroundTaskId`, and write first.
 - Step 2.3 done: links carry `step` from explicit tags (`multi_link_plan::step_tag`); `LinkEvidence::Hook` and
   `StateEvidence::Hook` exist but nothing produces them yet; `crates/hook` skeleton ready for 2.5/2.6.
+- Step 2.4 done (Claude, Codex-reviewed): "Hook records" contract in docs/output-schema.md; Hook variant →
+  fixtures/expected/hook/{links,sessions,sessions-2h}.json (expect hook_conflicts = 1). 2.6: record waiting first,
+  hook waiting only without a record; 2.5: write the child-null record first, append the child.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.4: Hook record contract and fixtures — Claude
+- Did: output-schema.md "Hook records": layout `<state>/hook/<uuid>.jsonl` (`$MULTI_LINK_HOME`, else
+  `$HOME/.multi-link`; fixture mode `<root>/.multi-link`); v1 record (kind handoff|waiting, at = hook clock at
+  write, session_id = file stem, agent_id, event PostToolUse|PostToolUseFailure|PermissionRequest|Notification,
+  tool_use_id, cwd, child, child_evidence stdout|thread_ready|task_output, notification_type); background
+  calls write a child-null record first, then append the child; reader rules; link join on (session_id,
+  tool_use_id), transcript wins, conflicts counted in stderr-only `hook_conflicts`; state `waiting` /
+  `session_record` (H11) first, `waiting` / `hook` only for a transcript session without a record. Hook
+  variant = fixtures/sessions + overlay fixtures/hook/ − task-output/be01y5dv6.output; 8 synthetic hook files
+  + scrubbed 2.1 waiting session record 98798.json.
+- Changed: docs/output-schema.md, fixtures/README.md, fixtures/hook/**, fixtures/expected/hook/{links,sessions,sessions-2h}.json;
+  PLAN.md 2.4 Verify wording updated for H11 by the coordinator.
+- Verify: `jq . fixtures/expected/*.json fixtures/expected/hook/*.json > /dev/null` → ok; bg link via hook →
+  exact/hook, same child as task_output; conflict exec link stays exact/stdout; waiting rows in hook/sessions.json
+  and hook/sessions-2h.json → [11c1f13c hook, d1f3b188 session_record]; `git diff --stat -- fixtures/expected/*.json`
+  → empty; privacy `rg --hidden` → nothing. Re-run by the coordinator: identical.
+- Review: Codex (read-only), 3 findings, all accepted and fixed: `at` ambiguous for the appended bg record;
+  no fixture where record and hook disagree (added 1f47e9b3: hook waiting vs idle record → stays idle);
+  agent_id example was an agent_type.
+- Gotchas: fixture dirs are hidden (.multi-link, .claude): plain rg skips them, use --hidden. 98798.json times
+  are later than the fixture --now; waiting has no freshness check. Expected hook keys were produced as
+  hand-chosen jq edits of the hand-written Phase 1 keys, each edit listed in the schema.
 
 ### 2026-10-30 — Step 2.3: Step tags in links, model changes, hook crate skeleton — Codex
 - Did: `multi_link_plan::step_tag` (new `tag.rs`): ASCII boundaries checked by hand (no lookahead in Rust

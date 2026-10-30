@@ -1,0 +1,525 @@
+{
+  "now": "2026-10-29T23:15:00.000Z",
+  "sessions": [
+    {
+      "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-c/11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43.jsonl",
+      "record": null,
+      "cwd": "/home/dev/repo-c",
+      "repo": "/home/dev/repo-c",
+      "branch": "main",
+      "started_at": "2026-10-28T09:48:34.173Z",
+      "last_activity": "2026-10-28T10:03:04.840Z",
+      "state": "waiting",
+      "state_evidence": "hook",
+      "segments": [
+        {
+          "from": "2026-10-28T09:48:34.173Z",
+          "to": "2026-10-28T10:03:04.840Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "6358ec7e-ab3b-40b4-a75d-87f6da09cedc",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/60243.json",
+      "cwd": "/home/dev/repo-c",
+      "repo": "/home/dev/repo-c",
+      "branch": null,
+      "started_at": "2026-10-29T19:40:26.332Z",
+      "last_activity": "2026-10-29T23:12:39.714Z",
+      "state": "busy",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    },
+    {
+      "id": "1f47e9b3-3e6b-4c41-9bf6-c308a74c611a",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/64044.json",
+      "cwd": "/home/dev/repo-d",
+      "repo": "/home/dev/repo-d",
+      "branch": null,
+      "started_at": "2026-10-29T20:43:33.850Z",
+      "last_activity": "2026-10-29T20:44:16.946Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    },
+    {
+      "id": "f8017fcd-640d-4429-9ee6-d370299711c6",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/65362.json",
+      "cwd": "/home/dev/repo-d",
+      "repo": "/home/dev/repo-d",
+      "branch": null,
+      "started_at": "2026-10-29T21:32:40.107Z",
+      "last_activity": "2026-10-29T21:33:59.364Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    },
+    {
+      "id": "9d02a552-d23d-450d-900d-6d44c77a8c6b",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/65681.json",
+      "cwd": "/home/dev/Library/Application Support/Claude/scratch-workspaces/694f1c37-1208-4fe4-88cc-a484a6abc97e/ba2e3f27-7501-4388-bd1e-c327bda606fb/scratch-2026-10-29-338fd3",
+      "repo": "/home/dev/Library/Application Support/Claude/scratch-workspaces/694f1c37-1208-4fe4-88cc-a484a6abc97e/ba2e3f27-7501-4388-bd1e-c327bda606fb/scratch-2026-10-29-338fd3",
+      "branch": null,
+      "started_at": "2026-10-29T21:35:49.872Z",
+      "last_activity": "2026-10-29T21:35:50.326Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    },
+    {
+      "id": "bed52539-43f3-4a1e-ab86-08e6ef2e67ef",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/69401.json",
+      "cwd": "/home/dev/project",
+      "repo": "/home/dev/project",
+      "branch": null,
+      "started_at": "2026-10-29T22:47:05.886Z",
+      "last_activity": "2026-10-29T23:12:43.600Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    },
+    {
+      "id": "bb792d9c-7f69-410b-a571-b6d97d3aaffa",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-a/bb792d9c-7f69-410b-a571-b6d97d3aaffa.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T22:58:22.432Z",
+      "last_activity": "2026-10-29T22:58:42.511Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T22:58:22.432Z",
+          "to": "2026-10-29T22:58:42.511Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e2-d57f-7a91-b74c-ae85abd1a6a1",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T15-58-26-01a189e2-d57f-7a91-b74c-ae85abd1a6a1.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T22:58:26.855Z",
+      "last_activity": "2026-10-29T22:58:58.954Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T22:58:26.855Z",
+          "to": "2026-10-29T22:58:58.954Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "ef72378c-eb71-4b07-9790-f9ddd68b1171",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-a/ef72378c-eb71-4b07-9790-f9ddd68b1171.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T22:58:47.061Z",
+      "last_activity": "2026-10-29T22:59:04.662Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T22:58:47.061Z",
+          "to": "2026-10-29T22:59:04.662Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "9d9a0ed8-8e46-4e39-b121-30428e14d052",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-b/9d9a0ed8-8e46-4e39-b121-30428e14d052.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T22:59:08.725Z",
+      "last_activity": "2026-10-29T22:59:32.147Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T22:59:08.725Z",
+          "to": "2026-10-29T22:59:32.147Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [
+        "aee8ad2d0134ca48a"
+      ]
+    },
+    {
+      "id": "01a189e3-a439-7e72-8cea-1496af1d6d74",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T15-59-19-01a189e3-a439-7e72-8cea-1496af1d6d74.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T22:59:19.771Z",
+      "last_activity": "2026-10-29T22:59:25.940Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T22:59:19.771Z",
+          "to": "2026-10-29T22:59:25.940Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "07c80c2e-780f-462d-8e04-581cad43339f",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-b/07c80c2e-780f-462d-8e04-581cad43339f.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T22:59:36.313Z",
+      "last_activity": "2026-10-29T22:59:59.499Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T22:59:36.313Z",
+          "to": "2026-10-29T22:59:59.499Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e3-f419-79a1-b801-38f3fecd7480",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T15-59-40-01a189e3-f419-79a1-b801-38f3fecd7480.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T22:59:40.222Z",
+      "last_activity": "2026-10-29T22:59:47.841Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T22:59:40.222Z",
+          "to": "2026-10-29T22:59:47.841Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "df403bfa-454f-4993-b67c-e44c6e7a9f7e",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-b/df403bfa-454f-4993-b67c-e44c6e7a9f7e.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:03.496Z",
+      "last_activity": "2026-10-29T23:00:07.816Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:03.496Z",
+          "to": "2026-10-29T23:00:07.816Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "80cce3e4-bbbc-42cd-999b-856685f1b3f7",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-a/80cce3e4-bbbc-42cd-999b-856685f1b3f7.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:12.184Z",
+      "last_activity": "2026-10-29T23:00:28.757Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:12.184Z",
+          "to": "2026-10-29T23:00:28.757Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "c86d374f-cab2-4f76-9b58-e59d5a43b09f",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-a-wt/c86d374f-cab2-4f76-9b58-e59d5a43b09f.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a-wt",
+      "repo": "/home/dev/multi-link-sandbox/repo-a-wt",
+      "branch": "wt",
+      "started_at": "2026-10-29T23:00:12.201Z",
+      "last_activity": "2026-10-29T23:00:29.712Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:12.201Z",
+          "to": "2026-10-29T23:00:29.712Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e4-7f31-7293-8ee6-516b81099fb5",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T16-00-16-01a189e4-7f31-7293-8ee6-516b81099fb5.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:16.284Z",
+      "last_activity": "2026-10-29T23:00:25.273Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:16.284Z",
+          "to": "2026-10-29T23:00:25.273Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e4-8084-7fc2-93b5-0b202360b109",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T16-00-16-01a189e4-8084-7fc2-93b5-0b202360b109.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a-wt",
+      "repo": "/home/dev/multi-link-sandbox/repo-a-wt",
+      "branch": "wt",
+      "started_at": "2026-10-29T23:00:16.603Z",
+      "last_activity": "2026-10-29T23:00:24.795Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:16.603Z",
+          "to": "2026-10-29T23:00:24.795Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "11bf1b58-17d9-48e6-988d-aa0cf951751d",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-b/11bf1b58-17d9-48e6-988d-aa0cf951751d.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:33.781Z",
+      "last_activity": "2026-10-29T23:00:53.156Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:33.781Z",
+          "to": "2026-10-29T23:00:53.156Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "f4d83303-be58-4964-b60a-64470e01f0c7",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-multi-link-sandbox-repo-b/f4d83303-be58-4964-b60a-64470e01f0c7.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:35.769Z",
+      "last_activity": "2026-10-29T23:00:52.046Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:35.769Z",
+          "to": "2026-10-29T23:00:52.046Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e4-d501-71d2-97d8-0192e844ec5d",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T16-00-37-01a189e4-d501-71d2-97d8-0192e844ec5d.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:37.830Z",
+      "last_activity": "2026-10-29T23:00:45.703Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:37.830Z",
+          "to": "2026-10-29T23:00:45.703Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e4-d953-7b63-b9b5-088a72542eb3",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T16-00-38-01a189e4-d953-7b63-b9b5-088a72542eb3.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-b",
+      "repo": "/home/dev/multi-link-sandbox/repo-b",
+      "branch": "main",
+      "started_at": "2026-10-29T23:00:38.906Z",
+      "last_activity": "2026-10-29T23:00:46.985Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T23:00:38.906Z",
+          "to": "2026-10-29T23:00:46.985Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "01a189e5-5b32-7f13-b365-8737dca7a4fb",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/10/29/rollout-2026-10-29T16-01-12-01a189e5-5b32-7f13-b365-8737dca7a4fb.jsonl",
+      "record": null,
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": "main",
+      "started_at": "2026-10-29T23:01:12.154Z",
+      "last_activity": "2026-10-29T23:01:21.437Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-10-29T23:01:12.154Z",
+          "to": "2026-10-29T23:01:21.437Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": []
+    },
+    {
+      "id": "d1f3b188-efd4-469b-8cce-7caec214cc3a",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/98798.json",
+      "cwd": "/home/dev/multi-link-sandbox/repo-a",
+      "repo": "/home/dev/multi-link-sandbox/repo-a",
+      "branch": null,
+      "started_at": "2026-10-30T06:08:09.990Z",
+      "last_activity": "2026-10-30T06:08:12.305Z",
+      "state": "waiting",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": []
+    }
+  ],
+  "skipped": [
+    {
+      "file": ".claude/projects/-home-dev-repo-e/00000000-0000-4000-8000-00000000000e.jsonl",
+      "line": 3,
+      "reason": "invalid_json"
+    },
+    {
+      "file": ".claude/projects/-home-dev-repo-e/00000000-0000-4000-8000-00000000000e.jsonl",
+      "line": 4,
+      "reason": "empty_line"
+    },
+    {
+      "file": ".claude/projects/-home-dev-repo-e/00000000-0000-4000-8000-00000000000e.jsonl",
+      "line": 5,
+      "reason": "unknown_type"
+    },
+    {
+      "file": ".codex/sessions/2026/10/29/rollout-2026-10-29T00-00-00-00000000-0000-4000-8000-00000000000f.jsonl",
+      "line": 2,
+      "reason": "invalid_json"
+    },
+    {
+      "file": ".multi-link/hook/0d7faed4-bfd7-40bc-9d56-c3652efeb876.jsonl",
+      "line": 2,
+      "reason": "invalid_json"
+    },
+    {
+      "file": ".multi-link/hook/0d7faed4-bfd7-40bc-9d56-c3652efeb876.jsonl",
+      "line": 3,
+      "reason": "unknown_type"
+    }
+  ]
+}
