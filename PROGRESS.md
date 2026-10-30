@@ -87,7 +87,6 @@
   serialises the report; no I/O errors surface (absent PLAN.md → `missing`, unreadable → `unsupported`,
   absent/unreadable PROGRESS.md → no entries). Gotcha: per the schema, `result` is `pass` only when the
   text after `→` starts with pass/ok, so this repo's own entries (`→` followed by a backticked `test result: ok`) read `unknown`.
-
 - Step 1.2 done (Codex, reviewed by Claude, 1 fix round): `multi_link_claude::scan(root)` → `ClaudeScan {
   transcripts, records, skipped, bad_records }`. `Transcript { id, transcript, cwd, branch, started_at,
   last_activity, subagents, subagent_files: [SubagentFile { id, transcript }] }`; metadata fields are
@@ -98,7 +97,34 @@
   records into transcripts by `session_id == id`; `bad_records` (unreadable/invalid record files) is not a
   schema `skipped` reason. Known gaps: a transcript deleted between listing and open is left out; other
   I/O errors (e.g. permission denied) fail the whole scan.
+- Step 1.5 done (Codex, reviewed by Claude, 1 fix round): `multi_link_core::RepoMode::{Real,Fixture}.map(cwd)`
+  → `RepoPaths { repo, checkout }`. Real runs `git -C <cwd> rev-parse --path-format=absolute --show-toplevel
+  --git-common-dir` with all inherited `GIT_*` vars removed; `repo` = parent of the common dir only when it is
+  named `.git` (submodules / bare-repo worktrees → `repo` = checkout); outside git or on any failure both = cwd.
+  Fixture returns cwd verbatim. Probe: trait `ProcessProbe::probe(pid, proc_start) -> Liveness {Alive, Gone,
+  Unavailable}`; `RealProcessProbe` (default `/bin/ps`, `new(path)` to override), `FixtureProcessProbe`
+  (always `Unavailable`), `FakeProcessProbe { results: HashMap<(pid, start), Liveness> }` (missing key →
+  `Unavailable`). For 1.7: pass the probe and mode in so fixture mode and tests never run `ps`/git; `Gone` →
+  `finished`/`process_exit`, `Unavailable` → trust the record. Gotchas: start times compare after collapsing
+  whitespace; ps inherits the user's locale, which is assumed to match how Claude wrote `procStart` (unverified
+  outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
+  tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.5: Repo mapper and process probe — Codex
+- Did: Repo mapper (`repo.rs`): real/fixture modes, shared main root for worktrees, cwd fallback. Process
+  probe (`probe.rs`): real (`ps -p <pid> -o lstart=`), fixture and fake probes with three outcomes. Round 1
+  (Claude findings): `repo` = parent of the common dir only when it is `.git` (pure `repo_root` + unit test);
+  remove every inherited `GIT_*` variable, not three.
+- Changed: `crates/core/src/{lib.rs,repo.rs,probe.rs}`, `crates/core/tests/repo_probe.rs`
+- Verify: `cargo test -p multi-link-core` → (Codex, sandbox) `test result: ok. 2 passed`, `test result: ok.
+  8 passed`, `test result: ok. 0 passed` (doc); the own-pid and reaped-child tests printed SKIP (sandbox blocks ps).
+- Review: Claude, 2 findings, both fixed in 1 round: (1) `repo.rs` took the common dir's parent for
+  submodules (`.git/modules/x`) and bare repos (`repo.git`), giving bogus repo paths; (2) only 3 of the `GIT_*`
+  env vars were removed. Claude re-ran Verify outside the sandbox with `--nocapture`: `test result: ok. 2
+  passed`, `test result: ok. 8 passed`, `test result: ok. 0 passed`, no SKIP lines (real `ps` tests ran: own
+  pid → Alive, wrong start → Gone, reaped child → Gone, missing ps → Unavailable). Scope: only the named files.
+- Gotchas: ps locale assumed to match `procStart`'s; stderr from ps is treated as `Unavailable`.
 
 ### 2026-10-29 — Step 1.2: Claude transcripts and session records — Codex
 - Did: `scan(root)` discovers main transcripts (`projects/*/*.jsonl`, one level) and subagents
@@ -117,7 +143,9 @@
   match `docs/phase0.md`, no network code, only the step's files changed. Claude re-ran Verify and fmt:
   matches the paste.
 - Gotchas: Field paths are from Phase 0 fixtures, not a spec. A vanished main transcript also hides its
-  subagents. `.json` entries in `sessions/` that are directories count as bad records.
+  subagents. `.json` entries in `sessions/` that are directories count as bad records. This entry and the
+  1.2 "Current state" line landed in the Step 1.4 commit (21d36dd): its `git commit -- PROGRESS.md` took the
+  whole working file while this step was mid-edit; the code is in the Step 1.2 commit.
 
 ### 2026-10-29 — Step 1.4: PLAN.md / PROGRESS.md parser and steps report — Codex
 - Did: Implemented `steps_report`, pure parsers, strict step ids (`N` / `N.M` + one lowercase letter),
