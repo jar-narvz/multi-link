@@ -4,8 +4,10 @@
 **Resume here (2026-10-30).** Phases 0–3 / **Release 1 are done**, including Step **3.8**.
 Whole-phase Verify passes with documented limitations; Step 3.8 reviewed by Claude and committed locally (not pushed).
 Next: **Phase 4 (home screen cleanup, Release 1.1)**, planned 2026-10-30 after the owner found the real
-home screen far noisier than mockup screen 6. Start **4.1** and **4.2** in parallel (one fresh step session
-each; neither commits, the coordinator commits each and runs the workspace gate), then 4.3 → 4.6 in order.
+home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coordinator workspace gate
+2026-10-30: `cargo test --workspace` 28 `test result: ok`, 0 failed; clippy `-D warnings` clean).
+`-C .` / `-C "$PWD"` no longer count as a directory move (real-`~` counts in the 4.1 entry).
+Next: **4.3**, then 4.4 → 4.6 in order, one fresh step session each.
 4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
 stub/missing-program child handling and terminal restoration. The child checks used a synthetic
@@ -15,6 +17,10 @@ exited terminal Claude session deletes its record, leaving `unknown` / `Unavaila
 resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
 Codex-off mode is off: Codex implements, Claude plans and reviews.
 
+- **What 4.3 / 4.4 need from 4.2:** contract in `docs/output-schema.md` → Overview → Rows (Merge) and
+  "Phase 4 fixture results"; design U1–U5. Test target: `overview --root fixtures/sessions-phase4 --now
+  2026-10-29T23:15:00Z --since all --json` == `fixtures/expected/phase4/overview.json`. U3 keys: separate
+  per-repo expanded set; `enter` on a collapsed repo expands it, merged rows stay merged; `esc` clears both sets.
 - **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
 - **What 3.7 needs from 3.6:** `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)` and
   `TimeWindow::default_for(report)`; 3.7 adds selected-lane scrolling, +/- zoom, left/right pan and 0 reset.
@@ -76,6 +82,37 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 4.2: Contract: `codex ×N`, collapsed repos, header — Claude
+- Did: Wrote U1–U5 into `docs/design.md` ("Phase 4 decisions", plus the heuristic paragraph's `-C` note).
+  `docs/output-schema.md`: Phase 4 changes block; Heuristic gains the U1 rule; Merge now covers
+  `claude ×N` and `codex ×N` (quiet top-level Codex rows, decided per harness, threshold 4, one MergedRow
+  per harness at its first member's place, MergedRow `harness`); new "Phase 4 fixture results". New
+  isolated synthetic root `fixtures/sessions-phase4/` (repo-e formats: 13 Codex rollouts, 4 Claude
+  transcripts, record `70401.json`, plan copy of repo-a for repo-j) and hand-written
+  `fixtures/expected/phase4/overview.json`. `fixtures/sessions` and every earlier key untouched.
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase4/**` (20 files),
+  `fixtures/expected/phase4/overview.json`, `PROGRESS.md`.
+- Verify: `python3 -m json.tool fixtures/expected/phase4/overview.json` → valid JSON. Rows traced (key has
+  18 session rows; current CLI `sessions --root fixtures/sessions-phase4 --now 2026-10-29T23:15:00Z --since all`
+  → 18 sessions, `skipped: []`): repo-h (busy) `…40b4` busy/open_turn, `…40b3`, `…40b2`, `…40b1`
+  ← `.codex/sessions/2026/10/29/rollout-*-…40b{1..4}.jsonl` (3 quiet, no merge); repo-j `…40d1` idle
+  ← `.claude/sessions/70401.json`, plan ← `repos/repo-j/` (latest step 0.4); repo-k `…40e1` stale/open_turn
+  ← `rollout-*-…40e1.jsonl`; repo-g merged codex ×4 `…40a4..a1` ← `rollout-*-…40a{1..4}.jsonl`; repo-i merged
+  codex ×4 `…40c4..c1` ← `rollout-*-…40c{1..4}.jsonl`, then merged claude ×4 `…41c4..c1`
+  ← `.claude/projects/-home-dev-repo-i/…41c{1..4}.jsonl`. Cross-check: current `overview` CLI on the root,
+  merged rows flattened → equal to the flattened key (only the codex merge + `harness` differ, as 4.3 adds).
+  Scrub `rg -l "/Users/|\bsk-|api_key" fixtures/sessions-phase4 fixtures/expected/phase4` → no output.
+  `cargo test --workspace` (with 4.1's uncommitted claude changes in the tree) → 28 `test result: ok`, 0 failed.
+- Review: adversarial Claude subagent (diff + Step 4.2 only) re-derived the key by hand and by CLI: correct
+  and fully traceable; 0 P1, 2 P2, 5 P3, all accepted: U3 now defines `enter`/`esc` against today's
+  merged-row expansion (two stages, separate per-repo set, `esc` clears both); collapse status of all 5
+  groups stated, 4.4 golden must show repo-i expanded; "busy between quiet" reworded to "does not count
+  towards the 4"; U3/U4 counts defined (all shown sessions; FR17 = Warning objects); U1 several `-C` → moves
+  if any moves, bare `-C` moves (matches 4.1's code); repo-j plan headings renamed; selection vs expansion
+  identity noted.
+- Gotchas: repo-h's busy row only "sits between" quiet ones by `started_at`; in output it sorts first. A
+  valid uuid needs 12 hex digits in the last group (first draft had 11; open refuses non-uuids).
 
 ### 2026-10-30 — Step 4.1: Linker current-directory options — Codex
 - Did: Tokeniser preserves whether a word contains an expandable dollar sign. Directory-option

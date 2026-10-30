@@ -1,0 +1,3 @@
+{"type": "session_meta", "timestamp": "2026-10-29T22:59:00.000Z", "payload": {"id": "00000000-0000-4000-8000-0000000040e1", "cwd": "/home/dev/repo-k", "originator": "synthetic", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-10-29T22:59:01.000Z", "payload": {"type": "task_started", "turn_id": "00000000-0000-4000-8000-0000000140e1"}}
+{"type": "event_msg", "timestamp": "2026-10-29T23:02:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}

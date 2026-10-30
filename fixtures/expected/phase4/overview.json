@@ -1,0 +1,343 @@
+{
+  "now": "2026-10-29T23:15:00.000Z",
+  "repos": [
+    {
+      "repo": "/home/dev/repo-h",
+      "tier": "busy",
+      "last_activity": "2026-10-29T23:14:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040b4",
+          "harness": "codex",
+          "state": "busy",
+          "state_evidence": "open_turn",
+          "checkout": "/home/dev/repo-h",
+          "branch": null,
+          "started_at": "2026-10-29T22:30:00.000Z",
+          "last_activity": "2026-10-29T23:14:00.000Z",
+          "handoffs": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040b3",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-h",
+          "branch": null,
+          "started_at": "2026-10-29T22:50:00.000Z",
+          "last_activity": "2026-10-29T22:51:00.000Z",
+          "handoffs": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040b2",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-h",
+          "branch": null,
+          "started_at": "2026-10-29T22:40:00.000Z",
+          "last_activity": "2026-10-29T22:41:00.000Z",
+          "handoffs": [],
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040b1",
+          "harness": "codex",
+          "state": "unknown",
+          "state_evidence": "turns_complete",
+          "checkout": "/home/dev/repo-h",
+          "branch": null,
+          "started_at": "2026-10-29T22:00:00.000Z",
+          "last_activity": "2026-10-29T22:01:00.000Z",
+          "handoffs": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-j",
+      "tier": "other",
+      "last_activity": "2026-10-29T23:05:00.000Z",
+      "plan": {
+        "convention": "supported",
+        "latest_step": {
+          "id": "0.4",
+          "title": "Parse sample records",
+          "entry": {
+            "date": "2026-10-29",
+            "agent": "Codex",
+            "verify": {
+              "command": "cargo test parser",
+              "result": "unknown",
+              "result_text": "not run (synthetic format sample).",
+              "source": "reported"
+            }
+          }
+        }
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040d1",
+          "harness": "claude",
+          "state": "idle",
+          "state_evidence": "session_record",
+          "checkout": "/home/dev/repo-j",
+          "branch": null,
+          "started_at": "2026-10-29T22:30:00.000Z",
+          "last_activity": "2026-10-29T23:05:00.000Z",
+          "handoffs": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-k",
+      "tier": "other",
+      "last_activity": "2026-10-29T23:02:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "00000000-0000-4000-8000-0000000040e1",
+          "harness": "codex",
+          "state": "stale",
+          "state_evidence": "open_turn",
+          "checkout": "/home/dev/repo-k",
+          "branch": null,
+          "started_at": "2026-10-29T22:59:00.000Z",
+          "last_activity": "2026-10-29T23:02:00.000Z",
+          "handoffs": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-g",
+      "tier": "other",
+      "last_activity": "2026-10-29T23:01:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "merged",
+          "harness": "codex",
+          "count": 4,
+          "rows": [
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040a4",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-g",
+              "branch": null,
+              "started_at": "2026-10-29T23:00:00.000Z",
+              "last_activity": "2026-10-29T23:01:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040a3",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-g",
+              "branch": null,
+              "started_at": "2026-10-29T22:55:00.000Z",
+              "last_activity": "2026-10-29T22:56:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040a2",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-g",
+              "branch": null,
+              "started_at": "2026-10-29T22:50:00.000Z",
+              "last_activity": "2026-10-29T22:51:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040a1",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-g",
+              "branch": null,
+              "started_at": "2026-10-29T22:45:00.000Z",
+              "last_activity": "2026-10-29T22:46:00.000Z",
+              "handoffs": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-i",
+      "tier": "other",
+      "last_activity": "2026-10-29T22:58:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "merged",
+          "harness": "codex",
+          "count": 4,
+          "rows": [
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040c4",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:57:00.000Z",
+              "last_activity": "2026-10-29T22:58:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040c3",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:47:00.000Z",
+              "last_activity": "2026-10-29T22:48:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040c2",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:37:00.000Z",
+              "last_activity": "2026-10-29T22:38:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000040c1",
+              "harness": "codex",
+              "state": "unknown",
+              "state_evidence": "turns_complete",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:27:00.000Z",
+              "last_activity": "2026-10-29T22:28:00.000Z",
+              "handoffs": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "kind": "merged",
+          "harness": "claude",
+          "count": 4,
+          "rows": [
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000041c4",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:56:00.000Z",
+              "last_activity": "2026-10-29T22:57:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000041c3",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:46:00.000Z",
+              "last_activity": "2026-10-29T22:47:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000041c2",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:36:00.000Z",
+              "last_activity": "2026-10-29T22:37:00.000Z",
+              "handoffs": [],
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "00000000-0000-4000-8000-0000000041c1",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-i",
+              "branch": null,
+              "started_at": "2026-10-29T22:26:00.000Z",
+              "last_activity": "2026-10-29T22:27:00.000Z",
+              "handoffs": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

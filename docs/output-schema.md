@@ -1,11 +1,12 @@
 # Output schema — `multi-link sessions | links | steps | overview --json`, `open`
 
-Binding contract for Phases 1–3. `docs/design.md` → Data model is illustrative only; this file wins.
+Binding contract for Phases 1–4. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
 `fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
 `fixtures/expected/links-tagged.json` (Links → Tagged variant); Phase 2 hook answer keys in
 `fixtures/expected/hook/` (Hook records → Hook variant); Phase 3 `fixtures/expected/overview.json` and
-`fixtures/expected/hook/overview.json` (Overview).
+`fixtures/expected/hook/overview.json` (Overview); Phase 4 `fixtures/expected/phase4/overview.json`
+(Overview → Phase 4 fixture results).
 
 **Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
 `state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
@@ -13,6 +14,12 @@ Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` a
 **Phase 2 changes (Step 2.4):** new section "Hook records" (file layout, record fields, reader rules,
 Hook variant); State gains two `waiting` rows, session record first (design H11), hook second (H8);
 a `waiting` session is always listed; hook lines appear in `sessions` → `skipped`.
+
+**Phase 4 changes (Step 4.2):** MergedRow gains `harness`; the merge covers quiet top-level Codex rows
+(`codex ×N`, design U2), one merged row per harness; Heuristic gains the `-C .` / `-C "$PWD"` rule (U1).
+New isolated fixture root `fixtures/sessions-phase4/` with answer key `fixtures/expected/phase4/overview.json`
+(Overview → Phase 4 fixture results); `fixtures/sessions` and every earlier key are untouched until Step 4.3
+adds `"harness": "claude"` to the existing keys' merged rows.
 
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
@@ -211,7 +218,11 @@ exclusion below unless its `form` is `resume`.
 ### Heuristic (no exact evidence)
 **Launch directory must be certain.** If the launch segment follows a `cd` in the same command, or the
 `codex` call has `-C` / `--cd`, the child's directory is not `checkout`: no heuristic runs and the link
-is `unlinked` (no fixture has this; Phase 1 unit test).
+is `unlinked` (no fixture has this; Phase 1 unit test). **Phase 4 (design U1):** a `-C` / `-C<value>` /
+`--cd <value>` / `--cd=<value>` whose value is `.`, or `$PWD` / `${PWD}` unquoted or inside double quotes,
+is not a move. With several such flags the call moves if any one moves; a flag with no value moves. Single-quoted (`'$PWD'`) or backslash-escaped (`\$PWD`) values are literal text and still
+move, as does any other value (`"$PWD/x"`, `"$HOME/x"`, `/tmp/x`); a preceding `cd` segment still moves;
+`-C` after `--` is not a flag. Step 4.1 unit tests; no fixture has these forms.
 
 Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_at` in
 `[at, at + 60 s]`, excluding sessions that are the child of another invocation's `exact` link with
@@ -494,13 +505,24 @@ condition keeps every row inside its own repo's group; no fixture has a cross-re
 `last_activity` descending; then `id` ascending. A parent's place follows its own `state` and
 `last_activity`, never its children's.
 
-**Merge (`claude ×N`).** After ordering, the *quiet* rows are the top-level Claude SessionRows whose `state`
-is `idle`, `unknown` or `finished` **and** whose children are all `idle`, `unknown` or `finished` (a busy
-or stale Codex child keeps its parent visible, review #4). If a group has **4 or more** quiet rows, they are removed and one
-MergedRow `{"kind": "merged", "count": N, "rows": [SessionRow, ...]}` takes the place of the first of
-them; `rows` keeps their order and their children. Fewer than 4: no merge. Codex top-level rows and
-`waiting` / `busy` / `stale` rows never merge. A MergedRow is not actionable: the TUI expands it before
-`o` / `f`, so open always gets one full session id (T11).
+**Merge (`claude ×N`, `codex ×N`).** After ordering, the *quiet* rows of a harness are:
+- Claude: the top-level Claude SessionRows whose `state` is `idle`, `unknown` or `finished` **and** whose
+  children are all `idle`, `unknown` or `finished` (a busy or stale Codex child keeps its parent visible,
+  review #4).
+- Codex (Phase 4, design U2): the top-level Codex SessionRows (no placing hand-off, so not a child) whose
+  `state` is `idle`, `unknown` or `finished`. Their `handoffs` do not matter: an `unlinked`, `ambiguous`
+  or cross-repo link leaves the row top-level and still mergeable.
+
+Each harness is decided on its own. If a group has **4 or more** quiet rows of one harness, they are
+removed and one MergedRow `{"kind": "merged", "harness": "claude" | "codex", "count": N, "rows":
+[SessionRow, ...]}` takes the place of the first of them in the ordered list; `rows` keeps their order and
+(Claude) their children. Fewer than 4 of a harness: that harness does not merge. So a group shows at most
+two merged rows, one per harness, ordered by where their first member stood; a merged row never mixes
+harnesses. `waiting` / `busy` / `stale` rows never merge and do not count towards the 4 (the top-level
+order already places them before every quiet row). A MergedRow is not actionable: the TUI expands it before
+`o` / `f`, so open always gets one full session id (T11). Its `harness` equals every member's `harness`;
+the App identifies a merged row by (repo, `harness`) for selection, so a refresh keeps the same one selected
+(Step 4.3); merged-row expansion stays keyed by repo (design U3).
 
 ### Plan
 `{"convention": "supported" | "missing" | "unsupported", "latest_step": LatestStep | null}`, from the
@@ -544,6 +566,34 @@ Hook variant (`hook/overview.json`, `--since all`, built as in Hook records → 
 `hook`) form the `waiting` tier, in that order; no group is `busy`; the `other` order is unchanged. A
 waiting row comes first in its group. repo-a now has 4 Claude rows but only 3 quiet ones: still no merge.
 The bg child's hand-off carries `evidence: "hook"`.
+
+### Phase 4 fixture results (`phase4/overview.json`, `--since all`)
+Verify command (Step 4.3 adds the test): `multi-link overview --root fixtures/sessions-phase4 --now
+2026-10-29T23:15:00Z --since all --json` must equal `fixtures/expected/phase4/overview.json` (parsed).
+The root is synthetic (hand-written in the synthetic formats of `fixtures/sessions`: the `repo-e` Codex
+rollout and Claude transcript shapes and the `.claude/sessions/<pid>.json` record shape) and isolated, so
+parser counts and CLI tests on `fixtures/sessions` keep their numbers. It has no hand-offs: every
+`latest_handoff` is `null`, every `handoffs` / `children` / `active_steps` / `concurrency` is `[]`.
+- 5 groups. U3 collapse status: repo-j, repo-g and repo-i collapse (tier `other`, no `stale`); repo-h
+  (`busy`) and repo-k (`stale`) stay expanded. Step 4.4's phase4 home golden must also show repo-i
+  expanded (both merged rows visible), so the `codex ×N` label and two merged rows appear in a golden.
+- `/home/dev/repo-h` is `busy`; the rest are `other`, by `last_activity`: `repo-j` (23:05:00),
+  `repo-k` (23:02:00), `repo-g` (23:01:00), `repo-i` (22:58:00).
+- repo-h (no merge): Codex `…40b4` is `busy` / `open_turn` (last activity 23:14:00, 60 s old; it started
+  22:30, between the quiet runs) and comes first; then 3 quiet Codex rows `…40b3`, `…40b2`, `…40b1`
+  (`unknown` / `turns_complete`). Only 3 quiet rows: no `codex ×N` (the busy row started between the quiet
+runs but sorts first and does not count towards the 4).
+- repo-j (idle, collapsed): one record-only Claude session `…40d1` (`70401.json`, `idle` /
+  `session_record`). Plan: `repos/repo-j/` is a copy of the `fixtures/sessions` repo-a plan (headings renamed to repo-j), so its latest
+  step is `0.4` "Parse sample records" with the same reported Verify (the collapsed line's step + Verify).
+- repo-k (stale-only, stays expanded): one Codex row `…40e1`, `stale` / `open_turn` (last activity
+  23:02:00, 780 s old).
+- repo-g (`codex ×4`): 4 quiet Codex rows → one MergedRow `harness: "codex"`, `count` 4, rows `…40a4`,
+  `…40a3`, `…40a2`, `…40a1` (by activity).
+- repo-i (two merged rows): 4 quiet Claude transcript rows (`unknown` / `no_signal`) and 4 quiet Codex rows,
+  interleaved by activity (Codex first). Rows: MergedRow `codex` ×4 (`…40c4`, `…40c3`, `…40c2`, `…40c1`),
+  then MergedRow `claude` ×4 (`…41c4`, `…41c3`, `…41c2`, `…41c1`).
+- Plans: `missing` everywhere except repo-j.
 
 ## Open
 
