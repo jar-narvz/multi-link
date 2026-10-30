@@ -1,198 +1,29 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-- **Phase 2 closed (2026-10-30, Step 2.8, Claude; Codex-reviewed). Next: plan Phase 3** (still "to be
-  split later" in PLAN.md). Results: `docs/phase2-hook.md` → "Step 2.8 results (Phase 2 Verify)"; raw
-  evidence in git-ignored `fixtures/raw/hook/step-2.8/`. Verify passed with two qualified wordings:
-  the `/dev/null` hand-off came out `ambiguous` (not `heuristic` / `unlinked`; still never `exact`), and
-  the held prompt showed `waiting` / `session_record` (H11), with the hook's `waiting` records agreeing.
-  PLAN.md's Phase 2 / 2.8 Verify text still says `waiting` / `hook` and "heuristic or unlinked"; the
-  planner may want to align it.
-- **Open decision for Phase 3 planning: background hook evidence fails in clean-environment `claude -p`.**
-  On Claude Code 2.1.314 a `claude -p` started under `env -i` sent `PostToolUse` payloads with no
-  `scratchpad_dir` (12 keys), so the recorder can't derive the task output path and writes only the
-  `child: null` record. The same prompt with the desktop session's environment had the field and gave
-  `exact` / `hook`. Once the temp task file is gone such links fall to heuristic/ambiguous. Possible
-  fallback: read the "Output is being written to: <path>" text in the transcript's `tool_result` for the
-  same `tool_use_id` (needs polling; 2.1 (i) found transcript writes buffered). Not decided; one clean and
-  one inherited run is the whole sample, and the controlling env var was not isolated.
-- Sandbox state: hook config removed from `repo-a/.claude/` (directory gone); sandbox hook records stay
-  in `~/multi-link-sandbox/state/hook/` (6 files). Running `multi-link` against real `~` now lists the
-  2.8 sandbox sessions too.
-- Step 1.10 done (Codex, reviewed by Claude): `RealProcessProbe` runs `ps` with `TZ=UTC`; real data shows
-  `{"busy":2,"idle":17}` for 19 live records.
-- Step 0.1 done, committed and reviewed by Codex (4 findings, all fixed).
-- Autonomous loop set up (CLAUDE.md "Autonomous mode"): Claude commits locally after review, never pushes.
-  Rust 1.99.1 installed; Codex sandbox smoke-tested building a crate with a crates.io dependency.
-- `docs/design.md` now holds the full design (exported from claude.ai, repo copy is source of truth).
-- PLAN.md revised: Step 0.2a (Claude generates known hand-offs in `~/multi-link-sandbox/`), fixtures
-  split into 0.4 (Codex scrubs) and 0.5 (Claude writes schema + expected outputs), design revision is 0.6.
-- Step 0.2a done: 10 generated cases with ground truth in `fixtures/raw/ground-truth.md` (stale case not made).
-- Step 0.2 investigation complete (Codex), awaiting Claude review: `docs/phase0.md` records
-  (a) conditional go for observed exact child IDs and (b) no-go for authoritative state detection.
-  Approval/waiting events and a confirmed live-but-stale process remain unverified.
-- Step 0.2 reviewed (Claude): (a) go, (b) no-go for *waiting* only; see review notes in the 0.2 entry.
-- Step 0.3 done: zoetrope no-go as a library (write our own parsers); agtrace go (doesn't link
-  Claude → Codex; confirmed by source and by running it on sandbox copies).
-- Step 0.4 done (Codex, reviewed by Claude): scrubbed fixtures in `fixtures/sessions/` (home-shaped root for
-  `--root fixtures/sessions`); case list in `fixtures/README.md` matches `fixtures/raw/ground-truth.md`.
-  For Step 0.5: ids, timestamps, line numbers and record shapes equal raw, so `docs/phase0.md` line refs
-  (e.g. exec result at line 27) hold for the scrubbed copies. Paths: sandbox → `/home/dev/multi-link-sandbox/repo-{a,a-wt,b}`,
-  organic → `repo-c`, `repo-d`, `repo-f`; multi-link itself → `/home/dev/project`; temp → `/tmp/dev/...`.
-  The bg tool result names `/tmp/dev/.../tasks/be01y5dv6.output`; the copy is `task-output/be01y5dv6.output`, so
-  the loader needs a task-output lookup by filename (design choice for 0.5/0.6). Extras: malformed Claude
-  (repo-e) and Codex (`00000000-...000f`) files; plan samples in `repos/repo-a` (`N.M`, bold Verify) and
-  `repos/repo-b` (`N`, plain Verify), one style per file. Sessions' prompts are placeholders, so step
-  assignment from prompt text has no real evidence here; 0.5 must decide what steps.json expects.
-  Verify regex changed to `\bsk-` (PLAN.md Review log). Regenerate with `python3 fixtures/raw/scrub.py`.
-- Step 0.5 done (Claude, reviewed by Codex): `docs/output-schema.md` is the binding JSON contract;
-  expected files in `fixtures/expected/` (sessions, links, steps, links-amb-hidden). Phase 1 Verify:
-  `--root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json` for sessions/links;
-  `steps --root fixtures/sessions --repo repos/repo-a --repo repos/repo-b --json`.
-  Decisions Step 0.6 must carry into design.md/PLAN.md: transcript-only sessions are `unknown`, not
-  `finished` (no exit evidence); fixture mode (`--root`) turns off `ps` and git lookups, so `repo` = `cwd`
-  and repo-a-wt is its own repo there; step tags are not recognised yet (tag format is an open question),
-  so every segment is `step: null`; heuristic window is 60 s after the call, same exact checkout;
-  background task output is read from `<root>/task-output/<file>` in fixture mode.
-  Phase 1 tasks the fixtures can't cover (unit tests): `stale` and `finished` states, open Codex turn,
-  git root + worktree grouping, Verify `pass`/`fail` parsing, and the derived amb-hidden variant
-  (built in a test from a temp copy; see schema "Ambiguous variant").
-  Gotcha for 0.6: this repo's own PLAN.md uses ids like `0.2a`, which the supported `N`/`N.M` convention
-  doesn't parse; decide whether to allow a letter suffix.
-- Step 0.6 done (Claude, critiqued by Codex): Phase 0 closed; `docs/phase0-deps.md` merged into
-  `docs/phase0.md`; `docs/design.md` has decisions P1–P12 ("Phase 0 results and decisions"); Phase 1 split
-  into Steps 1.1–1.9 in PLAN.md. No stop-and-ask: (a) go, (b) no-go for waiting only, (c) no-go, (d) go.
-  Step ids may carry one letter suffix (`0.2a`). Schema changes this step (`docs/output-schema.md`): id
-  suffix, Codex "latest turn governs" + `no_signal` row, no heuristic when a `cd` / `-C` moves the launch.
-  Expected files unchanged (no fixture hits these cases).
-- Step 1.1 done (Codex, reviewed by Claude, 1 round): Cargo workspace `crates/*`, edition 2024.
-  For 1.2–1.5 (run in parallel, one crate each; **no Cargo.toml / Cargo.lock edits**):
-  - Packages: `multi-link-model`, `-claude`, `-codex`, `-plan`, `-core`; CLI package and binary `multi-link`.
-    Test one crate with `cargo test -p <package>` (Rust PATH from AGENTS.md first).
-  - Deps already declared (`[workspace.dependencies]`): claude/codex/core: model, serde, serde_json, time;
-    plan: model, serde, serde_json; cli: model, clap, serde_json; tempfile as dev-dep everywhere.
-    core does not depend on claude/codex/plan (1.7 adds them); cli gets core/plan in 1.9.
-  - `multi_link_model` exports the schema types (`Session`, `Segment`, `Skipped`, `Link`, `Candidate`,
-    `SessionsReport`, `LinksReport`, `StepsReport`, `RepoSteps`, `Step`, `Entry`, `Verify`) and enums
-    (`Harness`, `State`, `StateEvidence`, `StepSource`, `SkipReason`, `InvocationForm`, `Match`,
-    `LinkEvidence`, `Convention`, `VerifyResult`, `VerifySource`); all derive Serialize + Deserialize, so
-    tests can load `fixtures/expected/*.json` into them. `Link.match` is `r#match` in Rust.
-  - `Timestamp::parse(rfc3339)` / `Timestamp::from_epoch_ms(i64)`; truncated to whole ms at construction,
-    prints `YYYY-MM-DDTHH:MM:SS.mmmZ`; Ord/Eq match the printed form.
-  - `jsonl::JsonlReader::from_path(path, display_path)` (or `::new(BufRead, display_path)`) iterates
-    `io::Result<Result<(line_no, Value), Skipped>>`; 1-based lines, CRLF stripped, blank/whitespace →
-    `empty_line`, bad JSON → `invalid_json`; an unterminated last line is held in `pending()`, never
-    yielded. `display_path` is copied into `Skipped.file` (pass the root-relative path). `unknown_type`
-    is the parser's job.
-- Step 1.6 done (Codex, reviewed by Claude, 1 fix round): `multi_link_claude::recognise(&str) -> Option<Launch
-  { form, resume_id, dir_moved }>` and `invocations(root, &ClaudeScan) -> io::Result<Vec<Invocation>>`, sorted by
-  (at, parent, invocation). `Invocation { parent, invocation, subagent, form, background, at, checkout, command,
-  resume_id, dir_moved, result_text: Option<String> }`; only recognised launches are returned (13 in the fixtures).
-  For 1.8: `result_text` is raw (tool_result string / text blocks, plus `toolUseResult.stdout` when the record
-  holds one tool_result), joined with `\n`; parse `session id:`, `[codex] Thread ready (<uuid>)` (not the Turn
-  uuid) and `Output is being written to: <path>` from it yourself, and do the task-output lookup there.
-  `resume_id` gives `resume_arg`. `dir_moved` = a `cd` segment before the launch or `-C`/`--cd` → no heuristic.
-  `codex exec resume --last` / non-UUID resume is `exec` per the schema grammar. For 1.7: nothing new; 1.7 must
-  not depend on `invocations`. Gotchas: a tool_use whose first occurrence lacks timestamp/cwd is dropped even if a
-  later copy is complete; result pairing is per file (a subagent's results are in its own file).
-- Step 1.7 done (Codex, reviewed by Claude, 1 fix round). Core tests pass,
-  including full sessions answer-key equality; Clippy reports no warnings for core. No linking logic added.
-  For 1.8: `multi_link_core::sessions_report(root: &Path, &Options<'_>) -> io::Result<SessionsOutput>`
-  (also in `sessions` module); `Options { now: Timestamp, since: Option<std::time::Duration>,
-  repo_mode: RepoMode, probe: &dyn ProcessProbe }`. `None` = all history. `SessionsOutput { report:
-  SessionsReport, bad_records: Vec<String>, incomplete: Vec<String>, unreadable:
-  Vec<multi_link_codex::ReadFailure> }` exposes non-schema diagnostics for 1.9 stderr; `incomplete`
-  contains sorted root-relative Claude transcript paths missing cwd or either timestamp.
-  Repo mode controls only git lookups; the supplied probe is always used for records. Fixture callers
-  must pass `FixtureProcessProbe`; Step 1.9 wires it and `RepoMode::Fixture` together from `--root`.
-  `state::{claude_state(now, Option<&SessionRecord>, Liveness), codex_state(now, &Rollout)}` return
-  `(State, StateEvidence)` without I/O or system-clock reads.
-  Gotchas for 1.8: the report is filtered output; parse all transcripts separately for linking evidence.
-  Merged records always retain transcript fields and bypass `since`. Duplicate session records choose
-  greatest `updated_at` (ties: ascending-first record path). Incomplete Claude transcripts are omitted
-  and counted in `incomplete`; a matching record remains record-only. No invented metadata.
-  Every transcript has one unknown-step segment; record-only sessions have none.
-- Step 1.8 done (Codex, reviewed by Claude, 1 fix round): public
-  `multi_link_core::links_report(root: &Path, &Options<'_>) -> io::Result<LinksOutput>`
-  (also in `links` module). Reuses sessions `Options`; `LinksOutput { report: LinksReport,
-  bad_records: Vec<String>, incomplete: Vec<String>, unreadable: Vec<multi_link_codex::ReadFailure> }`
-  exposes the session discovery diagnostics for Step 1.9. Exact ids resolve before heuristics;
-  all invocations and rollouts participate before output-only `since` filtering. `RepoMode::Fixture`
-  selects task-output lookup under `<root>/task-output/<basename>`; real mode reads the named path.
-  Full reports equal both links answer keys; all Step 1.8 Verify cases pass. Core Clippy is clean.
-  Round 1: unreadable/non-regular task outputs give no evidence; links sort by (at, invocation).
-  For 1.9: `links --json` = `links_report(root, &Options)` with the same Options as `sessions`
-  (`--root` → `RepoMode::Fixture` + `FixtureProcessProbe`); print `bad_records`/`incomplete`/`unreadable`
-  to stderr like `sessions`.
-- Step 1.9 done (Codex, reviewed by Claude, 1 fix round): `multi-link sessions | links | steps` with
-  `--root/--now/--since/--json/--repo`; the CLI only builds `Options` and prints the core/plan reports
-  (aligned text tables or JSON). Exit 0 ok, 1 report I/O error, 2 bad flags; diagnostics are counts on stderr.
-  Clippy `collapsible_if` follow-up from 1.6 fixed (separate commit). `cargo clippy --workspace
-  --all-targets -- -D warnings` is clean.
-- **Phase 1 complete** (2026-10-29): `cargo test --workspace` passes and the three Phase 1 Verify
-  commands equal their expected files (Claude re-ran them: `same` ×3); negative fixtures and the
-  ambiguous variant are covered by core tests (`fixture_report_equals_answer_key`,
-  `ambiguous_variant_equals_answer_key`).
-- Phase 1 real-`~` smoke findings still open (from Step 1.9): 1324 `unknown_type` skips from new Claude
-  record types (`ai-title`, `permission-mode`, `frame-link`, `artifact-comment-monitor`, `bridge-session`,
-  `relocated`, `artifact-autoreact-ledger`; schema edit, not yet planned); speed 5.6 s / 7.8 s (Phase 3
-  tailing); 0 exact real links in 2 h (the Phase 2 hook targets this). The probe UTC bug is fixed (1.10).
-- Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
-  physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
-- Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
-  `Discovery { rollouts, skipped, unreadable }`; `rollouts` sorted by root-relative path, `skipped` holds
-  `invalid_json` / `empty_line` / `unknown_type`. `Rollout { id, transcript, cwd, branch, started_at,
-  last_activity, turns }`, `Turn { turn_id, started_at, completed_at: Option }` in `task_started` order.
-  For 1.7: `Rollout::last_turn_complete()` → `None` (no `task_started` → `no_signal`), `Some(false)` (open
-  turn → busy/stale by `last_activity`), `Some(true)` (`turns_complete`). Build `Session` yourself:
-  `repo` = `cwd` in fixture mode, `subagents: []`, one segment. `unreadable` (file read errors) is not a
-  schema `skipped` reason; 1.7 decides whether to surface it. Known gaps: a directory traversal error
-  (e.g. permission denied on a subfolder) returns `Err` for the whole discovery; a `task_started` without a
-  parseable top-level `timestamp` is dropped, so the "latest turn" falls back to the one before it.
-- Step 1.4 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_plan::steps_report(root, &[String])`
-  → `StepsReport` (relative repos join `root`, absolute kept; `repo` echoes the input string). Also
-  `parse_plan(&str) -> Option<Vec<Step>>` (None = unsupported) and `parse_progress(&str) -> Vec<(id, Entry)>`.
-  For 1.9: the CLI only passes `--root` and the `--repo` list (default: each session's `repo`) and
-  serialises the report; no I/O errors surface (absent PLAN.md → `missing`, unreadable → `unsupported`,
-  absent/unreadable PROGRESS.md → no entries). Gotcha: per the schema, `result` is `pass` only when the
-  text after `→` starts with pass/ok, so this repo's own entries (`→` followed by a backticked `test result: ok`) read `unknown`.
-- Step 1.2 done (Codex, reviewed by Claude, 1 fix round): `multi_link_claude::scan(root)` → `ClaudeScan {
-  transcripts, records, skipped, bad_records }`. `Transcript { id, transcript, cwd, branch, started_at,
-  last_activity, subagents, subagent_files: [SubagentFile { id, transcript }] }`; metadata fields are
-  `Option` (None if no known record carries them). `SessionRecord { pid, proc_start, session_id, cwd,
-  status: String, status_updated_at, started_at, updated_at, record }`. All paths root-relative, sorted.
-  For 1.6: re-read `Transcript::transcript` and each `subagent_files[].transcript` (join with root) to
-  extract tool calls; `known_type` is private, so check `type == "assistant"` yourself. For 1.7: merge
-  records into transcripts by `session_id == id`; `bad_records` (unreadable/invalid record files) is not a
-  schema `skipped` reason. Known gaps: a transcript deleted between listing and open is left out; other
-  I/O errors (e.g. permission denied) fail the whole scan.
-- Step 1.5 done (Codex, reviewed by Claude, 1 fix round): `multi_link_core::RepoMode::{Real,Fixture}.map(cwd)`
-  → `RepoPaths { repo, checkout }`. Real runs `git -C <cwd> rev-parse --path-format=absolute --show-toplevel
-  --git-common-dir` with all inherited `GIT_*` vars removed; `repo` = parent of the common dir only when it is
-  named `.git` (submodules / bare-repo worktrees → `repo` = checkout); outside git or on any failure both = cwd.
-  Fixture returns cwd verbatim. Probe: trait `ProcessProbe::probe(pid, proc_start) -> Liveness {Alive, Gone,
-  Unavailable}`; `RealProcessProbe` (default `/bin/ps`, `new(path)` to override), `FixtureProcessProbe`
-  (always `Unavailable`), `FakeProcessProbe { results: HashMap<(pid, start), Liveness> }` (missing key →
-  `Unavailable`). For 1.7: pass the probe and mode in so fixture mode and tests never run `ps`/git; `Gone` →
-  `finished`/`process_exit`, `Unavailable` → trust the record. Gotchas: start times compare after collapsing
-  whitespace; ps inherits the user's locale, which is assumed to match how Claude wrote `procStart` (unverified
-  outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
-  tests print SKIP; outside it they run.
-- Step 2.2 done (Claude, Codex-reviewed): `Link.step`, `evidence: "hook"`, reserved `state_evidence: "hook"`
-  and the Tagged variant are in `docs/output-schema.md`. Red until 2.3: model `every_expected_report_round_trips`
-  and cli `phase_one_json_matches_answer_keys`.
-- Step 2.1 done (Claude, Codex-reviewed): `docs/phase2-hook.md`. Session records DO show `status: "waiting"` +
-  `waitingFor` during a held prompt (contradicts Phase 0 P3; decision in PLAN.md Review log). 2.5 must also hook
-  `PostToolUseFailure`, derive the bg output path from `scratchpad_dir` + `backgroundTaskId`, and write first.
-- Step 2.3 done: links carry `step` from explicit tags (`multi_link_plan::step_tag`); `LinkEvidence::Hook` and
-  `StateEvidence::Hook` exist but nothing produces them yet; `crates/hook` skeleton ready for 2.5/2.6.
-- Step 2.4 done (Claude, Codex-reviewed): "Hook records" contract in docs/output-schema.md; Hook variant →
-  fixtures/expected/hook/{links,sessions,sessions-2h}.json (expect hook_conflicts = 1). 2.6: record waiting first,
-  hook waiting only without a record; 2.5: write the child-null record first, append the child.
-- Steps 2.5 + 2.6 done: hook crate has record / write / record_and_write (writes first, polls ≤ 25 s); core reads
-  hook records (`LinksOutput.hook_conflicts`, `Options.state_dir`). 2.7: call record_and_write with a real clock,
-  build HookEnv from env vars, register PostToolUseFailure, print hook_conflicts on stderr (implemented;
-  awaiting review, see the newest entry).
+**Resume here (2026-10-30).** Phases 0, 1 and 2 are done and committed locally (not pushed). Next: **plan Phase 3**
+(TUI home + repo timeline + open, Release 1), which is still "to be split later" in PLAN.md. Use one planning
+session, as for Phase 2: decisions with a why, Steps 3.x with Files / Verify / Depends on / Parallel with,
+Codex critique logged in PLAN.md's Review log, then one fresh session per step (CLAUDE.md "Autonomous mode").
+
+- **What exists:** Rust workspace `crates/{model,claude,codex,plan,core,hook,cli}`. `multi-link sessions | links |
+  steps` (JSON or text; `--root` fixture mode, `--now`, `--since`) and `multi-link hook record | install |
+  uninstall` (install only prints). `cargo test --workspace` → 24 binaries ok; clippy `-D warnings` clean.
+- **Answer keys:** `fixtures/expected/{sessions,links,steps}.json` (Phase 1), `links-tagged.json`,
+  `links-amb-hidden.json`, `fixtures/expected/hook/*` (Hook variant). Verify commands are in PLAN.md 1.9 / 2.x.
+- **Key decisions to carry into Phase 3:** exact links only with an observed child id; waiting comes from the
+  Claude session record first (H11), hook second; freshness limit applies to `busy` only; liveness = pid +
+  start time in UTC (1.10); step ids `N`, `N.M` (letter-suffix decision in design.md); multi-link never writes
+  to `~/.claude/` or `~/.codex/`.
+- **Open for Phase 3 planning:** (1) background hook evidence fails in clean-environment `claude -p` (no
+  `scratchpad_dir`); candidate fallback is the transcript's "Output is being written to" path (PLAN.md Review
+  log, Phase 2 close #3). (2) Phase 3 Verify needs the ≤ 2 s home refresh measured on real `~` (not yet measured;
+  a full `sessions --json` on real data took ~6 s including a release build, so measure warm).
+  (3) Small nits left in 2.5/2.6 entries (hook dir read errors fail the report; hook files read twice).
+- **Parallel-step rule:** parallel sessions don't commit; the coordinator commits each step separately
+  (learned in 1.2/1.5).
+- **Leftovers outside the repo:** `~/multi-link-sandbox/` (sandbox repos, deps clones, `state/hook/` from 2.8)
+  and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
 

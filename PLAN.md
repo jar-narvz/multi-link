@@ -500,6 +500,15 @@ Step graph · live grid · tmux / Herdr jump · desktop app with notifications �
 
 ## Review log
 
+### 2026-10-30 — Phase 2 close (Step 2.8 results, coordinator)
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | The `/dev/null` hand-off came out `ambiguous`, not "heuristic or unlinked" as the Verify words it | Accepted: the Verify's intent is "never `exact` without an observed id", which held. Read the Phase 2 / 2.8 wording as "not `exact`" |
+| 2 | The held prompt showed `waiting` / `session_record`, not `waiting` / `hook` | Accepted: H11 (record first) postdates the Verify text; the hook's `waiting` records agreed. Read the wording as "`waiting`, from the record or the hook" |
+| 3 | A clean-environment `claude -p` sends no `scratchpad_dir`, so background hand-offs get only the `child: null` hook record and fall back to heuristic/ambiguous once the temp output file is gone | Open: decide in Phase 3 planning (candidate fallback: read the "Output is being written to" path from the transcript `tool_result`). Sample is 1 clean + 1 inherited run; the controlling env var was not isolated |
+
+Phase 2 is closed. Next: plan Phase 3 (TUI, Release 1).
+
 ### 2026-10-30 — Step 2.1 finding: session records show waiting (H11)
 | # | Finding | Decision |
 | --- | --- | --- |
