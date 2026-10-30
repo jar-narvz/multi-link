@@ -1,12 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.7** + **3.6a** are done and committed locally
-(not pushed). Next: **Step 3.8** (real check on `~`, pty check with a stub child and a missing program, resize,
-README; closes Release 1). `multi-link tui [--root] [--now] [--since]` runs; runtime in `crates/cli/src/tui.rs`,
-pure `App` in `crates/tui/src/app.rs`. Codex-off mode is off: Codex implements, Claude plans and reviews.
-- **3.8 should check on real `~`:** footer shows diagnostics after the key help (bad/incomplete counts); child
-  exit messages stay until a key; Ctrl-C quits; the worker is not joined on quit (terminal restores first).
+**Resume here (2026-10-30).** Phases 0–3 / **Release 1 are done**, including Step **3.8**.
+Whole-phase Verify passes with documented limitations; Step 3.8 reviewed by Claude and committed locally (not pushed).
+Next is the ordered, uncommitted backlog in PLAN.md; the owner decides what to take on.
+Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
+stub/missing-program child handling and terminal restoration. The child checks used a synthetic
+record in a scratch HOME because real `~` had 0 finished sessions. The crossterm 0.29 lost-key
+item remains backlog: a key arriving with resize can be delayed until the next key. A cleanly
+exited terminal Claude session deletes its record, leaving `unknown` / `Unavailable` with a
+resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
+Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 - **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
 - **What 3.7 needs from 3.6:** `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)` and
@@ -69,6 +73,121 @@ pure `App` in `crates/tui/src/app.rs`. Codex-off mode is off: Codex implements, 
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.8: Real check, README, Release 1 close — Codex
+- Did: Read AGENTS.md, PLAN Step 3.8 and Current state. Built release CLI; ran real-home timing,
+  workspace tests, clippy and Expect PTYs. Recorded the original sandbox observations and folded
+  in Claude's host evidence; updated README for Release 1 completion with documented limitations.
+- Review round 1: Kept sandbox ps denial, 23/35 ms warm timings and no-resize control; added host
+  timing (Run B satisfies k ≥ 1), crossterm resize root cause, draining resize, Ctrl-C, synthetic
+  scratch-HOME Resume stub/missing-program checks and clean-exit record deletion. Replaced pending
+  README claims with the two evidenced limitations and updated Current state. No code or PTY reruns.
+- Changed: `README.md`, `docs/phase3-check.md`, `PROGRESS.md` only.
+- Verify: `cargo run --release -q -p multi-link-core --example refresh_timing -- 3` → exit 0, actual output:
+  ```text
+  pass 1: 3794 ms, 25 sessions, 4 repos, 441 files re-parsed, 508526132 bytes re-parsed
+  pass 2: 23 ms, 25 sessions, 4 repos, 1 files re-parsed, 1216599 bytes re-parsed
+  pass 3: 35 ms, 25 sessions, 4 repos, 2 files re-parsed, 1654498 bytes re-parsed
+  ```
+- Verify: `cargo build --release -q -p multi-link` → no output, exit 0.
+  `cargo test --workspace` → exit 0; all actual `test result:` lines are pasted in
+  `docs/phase3-check.md`; the overview key comparison printed:
+  ```text
+  test overview_json_matches_answer_key_and_text_has_one_line_per_repo ... ok
+  ```
+  `cargo clippy --workspace -- -D warnings` → exit 0:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+  ```
+- Verify: `/usr/bin/expect <scratch>/simple.exp` → exit 0, actual output:
+  ```text
+  REAL_REPORT=seen
+  TUI_EXIT=0
+  PTY_WAIT=0
+  ```
+  `diff -u <scratch>/simple.before <scratch>/simple.after` → no output,
+  exit 0 (`DIFF_EXIT=0`). Full identical `stty -a` snapshots and scrubbed repo-name screen
+  evidence are in `docs/phase3-check.md`.
+- Verify: `/usr/bin/expect <scratch>/check.exp normal` (real home, resize 40x160 →
+  32x120, then `q`) → exit 1, actual decisive output:
+  ```text
+  RESIZE=40x160->32x120
+  FAIL quit timeout
+  ```
+  After snapshot absent (`RESIZED_AFTER=missing (TUI did not return)`); no successful diff
+  claimed for this sandbox resize run. Reproduced with and without the runner's outer PTY.
+  A no-resize control waiting for the real report then exited cleanly. Checks stopped at that
+  point in the original run; Claude's host investigation and passing runs follow.
+- Verify (Claude, host): `/bin/ps -p $$ -o lstart=` → ok.
+  `cargo run --release -q -p multi-link-core --example refresh_timing -- 3` → exit 0.
+  Run A actual output:
+  ```text
+  pass 1: 3770 ms, 25 sessions, 4 repos, 441 files re-parsed, 516819435 bytes re-parsed
+  pass 2: 34 ms, 25 sessions, 4 repos, 0 files re-parsed, 0 bytes re-parsed
+  pass 3: 37 ms, 25 sessions, 4 repos, 0 files re-parsed, 0 bytes re-parsed
+  ```
+  Run B (used for the k>=1 requirement), actual output:
+  ```text
+  pass 1: 3950 ms, 27 sessions, 5 repos, 443 files re-parsed, 518399847 bytes re-parsed
+  pass 2: 31 ms, 27 sessions, 5 repos, 1 files re-parsed, 183074 bytes re-parsed
+  pass 3: 28 ms, 27 sessions, 5 repos, 1 files re-parsed, 185194 bytes re-parsed
+  ```
+- Verify (Claude, host): `check.exp` reproduced `FAIL quit timeout`; traced to crossterm 0.29
+  dropping mio edge-triggered TTY readiness when SIGWINCH and a key share one wake, not a
+  multi-link bug. Draining `host.exp` mode resize, actual output:
+  ```text
+  RESIZE=40x160->32x120 / RESIZE=32x120->40x160 / TUI_EXIT=0 / PTY_WAIT=0 / STTY_DIFF=0
+  ```
+  `stty -a` before/after diff → exit 0. `host.exp` mode ctrlc, real `~`, actual output:
+  ```text
+  TUI_EXIT=0 / PTY_WAIT=0 / STTY_DIFF=0
+  ```
+- Verify (Claude, host): Real `~` had 367 sessions: unknown 343, idle 22, waiting 1, stale 1;
+  0 finished. Synthetic record in `HOME=<scratch>/fakehome`, copied sandbox transcript,
+  real ps, no `--root`: `multi-link open --dry-run 80f7add3` → exit 0 (id scrubbed):
+  ```json
+  {"action":"resume","program":"claude","args":["--resume","80f7add3…"],"cwd":"~/multi-link-sandbox/repo-a"}
+  ```
+  Stub after `o`, actual output:
+  ```text
+  CHILD_OUTPUT=STUB_CLAUDE_RAN args=2 / FOOTER=returned to dashboard
+  TUI_EXIT=0 / PTY_WAIT=0 / STTY_DIFF=0
+  ```
+  Missing program after `o`, captured footer:
+  ```text
+  cannot run "claude": No such file or directory (os error 2)
+  ```
+  Keys `t`, Esc and `q` worked in both checks; missing-program actual output:
+  ```text
+  TUI_EXIT=0 / PTY_WAIT=0 / STTY_DIFF=0
+  ```
+- Verify (Claude, host): Clean-environment interactive Claude in sandbox repo-a, one prompt,
+  `/exit` → exit status 0. Record present while alive; 2 s after exit: record GONE, transcript kept.
+  `multi-link open --dry-run 9c0a9a1d` → exit 3 (id scrubbed):
+  ```json
+  {"action":"unavailable","reason":"not_known_finished","command":"claude --resume 9c0a9a1d…","cwd":"~/multi-link-sandbox/repo-a"}
+  ```
+  `sessions --json` → state unknown, record null. Whole-phase Verify passes with the documented
+  dependency and record-lifetime limitations; full host evidence is in `docs/phase3-check.md`.
+- Verify (review round 1, Codex): `git diff --check` → no output, exit 0.
+- Review: Claude (step session), 1 Codex fix round. Diff stays in `README.md`, `docs/phase3-check.md`, `PROGRESS.md`
+  (plus Claude's PLAN.md backlog line). Codex's sandbox could not run `ps` or write `~/.claude`, so Claude ran the
+  host checks and Codex folded them in (round 1). Resize "quit timeout": reproduced on host, root-caused to crossterm
+  0.29 (edge-triggered tty readiness dropped when SIGWINCH and a key share one kevent wake; first `q` delayed, second
+  quits); not a multi-link bug → limitation + backlog. Draining resize, Ctrl-C, stub and missing-program pty runs pass
+  with `stty -a` unchanged. Child checks needed a synthetic record in a scratch HOME (real `~` has 0 finished);
+  stated plainly in the doc. Sandbox exit: first runs invalid (inherited `CLAUDE_CODE_*` env); clean-env run shows
+  the record is deleted on `/exit` → `unknown` → `Unavailable`. Claude re-ran `cargo test --workspace` (28 result
+  lines, all ok, same counts as pasted, overview key ok) and clippy `-D warnings` (clean). Scrub check: no absolute
+  home paths, ids ≤ 8 chars. Not covered by the pty: nonzero diagnostics in the footer (App tests cover rendering).
+- Gotchas: Original sandbox `/bin/ps -p $$ -o lstart=` printed exactly
+  `zsh:1: operation not permitted: /bin/ps`; host probing succeeded. First host interactive
+  Claude attempts inherited `CLAUDECODE` / `CLAUDE_CODE_*` and wrote neither a record nor their
+  own transcript, so were invalid; rerun with `env -i HOME USER LOGNAME TERM LANG PATH` supplied
+  the valid record-on-exit evidence. Footer persistence across refreshes was not separately
+  asserted in the PTY (Step 3.7 App tests cover it); nonzero diagnostics were not separately
+  verified in these PTYs. Private captures/helpers remain temporary and uncommitted; evidence
+  omits session text, titles, long ids and absolute home paths. Nothing staged, committed or pushed.
 
 ### 2026-10-30 — Step 3.7: `multi-link tui`: loop, refresh, keys, bell, open — Codex
 - Did: Added `tui [--root] [--now] [--since]`. One background worker owns one Scanner, refreshes every 2 s
