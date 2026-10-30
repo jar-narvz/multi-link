@@ -50,6 +50,9 @@ Stop and ask the owner only when:
   `PROGRESS.md`, does exactly one step through the loop above (Codex → review → Verify → commit),
   updates "Current state" with what the next step needs to know, and ends. It never starts the next step.
 - Everything a later step needs goes in PROGRESS.md or the repo, never only in a session's chat.
+- Parallel steps share one git index, so their sessions do NOT commit or stage: each leaves its files
+  uncommitted and reports its paths plus its PROGRESS.md entry text; the coordinator then commits each
+  step separately. (Learned in 1.2/1.5: a parallel `git add` landed 1.5's code in 1.2's commit.)
 - When a step session ends, the coordinator checks `git log -1` and PROGRESS.md: a new commit for that
   step → start the next step's session; no commit or a "stop and ask" → report to the owner and wait.
 
