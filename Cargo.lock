@@ -197,6 +197,7 @@ name = "multi-link-claude"
 version = "0.1.0"
 dependencies = [
  "multi-link-model",
+ "multi-link-plan",
  "serde",
  "serde_json",
  "tempfile",
@@ -220,6 +221,18 @@ version = "0.1.0"
 dependencies = [
  "multi-link-claude",
  "multi-link-codex",
+ "multi-link-model",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
+]
+
+[[package]]
+name = "multi-link-hook"
+version = "0.1.0"
+dependencies = [
+ "multi-link-claude",
  "multi-link-model",
  "serde",
  "serde_json",

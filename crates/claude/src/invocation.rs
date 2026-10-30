@@ -13,6 +13,7 @@ use crate::ClaudeScan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Launch {
+    pub step: Option<String>,
     pub form: InvocationForm,
     pub resume_id: Option<String>,
     pub dir_moved: bool,
@@ -20,6 +21,7 @@ pub struct Launch {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invocation {
+    pub step: Option<String>,
     pub parent: String,
     pub invocation: String,
     pub subagent: Option<String>,
@@ -37,8 +39,8 @@ pub struct Invocation {
 /// interpreter. No expansion, environment prefixes, or wrapper commands.
 pub fn recognise(command: &str) -> Option<Launch> {
     let mut dir_moved = false;
-    for tokens in segments(command) {
-        let words: Vec<_> = tokens.iter().map(String::as_str).collect();
+    for segment in segments(command) {
+        let words: Vec<_> = segment.tokens.iter().map(String::as_str).collect();
         let (form, resume_id) = match words.as_slice() {
             ["codex", "exec", "resume", id, ..] | ["codex", "resume", id, ..]
                 if uuid_shaped(id) =>
@@ -63,6 +65,7 @@ pub fn recognise(command: &str) -> Option<Launch> {
                     || word.starts_with("--cd=")
             });
         return Some(Launch {
+            step: multi_link_plan::step_tag(&command[segment.span]),
             form,
             resume_id,
             dir_moved: dir_moved || changes_directory,
@@ -85,17 +88,23 @@ fn uuid_shaped(text: &str) -> bool {
 /// Tokenise words and segments together so quoted separators stay inside words.
 /// Backslash escapes outside single quotes; double quotes preserve backslashes
 /// except before shell-escapable characters. Unclosed quotes fail soft.
-fn segments(command: &str) -> Vec<Vec<String>> {
+struct Segment {
+    tokens: Vec<String>,
+    span: std::ops::Range<usize>,
+}
+
+fn segments(command: &str) -> Vec<Segment> {
     let mut segments = Vec::new();
     let mut words = Vec::new();
     let mut word = String::new();
     let mut started = false;
     let mut quote = None;
-    let mut chars = command.chars().peekable();
-    while let Some(ch) = chars.next() {
+    let mut chars = command.char_indices().peekable();
+    let mut segment_start = 0;
+    while let Some((index, ch)) = chars.next() {
         if ch == '\\'
             && quote != Some('\'')
-            && let Some(&next) = chars.peek()
+            && let Some(&(_, next)) = chars.peek()
             && (quote.is_none() || matches!(next, '$' | '`' | '"' | '\\' | '\n'))
         {
             chars.next();
@@ -120,14 +129,19 @@ fn segments(command: &str) -> Vec<Vec<String>> {
                 started = false;
             }
             // A single & is not a segment separator in the supported grammar.
-            if ch == '&' && chars.peek() != Some(&'&') {
+            if ch == '&' && chars.peek().map(|(_, ch)| *ch) != Some('&') {
                 word.push(ch);
                 started = true;
             } else if matches!(ch, ';' | '|' | '&' | '\n') {
-                if matches!(ch, '|' | '&') && chars.peek() == Some(&ch) {
+                if matches!(ch, '|' | '&') && chars.peek().map(|(_, next)| *next) == Some(ch) {
                     chars.next();
                 }
-                segments.push(std::mem::take(&mut words));
+                let segment_end = chars.peek().map_or(command.len(), |(index, _)| *index);
+                segments.push(Segment {
+                    tokens: std::mem::take(&mut words),
+                    span: segment_start..index,
+                });
+                segment_start = segment_end;
             }
         } else {
             word.push(ch);
@@ -138,7 +152,10 @@ fn segments(command: &str) -> Vec<Vec<String>> {
         if started {
             words.push(word);
         }
-        segments.push(words);
+        segments.push(Segment {
+            tokens: words,
+            span: segment_start..command.len(),
+        });
     }
     segments
 }
@@ -230,6 +247,7 @@ fn parse_call(value: &Value, block: &Value, main_id: &str, subagent: bool) -> Op
     let command = block.pointer("/input/command")?.as_str()?;
     let launch = recognise(command)?;
     Some(Invocation {
+        step: launch.step,
         parent: if subagent {
             value.get("sessionId")?.as_str()?
         } else {

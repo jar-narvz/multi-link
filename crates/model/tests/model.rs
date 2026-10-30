@@ -122,7 +122,9 @@ fn every_expected_report_round_trips() {
         let name = path.file_name().unwrap().to_str().unwrap();
         match name {
             "sessions.json" => round_trip::<SessionsReport>(&path),
-            "links.json" | "links-amb-hidden.json" => round_trip::<LinksReport>(&path),
+            "links.json" | "links-amb-hidden.json" | "links-tagged.json" => {
+                round_trip::<LinksReport>(&path)
+            }
             "steps.json" => round_trip::<StepsReport>(&path),
             _ => panic!("new expected report needs a type: {name}"),
         }
@@ -133,6 +135,7 @@ fn every_expected_report_round_trips() {
         names,
         [
             "links-amb-hidden.json",
+            "links-tagged.json",
             "links.json",
             "sessions.json",
             "steps.json"
@@ -150,7 +153,7 @@ fn reserved_enum_values_serialize_as_schema_strings() {
     check!(State::Busy => "busy", State::Finished => "finished", State::Stale => "stale",
         State::Waiting => "waiting", StateEvidence::ProcessExit => "process_exit",
         StateEvidence::OpenTurn => "open_turn", StateEvidence::TurnsComplete => "turns_complete",
-        StepSource::PromptTag => "prompt_tag", StepSource::Hook => "hook",
+        StepSource::PromptTag => "prompt_tag", StateEvidence::Hook => "hook", LinkEvidence::Hook => "hook",
         SkipReason::UnknownType => "unknown_type", Convention::Missing => "missing",
         Convention::Unsupported => "unsupported", VerifyResult::Pass => "pass",
         VerifyResult::Fail => "fail", VerifySource::Observed => "observed");

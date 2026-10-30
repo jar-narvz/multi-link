@@ -262,3 +262,37 @@ fn missing_unsupported_and_unreadable_files() {
         assert_eq!(repo.steps, Vec::new());
     }
 }
+
+#[test]
+fn step_tags_follow_schema_boundaries_and_keep_searching_after_invalid_candidates() {
+    for (text, expected) in [
+        ("do Step 1.2 in", Some("1.2")),
+        ("step 4", Some("4")),
+        ("Step 0.2a", Some("0.2a")),
+        ("Step 0.10", Some("0.10")),
+        ("Steps 1", None),
+        ("step1.2", None),
+        ("Step 1.2.3", None),
+        ("Step 1.2ab", None),
+        ("Step 2.1 … Step 2.2", Some("2.1")),
+        ("Step 1.2ab then Step 3", Some("3")),
+        ("Step 1.2.3 then Step 4", Some("4")),
+        ("xStep 1 _step 2 3step 4", None),
+        ("Step 1_ Step 2A Step .3 Step -4", None),
+        ("Step\n1", None),
+        ("Step\u{a0}1", None),
+        ("(sTeP\t 12b).", Some("12b")),
+        ("éStep 2é", Some("2")),
+        ("Step 1. end", Some("1")),
+        ("Step ١", None),
+        ("Step 1.2a.3; STEP 9", Some("9")),
+        ("Step 1.2_3", None),
+        ("Step 01.02z", Some("01.02z")),
+    ] {
+        assert_eq!(
+            multi_link_plan::step_tag(text).as_deref(),
+            expected,
+            "{text}"
+        );
+    }
+}

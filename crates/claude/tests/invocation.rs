@@ -290,3 +290,48 @@ fn repeated_tool_use_ids_keep_the_first_occurrence_in_each_file() {
         assert_eq!(call.at.to_string(), "2026-10-29T00:00:00.000Z");
     }
 }
+
+#[test]
+fn step_comes_from_raw_text_of_the_first_launch_segment_only() {
+    for (command, step) in [
+        ("echo 'Step 9'; codex exec x | echo 'Step 8'", None),
+        ("codex exec x; codex exec 'Step 2'", None),
+        ("codex exec 'Step 1; Step 2'", Some("1")),
+        (
+            "echo 'Step 9' && codex exec 'Step 0.2a' || echo 'Step 8'",
+            Some("0.2a"),
+        ),
+        ("echo x\ncodex exec 'Step 4'\necho 'Step 9'", Some("4")),
+        ("codex exec 'Step '1.2", None),
+        ("codex exec 'Step 1'.2", Some("1")),
+        ("codex exec 'St'ep' 1.2'", None),
+        (r"codex exec Step\ 1.2", None),
+        (r"codex exec St\ep 1.2", None),
+        (r"codex exec 'Step 1.2ab; Step 3'", Some("3")),
+        ("node /p/codex-companion.mjs task 'Step 5'", Some("5")),
+        (
+            "codex resume 01a189e2-d57f-7a91-b74c-ae85abd1a6a1 'Step 6'",
+            Some("6"),
+        ),
+        (
+            "echo é || codex exec \"Step 7 | quoted\" | tail -1",
+            Some("7"),
+        ),
+        ("codex exec \"$(cat prompt.txt)\"", None),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        write_records(
+            root.path(),
+            ".claude/projects/p/main.jsonl",
+            &[call("launch", command)],
+        );
+        let calls = invocations(root.path(), &scan(root.path()).unwrap()).unwrap();
+        assert_eq!(calls.len(), 1, "{command}");
+        assert_eq!(calls[0].step.as_deref(), step, "{command}");
+        assert_eq!(
+            recognise(command).unwrap().step.as_deref(),
+            step,
+            "{command}"
+        );
+    }
+}

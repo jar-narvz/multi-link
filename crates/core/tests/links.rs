@@ -161,6 +161,7 @@ fn link(
     candidates: Vec<Candidate>,
 ) -> Link {
     Link {
+        step: None,
         parent: parent.into(),
         invocation: parent.into(),
         subagent: None,
@@ -472,5 +473,66 @@ fn exact_evidence_precedence_and_real_task_path() {
                 unparented: vec![],
             }
         );
+    }
+}
+
+#[test]
+fn tagged_variant_equals_answer_key() {
+    let temp = tempfile::tempdir().unwrap();
+    copy_tree(&fixtures().join("sessions"), temp.path());
+    let projects = temp.path().join(".claude/projects");
+    let path = fs::read_dir(projects)
+        .unwrap()
+        .flat_map(|project| fs::read_dir(project.unwrap().path()).unwrap())
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("bb792d9c-")
+        })
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    let mut changed = 0;
+    let rewritten: String = text.lines().map(|line| {
+        let mut value: Value = serde_json::from_str(line).unwrap();
+        if value["type"] == "assistant" {
+            for block in value["message"]["content"].as_array_mut().unwrap() {
+                if block["type"] == "tool_use" && block["id"] == "toolu_01EGmZWsd8PbTTNmjK67yApw" {
+                    assert_eq!(block["input"]["command"], json!(r#"codex exec -s workspace-write --skip-git-repo-check "CASE-exec: <prompt>" | tail -n 1"#));
+                    block["input"]["command"] = json!(r#"codex exec -s workspace-write --skip-git-repo-check "Read AGENTS.md, then do Step 1.2 in PLAN.md. CASE-exec: <prompt>" | tail -n 1"#);
+                    changed += 1;
+                }
+            }
+        }
+        format!("{value}\n")
+    }).collect();
+    assert_eq!(changed, 1);
+    fs::write(path, rewritten).unwrap();
+    assert_eq!(report(temp.path()), expected("links-tagged.json"));
+}
+
+#[test]
+fn tags_are_preserved_for_every_match_kind() {
+    for (children, result, match_kind) in [
+        (vec![], String::new(), Match::Unlinked),
+        (vec![A], String::new(), Match::Heuristic),
+        (vec![A, B], String::new(), Match::Ambiguous),
+        (vec![A], format!("session id: {A}"), Match::Exact),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        call(
+            temp.path(),
+            "parent",
+            RECENT,
+            "codex exec 'Step 2.3'",
+            &result,
+        );
+        for id in children {
+            child(temp.path(), id, RECENT, "/repo");
+        }
+        let actual = report(temp.path());
+        assert_eq!(actual.links[0].r#match, match_kind);
+        assert_eq!(actual.links[0].step.as_deref(), Some("2.3"));
     }
 }

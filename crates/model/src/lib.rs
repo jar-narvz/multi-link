@@ -28,13 +28,10 @@ string_enum!(StateEvidence {
     SessionRecord,
     NoSignal,
     OpenTurn,
-    TurnsComplete
-});
-string_enum!(StepSource {
-    Unknown,
-    PromptTag,
+    TurnsComplete,
     Hook
 });
+string_enum!(StepSource { Unknown, PromptTag });
 string_enum!(SkipReason {
     InvalidJson,
     EmptyLine,
@@ -55,7 +52,8 @@ string_enum!(LinkEvidence {
     Stdout,
     ResumeArg,
     ThreadReady,
-    TaskOutput
+    TaskOutput,
+    Hook
 });
 string_enum!(Convention {
     Supported,
@@ -116,6 +114,7 @@ pub struct LinksReport {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Link {
+    pub step: Option<String>,
     pub parent: String,
     pub invocation: String,
     pub subagent: Option<String>,

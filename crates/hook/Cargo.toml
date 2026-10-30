@@ -1,0 +1,14 @@
+[package]
+name = "multi-link-hook"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+multi-link-model.workspace = true
+multi-link-claude = { path = "../claude" }
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -182,8 +182,28 @@
 - Step 2.1 done (Claude, Codex-reviewed): `docs/phase2-hook.md`. Session records DO show `status: "waiting"` +
   `waitingFor` during a held prompt (contradicts Phase 0 P3; decision in PLAN.md Review log). 2.5 must also hook
   `PostToolUseFailure`, derive the bg output path from `scratchpad_dir` + `backgroundTaskId`, and write first.
+- Step 2.3 done: links carry `step` from explicit tags (`multi_link_plan::step_tag`); `LinkEvidence::Hook` and
+  `StateEvidence::Hook` exist but nothing produces them yet; `crates/hook` skeleton ready for 2.5/2.6.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 2.3: Step tags in links, model changes, hook crate skeleton — Codex
+- Did: `multi_link_plan::step_tag` (new `tag.rs`): ASCII boundaries checked by hand (no lookahead in Rust
+  `regex`), maximal candidate run then `markdown::valid_id`, so one id grammar. `segments()` tracks byte
+  spans; `Launch`/`Invocation` gain `step` from the raw launch-segment text only; the linker copies it into
+  `Link.step`. Model: `Link.step`, `LinkEvidence::Hook`, `StateEvidence::Hook`; `StepSource::Hook` dropped.
+  `multi-link-claude` depends on `multi-link-plan`. Skeleton `crates/hook`, no logic.
+- Changed: Cargo.lock, crates/model/{src/lib.rs,tests/model.rs}, crates/plan/{src/lib.rs,src/tag.rs,tests/fixtures.rs},
+  crates/claude/{Cargo.toml,src/invocation.rs,tests/invocation.rs}, crates/core/{src/link.rs,tests/links.rs},
+  crates/hook/{Cargo.toml,src/lib.rs}
+- Verify: `cargo test --workspace` → 22 binaries all ok (the two red tests from 2.2 are green); clippy
+  `-D warnings` clean; `cargo fmt --check` clean; Step 1.9 CLI diffs → same ×3. Re-run by the step session and
+  the coordinator (22 ok).
+- Review: Claude, 0 rounds. Tag scanner equivalent to the schema regex; step read only from the raw launch
+  segment; hook crate skeleton only. Nits not fixed: `step` is the first struct field (schema lists it last);
+  the Tagged test re-serializes lines (key order changes, content the same).
+- Gotchas: a tag split by quotes or escapes (`'St'ep 1`, `Step\ 1.2`) gives null, by design. Nothing produces
+  hook evidence yet.
 
 ### 2026-10-30 — Step 2.1: Hook payload spike — Claude
 - Did: Throwaway async capture hook (allowlist: ids, paths, enums; other strings → `<string:N>`) in

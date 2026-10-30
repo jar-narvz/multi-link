@@ -19,6 +19,7 @@ pub(crate) fn resolve(
     for invocation in invocations {
         let exact = exact_evidence(root, mode, invocation)?;
         links.push(Link {
+            step: invocation.step.clone(),
             parent: invocation.parent.clone(),
             invocation: invocation.invocation.clone(),
             subagent: invocation.subagent.clone(),

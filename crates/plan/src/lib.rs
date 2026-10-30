@@ -3,6 +3,9 @@
 mod markdown;
 mod plan;
 mod progress;
+mod tag;
+
+pub use tag::step_tag;
 
 pub use plan::parse_plan;
 pub use progress::parse_progress;
