@@ -190,6 +190,25 @@
 
 ## Log (newest first)
 
+### 2026-10-30 — Step 2.5: Hook recorder library — Codex
+- Did: `multi_link_hook::record(payload, &HookEnv) -> Option<HookRecord>` (no I/O), `write(&HookRecord,
+  &HookEnv)`, and `record_and_write(payload, env, &mut impl Clock)`: writes the first record at once, then for a
+  background call with no child polls dirname(scratchpad_dir)/tasks/<backgroundTaskId>.output every 250 ms up
+  to 25 s and appends one `task_output` record (≤ 2 per tool_use_id). PostToolUse/PostToolUseFailure + Bash +
+  `multi_link_claude::recognise` → handoff (child from stdout, or `error` for failures); PermissionRequest and
+  Notification permission_prompt|elicitation_dialog → waiting; else None. State dir = MULTI_LINK_HOME else
+  HOME/.multi-link, absolute, never inside HOME/.claude or HOME/.codex (also after resolving symlinks);
+  O_NOFOLLOW, O_APPEND, mode 0600, one write per line < 4 KiB. 14 synthetic tests.
+- Changed: crates/hook/src/lib.rs, crates/hook/tests/hook.rs
+- Verify: `cargo test -p multi-link-hook` → 14 passed; clippy -D warnings clean; rustfmt --check clean.
+  Coordinator: `cargo test --workspace` with 2.5 + 2.6 together → 24 binaries ok; workspace clippy clean.
+- Review: Claude, 0 rounds. Safety checks pass (no stdout, Err not panic, writes stay in the state dir, symlinks
+  refused, task id validated, first record before polling). Nits not fixed: hard-linked record file still
+  appended to; a FIFO at the task output path blocks open (2.7's watchdog covers it); kind/event are Strings.
+  API adds record_and_write and write takes HookEnv (two-record background flow needs it).
+- Gotchas: PLAN 2.5 says 25 s in text and 30 s in Verify; implemented 25 s, under 2.7's 30 s watchdog. A
+  symlinked MULTI_LINK_HOME is refused. Not yet run as a real hook (2.7/2.8).
+
 ### 2026-10-30 — Step 2.4: Hook record contract and fixtures — Claude
 - Did: output-schema.md "Hook records": layout `<state>/hook/<uuid>.jsonl` (`$MULTI_LINK_HOME`, else
   `$HOME/.multi-link`; fixture mode `<root>/.multi-link`); v1 record (kind handoff|waiting, at = hook clock at
