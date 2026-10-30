@@ -653,8 +653,22 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
   exact-link repo, plus tests for a span clipped by the window, a link outside the window (not drawn) and a
   zero-length span; goldens reviewed as in 3.5.
 
+### Step 3.6a — `ps` runs in the C locale (Claude implementer)
+- Depends on: 3.4. Parallel with: 3.6 (core only; the tui crate depends on model only).
+- Found in the 3.4 review (P1): `RealProcessProbe` sets only `TZ=UTC`, but `ps -o lstart=` prints month and day
+  names in the user's locale (`LC_ALL=de_DE.UTF-8` → `Fr 30 Okt …`), while `procStart` is English. Under a
+  non-English locale a live session's start time never matches → `Gone` → `finished` → `open` offers `Resume`
+  on a running session. Fix: run both `ps` calls (single and batch) with `LC_ALL=C` (and drop any inherited
+  `LANG` / `LC_*` that could override it). Why `C`: it is the locale `procStart`'s format matches, and it is
+  always present.
+- Files: `crates/core/src/probe.rs`, `crates/core/tests/repo_probe.rs`
+- Verify: `cargo test -p multi-link-core` → all `ok`, including a test that runs the real probe on the test
+  process's own pid with `LC_ALL=de_DE.UTF-8` and `LANG=de_DE.UTF-8` set in the environment and still gets
+  `Alive` against its English start time (skipped with a printed note if `ps` is unavailable in the sandbox), and a
+  unit test that the built `Command` carries `LC_ALL=C` and `TZ=UTC`; `cargo clippy -p multi-link-core -- -D warnings` clean.
+
 ### Step 3.7 — `multi-link tui`: loop, refresh, keys, bell, open (Codex)
-- Depends on: 3.4, 3.5, 3.6. Parallel with: none.
+- Depends on: 3.4, 3.5, 3.6, 3.6a. Parallel with: none.
 - CLI subcommand `tui [--root] [--now] [--since]` (cli depends on tui). Refresh thread per T9; pure
   `App` state machine (`update(event) -> Vec<Effect>`) for keys: `↑/↓` select, `enter`/`t` timeline,
   `esc` back, `o` open, `f` fork, `q` quit; bell per T6 as an `Effect`; open recomputes the action from a
@@ -682,7 +696,7 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 - Verify: the timings and checks above pasted in `docs/phase3-check.md`; whole-phase Verify passes.
 
 ### Backlog (ordered, uncommitted)
-Hook reads the background task output path (T10) · offset tailing if T1 is not enough · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+Hook reads the background task output path (T10) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
 
