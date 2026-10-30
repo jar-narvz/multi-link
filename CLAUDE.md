@@ -26,7 +26,20 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
-Codex command (from the repo root):
+**Codex-off mode (owner, 2026-10-30, Codex usage running out; default from Step 3.2 on until the owner
+says otherwise):** no `codex exec` for anything. The roles stay the same, but Claude agents fill them:
+- Implementer = a Claude subagent (Agent tool, general-purpose) given the same prompt Codex would get
+  ("Read AGENTS.md, then do Step <id> in PLAN.md."). It follows AGENTS.md exactly as Codex would: only the
+  step's files, runs Verify, writes the PROGRESS.md entry with agent `Claude (implementer)`, never commits.
+- Reviewer = an adversarial Claude review: a fresh subagent that did not write the code, given only
+  `git diff` plus the PLAN.md step and told to try to break it (wrong behaviour, missed edge cases, safety
+  rules, Verify output that doesn't match). Findings go back to the implementer agent, at most 2 rounds.
+- Plan critiques (a phase split) come from the same kind of adversarial subagent instead of `codex exec`,
+  logged in the Review log the same way.
+- The step session still re-runs Verify itself and commits. Steps marked "(Codex)" in PLAN.md are done by
+  the implementer agent.
+
+Codex command (from the repo root, unused while Codex-off mode is on):
 ```
 export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
 codex exec -s workspace-write -c sandbox_workspace_write.network_access=true \
