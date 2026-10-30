@@ -2,7 +2,7 @@
 
 use std::{io, path::Path};
 
-use multi_link_model::{SkipReason, Skipped, Timestamp, jsonl::JsonlReader};
+use multi_link_model::{HookSummary, SkipReason, Skipped, Timestamp, jsonl::JsonlReader};
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -19,6 +19,15 @@ pub(crate) struct Record {
 pub(crate) struct Records {
     pub records: Vec<Record>,
     pub skipped: Vec<Skipped>,
+}
+
+impl Records {
+    pub fn summary(&self) -> HookSummary {
+        HookSummary {
+            records: self.records.len(),
+            latest: self.records.iter().map(|record| record.at).max(),
+        }
+    }
 }
 
 pub(crate) fn parse_file(root: &Path, path: &Path) -> io::Result<Records> {

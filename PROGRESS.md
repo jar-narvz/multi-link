@@ -4,8 +4,16 @@
 **Resume here (2026-10-30, latest).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
 screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
 (home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
-Next: Step 5.2** (Codex). Run 5.2 → 5.5 in order, one fresh step session each; 5.5 ends with a
-stop-and-ask for the owner. The older notes below are history.
+5.2 is committed** (Claude-reviewed, 0 fix rounds). **Next: Step 5.3** (Codex). Run 5.3 → 5.5 in order,
+one fresh step session each; 5.5 ends with a stop-and-ask for the owner. The older notes below are history.
+
+- **What 5.3 / 5.4 need from 5.2:** `OverviewReport.hook: HookSummary { records: usize, latest:
+  Option<Timestamp> }` (model crate; zero / `None` when no hook records, also for an unreadable dir, which
+  adds a `hook directory: …` diagnostic). `SessionRow.made: Vec<String>`, newest step first; a Claude row's
+  label is `made[0]`, a Codex row's step is its placing link's `step` in `handoffs`. Phase 5 key values:
+  `hook` zero, `made` `5011` `["4.1"]`, `5013` `["4.3"]`, `5014` `["4.4"]`, `5015` `["4.5"]`. Core still
+  emits MergedRow `claude ×7` in repo-l; the TUI view flattens it (V3). Test
+  `crates/core/tests/overview.rs::every_overview_matches_its_key` pins the phase5 key.
 
 - **What 5.2 needs from 5.1:** the field rules are in `docs/output-schema.md`: SessionRow `made` (after
   `handoffs`, before `children`; distinct non-null link steps where `parent` = this id, newest first, any
@@ -132,6 +140,78 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 5.2: Core: `made` and `hook` — Codex
+- Did: Added SessionRow `made` (distinct parent-link steps by newest `(at, invocation)`, any match;
+  always empty on Codex) and OverviewReport `hook` (all valid parsed records, count and maximum `at`).
+  Scanner reuses the current refresh's parsed hook data, including cached files, without another read.
+  Added zero/one/several-link tests, invocation tie ordering, untagged/unlinked/other-parent cases;
+  overview comparisons for all four keys; absent/empty/old/invalid/pending/unreadable hook cases,
+  cache reuse and removal/recovery. Updated only the two added fields in the three older keys.
+- Changed: `crates/core/src/{overview,hook,scanner}.rs`, `crates/core/tests/overview.rs`,
+  `crates/core/tests/overview-before-phase5.json`, `crates/model/src/lib.rs`,
+  `crates/model/tests/model.rs`, `fixtures/expected/{overview,hook/overview,phase4/overview}.json`,
+  `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.97s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: `cargo clippy --workspace -- -D warnings` → exit 0; actual output:
+  ```text
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+  ```
+- Verify: `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `cargo run -q -p multi-link -- overview --root fixtures/sessions-phase5 --now 2026-10-29T23:20:00Z --since all --json`
+  followed by parsed JSON equality and baseline comparison to `git show HEAD:fixtures/expected/<key>` →
+  exit 0; actual check output:
+  ```text
+PASS: phase5 CLI overview equals its answer key
+PASS: regression baseline equals all three committed overview keys
+  ```
+- Review: Claude, 2026-10-30, 0 fix rounds. Files all inside the step's list (`overview-before-phase5.json`
+  falls under `crates/core/tests/**`). Checked with jq: each of the three older keys with `made` / `hook`
+  removed equals its HEAD version, and the saved baseline equals HEAD for all three. `made` is non-empty
+  only in phase5 (no tagged links in the older fixtures). `hook/overview.json` `{11, 2026-10-30T06:08:18.433Z}`
+  matches an independent count of valid `v: 1` lines in `fixtures/hook/.multi-link/hook/`. Claude re-ran
+  Verify: `cargo test --workspace` → 29 `test result: ok`, 0 failed; clippy `-D warnings` clean; release
+  binary `overview --root fixtures/sessions-phase5 --now 2026-10-29T23:20:00Z --since all --json` equals
+  `phase5/overview.json` (parsed). Notes, not blocking: the "before" check compares to a saved copy
+  rather than git, which is fine since it was verified against HEAD here.
+- Gotchas: The saved regression baseline contains the three pre-5.2 committed keys (scrubbed fixture
+  data), so the test remains independent of git and network access. Hook metadata includes records newer
+  than `now` as well as records older than `--since`; neither flag filters the hook count.
+  Initial new overview test failed because its hook overlay retained the background task-output file;
+  corrected the setup to remove it per the Hook variant contract, then reran the full workspace successfully.
+  Permission-denied coverage uses mode 000 on a temporary hook directory and restores permissions before
+  assertions; an additional ENOTDIR case checks diagnostics and recovery.
 
 ### 2026-10-30 — Step 5.1: Contract and target screen — Claude
 - Did: Wrote V0–V10 and the target-screen rules into `docs/design.md` (Phase 5 decisions: layout, bar

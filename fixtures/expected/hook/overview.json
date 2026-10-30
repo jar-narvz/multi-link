@@ -1,5 +1,9 @@
 {
   "now": "2026-10-29T23:15:00.000Z",
+  "hook": {
+    "records": 11,
+    "latest": "2026-10-30T06:08:18.433Z"
+  },
   "repos": [
     {
       "repo": "/home/dev/multi-link-sandbox/repo-a",
@@ -50,6 +54,7 @@
           "started_at": "2026-10-30T06:08:09.990Z",
           "last_activity": "2026-10-30T06:08:12.305Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -63,6 +68,7 @@
           "started_at": "2026-10-29T23:01:12.154Z",
           "last_activity": "2026-10-29T23:01:21.437Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -76,6 +82,7 @@
           "started_at": "2026-10-29T23:00:12.184Z",
           "last_activity": "2026-10-29T23:00:28.757Z",
           "handoffs": [],
+          "made": [],
           "children": [
             {
               "kind": "session",
@@ -103,6 +110,7 @@
                   "step": null
                 }
               ],
+              "made": [],
               "children": []
             }
           ]
@@ -118,6 +126,7 @@
           "started_at": "2026-10-29T22:58:47.061Z",
           "last_activity": "2026-10-29T22:59:04.662Z",
           "handoffs": [],
+          "made": [],
           "children": [
             {
               "kind": "session",
@@ -159,6 +168,7 @@
                   "step": null
                 }
               ],
+              "made": [],
               "children": []
             }
           ]
@@ -174,6 +184,7 @@
           "started_at": "2026-10-29T22:58:22.432Z",
           "last_activity": "2026-10-29T22:58:42.511Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -222,6 +233,7 @@
           "started_at": "2026-10-28T09:48:34.173Z",
           "last_activity": "2026-10-28T10:03:04.840Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -235,6 +247,7 @@
           "started_at": "2026-10-29T23:05:00.000Z",
           "last_activity": "2026-10-29T23:13:30.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -248,6 +261,7 @@
           "started_at": "2026-10-29T19:40:26.332Z",
           "last_activity": "2026-10-29T23:12:39.714Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -261,6 +275,7 @@
           "started_at": "2026-10-28T07:15:56.399Z",
           "last_activity": "2026-10-28T09:36:49.897Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -288,6 +303,7 @@
           "started_at": "2026-10-29T22:47:05.886Z",
           "last_activity": "2026-10-29T23:12:43.600Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -346,6 +362,7 @@
               "started_at": "2026-10-29T23:00:33.781Z",
               "last_activity": "2026-10-29T23:00:53.156Z",
               "handoffs": [],
+              "made": [],
               "children": [
                 {
                   "kind": "session",
@@ -373,6 +390,7 @@
                       "step": null
                     }
                   ],
+                  "made": [],
                   "children": []
                 }
               ]
@@ -388,6 +406,7 @@
               "started_at": "2026-10-29T23:00:35.769Z",
               "last_activity": "2026-10-29T23:00:52.046Z",
               "handoffs": [],
+              "made": [],
               "children": [
                 {
                   "kind": "session",
@@ -415,6 +434,7 @@
                       "step": null
                     }
                   ],
+                  "made": [],
                   "children": []
                 }
               ]
@@ -430,6 +450,7 @@
               "started_at": "2026-10-29T23:00:03.496Z",
               "last_activity": "2026-10-29T23:00:07.816Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -443,6 +464,7 @@
               "started_at": "2026-10-29T22:59:36.313Z",
               "last_activity": "2026-10-29T22:59:59.499Z",
               "handoffs": [],
+              "made": [],
               "children": [
                 {
                   "kind": "session",
@@ -470,6 +492,7 @@
                       "step": null
                     }
                   ],
+                  "made": [],
                   "children": []
                 }
               ]
@@ -485,6 +508,7 @@
               "started_at": "2026-10-29T22:59:08.725Z",
               "last_activity": "2026-10-29T22:59:32.147Z",
               "handoffs": [],
+              "made": [],
               "children": [
                 {
                   "kind": "session",
@@ -512,6 +536,7 @@
                       "step": null
                     }
                   ],
+                  "made": [],
                   "children": []
                 }
               ]
@@ -556,6 +581,7 @@
           "started_at": "2026-10-29T23:00:12.201Z",
           "last_activity": "2026-10-29T23:00:29.712Z",
           "handoffs": [],
+          "made": [],
           "children": [
             {
               "kind": "session",
@@ -583,6 +609,7 @@
                   "step": null
                 }
               ],
+              "made": [],
               "children": []
             }
           ]
@@ -612,6 +639,7 @@
           "started_at": "2026-10-29T21:35:49.872Z",
           "last_activity": "2026-10-29T21:35:50.326Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -639,6 +667,7 @@
           "started_at": "2026-10-29T21:32:40.107Z",
           "last_activity": "2026-10-29T21:33:59.364Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -652,6 +681,7 @@
           "started_at": "2026-10-29T20:43:33.850Z",
           "last_activity": "2026-10-29T20:44:16.946Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -665,6 +695,7 @@
           "started_at": "2026-10-27T10:03:47.855Z",
           "last_activity": "2026-10-27T10:04:27.890Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -692,6 +723,7 @@
           "started_at": "2026-10-29T00:00:00.000Z",
           "last_activity": "2026-10-29T00:00:03.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -705,6 +737,7 @@
           "started_at": "2026-10-29T00:00:00.000Z",
           "last_activity": "2026-10-29T00:00:02.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]

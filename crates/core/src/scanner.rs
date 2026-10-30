@@ -10,7 +10,7 @@ use std::{
 
 use multi_link_claude::{ClaudeScan, ParsedFile, SessionRecord, SubagentFile};
 use multi_link_codex::{Discovery, ReadFailure, Rollout};
-use multi_link_model::{OverviewReport, RepoSteps, Skipped, Timestamp};
+use multi_link_model::{HookSummary, OverviewReport, RepoSteps, Skipped, Timestamp};
 
 use crate::{LinksOutput, Liveness, Options, ProcessProbe, RepoMode, SessionsOutput};
 
@@ -108,6 +108,7 @@ pub struct Scanner {
     records: Cache<Option<SessionRecord>>,
     codex: Cache<(Option<Rollout>, Vec<Skipped>)>,
     hooks: Cache<crate::hook::Records>,
+    hook_summary: HookSummary,
     outputs: Cache<String>,
     repos: HashMap<String, crate::RepoPaths>,
     pub stats: ParseStats,
@@ -146,6 +147,7 @@ impl Scanner {
         let (claude, invocations, latest) = self.read_claude(root)?;
         let mut codex = self.read_codex(root)?;
         let hooks = self.read_hooks(root, options, &mut codex);
+        self.hook_summary = hooks.summary();
         let waiting = claude
             .transcripts
             .iter()
@@ -416,13 +418,14 @@ impl Scanner {
         plans: &mut dyn FnMut(&Path) -> RepoSteps,
     ) -> io::Result<OverviewOutput> {
         let (sessions, links) = self.refresh(root, options)?;
-        let report = crate::overview::build(
+        let mut report = crate::overview::build(
             root,
             options.repo_mode,
             &sessions.report,
             &links.report,
             plans,
         );
+        report.hook = self.hook_summary.clone();
         Ok(OverviewOutput {
             report,
             sessions,

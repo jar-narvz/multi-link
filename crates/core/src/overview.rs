@@ -98,6 +98,7 @@ pub fn build(
             started_at: session.started_at,
             last_activity: session.last_activity,
             handoffs,
+            made: made(session, &links.links),
             children,
         }
     };
@@ -256,8 +257,28 @@ pub fn build(
     });
     OverviewReport {
         now: sessions.now,
+        hook: Default::default(),
         repos,
     }
+}
+
+/// Distinct steps in descending order of their newest listed launch.
+fn made(session: &Session, links: &[Link]) -> Vec<String> {
+    if session.harness == Harness::Codex {
+        return Vec::new();
+    }
+    let mut launches: Vec<_> = links
+        .iter()
+        .filter(|link| link.parent == session.id && link.step.is_some())
+        .collect();
+    launches.sort_by(|a, b| (b.at, &b.invocation).cmp(&(a.at, &a.invocation)));
+    let mut seen = BTreeSet::new();
+    launches
+        .into_iter()
+        .filter_map(|link| link.step.as_ref())
+        .filter(|step| seen.insert((*step).clone()))
+        .cloned()
+        .collect()
 }
 
 fn state_rank(state: State) -> u8 {
@@ -435,6 +456,46 @@ mod tests {
             Row::Session(row) => row,
             Row::Merged(_) => panic!("expected a session row"),
         }
+    }
+
+    #[test]
+    fn made_handles_empty_untagged_and_single_launch() {
+        let parent = claude("p", "/r", State::Idle, 1);
+        assert_eq!(made(&parent, &[]), Vec::<String>::new());
+        let mut launch = link("p", "c", 1);
+        assert_eq!(made(&parent, &[launch.clone()]), Vec::<String>::new());
+        launch.step = Some("5.2".into());
+        assert_eq!(made(&parent, &[launch.clone()]), ["5.2"]);
+        assert_eq!(
+            made(&codex("p", "/r", State::Idle, 1), &[launch]),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn made_deduplicates_by_newest_time_and_invocation_for_any_match() {
+        let parent = claude("p", "/r", State::Idle, 1);
+        let launches = [
+            ("old", "1", 1),
+            ("a", "2", 2),
+            ("z", "1", 2),
+            ("other-parent", "3", 9),
+            ("middle", "4", 2),
+        ]
+        .into_iter()
+        .map(|(invocation, step, minute)| {
+            let mut launch = link("p", "c", minute);
+            launch.invocation = invocation.into();
+            launch.step = Some(step.into());
+            launch.r#match = Match::Unlinked;
+            launch.child = None;
+            if invocation == "other-parent" {
+                launch.parent = "elsewhere".into();
+            }
+            launch
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(made(&parent, &launches), ["1", "4", "2"]);
     }
 
     #[test]

@@ -1,5 +1,9 @@
 {
   "now": "2026-10-29T23:15:00.000Z",
+  "hook": {
+    "records": 0,
+    "latest": null
+  },
   "repos": [
     {
       "repo": "/home/dev/repo-h",
@@ -24,6 +28,7 @@
           "started_at": "2026-10-29T22:30:00.000Z",
           "last_activity": "2026-10-29T23:14:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -37,6 +42,7 @@
           "started_at": "2026-10-29T22:50:00.000Z",
           "last_activity": "2026-10-29T22:51:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -50,6 +56,7 @@
           "started_at": "2026-10-29T22:40:00.000Z",
           "last_activity": "2026-10-29T22:41:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         },
         {
@@ -63,6 +70,7 @@
           "started_at": "2026-10-29T22:00:00.000Z",
           "last_activity": "2026-10-29T22:01:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -103,6 +111,7 @@
           "started_at": "2026-10-29T22:30:00.000Z",
           "last_activity": "2026-10-29T23:05:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -130,6 +139,7 @@
           "started_at": "2026-10-29T22:59:00.000Z",
           "last_activity": "2026-10-29T23:02:00.000Z",
           "handoffs": [],
+          "made": [],
           "children": []
         }
       ]
@@ -162,6 +172,7 @@
               "started_at": "2026-10-29T23:00:00.000Z",
               "last_activity": "2026-10-29T23:01:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -175,6 +186,7 @@
               "started_at": "2026-10-29T22:55:00.000Z",
               "last_activity": "2026-10-29T22:56:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -188,6 +200,7 @@
               "started_at": "2026-10-29T22:50:00.000Z",
               "last_activity": "2026-10-29T22:51:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -201,6 +214,7 @@
               "started_at": "2026-10-29T22:45:00.000Z",
               "last_activity": "2026-10-29T22:46:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             }
           ]
@@ -235,6 +249,7 @@
               "started_at": "2026-10-29T22:57:00.000Z",
               "last_activity": "2026-10-29T22:58:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -248,6 +263,7 @@
               "started_at": "2026-10-29T22:47:00.000Z",
               "last_activity": "2026-10-29T22:48:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -261,6 +277,7 @@
               "started_at": "2026-10-29T22:37:00.000Z",
               "last_activity": "2026-10-29T22:38:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -274,6 +291,7 @@
               "started_at": "2026-10-29T22:27:00.000Z",
               "last_activity": "2026-10-29T22:28:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             }
           ]
@@ -294,6 +312,7 @@
               "started_at": "2026-10-29T22:56:00.000Z",
               "last_activity": "2026-10-29T22:57:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -307,6 +326,7 @@
               "started_at": "2026-10-29T22:46:00.000Z",
               "last_activity": "2026-10-29T22:47:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -320,6 +340,7 @@
               "started_at": "2026-10-29T22:36:00.000Z",
               "last_activity": "2026-10-29T22:37:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             },
             {
@@ -333,6 +354,7 @@
               "started_at": "2026-10-29T22:26:00.000Z",
               "last_activity": "2026-10-29T22:27:00.000Z",
               "handoffs": [],
+              "made": [],
               "children": []
             }
           ]

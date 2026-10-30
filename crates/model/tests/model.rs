@@ -117,6 +117,7 @@ fn round_trip<T: DeserializeOwned + Serialize>(path: &std::path::Path) {
 #[test]
 fn every_expected_report_round_trips() {
     round_trip::<OverviewReport>(&fixtures().join("expected/phase4/overview.json"));
+    round_trip::<OverviewReport>(&fixtures().join("expected/phase5/overview.json"));
     for name in ["overview.json", "sessions.json", "sessions-2h.json"] {
         let path = fixtures().join("expected/hook").join(name);
         if name == "overview.json" {

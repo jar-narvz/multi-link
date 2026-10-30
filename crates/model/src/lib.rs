@@ -183,7 +183,15 @@ pub struct Verify {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OverviewReport {
     pub now: Timestamp,
+    pub hook: HookSummary,
     pub repos: Vec<RepoGroup>,
+}
+
+/// Valid hook records observed in this refresh, regardless of the session window.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookSummary {
+    pub records: usize,
+    pub latest: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +247,7 @@ pub struct SessionRow {
     pub started_at: Timestamp,
     pub last_activity: Timestamp,
     pub handoffs: Vec<Link>,
+    pub made: Vec<String>,
     pub children: Vec<SessionRow>,
 }
 
