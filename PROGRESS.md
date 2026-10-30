@@ -75,7 +75,25 @@
   `codex exec resume --last` / non-UUID resume is `exec` per the schema grammar. For 1.7: nothing new; 1.7 must
   not depend on `invocations`. Gotchas: a tool_use whose first occurrence lacks timestamp/cwd is dropped even if a
   later copy is complete; result pairing is per file (a subagent's results are in its own file).
-- **Next: 1.7** (after 1.2, 1.3, 1.5), then 1.8 (after 1.6, 1.7), 1.9 (after 1.4, 1.7, 1.8).
+- Step 1.7 done (Codex, reviewed by Claude, 1 fix round). Core tests pass,
+  including full sessions answer-key equality; Clippy reports no warnings for core. No linking logic added.
+  For 1.8: `multi_link_core::sessions_report(root: &Path, &Options<'_>) -> io::Result<SessionsOutput>`
+  (also in `sessions` module); `Options { now: Timestamp, since: Option<std::time::Duration>,
+  repo_mode: RepoMode, probe: &dyn ProcessProbe }`. `None` = all history. `SessionsOutput { report:
+  SessionsReport, bad_records: Vec<String>, incomplete: Vec<String>, unreadable:
+  Vec<multi_link_codex::ReadFailure> }` exposes non-schema diagnostics for 1.9 stderr; `incomplete`
+  contains sorted root-relative Claude transcript paths missing cwd or either timestamp.
+  Repo mode controls only git lookups; the supplied probe is always used for records. Fixture callers
+  must pass `FixtureProcessProbe`; Step 1.9 wires it and `RepoMode::Fixture` together from `--root`.
+  `state::{claude_state(now, Option<&SessionRecord>, Liveness), codex_state(now, &Rollout)}` return
+  `(State, StateEvidence)` without I/O or system-clock reads.
+  Gotchas for 1.8: the report is filtered output; parse all transcripts separately for linking evidence.
+  Merged records always retain transcript fields and bypass `since`. Duplicate session records choose
+  greatest `updated_at` (ties: ascending-first record path). Incomplete Claude transcripts are omitted
+  and counted in `incomplete`; a matching record remains record-only. No invented metadata.
+  Every transcript has one unknown-step segment; record-only sessions have none.
+- **Next: 1.8** (after 1.6, 1.7), then 1.9 (after 1.4, 1.7, 1.8). Open follow-up: 4 clippy `collapsible_if`
+  warnings in `crates/claude/src/invocation.rs` (Step 1.6 code).
 - Organic inspection corrected the earlier grep inference: route-impact has Bash launch candidates;
   physaflow has textual mentions but no tool-use inputs containing `codex` in the inspected files.
 - Step 1.3 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_codex::discover(root)` →
@@ -118,6 +136,91 @@
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.7: Session state and sessions report — Codex
+- Did: Added pure Claude/Codex state functions and a sessions report that assembles parser
+  results, mapped repos, merged records, built segments, filtered history, sorted sessions/skips, and
+  returned bad-record/unreadable diagnostics beside the report. Round 1: decoupled process probes
+  from repo mode and documented caller-selected fixture probes on Options. Replaced probe-isolation
+  test with temp-root report tests for Gone (including different-start identity) on merged and
+  record-only sessions, and Unavailable on a stale busy record. Added sorted root-relative `incomplete`
+  diagnostics for missing Claude metadata; tests assert missing cwd/timestamps and record-only fallback.
+  FixtureProcessProbe report still equals the complete answer key. Ten session tests now cover these
+  cases alongside freshness, Codex turns, merge/latest-record selection and history boundaries.
+- Changed: `crates/core/Cargo.toml`, `Cargo.lock`, `crates/core/src/{lib.rs,state.rs,sessions.rs}`,
+  `crates/core/tests/sessions.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Round-1 `cargo fmt` → no output, exit 0.
+  `cargo test -p multi-link-core` → exit 0; actual test output:
+  ```text
+running 2 tests
+test repo::tests::groups_only_common_dirs_named_dot_git ... ok
+test probe::tests::classifies_ps_output_conservatively ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running 8 tests
+test fake_and_fixture_probes_are_deterministic ... ok
+test fixture_mode_preserves_even_nonexistent_relative_paths ... ok
+test reaped_child_is_gone ... ok
+test own_pid_matches_start_time_and_rejects_reused_identity ... ok
+test missing_ps_is_unavailable ... ok
+test real_mapper_falls_back_outside_git_or_for_missing_directory ... ok
+test mapper_ignores_inherited_git_environment ... ok
+test nested_main_and_worktree_map_to_shared_repo ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+running 10 tests
+test latest_codex_turn_governs_and_open_turn_uses_last_activity ... ok
+test claude_freshness_status_and_probe_precedence ... ok
+test file_diagnostics_are_separate_from_schema_skips ... ok
+test report_trusts_stale_busy_record_when_probe_is_unavailable ... ok
+test since_boundary_is_inclusive_and_future_activity_is_retained ... ok
+test merge_uses_transcript_fields_latest_record_and_bypasses_since ... ok
+test transcript_only_and_incomplete_transcripts_have_no_invented_fields ... ok
+test report_uses_gone_probe_for_merged_and_record_only_sessions ... ok
+test since_two_hours_filters_only_transcript_history ... ok
+test fixture_report_equals_every_expected_field ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: `cargo clippy -p multi-link-core --all-targets` → exit 0, no warnings for core.
+  Actual diagnostic headers and final line (source/help excerpts omitted):
+  ```text
+warning: this `if` statement can be collapsed
+   --> crates/claude/src/invocation.rs:96:9
+warning: this `if` statement can be collapsed
+   --> crates/claude/src/invocation.rs:97:13
+warning: this `if` statement can be collapsed
+   --> crates/claude/src/invocation.rs:202:17
+warning: this `if` statement can be collapsed
+   --> crates/claude/src/invocation.rs:267:13
+warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix --lib -p multi-link-claude -- ` to apply 4 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+  ```
+- Review: Claude, 1 fix round. #1 `sessions.rs:137` the probe was gated on `repo_mode != Fixture`, tying two
+  settings together and leaving the report-level `finished` path untested → fixed (probe always used; caller picks
+  `FixtureProcessProbe`; temp-root tests for Gone / different start on merged and record-only, Unavailable → stale).
+  #2 `sessions.rs:50` transcripts missing cwd/timestamps were dropped silently → fixed (`incomplete`, tested).
+  Clippy warnings are in Step 1.6's file, not 1.7's Verify: follow-up. Checked: every state carries its evidence;
+  no-record and completed/no-turn Codex are `unknown`, never busy/waiting; stale only for busy record / open turn
+  (300 s busy, 301 s stale; idle 3 h → idle); `now` passed in, no system clock in core; skipped merged and sorted,
+  bad/unreadable files counted beside the report; fixture report equals `sessions.json` as parsed JSON;
+  `--since 2h` keeps record-backed sessions; no `invocations` use or linking. Scope: only the named files.
+  Claude re-ran Verify: `test result: ok.` 2 / 8 / 10 / 0 passed; `cargo test --workspace -q` all ok; fmt clean.
+- Gotchas: Four pre-existing `collapsible_if` warnings in `crates/claude/src/invocation.rs` (Step 1.6)
+  remain a follow-up for a later step; that file is unchanged and Clippy is not 1.7's Verify command.
+  Multiple records with the same session id use the latest `updated_at`; equal timestamps keep the
+  ascending-first path. Missing Claude metadata is reported instead of fabricated; any record stays
+  record-only. Timestamp arithmetic uses its canonical RFC3339 form because the model exposes no
+  arithmetic API (no model changes). Initial pre-review test run had 8 session tests pass and 1 fail:
+  invalid UTF-8 was incorrectly expected to be a Codex file-read error. The shared JSONL reader
+  classifies it as `invalid_json`; corrected the test. New sessions tests never invoke ps/git;
+  the existing Step 1.5 tests still exercise those tools. Nothing staged, committed, or pushed.
 
 ### 2026-10-29 — Step 1.6: Claude hand-off calls and invocation recogniser — Codex
 - Did: Added a hand-written quote/escape-aware tokenizer and first-launch recognition for exec,

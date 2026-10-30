@@ -5,6 +5,8 @@ edition.workspace = true
 
 [dependencies]
 multi-link-model.workspace = true
+multi-link-claude = { path = "../claude" }
+multi-link-codex = { path = "../codex" }
 serde.workspace = true
 serde_json.workspace = true
 time.workspace = true

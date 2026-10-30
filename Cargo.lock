@@ -215,6 +215,8 @@ dependencies = [
 name = "multi-link-core"
 version = "0.1.0"
 dependencies = [
+ "multi-link-claude",
+ "multi-link-codex",
  "multi-link-model",
  "serde",
  "serde_json",
