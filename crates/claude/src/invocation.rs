@@ -93,17 +93,17 @@ fn segments(command: &str) -> Vec<Vec<String>> {
     let mut quote = None;
     let mut chars = command.chars().peekable();
     while let Some(ch) = chars.next() {
-        if ch == '\\' && quote != Some('\'') {
-            if let Some(&next) = chars.peek() {
-                if quote.is_none() || matches!(next, '$' | '`' | '"' | '\\' | '\n') {
-                    chars.next();
-                    if next != '\n' {
-                        word.push(next);
-                        started = true;
-                    }
-                    continue;
-                }
+        if ch == '\\'
+            && quote != Some('\'')
+            && let Some(&next) = chars.peek()
+            && (quote.is_none() || matches!(next, '$' | '`' | '"' | '\\' | '\n'))
+        {
+            chars.next();
+            if next != '\n' {
+                word.push(next);
+                started = true;
             }
+            continue;
         }
         if let Some(delimiter) = quote {
             if ch == delimiter {
@@ -199,10 +199,10 @@ fn read_calls(
                 if !seen.insert(id.to_owned()) {
                     continue;
                 }
-                if block["name"] == "Bash" {
-                    if let Some(call) = parse_call(&value, block, main_id, subagent) {
-                        calls.push(call);
-                    }
+                if block["name"] == "Bash"
+                    && let Some(call) = parse_call(&value, block, main_id, subagent)
+                {
+                    calls.push(call);
                 }
             } else if kind == Some("user") && block["type"] == "tool_result" {
                 let Some(id) = block.get("tool_use_id").and_then(Value::as_str) else {
@@ -264,10 +264,10 @@ fn collect_text(content: &Value, output: &mut Vec<String>) {
         output.push(text.to_owned());
     } else if let Some(blocks) = content.as_array() {
         for block in blocks {
-            if block["type"] == "text" {
-                if let Some(text) = block.get("text").and_then(Value::as_str) {
-                    output.push(text.to_owned());
-                }
+            if block["type"] == "text"
+                && let Some(text) = block.get("text").and_then(Value::as_str)
+            {
+                output.push(text.to_owned());
             }
         }
     }
