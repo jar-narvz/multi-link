@@ -125,6 +125,9 @@
   passed`, `test result: ok. 8 passed`, `test result: ok. 0 passed`, no SKIP lines (real `ps` tests ran: own
   pid → Alive, wrong start → Gone, reaped child → Gone, missing ps → Unavailable). Scope: only the named files.
 - Gotchas: ps locale assumed to match `procStart`'s; stderr from ps is treated as `Unavailable`.
+- Note: this step's code and PROGRESS.md lines landed in the Step 1.2 commit (a9d72e6): Claude staged them in the
+  shared index just as the 1.2 session committed the whole index. Content is identical to what was reviewed;
+  history not rewritten. Lesson for parallel steps: commit through a private `GIT_INDEX_FILE`, never the shared index.
 
 ### 2026-10-29 — Step 1.2: Claude transcripts and session records — Codex
 - Did: `scan(root)` discovers main transcripts (`projects/*/*.jsonl`, one level) and subagents
