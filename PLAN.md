@@ -696,7 +696,7 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 - Verify: the timings and checks above pasted in `docs/phase3-check.md`; whole-phase Verify passes.
 
 ### Backlog (ordered, uncommitted)
-Hook reads the background task output path (T10) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
 
