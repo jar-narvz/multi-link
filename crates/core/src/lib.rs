@@ -11,3 +11,6 @@ pub use repo::{RepoMode, RepoPaths};
 pub use sessions::{Options, SessionsOutput, sessions_report};
 
 pub use links::{LinksOutput, links_report};
+
+mod scanner;
+pub use scanner::{ParseStats, Scanner};

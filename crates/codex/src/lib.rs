@@ -196,3 +196,17 @@ fn parse_turn(payload: &Value, at: Option<Timestamp>, turns: &mut Vec<Turn>) {
         _ => {}
     }
 }
+
+/// Parse a single rollout without traversing its directory.
+pub fn parse_file(
+    root: &Path,
+    path: &Path,
+    skipped: &mut Vec<Skipped>,
+) -> io::Result<Option<Rollout>> {
+    let transcript = relative_path(root, path);
+    parse(
+        JsonlReader::from_path(path, &transcript)?,
+        &transcript,
+        skipped,
+    )
+}

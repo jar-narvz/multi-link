@@ -1,14 +1,11 @@
 //! Read-only, fail-soft reader for multi-link's versioned hook records.
 
-use std::{fs, io, path::Path};
+use std::{io, path::Path};
 
-use multi_link_claude::Transcript;
 use multi_link_model::{SkipReason, Skipped, Timestamp, jsonl::JsonlReader};
 use serde_json::Value;
 
-use crate::{Options, RepoMode};
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Record {
     pub session_id: String,
     pub tool_use_id: Option<String>,
@@ -18,59 +15,36 @@ pub(crate) struct Record {
     pub line: usize,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct Records {
     pub records: Vec<Record>,
     pub skipped: Vec<Skipped>,
 }
 
-pub(crate) fn read(root: &Path, options: &Options<'_>) -> io::Result<Records> {
-    let state = match options.repo_mode {
-        RepoMode::Fixture => root.join(".multi-link"),
-        RepoMode::Real => options.state_dir.clone(),
-    };
-    let entries = match fs::read_dir(state.join("hook")) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Records::default()),
-        Err(error) => return Err(error),
-    };
-    let mut paths = Vec::new();
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_file()
-            && path.extension().is_some_and(|ext| ext == "jsonl")
-            && path.file_stem().and_then(|s| s.to_str()).is_some_and(uuid)
-        {
-            paths.push(path);
-        }
-    }
-    paths.sort();
+pub(crate) fn parse_file(root: &Path, path: &Path) -> io::Result<Records> {
+    let file = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned();
+    let stem = path.file_stem().unwrap().to_str().unwrap();
     let mut output = Records::default();
-    for path in paths {
-        let file = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .into_owned();
-        let stem = path.file_stem().unwrap().to_str().unwrap();
-        for item in JsonlReader::from_path(&path, &file)? {
-            match item? {
-                Err(skipped) => output.skipped.push(skipped),
-                Ok((line, value)) => {
-                    if let Some(record) = parse(&value, stem, line) {
-                        output.records.push(record);
-                    } else {
-                        output.skipped.push(Skipped {
-                            file: file.clone(),
-                            line,
-                            reason: if value.is_object() {
-                                SkipReason::UnknownType
-                            } else {
-                                SkipReason::InvalidJson
-                            },
-                        });
-                    }
+    for item in JsonlReader::from_path(path, &file)? {
+        match item? {
+            Err(skipped) => output.skipped.push(skipped),
+            Ok((line, value)) => {
+                if let Some(record) = parse(&value, stem, line) {
+                    output.records.push(record);
+                } else {
+                    output.skipped.push(Skipped {
+                        file: file.clone(),
+                        line,
+                        reason: if value.is_object() {
+                            SkipReason::UnknownType
+                        } else {
+                            SkipReason::InvalidJson
+                        },
+                    });
                 }
             }
         }
@@ -143,7 +117,7 @@ fn parse(value: &Value, stem: &str, line: usize) -> Option<Record> {
     })
 }
 
-fn uuid(id: &str) -> bool {
+pub(crate) fn uuid(id: &str) -> bool {
     id.len() == 36
         && id.bytes().enumerate().all(|(i, b)| {
             if [8, 13, 18, 23].contains(&i) {
@@ -152,36 +126,4 @@ fn uuid(id: &str) -> bool {
                 b.is_ascii_digit() || (b'a'..=b'f').contains(&b)
             }
         })
-}
-
-/// Unknown transcript types can still carry the line that clears a prompt.
-/// Re-read all top-level timestamps, including those of subagent transcripts.
-pub(crate) fn waiting(root: &Path, transcript: &Transcript, hooks: &Records) -> io::Result<bool> {
-    let latest = hooks
-        .records
-        .iter()
-        .filter(|r| r.session_id == transcript.id)
-        .max_by_key(|r| (r.at, r.line));
-    let Some(latest) = latest.filter(|r| r.waiting) else {
-        return Ok(false);
-    };
-    for file in std::iter::once(transcript.transcript.as_str()).chain(
-        transcript
-            .subagent_files
-            .iter()
-            .map(|f| f.transcript.as_str()),
-    ) {
-        for item in JsonlReader::from_path(root.join(file), file)? {
-            if let Ok((_, value)) = item?
-                && let Some(at) = value
-                    .get("timestamp")
-                    .and_then(Value::as_str)
-                    .and_then(|s| Timestamp::parse(s).ok())
-                && at >= latest.at
-            {
-                return Ok(false);
-            }
-        }
-    }
-    Ok(true)
 }

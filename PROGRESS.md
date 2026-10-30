@@ -1,14 +1,27 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 done; **Phase 3 is planned** (PLAN.md Steps 3.1–3.8, decisions
-T1–T11, Codex critique logged). Next: **Step 3.1** (refresh speed, Codex) via one fresh session per step
-(CLAUDE.md "Autonomous mode"). Order: 3.1 → 3.2 → 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
+**Resume here (2026-10-30).** Phases 0–2 and **Step 3.1 done** (refresh speed). Next: **Step 3.2**
+(output contract, Claude) via one fresh session per step (CLAUDE.md "Autonomous mode").
+Order: 3.1 → 3.2 → 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
 
+- **3.1 result (Claude, real `~`, real `ps`, warm release build):** `refresh_timing -- 3` → pass 1 3058 ms,
+  pass 2 29 ms (k=1), pass 3 31 ms (k=2). Warm refresh ≤ 2000 ms with k ≥ 1, so **offset tailing is not needed**
+  before 3.7 (T1 holds as written). Passes with k=0 also occur (live sessions write in bursts).
+- **What 3.2+ need to know from 3.1:** keep ONE `core::Scanner` per refresh worker and call
+  `Scanner::refresh(root, &options)` → `(SessionsOutput, LinksOutput)` (one discovery pass, one batched `ps`).
+  `Scanner::stats` (files/bytes re-parsed) and `Scanner::diagnostics` (hook dir/file errors, also listed in
+  `unreadable`) describe the last pass. `sessions_report` / `links_report` are fresh-Scanner wrappers; the CLI
+  `sessions` command still calls both (≈ 5.9 s warm, was 16.4 s), so 3.3's `overview` CLI should use one
+  `refresh`. Repo memo (`Scanner::repos`, per cwd) never expires and memoises the cwd fallback when git fails.
+- **Open for 3.7 (T9):** a non-NotFound error on one Claude transcript/subagent dir (EACCES, ENOTDIR) still fails
+  the whole pass, as before 3.1; the TUI would then keep a stale "last good report" until it is fixed. Decide
+  in 3.7 whether to turn these into `unreadable` entries like Codex rollouts.
 - **Baseline for 3.1 (measured 2026-10-30, warm release build, real `~`):** `sessions --json` 16.4–16.9 s
   (10.4 s user, 4.5 s sys); `--root ~` (no ps/git) 6.0 s; `links` 9.8 s; `steps` 7.0 s. Cause: one `git
   rev-parse` per session before the window filter, one `ps` per record, and a full re-parse of every file.
-- **What exists:** Rust workspace `crates/{model,claude,codex,plan,core,hook,cli}`. `multi-link sessions | links |
+- **What exists:** Core `Scanner::{sessions,links,refresh}` caches per-file parsed results and git mappings,
+  with one batch process probe per refresh. Rust workspace `crates/{model,claude,codex,plan,core,hook,cli}`. `multi-link sessions | links |
   steps` (JSON or text; `--root` fixture mode, `--now`, `--since`) and `multi-link hook record | install |
   uninstall` (install only prints). `cargo test --workspace` → 24 binaries ok; clippy `-D warnings` clean.
 - **Answer keys:** `fixtures/expected/{sessions,links,steps}.json` (Phase 1), `links-tagged.json`,
@@ -25,6 +38,185 @@ T1–T11, Codex critique logged). Next: **Step 3.1** (refresh speed, Codex) via 
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.1: Refresh speed: scanner cache, memoised git, one ps — Codex
+- Did: Added Scanner caches keyed by path, length, mtime and inode for main/subagent Claude
+  transcripts, session records, Codex rollouts, hook files and task output. Cached results retain
+  invocation evidence and unknown-record timestamps for waiting. Recompute state/window/link
+  decisions each pass; map only listed cwds, memoising git by cwd. Report wrappers use fresh Scanners;
+  `refresh` returns sessions + links from one scan and one batch probe. Real batch ps deduplicates
+  nonzero pids, uses UTC and fails soft without per-pid process fallbacks. Hook read failures become
+  Scanner diagnostics and existing `unreadable` diagnostics instead of aborting the report.
+  Added cache invalidation, warm answer-key parity, batch-call count, ps argument/UTC/failure,
+  task-output change/removal, hook-directory recovery and repo-window/memoisation tests.
+  Round 1: Routed `scan()` main transcripts and subagents through `parse_file()`, removing
+  the duplicate transcript fold and reader; existing Claude fixtures now exercise the production
+  parser. Updated the missing/empty-file unit test to call that parser. Confirmed Codex `discover()`
+  and `parse_file()` still share `parse()` without changes. Replaced production `FakeProcessProbe`
+  with private `BatchProcessProbe` in scanner.rs, retaining pid/start lookup and unavailable fallback.
+  Claude fixes (after adversarial review): `probe.rs` `MAX_PID` (macOS 99 999, else `i32::MAX`) keeps
+  out-of-range pids out of the batch `ps` (macOS `ps -p 1,100000` → "process id too large", rc 1, which
+  made every pid Unavailable) and answers them Unavailable alone; `scanner.rs` `rollout_paths` skips a
+  rollout that vanishes between `read_dir` and stat instead of failing the pass; hook files are read only
+  if regular (symlinks skipped, as the old `DirEntry::file_type` reader did); `Stamp` doc notes the
+  fine-grained-mtime assumption. Tests: `MAX_PID+1` cases in both batch tests, new
+  `symlinked_hook_files_are_skipped`. The rollout NotFound skip is a race and is untested.
+- Changed: `crates/claude/src/lib.rs`, `crates/codex/src/lib.rs`,
+  `crates/core/src/{lib.rs,scanner.rs,sessions.rs,links.rs,link.rs,hook.rs,probe.rs}`,
+  `crates/core/examples/refresh_timing.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines
+  (workspace runner order, including doc tests):
+  ```text
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: Phase 1 Step 1.9's three literal `diff <(cargo run … | jq -S .) <(jq -S …)`
+  commands (sessions, links, steps) → exit 0, actual stdout:
+  ```text
+same
+same
+same
+  ```
+  Python subprocess comparison of the pre-change CLI binary against the rebuilt binary, using a
+  temporary copy of plain fixtures and the hook overlay (background output removed, as in hook tests).
+  Compared stdout/stderr bytes and exit codes; parsed JSON compared with untouched answer keys.
+  `git diff --exit-code HEAD -- fixtures/expected` → exit 0, no output. Comparison stdout:
+  ```text
+plain sessions JSON/text stdout/stderr/exit bytes: same
+plain links JSON/text stdout/stderr/exit bytes: same
+plain steps JSON/text stdout/stderr/exit bytes: same
+hook sessions JSON/text stdout/stderr/exit bytes: same
+hook sessions CLI diff: same
+hook links JSON/text stdout/stderr/exit bytes: same
+hook links CLI diff: same
+hook sessions 2h bytes and CLI diff: same
+fixtures/expected vs HEAD bytes: same
+  ```
+- Verify: `cargo run --release -p multi-link-core --example refresh_timing -- 3` on real home,
+  read-only, one Scanner, full sessions + links refresh per pass → exit 0. First run, all three lines:
+  ```text
+pass 1: 3332 ms, 64 sessions, 360 files re-parsed, 452929165 bytes re-parsed
+pass 2: 10 ms, 64 sessions, 1 files re-parsed, 721216 bytes re-parsed
+pass 3: 11 ms, 64 sessions, 1 files re-parsed, 722820 bytes re-parsed
+  ```
+  Repeated after the hook-diagnostic plumbing and per-transcript waiting-key adjustment, exit 0:
+  ```text
+pass 1: 3552 ms, 63 sessions, 360 files re-parsed, 453447435 bytes re-parsed
+pass 2: 11 ms, 63 sessions, 0 files re-parsed, 0 bytes re-parsed
+pass 3: 19 ms, 63 sessions, 1 files re-parsed, 1297835 bytes re-parsed
+  ```
+  Both runs beat the 2000 ms warm target here. First run measured changing files on both warm passes;
+  repeat pass 2 observed no changes and therefore does not satisfy that pass's k ≥ 1 condition.
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+  ```text
+    Checking multi-link-core v0.1.0
+    Checking multi-link v0.1.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.90s
+  ```
+  (Checkout paths omitted.) `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+- Verify: Round 1 (Rust PATH set per AGENTS.md): `cargo test --workspace` → exit 0;
+  actual result lines (runner order, including doc tests):
+  ```text
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.93s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0 (checkout paths omitted):
+  ```text
+    Checking multi-link-claude v0.1.0
+    Checking multi-link-core v0.1.0
+    Checking multi-link-hook v0.1.0
+    Checking multi-link v0.1.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.94s
+  ```
+  `cargo fmt --all -- --check` → no output, exit 0. The three literal Step 1.9 diffs
+  (sessions, links, steps) → each exit 0; actual combined stdout:
+  ```text
+same
+same
+same
+  ```
+  `git diff --exit-code HEAD -- fixtures/expected`, `git diff --check`, and
+  `git diff --cached --stat` → no output, exit 0. Answer keys unchanged; nothing staged.
+  `refresh_timing` not rerun, per request (Claude ran it with real ps).
+- Verify (Claude, final tree, outside the sandbox): `cargo test --workspace` → all `test result: ok`
+  (core scanner suite 10 passed), clippy `-D warnings` and `cargo fmt --check` clean, `git diff --check`
+  clean; the three Step 1.9 diffs → `same` `same` `same`; `git diff --exit-code HEAD -- fixtures/expected`
+  → exit 0. `/bin/ps -o pid=,lstart= -p $$` works here. `cargo run --release -p multi-link-core --example
+  refresh_timing -- 3` on real `~` (second run on the final build; the first had k=0 on pass 3):
+  ```text
+pass 1: 3058 ms, 61 sessions, 365 files re-parsed, 458819690 bytes re-parsed
+pass 2: 29 ms, 61 sessions, 1 files re-parsed, 659860 bytes re-parsed
+pass 3: 31 ms, 61 sessions, 2 files re-parsed, 1177474 bytes re-parsed
+  ```
+  Codex's sandbox timings above (10–19 ms) ran without `ps`; these replace them. Warm CLI
+  `multi-link sessions --json`: 5.91 s real (was 16.4–16.9 s).
+- Review: Claude, 2 rounds. Round 1 (Claude → Codex): duplicate Claude transcript fold (crate tests covered
+  `scan`, production ran `parse_file`) and `FakeProcessProbe` in the live path — both fixed. Then (owner:
+  no more Codex) an adversarial Claude subagent review, 10 findings: accepted #1 batch `ps` sunk by one pid
+  ≥ 100000 (confirmed on macOS), #2 vanishing rollout aborts the pass, #6 hook symlinks now followed, #9
+  doc the mtime assumption — fixed by Claude, and that edit reviewed by a second Claude subagent (clean;
+  MAX_PID cutoff confirmed with `ps -p 1,99999` rc 0 vs `1,100000` rc 1; tests fail without each fix).
+  Rejected: #3 one bad Claude file fails the pass (pre-existing; T9 scopes hook errors; carried to 3.7 in
+  Current state); #4 repo memo never expires / memoises the git fallback (`RepoMode::map` gives no failure
+  signal, and memoising only non-fallbacks would re-run git for every repo-root cwd; noted for 3.2+);
+  #5 changed Claude files read twice, bytes counter ≈ half the real reads (wall-clock target still met);
+  #7 hook errors listed in both diagnostics and Codex `unreadable` (acceptable under T9); #8 prune keeps
+  existing-but-undiscovered paths (memory only); #10 rebuilt `io::Error` drops `raw_os_error` (output same).
+  Files changed match the step's list (+ PROGRESS.md).
+- Gotchas: Sandbox blocks real ps: `/bin/ps -o pid=,lstart= -p $$` produced
+  `zsh:1: operation not permitted: /bin/ps`. No workaround; RealProcessProbe returns Unavailable.
+  A read-only git rev-parse in the real home checkout succeeded (exit 0). Timings consequently
+  do not establish unrestricted ps performance or real liveness; batch semantics are tested with a
+  deterministic local stub. The CLI sessions command still invokes both fresh report wrappers for its
+  hook-conflict diagnostic; callers retaining a Scanner should use `refresh` for the shared pass.
+  Changed Claude files use the existing invocation recogniser as a second read; unchanged files do
+  neither read. Counters count changed files and their metadata lengths once, not physical read I/O.
+  An initial task-output test selected the first background invocation (a negative case) and failed
+  (`6 passed; 1 failed`); fixed the test to select the known background parent's id.
 
 ### 2026-10-30 — Step 2.8: Real hand-off and waiting check in the sandbox — Claude
 - Did: Built release `multi-link`; put the `hook install --scope local` snippet (each command prefixed with

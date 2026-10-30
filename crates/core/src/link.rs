@@ -1,6 +1,6 @@
 //! Resolve observed child ids before considering bounded heuristic candidates.
 
-use std::{collections::HashSet, fs, io, path::Path};
+use std::{collections::HashSet, io, path::Path};
 
 use multi_link_claude::Invocation;
 use multi_link_codex::Rollout;
@@ -15,11 +15,12 @@ pub(crate) fn resolve(
     invocations: &[Invocation],
     rollouts: &[Rollout],
     hooks: &crate::hook::Records,
+    read_output: &mut impl FnMut(&Path) -> Option<String>,
 ) -> io::Result<(Vec<Link>, usize)> {
     let mut links = Vec::new();
     let mut hook_conflicts = 0;
     for invocation in invocations {
-        let mut exact = exact_evidence(root, mode, invocation)?;
+        let mut exact = exact_evidence(root, mode, invocation, read_output)?;
         let children: HashSet<_> = hooks
             .records
             .iter()
@@ -106,6 +107,7 @@ fn exact_evidence(
     root: &Path,
     mode: RepoMode,
     invocation: &Invocation,
+    read_output: &mut impl FnMut(&Path) -> Option<String>,
 ) -> io::Result<Option<(String, LinkEvidence)>> {
     if let Some(id) = &invocation.resume_id {
         return Ok(Some((id.clone(), LinkEvidence::ResumeArg)));
@@ -142,12 +144,8 @@ fn exact_evidence(
                 root.join("task-output").join(name)
             }
         };
-        if !fs::metadata(&path).is_ok_and(|metadata| metadata.is_file()) {
+        let Some(output) = read_output(&path) else {
             continue;
-        }
-        let output = match fs::read_to_string(path) {
-            Ok(output) => output,
-            Err(_) => continue,
         };
         if let Some(id) = session_id(&output) {
             return Ok(Some((id, LinkEvidence::TaskOutput)));

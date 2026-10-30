@@ -42,9 +42,16 @@ pub struct SessionsOutput {
 
 /// Read every transcript before applying the output-only history window.
 pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<SessionsOutput> {
-    let claude = multi_link_claude::scan(root)?;
-    let hooks = crate::hook::read(root, options)?;
-    let codex = multi_link_codex::discover(root)?;
+    crate::Scanner::default().sessions(root, options)
+}
+
+pub(crate) fn assemble(
+    options: &Options<'_>,
+    claude: multi_link_claude::ClaudeScan,
+    codex: multi_link_codex::Discovery,
+    hooks: crate::hook::Records,
+    waiting: &std::collections::HashSet<String>,
+) -> io::Result<SessionsOutput> {
     let mut records: BTreeMap<String, SessionRecord> = BTreeMap::new();
     for record in claude.records {
         let slot = records
@@ -58,8 +65,8 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
     let mut sessions = Vec::new();
     let mut incomplete = Vec::new();
     for transcript in claude.transcripts {
-        let hook_waiting = !records.contains_key(&transcript.id)
-            && crate::hook::waiting(root, &transcript, &hooks)?;
+        let hook_waiting =
+            !records.contains_key(&transcript.id) && waiting.contains(&transcript.transcript);
         let (Some(cwd), Some(started_at), Some(last_activity)) = (
             transcript.cwd,
             transcript.started_at,
@@ -81,7 +88,7 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
             harness: Harness::Claude,
             transcript: Some(transcript.transcript),
             record: record.map(|record| record.record),
-            repo: repo(options, &cwd),
+            repo: cwd.clone(),
             cwd,
             branch: transcript.branch,
             started_at,
@@ -99,7 +106,7 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
             harness: Harness::Claude,
             transcript: None,
             record: Some(record.record),
-            repo: repo(options, &record.cwd),
+            repo: record.cwd.clone(),
             cwd: record.cwd,
             branch: None,
             started_at: record.started_at,
@@ -117,7 +124,7 @@ pub fn sessions_report(root: &Path, options: &Options<'_>) -> io::Result<Session
             harness: Harness::Codex,
             transcript: Some(rollout.transcript),
             record: None,
-            repo: repo(options, &rollout.cwd),
+            repo: rollout.cwd.clone(),
             cwd: rollout.cwd,
             branch: rollout.branch,
             started_at: rollout.started_at,
@@ -162,15 +169,6 @@ fn record_state(
         _ => Liveness::Unavailable,
     };
     claude_state(options.now, record, liveness)
-}
-
-fn repo(options: &Options<'_>, cwd: &str) -> String {
-    options
-        .repo_mode
-        .map(Path::new(cwd))
-        .repo
-        .to_string_lossy()
-        .into_owned()
 }
 
 fn segment(from: Timestamp, to: Timestamp) -> Vec<Segment> {

@@ -5,7 +5,7 @@ use std::{collections::HashSet, io, path::Path};
 use multi_link_codex::ReadFailure;
 use multi_link_model::{Harness, LinksReport};
 
-use crate::{Options, link, sessions_report};
+use crate::Options;
 
 #[derive(Debug)]
 pub struct LinksOutput {
@@ -20,18 +20,14 @@ pub struct LinksOutput {
 /// Resolve all hand-offs, then retain links with a listed parent or child.
 /// RepoMode::Fixture also selects task-output lookup by basename under root.
 pub fn links_report(root: &Path, options: &Options<'_>) -> io::Result<LinksOutput> {
-    let sessions = sessions_report(root, options)?;
-    let claude = multi_link_claude::scan(root)?;
-    let invocations = multi_link_claude::invocations(root, &claude)?;
-    let codex = multi_link_codex::discover(root)?;
-    let hooks = crate::hook::read(root, options)?;
-    let (mut links, hook_conflicts) = link::resolve(
-        root,
-        options.repo_mode,
-        &invocations,
-        &codex.rollouts,
-        &hooks,
-    )?;
+    crate::Scanner::default().links(root, options)
+}
+
+pub(crate) fn assemble(
+    sessions: &crate::SessionsOutput,
+    mut links: Vec<multi_link_model::Link>,
+    hook_conflicts: usize,
+) -> io::Result<LinksOutput> {
     let parented: HashSet<_> = links
         .iter()
         .filter_map(|link| link.child.as_deref())
@@ -62,8 +58,15 @@ pub fn links_report(root: &Path, options: &Options<'_>) -> io::Result<LinksOutpu
     Ok(LinksOutput {
         hook_conflicts,
         report: LinksReport { links, unparented },
-        bad_records: sessions.bad_records,
-        incomplete: sessions.incomplete,
-        unreadable: sessions.unreadable,
+        bad_records: sessions.bad_records.clone(),
+        incomplete: sessions.incomplete.clone(),
+        unreadable: sessions
+            .unreadable
+            .iter()
+            .map(|failure| ReadFailure {
+                file: failure.file.clone(),
+                error: io::Error::new(failure.error.kind(), failure.error.to_string()),
+            })
+            .collect(),
     })
 }

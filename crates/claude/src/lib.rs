@@ -75,34 +75,13 @@ pub fn scan(root: &Path) -> io::Result<ClaudeScan> {
             let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) else {
                 continue;
             };
-            let mut transcript = Transcript {
-                id: id.to_owned(),
-                transcript: relative_path(root, &path),
-                cwd: None,
-                branch: None,
-                started_at: None,
-                last_activity: None,
-                subagents: Vec::new(),
-                subagent_files: Vec::new(),
+            let parsed = match parse_file(root, &path, false) {
+                Ok(parsed) => parsed,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error),
             };
-            if !read_transcript(root, &path, &mut scan.skipped, |value| {
-                if let Some(cwd) = value.get("cwd").and_then(Value::as_str) {
-                    transcript.cwd = Some(cwd.to_owned());
-                }
-                if let Some(branch) = value.get("gitBranch").and_then(Value::as_str) {
-                    transcript.branch = Some(branch.to_owned());
-                }
-                if let Some(timestamp) = value
-                    .get("timestamp")
-                    .and_then(Value::as_str)
-                    .and_then(|text| Timestamp::parse(text).ok())
-                {
-                    transcript.started_at.get_or_insert(timestamp);
-                    transcript.last_activity = Some(timestamp);
-                }
-            })? {
-                continue;
-            }
+            let mut transcript = parsed.transcript;
+            scan.skipped.extend(parsed.skipped);
             for subagent_path in children(&project.join(id).join("subagents"))? {
                 if !subagent_path.is_file()
                     || subagent_path.extension().is_none_or(|ext| ext != "jsonl")
@@ -117,13 +96,16 @@ pub fn scan(root: &Path) -> io::Result<ClaudeScan> {
                 else {
                     continue;
                 };
-                if !read_transcript(root, &subagent_path, &mut scan.skipped, |_| {})? {
-                    continue;
-                }
+                let parsed = match parse_file(root, &subagent_path, true) {
+                    Ok(parsed) => parsed,
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                    Err(error) => return Err(error),
+                };
+                scan.skipped.extend(parsed.skipped);
                 transcript.subagents.push(agent_id.to_owned());
                 transcript.subagent_files.push(SubagentFile {
                     id: agent_id.to_owned(),
-                    transcript: relative_path(root, &subagent_path),
+                    transcript: parsed.transcript.transcript,
                 });
             }
             transcript.subagents.sort();
@@ -169,42 +151,6 @@ fn relative_path(root: &Path, path: &Path) -> String {
         .into_owned()
 }
 
-/// Returns false only when the file disappeared before it could be opened.
-fn read_transcript(
-    root: &Path,
-    path: &Path,
-    skipped: &mut Vec<Skipped>,
-    mut visit: impl FnMut(&Value),
-) -> io::Result<bool> {
-    let display_path = relative_path(root, path);
-    let reader = match JsonlReader::from_path(path, &display_path) {
-        Ok(reader) => reader,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
-    };
-    for record in reader {
-        match record? {
-            Err(skip) => skipped.push(skip),
-            Ok((line, value)) => {
-                if value
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .is_some_and(known_type)
-                {
-                    visit(&value);
-                } else {
-                    skipped.push(Skipped {
-                        file: display_path.clone(),
-                        line,
-                        reason: SkipReason::UnknownType,
-                    });
-                }
-            }
-        }
-    }
-    Ok(true)
-}
-
 fn known_type(kind: &str) -> bool {
     matches!(
         kind,
@@ -227,7 +173,7 @@ fn known_type(kind: &str) -> bool {
     )
 }
 
-fn read_session_record(root: &Path, path: &Path) -> Option<SessionRecord> {
+pub fn read_session_record(root: &Path, path: &Path) -> Option<SessionRecord> {
     let value: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     let string = |key: &str| value.get(key)?.as_str().map(str::to_owned);
     let timestamp = |key: &str| Timestamp::from_epoch_ms(value.get(key)?.as_i64()?).ok();
@@ -249,24 +195,129 @@ mod tests {
     use super::*;
 
     #[test]
-    fn transcript_missing_at_open_is_omitted_but_empty_file_is_read() {
+    fn parse_file_reports_missing_at_open_but_reads_empty_file() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("x.jsonl");
         fs::write(&path, "").unwrap();
         assert!(path.is_file());
         // Deterministically model deletion after discovery, before open.
         fs::remove_file(&path).unwrap();
-        let mut skipped = Vec::new();
-        assert!(
-            !read_transcript(root.path(), &path, &mut skipped, |_| {
-                panic!("missing transcript must not yield records")
-            })
-            .unwrap()
+        assert_eq!(
+            parse_file(root.path(), &path, false).unwrap_err().kind(),
+            io::ErrorKind::NotFound
         );
-        assert!(skipped.is_empty());
 
         fs::write(&path, "").unwrap();
-        assert!(read_transcript(root.path(), &path, &mut skipped, |_| {}).unwrap());
-        assert!(skipped.is_empty());
+        let parsed = parse_file(root.path(), &path, false).unwrap();
+        assert_eq!(parsed.transcript.id, "x");
+        assert_eq!(parsed.transcript.cwd, None);
+        assert_eq!(parsed.transcript.last_activity, None);
+        assert!(parsed.skipped.is_empty());
+        assert!(parsed.invocations.is_empty());
+        assert_eq!(parsed.latest_timestamp, None);
     }
+}
+
+/// One independently cacheable transcript. Subagent discovery belongs to the caller.
+#[derive(Debug, Clone)]
+pub struct ParsedFile {
+    pub transcript: Transcript,
+    pub skipped: Vec<Skipped>,
+    pub invocations: Vec<Invocation>,
+    /// Includes unknown record types, which can clear hook waiting.
+    pub latest_timestamp: Option<Timestamp>,
+}
+
+pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<ParsedFile> {
+    let id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    let mut transcript = Transcript {
+        id: id.to_owned(),
+        transcript: relative_path(root, path),
+        cwd: None,
+        branch: None,
+        started_at: None,
+        last_activity: None,
+        subagents: Vec::new(),
+        subagent_files: Vec::new(),
+    };
+    let mut skipped = Vec::new();
+    let mut latest_timestamp = None;
+    let mut call_owners = std::collections::HashMap::new();
+    for item in JsonlReader::from_path(path, &transcript.transcript)? {
+        let (line, value) = match item? {
+            Ok(item) => item,
+            Err(skip) => {
+                skipped.push(skip);
+                continue;
+            }
+        };
+        if subagent
+            && value["type"] == "assistant"
+            && let Some(blocks) = value.pointer("/message/content").and_then(Value::as_array)
+        {
+            for block in blocks {
+                if block["type"] == "tool_use"
+                    && let Some(id) = block["id"].as_str()
+                {
+                    call_owners.entry(id.to_owned()).or_insert_with(|| {
+                        (
+                            value["sessionId"].as_str().map(str::to_owned),
+                            value["agentId"].as_str().map(str::to_owned),
+                        )
+                    });
+                }
+            }
+        }
+        let at = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(|s| Timestamp::parse(s).ok());
+        latest_timestamp = latest_timestamp.max(at);
+        if !value
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(known_type)
+        {
+            skipped.push(Skipped {
+                file: transcript.transcript.clone(),
+                line,
+                reason: SkipReason::UnknownType,
+            });
+            continue;
+        }
+        if let Some(cwd) = value.get("cwd").and_then(Value::as_str) {
+            transcript.cwd = Some(cwd.to_owned());
+        }
+        if let Some(branch) = value.get("gitBranch").and_then(Value::as_str) {
+            transcript.branch = Some(branch.to_owned());
+        }
+        if let Some(at) = at {
+            transcript.started_at.get_or_insert(at);
+            transcript.last_activity = Some(at);
+        }
+    }
+    let scan = ClaudeScan {
+        transcripts: vec![transcript.clone()],
+        ..Default::default()
+    };
+    let mut calls = invocations(root, &scan)?;
+    if subagent {
+        calls.retain_mut(|call| {
+            let Some((Some(parent), agent)) = call_owners.get(&call.invocation) else {
+                return false;
+            };
+            call.parent = parent.clone();
+            call.subagent = agent.clone();
+            true
+        });
+    }
+    Ok(ParsedFile {
+        transcript,
+        skipped,
+        invocations: calls,
+        latest_timestamp,
+    })
 }
