@@ -801,10 +801,157 @@ mockup screen 6 promises. The real screen buries that (owner, 2026-10-30, after 
 - Files: `README.md`, `docs/phase4-check.md`
 - Verify: outputs pasted in `docs/phase4-check.md`; whole-phase Verify passes; the owner's answer recorded.
 
+### Phase 5 — Home redesign to the approved target (Release 1.2)
+Need (unchanged from Phase 4): from the home screen I can tell in a few seconds which repo needs me and what
+is running. Owner, 2026-10-30, after Phase 4: the screen is shorter but "still very hard to easily read and
+understand, nothing like the mockup"; Phase 4 closes as not meeting the need and Phase 5 replaces its layout.
+The owner approved **board 7** on the mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C, "7 · Home
+target: real data, 30 Oct 16:19"), drawn only from real `overview` + `links` output, and asked to
+**prioritise UX/UI, readability and colour**. Board 7 is the acceptance picture for this phase.
+- **Why Phase 4 missed:** it was built rule by rule (merge, collapse, header) with colour listed as a
+  non-goal and no picture to check against. Rows were named by id prefixes, most rows were old `unknown`
+  sessions, bars were a thin dotted track, links used internal words (`heuristic exec`).
+- **V0 JSON stays stable; presentation lives in the TUI.** Core JSON gains only additive fields (V1 `made`,
+  V8 `hook`); every existing value and row order is unchanged. Windowing, ordering, the cap and combined
+  lanes are a home view model in the TUI (`crates/tui/src/view.rs`), built from the overview + links.
+- **V1 Rows are named by step.** New SessionRow field `made`: steps of the links this row made (links whose
+  `parent` is its id), newest first (`handoffs` lists only links into a Codex row). A Claude row's label is
+  its latest made step; a Codex row's is its placing link's step. No step: `claude · no hand-off`,
+  `codex · no parent found`; the busy main row reads `claude main · busy now`. Id prefixes leave the home
+  screen (the timeline and `o` keep ids).
+- **V2 One lane per step, only when it is true.** A Claude row with exactly one Codex child whose placing
+  step equals the parent's latest made step (or one of them is null) is drawn as one lane: the Claude span as
+  a thin line, the Codex span as a solid block, each mapped on its own times (a child may start or end
+  outside the parent's span; overlap draws Codex on top). Otherwise parent and children stay separate rows.
+  On a combined lane, `o` opens the Claude session and `enter` splits it into its two rows.
+- **V3 Rows: actionable always, the rest windowed.** Per repo: waiting, busy and stale rows always show,
+  whatever their age and outside any cap (rank by the row's own state and its children's). Then quiet rows
+  by `started_at` ascending (the step chain reads top to bottom), only those with activity in the window,
+  at most 8; the rest are one line `N earlier sessions · enter shows all`. The TUI stops drawing
+  `claude ×N` / `codex ×N` (core still emits MergedRow; the view flattens it).
+- **V4 Colour is a requirement, with tested contrast.** One theme: explicit fg/bg pairs for Claude orange,
+  Codex blue, needs-you yellow, warning red, secondary grey, track, card border, selected row; bright for
+  busy/waiting, dim for idle/done/unknown. Truecolor when `COLORTERM` is `truecolor`/`24bit`, else 256-colour
+  indexes; every text pair ≥ 4.5:1 contrast on the card background (test computes it for both palettes).
+  `NO_COLOR`: no colour, the track becomes `·`, spans keep `━` / `█`, and every state keeps its glyph and
+  word. Cards have rounded borders; busy repo border orange, waiting yellow.
+- **V5 Bars like the mockup.** Fixed bar column right of the label column; dark track cells; Claude `━`
+  orange, Codex `█` blue; clipped ends `◂` / `▸`; a zero-length span is one cell. Axis labels above the
+  first card in local time, last one `now`.
+- **V6 Plain words.** exact → `confirmed`, heuristic → `matched by time`, ambiguous → `N possible runs`,
+  unlinked → `no run found`. Last line per expanded repo: `last: claude handed step X to codex at HH:MM
+  (matched by time)`.
+- **V7 Local time.** Offset read once per refresh for the report's `now` (`time` crate `local-offset`);
+  fallback UTC with the axis saying `UTC`. Fractional offsets work. When the window crosses midnight the
+  first axis label carries the date (`Oct 29 23:20`). JSON timestamps stay UTC. Limitation: a window across
+  a DST change uses the offset at `now`.
+- **V8 Header.** `All repos · last 2h`, `● N busy`, `○ N idle · N done or unknown`, repos, hand-offs; at the
+  right `◆ N need you` in yellow whenever any row is waiting (records report waiting without a hook). With
+  zero waiting and no hook records seen, it says `◆ needs-you partial: no hook records seen` instead of
+  `0 need you`. Overview gains `hook`: `{"records": N, "latest": ts | null}` (observed evidence, never
+  "installed"); an unreadable hook dir stays a diagnostic.
+- **V9 Idle repos, truthful.** One bordered line: name (fixed width), the plan wording the screen already
+  uses (latest step id + title, `no PLAN.md`, `PLAN.md not in the step format`), then counts by harness and
+  real state (`1 claude idle · 5 codex done or unknown`) and `last HH:MM`; no path. Stale or FR17 repos never
+  collapse; the FR17 warning stays a red row. `enter` expands.
+- **V10 Widths.** ≥ 100 columns: board 7 layout, 46-column labels. 80–99: 30-column labels, the last line
+  shortened to `last: step X → codex · matched by time`. 60–79: 24-column labels, header drops the hand-off
+  count. < 60: no bars, text rows only. Labels end with `…` on a word boundary; field priority: state glyph,
+  step, harness, link words. Lists taller than the screen scroll with the selection.
+- Non-goals: Codex waiting detection; installing the hook for the owner (it stays print-only); the
+  timeline screen (later phase); themes beyond the one palette.
+- Verify (whole phase, 5.5 runs it): `cargo test --workspace` and clippy clean; existing JSON keys differ
+  only by the added fields; the styled golden for the board-7 fixture matches the hand-drawn target from
+  5.1 cell for cell (characters, fg, bg, modifiers); an HTML render of the real home screen, screenshotted,
+  next to board 7 in `docs/phase5-check.md`; the owner looks at the real screen and confirms (stop-and-ask).
+
+### Step 5.1 — Contract and target screen (Claude)
+- Depends on: Phase 4 code (383537e).
+- Write V0–V10 into `docs/design.md` ("Phase 5 decisions") and `docs/output-schema.md` (SessionRow `made`,
+  overview `hook`, both additive). New isolated fixture root `fixtures/sessions-phase5/` shaped like board 7:
+  one busy Claude row, four step chains with one Codex child each (one `confirmed`, the rest `matched by
+  time`, one child ending after its parent), two Claude rows with no hand-off, one Codex row with no parent,
+  one quiet session before the window, one waiting session from yesterday (must show), two idle repos (one
+  with a PLAN.md, one Codex-only). Hand-written `fixtures/expected/phase5/overview.json` and the target
+  screen as a styled golden: `fixtures/expected/tui/home-phase5.txt` (text grid) plus
+  `home-phase5.styles.txt` (one line per run: row, columns, fg, bg, every modifier), 120×40, fixed offset
+  UTC−7, truecolor palette, nothing selected.
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase5/**`,
+  `fixtures/expected/phase5/**`, `fixtures/expected/tui/home-phase5*.txt`
+- Verify: keys are valid JSON and every row traces to a fixture file (Review line lists them); the target
+  golden is checked by eye against board 7 (Review line names each region: header, axis, card, step lanes,
+  idle lines, footer, and what differs from board 7 because of the added waiting row); palette contrast
+  ratios listed; `cargo test --workspace` → all `ok` (nothing reads the new files yet).
+
+### Step 5.2 — Core: `made` and `hook` (Codex)
+- Depends on: 5.1.
+- Overview fills SessionRow `made` and report `hook` per the 5.1 contract; nothing else in the JSON changes.
+- Files: `crates/core/src/{overview,hook,scanner}.rs`, `crates/core/tests/**`, `crates/model/src/**`,
+  `crates/model/tests/**`, `fixtures/expected/overview.json`, `fixtures/expected/hook/overview.json`,
+  `fixtures/expected/phase4/overview.json` (only the added fields)
+- Verify: `cargo test --workspace` → all `ok`, phase5 overview equals its key; a test that the existing keys
+  equal their committed versions once `made` / `hook` are removed; unit tests for `made` with zero / one /
+  several links, `hook` with no dir, an empty dir, old records only, and an unreadable dir (diagnostic);
+  `cargo clippy --workspace -- -D warnings` clean.
+
+### Step 5.3 — TUI theme and styled goldens (Codex)
+- Depends on: 5.2.
+- `crates/tui/src/theme.rs` per V4 (pure function of the env values passed in). Test helper that dumps a
+  ratatui buffer in the 5.1 styled-golden format (fg, bg, every modifier); existing home and timeline goldens
+  gain `.styles.txt` files generated once and reviewed.
+- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/*.styles.txt`,
+  `crates/cli/src/tui.rs` (reads the environment once)
+- Verify: `cargo test --workspace` → all `ok`; theme tests for truecolor, 256 and `NO_COLOR`; contrast test
+  ≥ 4.5:1 for every text pair in both palettes; a `NO_COLOR` render keeps every glyph and word and a visible
+  track; clippy clean.
+
+### Step 5.4 — TUI home to board 7 (Codex)
+- Depends on: 5.3.
+- `crates/tui/src/view.rs` (home view model: V2, V3, V10) and `render_home` per V1–V10; local offset per V7.
+  App: `enter` expands an idle repo, splits a combined lane, or shows hidden rows; `o` opens the selected
+  row's session (Claude on a combined lane); selection survives refresh.
+- Files: `Cargo.toml` (`time` `local-offset`), `Cargo.lock`, `crates/tui/src/**`, `crates/tui/tests/**`,
+  `fixtures/expected/tui/home*.txt`, `crates/cli/src/tui.rs`, `crates/cli/tests/**` (only tests that read
+  home text)
+- Verify: `cargo test --workspace` → all `ok`; the phase5 render equals `home-phase5.txt` and
+  `home-phase5.styles.txt` from 5.1 exactly (5.1's golden is not edited here; a mismatch Codex blames on the
+  golden is reported, not fixed); view tests: yesterday's waiting row shown, 9 quiet rows → 8 + hidden line,
+  a child ending after its parent, differing steps → two rows, a midnight-crossing window, offsets −7 / 0 /
+  +5:30; renders at 120 / 100 / 80 / 60 / 40 columns and 10 rows follow V10 with no cut words; App tests for
+  the three `enter` cases and `o` on a combined lane; clippy clean.
+
+### Step 5.5 — Visual check on real data and README (Claude)
+- Depends on: 5.4.
+- `crates/tui/examples/home_html.rs`: renders the home buffer with colours to HTML (fixture or real `~`).
+  Screenshot the real-`~` render and the phase5 fixture render in the browser pane, place them next to a
+  board 7 screenshot in `docs/phase5-check.md` (repo names only, no conversation content); note every
+  difference from board 7. README home-screen section and screenshot updated from these outputs. Record the
+  owner's Phase 4 verdict in `docs/phase4-check.md`. Then stop and ask the owner to run `multi-link tui`
+  and confirm.
+- Files: `crates/tui/examples/home_html.rs`, `docs/phase5-check.md`, `docs/phase4-check.md`, `README.md`,
+  `docs/img/**`
+- Verify: whole-phase Verify; screenshots in `docs/phase5-check.md`; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-30 — Phase 5 plan (Claude, Codex critique, read-only)
+Owner approved board 7 and asked to prioritise UX/UI, readability and colour. Codex checked 5.1–5.5 against
+the code. Verdict: revise before implementing. All 10 accepted.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P1: the window and 8-row cap could hide an overnight waiting session | Accepted: V3 always shows waiting/busy/stale rows outside the cap; overflow line keeps the rest reachable; yesterday's waiting row in the 5.1 fixture |
+| 2 | P2: filtering/capping in core breaks the JSON contract | Accepted: V0, presentation in a TUI view model; JSON additive only; 5.2 tests existing keys minus new fields |
+| 3 | P2: hook presence is not "installed" or "needs-you off" | Accepted: V8 reports observed records; waiting count always shown; "partial: no hook records seen" only at zero waiting |
+| 4 | P2: 5.2 lacked `scanner.rs`, which owns window and hook records | Accepted: added to Files |
+| 5 | P2: one lane per step is not guaranteed by placement | Accepted: V2 combines only on one child with matching (or null) step; `o` opens Claude, `enter` splits |
+| 6 | P2: a child can run past its parent's span | Accepted: independent mapping, overlap rule, fixture child ending after its parent |
+| 7 | P2: 46-column labels cannot fit at 60 columns | Accepted: V10 width tiers, field priority, ellipsis, scrolling; renders at 5 widths and 10 rows |
+| 8 | P2: colour readability untested; golden format dropped dim/reversed | Accepted: V4 explicit pairs, 4.5:1 contrast test, NO_COLOR track; golden records every modifier |
+| 9 | P2: local time underspecified; `time` lacks `local-offset` | Accepted: V7 rules; Cargo.toml in 5.4; offsets −7/0/+5:30 and midnight tests; DST limitation stated |
+| 10 | P2: idle summary could claim states the data lacks | Accepted: V9 uses real counts and existing plan wording; stale/FR17 repos never collapse |
 
 ### 2026-10-30 — Step 4.6 review (adversarial Claude subagent)
 | # | Finding | Decision |

@@ -1,7 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–3 / **Release 1 are done**, including Step **3.8**.
+**Resume here (2026-10-30, latest).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
+screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Next: Phase
+5** (home redesign to the owner-approved **board 7** on the mockup canvas; priority UX/UI, readability,
+colour). Run 5.1 → 5.5 in order, one fresh step session each; 5.5 ends with a stop-and-ask for the owner.
+The older notes below are history.
+
+Phases 0–3 / **Release 1 are done**, including Step **3.8**.
 Whole-phase Verify passes with documented limitations; Step 3.8 reviewed by Claude and committed locally (not pushed).
 Next: **Phase 4 (home screen cleanup, Release 1.1)**, planned 2026-10-30 after the owner found the real
 home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coordinator workspace gate
