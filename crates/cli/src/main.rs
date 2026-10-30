@@ -1,4 +1,5 @@
 mod hook;
+mod tui;
 
 use std::{
     collections::HashSet,
@@ -30,6 +31,8 @@ enum Command {
         #[command(subcommand)]
         command: hook::HookCommand,
     },
+    /// Interactive dashboard.
+    Tui(tui::TuiArgs),
     Sessions(CommonArgs),
     Links(CommonArgs),
     /// Home screen data: repo groups, rows, plan (one refresh pass).
@@ -414,6 +417,7 @@ fn overview_text(writer: &mut impl Write, report: &OverviewReport) -> io::Result
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let cli = match cli.command {
         Command::Hook { command } => return hook::run(command),
+        Command::Tui(args) => return tui::run(args),
         command => Cli { command },
     };
     if let Command::Open(args) = &cli.command {
@@ -440,7 +444,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let common = match &cli.command {
-        Command::Hook { .. } | Command::Open(_) => unreachable!(),
+        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) => unreachable!(),
         Command::Sessions(common)
         | Command::Links(common)
         | Command::Overview(common)
@@ -464,7 +468,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut stdout = io::stdout().lock();
     match &cli.command {
-        Command::Hook { .. } | Command::Open(_) => unreachable!(),
+        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) => unreachable!(),
         Command::Sessions(_) => {
             let output = multi_link_core::sessions_report(&root, &options)?;
             hook_conflicts(multi_link_core::links_report(&root, &options)?.hook_conflicts);

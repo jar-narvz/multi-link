@@ -93,6 +93,19 @@ pub fn render_timeline(
     area: Rect,
     buf: &mut Buffer,
 ) {
+    render_timeline_selected(report, links, repo, window, None, area, buf);
+}
+
+/// Interactive variant: keep the selected lane visible and highlight it.
+pub fn render_timeline_selected(
+    report: &OverviewReport,
+    links: &LinksReport,
+    repo: &str,
+    window: TimeWindow,
+    selection: Option<usize>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let area = area.intersection(buf.area);
     if area.is_empty() {
         return;
@@ -189,7 +202,10 @@ pub fn render_timeline(
         .saturating_sub(legend_rows);
     let total = lanes.len();
     // When lanes are cut, the last body row counts them (with one body row, it is the only row).
-    let (shown, hidden) = if total > usize::from(body_rows) && body_rows >= 1 {
+    let (shown, hidden) = if total > usize::from(body_rows)
+        && body_rows >= 1
+        && !(body_rows == 1 && selection.is_some())
+    {
         (
             usize::from(body_rows - 1),
             total - usize::from(body_rows - 1),
@@ -197,11 +213,14 @@ pub fn render_timeline(
     } else {
         (usize::from(body_rows).min(total), 0)
     };
+    let offset = selection.map_or(0, |selected| (selected + 1).saturating_sub(shown.max(1)));
+    let shown = shown.min(total.saturating_sub(offset));
+    let hidden = hidden.saturating_sub(offset);
     let markers = group
         .map(|_| markers_by_lane(&lanes, links))
         .unwrap_or_default();
-    for (index, lane) in lanes.iter().take(shown).enumerate() {
-        let Some(row) = u16::try_from(index)
+    for (index, lane) in lanes.iter().enumerate().skip(offset).take(shown) {
+        let Some(row) = u16::try_from(index - offset)
             .ok()
             .and_then(|i| body_top.checked_add(i))
         else {
@@ -216,6 +235,9 @@ pub fn render_timeline(
         );
         if let Some(scale) = &scale {
             draw_lane(scale, lane, &markers[index], lane_x, row, buf);
+        }
+        if selection == Some(index) {
+            buf.set_style(Rect::new(area.x, row, area.width, 1), Modifier::REVERSED);
         }
     }
     if hidden > 0

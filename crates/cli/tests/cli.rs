@@ -887,3 +887,20 @@ fn open_lookup_no_match_ambiguous_and_old_ids() {
         "claude --resume 0d7faed4-bfd7-40bc-9d56-c3652efeb876"
     );
 }
+
+#[test]
+fn tui_has_only_dashboard_flags_and_rejects_invalid_history() {
+    let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+        .args(["tui", "--help"])
+        .output()
+        .unwrap();
+    success(&output);
+    let help = String::from_utf8(output.stdout).unwrap();
+    for flag in ["--root", "--now", "--since"] {
+        assert!(help.contains(flag));
+    }
+    assert!(!help.contains("--json"));
+    let output = run("tui", &["--since", "bad"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("expected 'all' or a duration"));
+}

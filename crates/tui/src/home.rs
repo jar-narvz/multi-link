@@ -61,6 +61,16 @@ pub fn render_home(
     area: Rect,
     buf: &mut Buffer,
 ) {
+    render_home_with_footer(report, selection, true, area, buf);
+}
+
+pub(crate) fn render_home_with_footer(
+    report: &OverviewReport,
+    selection: Option<usize>,
+    keys: bool,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let area = area.intersection(buf.area);
     if area.is_empty() {
         return;
@@ -68,11 +78,14 @@ pub fn render_home(
     let lines = body_lines(report);
 
     // Title on top and keys at the bottom when there is room for a body line between them.
-    let (title_rows, footer_rows) = match area.height {
+    let (title_rows, mut footer_rows) = match area.height {
         1 => (0, 0),
         2 => (0, 1),
         _ => (1, 1),
     };
+    if !keys {
+        footer_rows = 0;
+    }
     if title_rows == 1 {
         let title = Line::from(vec![
             Span::from("multi-link").bold(),

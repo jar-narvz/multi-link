@@ -386,10 +386,13 @@ name = "multi-link"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "crossterm",
  "multi-link-core",
  "multi-link-hook",
  "multi-link-model",
  "multi-link-plan",
+ "multi-link-tui",
+ "ratatui",
  "serde",
  "serde_json",
  "tempfile",

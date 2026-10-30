@@ -1,22 +1,23 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (paused 2026-10-30 by the owner after Step 3.6).** Phases 0–2 and Steps **3.1–3.6** + **3.6a** done
-and committed locally (not pushed). Next: **Step 3.7** (`multi-link tui`: refresh loop, keys, bell, open with
-terminal suspend/restore), then **3.8** (real check on `~`, README; closes Release 1). Start 3.7 with one fresh
-step session (CLAUDE.md "Autonomous mode"). **Codex-off mode is off** (owner, 2026-10-30): 3.7 goes to Codex
-(`codex exec`), with Claude as planner and reviewer.
+**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.7** + **3.6a** are done and committed locally
+(not pushed). Next: **Step 3.8** (real check on `~`, pty check with a stub child and a missing program, resize,
+README; closes Release 1). `multi-link tui [--root] [--now] [--since]` runs; runtime in `crates/cli/src/tui.rs`,
+pure `App` in `crates/tui/src/app.rs`. Codex-off mode is off: Codex implements, Claude plans and reviews.
+- **3.8 should check on real `~`:** footer shows diagnostics after the key help (bad/incomplete counts); child
+  exit messages stay until a key; Ctrl-C quits; the worker is not joined on quit (terminal restores first).
 
 - **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
 - **What 3.7 needs from 3.6:** `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)` and
-  `TimeWindow::default_for(report)`; it has no selection or scroll state, so 3.7 adds keys for it (and the window).
+  `TimeWindow::default_for(report)`; 3.7 adds selected-lane scrolling, +/- zoom, left/right pan and 0 reset.
 
 - **What 3.7 needs from 3.4:** before `o` / `f`, call `open::fresh_action(&mut scanner, root, &options, full_id, fork)`
   (fresh pass, window off; `None` → footer "session no longer found"). Execute `Resume` as
   `Command::new(program).args(args).current_dir(cwd).status()` and `AppLink` as `/usr/bin/open <url>`, wrapped in T9's
   terminal suspend/restore; show `Unavailable` with its reason and command. The CLI's `open_command` builds these.
 - **What 3.7 needs from 3.5:** `selection` indexes `selectable(report)`; a merged row is one line until expanded, and
-  `render_home` has no expanded state yet, so 3.7 adds it. crossterm is already a tui dependency.
+  3.7 expands it in App presentation state before selecting individual members. crossterm is a tui dependency.
 
 - **What 3.4 needs from 3.3:** `Session.host_session_id` and `Session.record` already follow the
   several-records-per-id rule (`core/src/sessions.rs::choose_record`: `finished` only when every record is
@@ -43,9 +44,10 @@ step session (CLAUDE.md "Autonomous mode"). **Codex-off mode is off** (owner, 20
   `unreadable`) describe the last pass. `sessions_report` / `links_report` are fresh-Scanner wrappers; the CLI
   `sessions` command still calls both (≈ 5.9 s warm, was 16.4 s), so 3.3's `overview` CLI should use one
   `refresh`. Repo memo (`Scanner::repos`, per cwd) never expires and memoises the cwd fallback when git fails.
-- **Open for 3.7 (T9):** a non-NotFound error on one Claude transcript/subagent dir (EACCES, ENOTDIR) still fails
-  the whole pass, as before 3.1; the TUI would then keep a stale "last good report" until it is fixed. Decide
-  in 3.7 whether to turn these into `unreadable` entries like Codex rollouts.
+- **Resolved in 3.7 (T9):** retain whole-pass failure on a non-NotFound Claude transcript/subagent directory
+  error (EACCES, ENOTDIR). The TUI keeps the last good report, shows the refresh error, and blocks open/fork until
+  a successful refresh. Partial-report conversion would require core/parser files outside 3.7's scope. A real
+  ENOTDIR subagent-path regression test covers the retained behavior; no core changes.
 - **Baseline for 3.1 (measured 2026-10-30, warm release build, real `~`):** `sessions --json` 16.4–16.9 s
   (10.4 s user, 4.5 s sys); `--root ~` (no ps/git) 6.0 s; `links` 9.8 s; `steps` 7.0 s. Cause: one `git
   rev-parse` per session before the window filter, one `ps` per record, and a full re-parse of every file.
@@ -67,6 +69,136 @@ step session (CLAUDE.md "Autonomous mode"). **Codex-off mode is off** (owner, 20
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.7: `multi-link tui`: loop, refresh, keys, bell, open — Codex
+- Did: Added `tui [--root] [--now] [--since]`. One background worker owns one Scanner, refreshes every 2 s
+  (a slow pass completes before the next), injects plan lookup, and handles fresh full-id open/fork checks with
+  the history window off. UI-thread input polling never reads disk and pauses naturally during child `status()`.
+  Pure `App::update(Event) -> Vec<Effect>` manages selection, per-repo merged-row expansion, home/timeline/esc,
+  quit, timeline lane scrolling, +/- zoom, left/right pan, 0 reset, and one bell per id newly entering waiting;
+  first report and continued waiting are silent. Selection follows the full id when refresh sorting changes.
+  Open effects contain only id/fork: executable actions come exclusively from core's fresh check. Unavailable,
+  missing ids, lookup failures and child failures appear in the footer. Terminal guards restore raw mode and
+  alternate screen after children, restore normal mode/cursor on exit, and cover setup failure and unwinding.
+- Review round 1 fixes: Accepted all three findings. Open result messages now survive successful refreshes
+  until the next key press; the in-flight checking message survives refreshes and keys until `Opened` arrives.
+  Refresh errors have separate state, with display priority open/progress message > refresh error > key help
+  plus diagnostics. Home and timeline help precedes diagnostics, truncated only at the terminal width.
+  Runtime maps Ctrl-C to q's existing quit effect, preserving ordinary c and other key codes. Added exact
+  App/render regressions for persistent results, checking lifetime, priority, combined help/diagnostics,
+  width truncation, plus a runtime Ctrl-C mapping test and fixture PTY Ctrl-C restoration check.
+- Decision (T9 open item): Keep the existing whole-pass error for a non-NotFound Claude transcript/subagent
+  directory failure. Show the error and retain the last good report; disable `o`/`f` until a successful refresh.
+  This meets T9's explicit last-good-report rule and avoids silently presenting an incomplete set as current.
+  Converting to `unreadable` requires core/parser changes, which are outside the step's allowed files. The
+  deterministic ENOTDIR regression makes one transcript's `<id>` a regular file, so its subagent discovery
+  fails even under privileged tests. NotFound behavior and existing per-file diagnostics remain as before.
+- Changed: `crates/cli/Cargo.toml`, `crates/cli/src/{main,tui}.rs`, `crates/cli/tests/cli.rs`,
+  `crates/tui/src/{lib,app,home,timeline}.rs`, `Cargo.lock`, `PROGRESS.md`.
+- Verify (fresh after Review round 1 fixes): Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0.
+  Actual output excerpts: every target/result line plus App/runtime tests (other passing test-name lines omitted).
+  ```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-f69ed8de1bb427a5)
+test tui::tests::partial_setup_and_restore_failure_still_leave_normal_terminal ... ok
+test tui::tests::control_c_uses_the_same_quit_effect_as_q ... ok
+test tui::tests::terminal_restores_after_success_spawn_failure_and_unwind ... ok
+test tui::tests::drawn_finished_but_fresh_running_never_resumes_and_errors_never_execute ... ok
+test tui::tests::app_open_running_fixture_uses_fresh_pass_and_never_resumes ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests/cli.rs (target/debug/deps/cli-89cbdb7a788bfb89)
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-002e7034494a8445)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-aaba9febfe95def0)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+     Running tests/invocation.rs (target/debug/deps/invocation-0eaccf444a8ae875)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-204a903019c5c359)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-b55b5b49100073b1)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-9171feebdd5225a7)
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+     Running tests/hook.rs (target/debug/deps/hook-0019750ae5ccafd6)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+     Running tests/links.rs (target/debug/deps/links-fc0002f57806efaa)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-75c327fc37ed8c3d)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests/sessions.rs (target/debug/deps/sessions-06ff65e7cbcbd48c)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-466f5073014ef46a)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-e8fbeeb40f3e2efd)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-0c1ee82a039f47e5)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/model.rs (target/debug/deps/model-1d2bf893dec8dc40)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-ef4f88aa29a57d10)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-b74ce1dc050185a3)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-240b89d3261ac0d5)
+test app::tests::each_new_waiting_id_gets_one_bell ... ok
+test app::tests::refresh_preserves_selected_full_id_when_order_changes ... ok
+test app::tests::checking_message_survives_refreshes_and_keys_until_opened ... ok
+test app::tests::failed_refresh_keeps_report_and_blocks_open_until_success ... ok
+test app::tests::footer_prioritizes_open_then_error_then_help_with_diagnostics ... ok
+test app::tests::timeline_scroll_keeps_last_selected_lane_visible_even_in_one_body_row ... ok
+test app::tests::merged_rows_expand_before_action_and_timeline_navigates ... ok
+test app::tests::open_results_survive_successful_refresh_until_a_key_press ... ok
+test app::tests::bell_only_on_entry_to_waiting_and_not_on_first_report ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/home.rs (target/debug/deps/home-7b5aca6f3e439c8d)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/timeline.rs (target/debug/deps/timeline-4b1fd284057fee64)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify (fresh after Review round 1 fixes): `cargo clippy --workspace -- -D warnings` → exit 0,
+  actual final output line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+  ```
+- Verify: Additional fixture-only Python PTY harness launched `target/debug/multi-link tui --root fixtures/sessions
+  --now 2026-10-29T23:15:00Z --since all`, navigated home/timeline, zoom/selection, resize, Esc and q;
+  the controlling-terminal wrapper compared termios before/after the dashboard. Actual output:
+  ```text
+PASS: fixture PTY home, timeline, zoom, selection, resize, Esc, q; exit 0; termios unchanged
+  ```
+- Verify (Review round 1): Fixture-only Python PTY controlling-terminal wrapper launched the same `tui`
+  fixture command above, sent byte 0x03 (Ctrl-C), and compared termios before/after. Actual output:
+  ```text
+PASS: fixture PTY Ctrl-C quits; exit 0; termios unchanged
+  ```
+- Review: Claude (step session), 1 round. Diff stays in the step's files. Round 1: (1) P2 a refresh overwrote the
+  open result (Unavailable command text) within 2 s → kept until the next key; (2) P3 diagnostics hid the key help
+  → shown together; (3) P3 Ctrl-C ignored in raw mode → quits like `q`. All fixed with tests. Claude re-ran
+  `cargo test --workspace` (exit 0, all `ok`, tui 18 + cli unit 8 incl. the four required App/open cases) and
+  clippy `-D warnings` (exit 0): matches Codex's output. T9 decision accepted: open's fresh pass would hit the
+  same failing dir, so blocking `o`/`f` until a good refresh costs nothing. Done.
+- Gotchas: Real-home timings, real harness-exit evidence and the real PTY stub-child checks remain Step 3.8.
+  Child failure/panic restoration here is unit-tested with injected mode transitions; the fixture PTY smoke
+  covers navigation/normal exit, not a real resumed harness. Initial local tests exposed incorrect test
+  assumptions (a project entry that is a plain file is skipped, the busy fixture cwd is repo-c, and the first
+  row has no children); corrected the tests against the fixtures and actual subagent-discovery path. Initial
+  ad-hoc PTY checks also needed a controlling-terminal wrapper to inspect termios before the session leader
+  exits; the final wrapper check above passes. A vanished timeline repo shows the existing missing-repo note;
+  Esc returns home. The worker is not joined on exit, so a slow scan cannot delay terminal restoration.
 
 ### 2026-10-30 — Step 3.6: TUI repo timeline render — Claude (implementer)
 - Did: `render_timeline(&OverviewReport, &LinksReport, repo, TimeWindow, area, buf)`, pure, no clock reads;
