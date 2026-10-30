@@ -1,6 +1,8 @@
 //! Home screen snapshots (design T4): render the overview answer keys and compare with reviewed
 //! goldens in `fixtures/expected/tui/`. `UPDATE_SNAPSHOTS=1` rewrites the goldens instead.
 
+mod support;
+
 use std::{fs, path::PathBuf};
 
 use multi_link_model::{Link, OverviewReport, Row, State};
@@ -76,6 +78,12 @@ fn check_snapshot(fixture: &str, golden: &str, width: u16, height: u16) {
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
     render_home_with_options(&report, None, &options, area, &mut buf);
+    support::check_styles(
+        &buf,
+        &repo_root()
+            .join("fixtures/expected/tui")
+            .join(golden.replace(".txt", ".styles.txt")),
+    );
     let rendered = text(&buf);
     let path = repo_root().join("fixtures/expected/tui").join(golden);
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some_and(|value| value == "1") {

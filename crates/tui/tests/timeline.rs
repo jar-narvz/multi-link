@@ -1,6 +1,8 @@
 //! Repo timeline snapshots (design T4) and window/clipping rules (PLAN Step 3.6). Goldens live
 //! in `fixtures/expected/tui/timeline*.txt`; `UPDATE_SNAPSHOTS=1` rewrites them instead.
 
+mod support;
+
 use std::{fs, path::PathBuf, time::Duration};
 
 use multi_link_model::{Link, LinksReport, Match, OverviewReport, Row, SessionRow, Timestamp};
@@ -77,10 +79,17 @@ fn text(buf: &Buffer) -> String {
     out
 }
 
-fn check_snapshot(rendered: &str, golden: &str) {
+fn check_snapshot(buffer: &Buffer, golden: &str) {
+    let rendered = text(buffer);
+    support::check_styles(
+        buffer,
+        &repo_root()
+            .join("fixtures/expected/tui")
+            .join(golden.replace(".txt", ".styles.txt")),
+    );
     let path = repo_root().join("fixtures/expected/tui").join(golden);
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some_and(|value| value == "1") {
-        fs::write(&path, rendered).expect("write golden");
+        fs::write(&path, &rendered).expect("write golden");
         return;
     }
     let expected = fs::read_to_string(&path)
@@ -194,14 +203,14 @@ fn amb_links() -> LinksReport {
 fn timeline_repo_a_default_window_snapshot() {
     let report = overview();
     let window = TimeWindow::default_for(&report);
-    let screen = text(&render(&report, &links(), REPO_A, window, WIDTH, 16));
-    check_snapshot(&screen, "timeline-repo-a.txt");
+    let buffer = render(&report, &links(), REPO_A, window, WIDTH, 16);
+    check_snapshot(&buffer, "timeline-repo-a.txt");
 }
 
 #[test]
 fn timeline_repo_a_zoom_snapshot() {
-    let screen = text(&render(&overview(), &links(), REPO_A, zoom(), WIDTH, 16));
-    check_snapshot(&screen, "timeline-repo-a-zoom.txt");
+    let buffer = render(&overview(), &links(), REPO_A, zoom(), WIDTH, 16);
+    check_snapshot(&buffer, "timeline-repo-a-zoom.txt");
 }
 
 #[test]
@@ -209,16 +218,16 @@ fn timeline_repo_b_ambiguous_default_window_snapshot() {
     let links = amb_links();
     let report = amb_overview(&links);
     let window = TimeWindow::default_for(&report);
-    let screen = text(&render(&report, &links, REPO_B, window, WIDTH, 16));
-    check_snapshot(&screen, "timeline-repo-b-amb.txt");
+    let buffer = render(&report, &links, REPO_B, window, WIDTH, 16);
+    check_snapshot(&buffer, "timeline-repo-b-amb.txt");
 }
 
 #[test]
 fn timeline_repo_b_ambiguous_zoom_snapshot() {
     let links = amb_links();
     let report = amb_overview(&links);
-    let screen = text(&render(&report, &links, REPO_B, zoom(), WIDTH, 16));
-    check_snapshot(&screen, "timeline-repo-b-amb-zoom.txt");
+    let buffer = render(&report, &links, REPO_B, zoom(), WIDTH, 16);
+    check_snapshot(&buffer, "timeline-repo-b-amb-zoom.txt");
 }
 
 #[test]

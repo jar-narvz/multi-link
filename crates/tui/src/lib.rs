@@ -12,3 +12,6 @@ pub use timeline::{DEFAULT_WINDOW, TimeWindow, render_timeline};
 
 mod app;
 pub use app::{App, Effect, Event, Refresh};
+
+/// Explicit Phase 5 palette and pure environment selection.
+pub mod theme;

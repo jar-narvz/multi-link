@@ -207,6 +207,12 @@ fn app_key(key: KeyEvent) -> KeyCode {
 
 pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
     let root = args.root.clone().map(Ok).unwrap_or_else(super::home)?;
+    let colorterm = std::env::var_os("COLORTERM");
+    let no_color = std::env::var_os("NO_COLOR");
+    let theme = multi_link_tui::theme::Theme::from_env(
+        colorterm.as_deref().and_then(|value| value.to_str()),
+        no_color.as_deref(),
+    );
     let screen = Screen::enter(TerminalModes)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
@@ -254,7 +260,10 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
             Err(mpsc::TryRecvError::Disconnected) => return Err("refresh worker stopped".into()),
             Err(mpsc::TryRecvError::Empty) => {}
         }
-        terminal.draw(|frame| app.render(frame.area(), frame.buffer_mut()))?;
+        terminal.draw(|frame| {
+            app.render(frame.area(), frame.buffer_mut());
+            theme.apply_no_color(frame.buffer_mut());
+        })?;
         if event::poll(Duration::from_millis(50))?
             && let TerminalEvent::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press

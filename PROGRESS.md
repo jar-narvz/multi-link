@@ -4,9 +4,20 @@
 **Resume here (2026-10-30, latest).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
 screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
 (home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
-5.2 is committed** (Claude-reviewed, 0 fix rounds). **Next: Step 5.3** (Codex). Run 5.3 → 5.5 in order,
-one fresh step session each; 5.5 ends with a stop-and-ask for the owner. The older notes below are history.
+5.2 is committed** (Claude-reviewed, 0 fix rounds). **5.3 is committed** (Claude-reviewed, 0 fix rounds).
+**Next: Step 5.4** (Codex). Run 5.4 → 5.5 in order, one fresh step session each; 5.5 ends with a stop-and-ask for the owner. The older notes below are history.
 
+- **What 5.4 needs from 5.3:** `multi_link_tui::theme::Theme::from_env(colorterm, no_color)` gives every
+  palette role as a `Color` (`Rgb` truecolor, `Indexed` 256, `Reset` under nonempty `NO_COLOR`) plus
+  `text_style(fg, bg)`. The CLI builds it once in `crates/cli/src/tui.rs::run` but today only calls
+  `theme.apply_no_color(buf)` after each draw (strips colour + DIM from the legacy renders); 5.4 must pass the
+  theme into `App` / `render_home` and draw with it, and can then drop or keep that post-pass (under NO_COLOR
+  the new home must still draw the `·` track itself, V4). Styled goldens: `crates/tui/tests/support/mod.rs`
+  `dump_styles` / `check_styles` (`UPDATE_STYLE_SNAPSHOTS=1` rewrites generated `.styles.txt`; text goldens
+  still use `UPDATE_SNAPSHOTS=1`). `home.rs::check_snapshot` checks `<golden>.styles.txt` next to each text
+  golden, so 5.4's new home renders regenerate the legacy home `.styles.txt` along with the text. The
+  phase5 pair is checked only by the round-trip test in `tests/theme.rs`; 5.4 adds the real render check
+  against it (never regenerate it). Legacy timeline styles keep named ANSI colours (written as `Cyan` etc.).
 - **What 5.3 / 5.4 need from 5.2:** `OverviewReport.hook: HookSummary { records: usize, latest:
   Option<Timestamp> }` (model crate; zero / `None` when no hook records, also for an unreadable dir, which
   adds a `hook directory: …` diagnostic). `SessionRow.made: Vec<String>`, newest step first; a Claude row's
@@ -140,6 +151,107 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 5.3: TUI theme and styled goldens — Codex
+- Did: Added a pure V4 theme selected from passed COLORTERM / NO_COLOR values, with every RGB and
+  xterm index fixed to the design palette. CLI reads both variables once; nonempty NO_COLOR clears
+  colours and DIM after rendering, preserving glyphs, dotted tracks and selection. Existing coloured
+  home and timeline renders are unchanged; palette application awaits 5.4.
+  Added a shared maximal-run style dumper: uppercase RGB, Debug names for other colours, every
+  modifier, blank-cell normalization, full coverage, relative coordinates. Generated nine legacy
+  style goldens once using `UPDATE_STYLE_SNAPSHOTS=1 cargo test -p multi-link-tui` (exit 0).
+  Added exact palette, environment precedence, 48 text/background contrast pairs, NO_COLOR home / timeline,
+  every-modifier and blank normalization tests. Parsed the fixed 120×40 Phase 5 text/style pair into
+  a buffer and verified byte-for-byte reproduction of its style file.
+- Changed: `crates/tui/src/{lib.rs,theme.rs}`, `crates/tui/tests/{home.rs,timeline.rs,theme.rs,support/mod.rs}`,
+  `crates/cli/src/tui.rs`, nine new `fixtures/expected/tui/*.styles.txt` (home, home-full, home-hook,
+  home-hook-full, home-phase4, timeline-repo-a, timeline-repo-a-zoom, timeline-repo-b-amb,
+  timeline-repo-b-amb-zoom), `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo fmt --all -- --check` → no output, exit 0.
+  `cargo test --workspace` → exit 0; actual target/result lines:
+  ```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-f69ed8de1bb427a5)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests/cli.rs (target/debug/deps/cli-89cbdb7a788bfb89)
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-002e7034494a8445)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-aaba9febfe95def0)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+     Running tests/invocation.rs (target/debug/deps/invocation-0eaccf444a8ae875)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-204a903019c5c359)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-b55b5b49100073b1)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-9171feebdd5225a7)
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+     Running tests/hook.rs (target/debug/deps/hook-0019750ae5ccafd6)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+     Running tests/links.rs (target/debug/deps/links-fc0002f57806efaa)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/overview.rs (target/debug/deps/overview-92debc92993de7c8)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-75c327fc37ed8c3d)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/sessions.rs (target/debug/deps/sessions-06ff65e7cbcbd48c)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-466f5073014ef46a)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-e8fbeeb40f3e2efd)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-0c1ee82a039f47e5)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/model.rs (target/debug/deps/model-1d2bf893dec8dc40)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-ef4f88aa29a57d10)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-b74ce1dc050185a3)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-240b89d3261ac0d5)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/home.rs (target/debug/deps/home-7b5aca6f3e439c8d)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/theme.rs (target/debug/deps/theme-fc7945a11b97b413)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/timeline.rs (target/debug/deps/timeline-4b1fd284057fee64)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; final actual line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.91s
+  ```
+  Byte comparison of every tracked TUI golden against `git show HEAD:<file>` → actual output:
+  ```text
+PASS: all 11 existing TUI golden files are byte-identical to HEAD (text and Phase 5 styles).
+  ```
+  `git diff --check` → no output, exit 0.
+- Review: Claude, 0 fix rounds. Files all inside the step's list; `home-phase5*.txt` and every tracked text
+  golden unchanged (`git diff --quiet HEAD -- fixtures/expected/tui/*.txt`). Palette RGB and 256 indexes equal
+  docs/design.md's table exactly; dump format reproduces the 5.1 golden byte for byte (round-trip test). The nine
+  new style files show only what the legacy renders use today (default colours, DIM/BOLD, named ANSI in the
+  timeline). Claude re-ran `cargo test --workspace` → 30 `test result: ok`, 0 failed (matches the paste);
+  `cargo clippy --workspace --all-targets -- -D warnings` clean. Nits left for 5.4: the theme is built but only
+  used for the NO_COLOR post-pass (not yet passed to the renderers); NO_COLOR also drops DIM from the legacy
+  timeline (glyphs stay); style and text goldens use two different update env vars.
+- Gotchas: Legacy snapshots intentionally retain DIM and timeline ANSI colours until 5.4; the new
+  palette's text styles use no DIM. NO_COLOR follows nonempty-value semantics (an empty value does
+  not enable it). `UPDATE_STYLE_SNAPSHOTS=1` updates only generated render styles; the hand-drawn
+  Phase 5 round-trip test always asserts against its existing file and never rewrites it.
 
 ### 2026-10-30 — Step 5.2: Core: `made` and `hook` — Codex
 - Did: Added SessionRow `made` (distinct parent-link steps by newest `(at, invocation)`, any match;
