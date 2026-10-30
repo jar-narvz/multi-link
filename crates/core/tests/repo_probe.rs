@@ -169,13 +169,26 @@ fn probe_uses_utc_start_time_instead_of_local_rendering() {
     let ps = temp.path().join("ps");
     std::fs::write(
         &ps,
-        "#!/bin/sh\nif [ \"$TZ\" = UTC ]; then\n  echo 'Fri Oct 30 00:08:22 2026'\nelse\n  echo 'Thu Oct 29 17:08:22 2026'\nfi\n",
+        "#!/bin/sh\nif [ \"$TZ\" = UTC ] && [ \"$LC_ALL\" = C ] && [ -z \"${LANG+x}${LC_TIME+x}\" ]; then\n  echo 'Fri Oct 30 00:08:22 2026'\nelse\n  echo 'Thu Oct 29 17:08:22 2026'\nfi\n",
     )
     .unwrap();
     std::fs::set_permissions(&ps, std::fs::Permissions::from_mode(0o700)).unwrap();
     let probe = RealProcessProbe::new(ps);
     assert_eq!(probe.probe(12, "Fri Oct 30 00:08:22 2026"), Liveness::Alive);
     assert_eq!(probe.probe(12, "Thu Oct 29 17:08:22 2026"), Liveness::Gone);
+}
+
+fn lstart(pid: u32, locale: &str) -> String {
+    let output = Command::new("/bin/ps")
+        .args(["-p", &pid.to_string(), "-o", "lstart="])
+        .env_remove("LANG")
+        .env_remove("LC_TIME")
+        .env("LC_ALL", locale)
+        .env("TZ", "UTC")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
 }
 
 #[test]
@@ -186,16 +199,61 @@ fn own_pid_matches_start_time_and_rejects_reused_identity() {
         eprintln!("SKIP: real ps cannot probe the test's own pid in this environment");
         return;
     }
-    let output = Command::new("/bin/ps")
-        .args(["-p", &pid.to_string(), "-o", "lstart="])
-        .env("TZ", "UTC")
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{output:?}");
-    let start = String::from_utf8(output.stdout).unwrap();
+    let start = lstart(pid, "C");
     assert!(!start.trim().is_empty());
     assert_eq!(probe.probe(pid, &start), Liveness::Alive);
     assert_eq!(probe.probe(pid, "wrong start"), Liveness::Gone);
+}
+
+#[test]
+fn real_probe_ignores_non_english_locale() {
+    const CHILD: &str = "MULTI_LINK_TEST_LOCALE_CHILD";
+    const GERMAN: &str = "de_DE.UTF-8";
+    let probe = RealProcessProbe::default();
+    let pid = std::process::id();
+    if std::env::var_os(CHILD).is_some() {
+        assert_eq!(std::env::var("LC_ALL").as_deref(), Ok(GERMAN));
+        let start = lstart(pid, "C");
+        assert!(!start.trim().is_empty());
+        if lstart(pid, GERMAN) == start {
+            println!("SKIP: {GERMAN} does not change ps output here; still checking Alive");
+        } else {
+            println!("LOCALE-CHANGES-PS");
+        }
+        assert_eq!(probe.probe(pid, &start), Liveness::Alive);
+        assert_eq!(probe.batch(&[(pid, &start)]), vec![Liveness::Alive]);
+        println!("LOCALE-CHILD-OK");
+        return;
+    }
+    if probe.probe(pid, "wrong start") == Liveness::Unavailable {
+        eprintln!("SKIP: real ps cannot probe the test's own pid in this environment");
+        return;
+    }
+    // A child test process carries the locale so parallel tests never see it.
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "real_probe_ignores_non_english_locale",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .env("LC_ALL", GERMAN)
+        .env("LANG", GERMAN)
+        .env("LC_TIME", GERMAN)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        stdout.contains("LOCALE-CHILD-OK") && stdout.contains("1 passed"),
+        "{stdout}"
+    );
+    if cfg!(target_os = "macos") {
+        // macOS ships de_DE.UTF-8, so the locale must really have been exercised.
+        assert!(stdout.contains("LOCALE-CHANGES-PS"), "{stdout}");
+    } else if !stdout.contains("LOCALE-CHANGES-PS") {
+        eprintln!("SKIP: {GERMAN} did not change ps output; only Alive was checked");
+    }
 }
 
 #[test]

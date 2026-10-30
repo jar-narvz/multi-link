@@ -46,6 +46,31 @@ impl RealProcessProbe {
             ps_binary: ps_binary.into(),
         }
     }
+
+    /// `lstart` must render as `procStart` does: English names (C locale) in UTC.
+    /// Inherited `LANG` / `LC_*` are dropped so nothing can override `LC_ALL`.
+    fn ps_command(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(&self.ps_binary);
+        command.args(args);
+        for key in [
+            "LANG",
+            "LC_CTYPE",
+            "LC_TIME",
+            "LC_MESSAGES",
+            "LC_COLLATE",
+            "LC_NUMERIC",
+            "LC_MONETARY",
+        ] {
+            command.env_remove(key);
+        }
+        for (key, _) in std::env::vars_os() {
+            if key.as_encoded_bytes().starts_with(b"LC_") {
+                command.env_remove(key);
+            }
+        }
+        command.env("LC_ALL", "C").env("TZ", "UTC");
+        command
+    }
 }
 
 impl ProcessProbe for RealProcessProbe {
@@ -65,9 +90,8 @@ impl ProcessProbe for RealProcessProbe {
             .map(u32::to_string)
             .collect::<Vec<_>>()
             .join(",");
-        let output = Command::new(&self.ps_binary)
-            .args(["-o", "pid=,lstart=", "-p", &list])
-            .env("TZ", "UTC")
+        let output = self
+            .ps_command(&["-o", "pid=,lstart=", "-p", &list])
             .output();
         let Ok(output) = output else {
             return vec![Liveness::Unavailable; requests.len()];
@@ -85,9 +109,8 @@ impl ProcessProbe for RealProcessProbe {
         if pid == 0 {
             return Liveness::Unavailable;
         }
-        let Ok(output) = Command::new(&self.ps_binary)
-            .args(["-p", &pid.to_string(), "-o", "lstart="])
-            .env("TZ", "UTC")
+        let Ok(output) = self
+            .ps_command(&["-p", &pid.to_string(), "-o", "lstart="])
             .output()
         else {
             return Liveness::Unavailable;
@@ -315,9 +338,25 @@ mod batch_tests {
         assert_eq!(std::fs::read_to_string(&count).unwrap(), "call\n");
     }
 
+    #[test]
+    fn ps_command_forces_c_locale_and_utc() {
+        use std::ffi::OsStr;
+        let command = RealProcessProbe::default().ps_command(&["-o", "lstart="]);
+        let envs: HashMap<_, _> = command.get_envs().collect();
+        assert_eq!(envs.get(OsStr::new("LC_ALL")), Some(&Some(OsStr::new("C"))));
+        assert_eq!(envs.get(OsStr::new("TZ")), Some(&Some(OsStr::new("UTC"))));
+        assert_eq!(envs.get(OsStr::new("LANG")), Some(&None));
+        assert_eq!(envs.get(OsStr::new("LC_TIME")), Some(&None));
+        for (key, _) in std::env::vars_os() {
+            if key != "LC_ALL" && key.as_encoded_bytes().starts_with(b"LC_") {
+                assert_eq!(envs.get(key.as_os_str()), Some(&None), "{key:?}");
+            }
+        }
+    }
+
     fn fs_write_stub(binary: &std::path::Path, count: &std::path::Path) {
         std::fs::write(binary, format!(
-            "#!/bin/sh\necho call >> '{}'\n[ \"$TZ\" = UTC ] || exit 2\n[ \"$*\" = '-o pid=,lstart= -p 12,14' ] || exit 2\necho ' 12 Fri Oct 30 00:08:22 2026'\n",
+            "#!/bin/sh\necho call >> '{}'\n[ \"$TZ\" = UTC ] || exit 2\n[ \"$LC_ALL\" = C ] || exit 2\n[ -z \"${{LANG+x}}${{LC_TIME+x}}\" ] || exit 2\n[ \"$*\" = '-o pid=,lstart= -p 12,14' ] || exit 2\necho ' 12 Fri Oct 30 00:08:22 2026'\n",
             count.display())).unwrap();
     }
 }

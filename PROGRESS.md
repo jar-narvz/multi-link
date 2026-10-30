@@ -1,13 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.5** done (3.4 open actions, 3.5 TUI home render).
-Next: **Step 3.6** (timeline render) in Codex-off mode. **Before 3.7:** a small step for the `ps` locale P1
-(below). Order: 3.6 → probe locale fix → 3.7 → 3.8.
+**Resume here (2026-10-30).** Phases 0–2 and Steps **3.1–3.5**, **3.6a** done (3.4 open actions, 3.5 TUI home render).
+3.6a (`ps` C locale) done. Next: finish **Step 3.6** (timeline render, in progress), then **3.7**, **3.8**
+(Codex-off mode).
 
-- **Open P1 (found in 3.4 review):** `core/src/probe.rs` runs `ps` with only `TZ=UTC`; `lstart` is locale-dependent
-  (`LC_ALL=de_DE.UTF-8` → `Fr 30 Okt …`), so a non-English locale makes a live session `finished` and `open` would
-  offer `Resume`. Fix: `LC_ALL=C` on both `ps` calls + a test. Must land before 3.7.
+- **ps locale P1: fixed in 3.6a** (`LC_ALL=C` + `TZ=UTC` on every `ps` call); 3.7 is no longer blocked by it.
 - **What 3.7 needs from 3.4:** before `o` / `f`, call `open::fresh_action(&mut scanner, root, &options, full_id, fork)`
   (fresh pass, window off; `None` → footer "session no longer found"). Execute `Resume` as
   `Command::new(program).args(args).current_dir(cwd).status()` and `AppLink` as `/usr/bin/open <url>`, wrapped in T9's
@@ -64,6 +62,32 @@ Next: **Step 3.6** (timeline render) in Codex-off mode. **Before 3.7:** a small 
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.6a: `ps` runs in the C locale — Claude (implementer)
+- Did: Both `ps` calls (batch and single) now go through one helper, `RealProcessProbe::ps_command`, which removes
+  `LANG`, the standard `LC_*` names and every inherited `LC_*` key, then sets `LC_ALL=C` and `TZ=UTC`, so `lstart`
+  always prints English names in UTC like `procStart`. Unit test checks the built Command's envs; the batch and
+  single stub `ps` scripts also require `LC_ALL=C` and unset `LANG`/`LC_TIME`. New integration test
+  `real_probe_ignores_non_english_locale` re-runs the test binary as a child with `LC_ALL`/`LANG`/`LC_TIME=de_DE.UTF-8`;
+  the child checks German really changes `ps` output, then requires `Alive` from `probe` and `batch`; the parent
+  checks the child printed `LOCALE-CHILD-OK` and `1 passed`, and on macOS `LOCALE-CHANGES-PS`. Review round 1:
+  `own_pid_matches_start_time_and_rejects_reused_identity` now takes its reference start from `lstart(pid, "C")`.
+  Mutation check: with the old TZ-only command the locale test, the env unit test and both stub tests fail.
+- Changed: crates/core/src/probe.rs, crates/core/tests/repo_probe.rs
+- Verify: `cargo test -p multi-link-core` → lib `ok. 32 passed`; hook `ok. 6 passed`; links `ok. 15 passed`;
+  repo_probe `ok. 11 passed`; sessions `ok. 12 passed`; doc-tests `ok. 0 passed`; 0 failed. Same counts with
+  `LC_ALL=fr_FR.UTF-8 LANG=de_DE.UTF-8 LC_TIME=ja_JP.UTF-8` in the outer env. Locale test ran for real (no SKIP):
+  de_DE.UTF-8 gives `Fr 30 Okt 08:44:59 2026` vs C `Fri Oct 30 08:44:59 2026`. `cargo clippy -p multi-link-core
+  --all-targets -- -D warnings` → clean.
+- Review: Claude (step session) read the diff: in scope, both paths share one helper. Adversarial Claude review:
+  nothing blocking; on this Mac `LC_ALL=C` beats LC_TIME/LANG/LANGUAGE/__CF_USER_TEXT_ENCODING, ps ignores
+  AppleLocale, padding handled by the whitespace-split compare. Round 1 accepted: un-pinned reference start in the
+  own_pid test; macOS must show `LOCALE-CHANGES-PS`. Rejected: dropping the fixed env key list (keeps LANG/LC_TIME
+  removal explicit). Step session re-ran Verify outside the sandbox (German test ran, no SKIP). Coordinator re-ran
+  `cargo test -p multi-link-core` (same counts, 0 failed) and clippy (clean); workspace gate runs after 3.6.
+- Gotchas: Never `set_var` the locale in tests (edition 2024 makes it unsafe and it races threads); use the child
+  re-exec pattern. Any test's reference `ps` call must pin `LC_ALL=C` too. In `format!` stub scripts, shell
+  `${VAR+x}` is written `${{VAR+x}}`. Off macOS, a missing de_DE.UTF-8 prints a SKIP note but still requires `Alive`.
 
 ### 2026-10-30 — Step 3.5: TUI crate: home screen render — Claude (implementer)
 - Did: New lib crate `multi-link-tui` (deps: model, ratatui 0.29.0, crossterm 0.28.1, time). `render_home(&OverviewReport, Option<usize>, Rect, &mut Buffer)` is pure (ages from `report.now`). Layout: a title line (`N repos`, now), then one block per repo in report order: header (`◆` waiting / `●` busy, basename, session counts by state in T5 order, full path); steps line (no PLAN.md / unsupported / none logged / `latest <id> <title> · Verify ✓|✗|? (<date>)`, plus `active …`); one lane per session (state glyph, harness, short id, state, age, `@<checkout basename>` when checkout ≠ repo, then step tag and match from the lane's link: for a child its placing hand-off (latest link from that parent, T11), for a top-level row its latest link, `N hand-offs` when more than one, `no linked hand-off` when none); Codex children indented with `├`/`└`; a MergedRow as one `▸ claude ×N` line; FR17 `!` warning lines; the `↳ hand-off parent → child` line (`? (N candidates)` when ambiguous). Footer keys: ↑↓ select · enter expand/timeline · t timeline · o open · f fork · q quit. `selectable(report)` lists the selectable lines (top rows, children, one per merged row) in screen order. `selection` indexes it and the body scrolls just enough to keep it visible. When the body is clipped, the last body row reads `↓ N more lines`. Order, nesting and merging are taken from the report as given. Review round 1: u16-safe row math, placing hand-off for child lanes, `no linked hand-off`, clip marker, plurals, test guard.
