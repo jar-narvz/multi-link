@@ -485,20 +485,220 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   the owner runs it once interactively and the phase stays open until then.
 - Remove the sandbox hook afterwards (`ls …/settings.local.json` fails).
 
-### Phase 3 — TUI home + timeline + open (Release 1) — to be split later
-- Forced by Phase 0 (b), relaxed by H11: needs-you sorting and the bell use the session record's `waiting` first, then the hook's; without either
-  those sessions show as unknown, not as needing me.
-- Incremental tailing (read from the last offset; truncation → re-read) is built here, where refresh
-  speed matters; Phase 1 reads each file whole.
-- Worktree labels need a `checkout` field on Session (the git toplevel of `cwd`). Phase 1 computes it
-  (Step 1.5) but the schema doesn't emit it yet; add it to `docs/output-schema.md` here (Codex 0.6 #1).
-- Verify: snapshot tests of both screens pass on fixtures; home refresh on real `~` is ≤ 2 s;
-  opening a running fixture session never calls resume.
+### Phase 3 — TUI home + timeline + open (Release 1)
+`multi-link tui`: the home screen (mockup screen 6) and the repo timeline (screen 2), needs-you sorting,
+the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md` → "Phase 3 decisions"
+(written in Step 3.2; summary here so the steps read on their own).
+- **Measured before planning (2026-10-30, warm, release build, real `~`: 165 Claude + 174 Codex JSONL,
+  378 MB + 74 MB):** `sessions --json` 16.4–16.9 s real (10.4 s user, 4.5 s sys); with `--root ~` (no
+  `ps`, no git) 6.0 s. So ~10 s is one `git rev-parse` per session (run before the history window filters
+  them out) plus one `ps` per record, and ~6 s is re-parsing every file. The 2 s target needs both fixed.
+- **T1 Speed first, offsets only if needed.** A `Scanner` in core keeps each file's parsed result keyed by
+  (path, length, mtime, inode) and re-parses only files whose key changed; git lookups are memoised per
+  `cwd` and run only for listed sessions; one `ps` call covers every record pid. Why: between two refreshes
+  only a few files change, and the largest is 44 MB, so whole-file re-parse of changed files is cheap
+  enough to try; byte-offset tailing needs every parser rewritten as a resumable fold. If 3.1's warm
+  refresh misses 2 s, offset tailing becomes its own step before 3.7. This revises the NFR "Incremental
+  reads" wording (3.2 updates design.md).
+- **T2 `overview` lives in core, not the TUI.** Grouping by repo, needs-you sort, Codex-under-parent
+  nesting, the "claude ×N" merge threshold, FR17 concurrency warnings and the latest hand-off are computed
+  by `core::overview` into an `OverviewReport` (types in `model`), printed by `multi-link overview --json`
+  and answer-keyed like the other reports. Why: "front ends contain no logic"; the desktop app reuses it;
+  a JSON answer key is reviewable where a screen snapshot is not.
+- **T3 TUI stack:** `ratatui` + `crossterm`, new crate `crates/tui` (lib) depending on `model` only.
+  Why: the standard Rust TUI pair, `ratatui::backend::TestBackend` gives text snapshots without a
+  terminal, crossterm needs no ncurses. Depending on `model` only lets TUI steps run in parallel with core
+  steps (Phase 1 parallel rule).
+- **T4 Snapshots are reviewed goldens, not hand-written keys.** Render functions are pure
+  (`&OverviewReport`, `&LinksReport`, size → `Buffer`); tests compare the buffer text with
+  `fixtures/expected/tui/*.txt`. Codex generates the golden once (`UPDATE_SNAPSHOTS=1`), Claude reviews it
+  line by line against `overview.json` before commit; any later diff fails the test. Why: hand-typing a
+  100×30 screen is error-prone; the semantic truth is the overview answer key.
+- **T5 Needs-you order:** repos with a `waiting` session first, then `busy`, then the rest; inside a
+  tier, latest activity first; ties by repo path. Sessions inside a repo: waiting, busy, stale, idle,
+  unknown, finished. Why: the screen's job is "which one needs me"; activity order inside a tier keeps
+  the hottest repo on top.
+- **T6 Bell:** one `\a` when a session id enters `waiting` between two refreshes (not on the first
+  refresh, not every refresh while it waits). Terminal bell only; macOS notifications are desktop backlog
+  (FR14/FR15). Why: a bell per refresh trains me to ignore it.
+- **T7 Open (FR18) is a pure decision in core:** `open::action(&Session, fork) -> OpenAction`
+  (`Resume{program, args, cwd}` | `AppLink{url}` | `Unavailable{reason}`); the TUI only executes it.
+  Rules: `Resume` only with positive exit evidence, i.e. Claude `finished` (record + process gone) →
+  `claude --resume <id>` (`--fork-session` with `f`) in its `cwd`. Claude running (`busy`, `idle`,
+  `waiting`, `stale`) → `AppLink` if the record has `hostSessionId`, else `Unavailable`. Everything else
+  (Claude `unknown`, every Codex session, probe unavailable) → `Unavailable` carrying the command as text
+  (`claude --resume <id>` / `codex resume <id>`) for me to run myself, because `unknown` can be a live
+  process (a completed Codex turn, a `-p` session without a record). `codex://` links stay out (untested).
+  The action is recomputed from a fresh pass for that one full id right before it runs, never taken from
+  the last drawn report. Why: "never resume a running session" must hold without a liveness signal and be
+  testable without a terminal; Session gains `host_session_id` (from the record) for the app link.
+- **T8 Session gains `checkout`** (git toplevel of `cwd`; fixture mode = `cwd`), for worktree labels
+  (Codex 0.6 #1). Added to `sessions --json` too, so the schema stays one Session type.
+- **T9 Refresh:** every 2 s on a background thread that owns the `Scanner`; the UI thread never blocks on
+  disk. Before running an external program the TUI disables raw mode, leaves the alternate screen, pauses
+  its input reader, waits for the child, then restores all three on success, spawn failure and panic. A failing pass keeps the last good report and shows the error in the footer; hook dir read errors
+  become diagnostics instead of failing the report (Phase 2 nit). Why: a dashboard that dies on one bad
+  file is worse than a stale one.
+- **T10 Deferred:** background hand-offs whose hook child is `null` (clean-env `-p`, no `scratchpad_dir`)
+  stay exact through the task output file (Exact evidence 4) while it exists and fall back to heuristic
+  after (P2), unchanged. Teaching the hook to read the "Output is being written to" path → backlog. Why:
+  it changes link evidence, not the TUI; the fallback is already honest.
+- **T11 Overview layout (Codex P2 #7):** a Codex session sits under the parent of its latest hand-off
+  (by `at`), listed once, with every hand-off kept in its `handoffs` list; children are ordered by that
+  hand-off time; a parent's place follows its own state, and a repo's tier is the best tier of any of its
+  sessions. A merged `claude ×N` row is not actionable: `enter` expands it first, so `o` / `f` always target
+  one full session id. Codex sessions with no parent are top-level rows.
+- Parallel rules from Phase 1 apply. Only steps that say so change a `Cargo.toml` / `Cargo.lock`. Parallel
+  steps run crate-local checks (`cargo test -p …`, `cargo clippy -p …`) and return their PROGRESS entry text;
+  the coordinator runs the workspace gate once both are in and writes both entries (Codex P2 #9).
+- Verify (whole phase, Step 3.8 runs it): `cargo test --workspace` passes, including the home and
+  timeline snapshot tests on fixtures and the open-action tests (no running fixture session ever gets
+  `Resume`); the `overview` answer key matches; warm home refresh on real `~` ≤ 2000 ms (pasted
+  timings); `multi-link tui` runs against real `~` in a pty and quits cleanly with `q`.
+
+### Step 3.1 — Refresh speed: scanner cache, memoised git, one `ps` (Codex)
+- Depends on: Phase 2. Parallel with: none (3.2 edits answer keys this step's tests read).
+- `core::Scanner` (new) owns per-file caches for Claude transcripts + subagents, session records, Codex
+  rollouts, hook files and task output files, keyed by (path, len, mtime, inode); `Scanner::sessions` /
+  `links` take the same `Options` and return the same outputs as `sessions_report` / `links_report`, which
+  become thin wrappers over a fresh `Scanner` (CLI unchanged). Expose per-file parse functions from the
+  `claude` / `codex` crates as needed (no behaviour change). Repo mapping: memoised per `cwd`, applied
+  after the history window. Hook dir read errors become diagnostics, not a failed report (T9).
+  `ProcessProbe` gains a batch method; `RealProcessProbe` runs one
+  `ps -o pid=,lstart= -p <pid,pid,…>` (same UTC and fail-soft rules as 1.10; per-pid fallback is not
+  allowed to spawn more than one process per pass). Example `crates/core/examples/refresh_timing.rs`:
+  real `~`, N passes on one `Scanner`, each pass doing the full refresh that exists so far (sessions +
+  links; 3.3 adds overview), prints `pass <i>: <ms> ms, <n> sessions, <k> files re-parsed, <b> bytes
+  re-parsed`. Passes 2+ run while live sessions are writing, so `k ≥ 1` shows changed files are measured.
+- Files: `crates/core/src/**`, `crates/core/examples/refresh_timing.rs`, `crates/claude/src/lib.rs`,
+  `crates/codex/src/lib.rs`, their tests.
+- Verify: `cargo test --workspace` → all `ok`, the Phase 1 and hook CLI diffs still `same`; new unit
+  tests: an appended / truncated / replaced (new inode) file is re-parsed, an unchanged one is not (parse
+  counter); a fake batch probe is called once per pass. Then
+  `cargo run --release -p multi-link-core --example refresh_timing -- 3` on real `~` → paste all three
+  lines; pass 2 and 3 ≤ 2000 ms with `k ≥ 1`. A miss is not a fail of this step if pass 1 improved: log
+  it and Claude plans offset tailing (T1) as a step that 3.7 then depends on.
+
+### Step 3.2 — Output contract: checkout, host id, overview, open rules (Claude)
+- Depends on: 3.1. Parallel with: none.
+- `docs/design.md`: "Phase 3 decisions" (T1–T11), NFR "Incremental reads" revised per T1, FR18 table
+  aligned with T7. `docs/output-schema.md`: Session `checkout`, `host_session_id`; new `overview` section
+  (repo groups, tiers, nesting, `claude ×N` threshold 4, FR17 warnings = 2+ `busy` sessions with the same
+  `cwd`, latest hand-off, per repo the latest logged step + its Verify and the step tags of active
+  hand-offs, layout per T11); fixture-mode plan lookup (a session `repo` like `/home/dev/repo-a` reads
+  `<root>/repos/<basename>/PLAN.md`, while `repo` in the output keeps the recorded string; Codex P2 #5);
+  new "Open" section (T7 table, including the `Unavailable` command text). Answer keys: `sessions.json` and `hook/sessions*.json` gain
+  the two fields; new `overview.json` and `hook/overview.json` (the hook variant has a waiting session,
+  so needs-you sort is tested; the existing child linked from two parents (exec + resume) tests T11's
+  placement; at least one repo shows a real latest step + Verify). Fixture additions only if a case is missing (concurrency warning,
+  worktree-shaped `cwd`), scrubbed per `fixtures/README.md`. Leaves `cargo test` red until 3.3 (as 2.2 did).
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/expected/**`, `fixtures/sessions/**` (only
+  additions), `fixtures/README.md`
+- Verify: `python3 -m json.tool` parses every new/changed expected file; a short script checks every
+  Session in the changed keys has `checkout` and `host_session_id` keys and every `overview` session id
+  exists in `sessions.json`; Codex critique of the contract (read-only) logged in the Review log.
+
+### Step 3.3 — Core: new Session fields, overview report, CLI `overview` (Codex)
+- Depends on: 3.2. Parallel with: none.
+- Model: `Session.checkout`, `Session.host_session_id`, `OverviewReport` types. Core: fill the fields,
+  `overview` per the schema (built from one `Scanner` pass + steps report), `Scanner::overview`. CLI:
+  `multi-link overview [--root] [--now] [--since] [--json]` (text mode: one line per repo).
+- `claude::SessionRecord` keeps `hostSessionId` (today `read_session_record` drops it; Codex P2 #3);
+  tests for an absent id and an id different from the transcript id. `refresh_timing` adds overview.
+- Files: `crates/model/src/**`, `crates/claude/src/lib.rs` + its tests, `crates/core/src/**`,
+  `crates/core/examples/refresh_timing.rs`, `crates/plan/src/**` (only if the steps report needs a
+  getter), `crates/cli/src/main.rs`, `crates/cli/tests/cli.rs`, tests.
+- Verify: `cargo test --workspace` → all `ok`; `multi-link overview --root fixtures/sessions --now
+  2026-10-29T23:15:00Z --since all --json` equals `fixtures/expected/overview.json` (parsed), the hook
+  variant equals `hook/overview.json`; the sessions / links / steps diffs print `same`.
+
+### Step 3.4 — Core open actions + CLI `open --dry-run` (Codex)
+- Depends on: 3.3. Parallel with: 3.5, 3.6.
+- `core::open::action` per output-schema "Open". CLI `multi-link open <id-prefix> [--fork] [--dry-run]`
+  with `--root/--now`: prints the action as JSON; without `--dry-run` it executes it (spawn with inherited
+  stdio in `cwd`, or `open <url>`); `Unavailable` → reason on stderr, exit 3. Ambiguous prefix → exit 2.
+- Files: `crates/core/src/open.rs`, `crates/core/src/lib.rs`, `crates/cli/src/main.rs`,
+  `crates/cli/tests/cli.rs`
+- Verify (crate-local while 3.5 runs): `cargo test -p multi-link-core -p multi-link` → all `ok`,
+  including a table test over every fixture session × {open, fork} asserting `Resume` appears only for
+  `finished`; core unit tests with `FakeProcessProbe` for: record + `Gone` → `Resume`; record + `Alive`
+  with/without `hostSessionId` → `AppLink` / `Unavailable`; probe `Unavailable`, transcript-only Claude,
+  completed-turn Codex → `Unavailable` with command text; and `--dry-run` CLI output for an app-linked
+  running Claude, a transcript-only Claude and a Codex session (fixture mode can't produce `finished`).
+
+### Step 3.5 — TUI crate: home screen render (Codex)
+- Depends on: 3.3. Parallel with: 3.4.
+- New crate `crates/tui` (`multi-link-tui`, lib, deps: model, ratatui, crossterm); workspace deps added.
+  `render_home(&OverviewReport, selection, area, buf)`: per repo header (◆ when waiting, counts), steps
+  line, one mini lane per session (harness, id prefix, state, checkout label when ≠ repo, step tag, age
+  from `now`), Codex lanes indented under the parent, `claude ×N` over 4, FR17 warning, latest hand-off,
+  footer with keys. Snapshot test at 100×30 from `overview.json` and `hook/overview.json` (T4).
+- Files: `Cargo.toml`, `Cargo.lock`, `crates/tui/**`, `fixtures/expected/tui/home*.txt`
+- Verify (crate-local while 3.4 runs): `cargo test -p multi-link-tui` → `ok`, including renders at 40×10
+  and 20×5 that don't panic; goldens reviewed by Claude against the overview keys (Review line names each
+  checked row); `cargo clippy -p multi-link-tui -- -D warnings` clean.
+
+### Step 3.6 — TUI: repo timeline render (Codex)
+- Depends on: 3.5. Parallel with: 3.4.
+- `render_timeline(&OverviewReport, &LinksReport, repo, window, area, buf)`: time axis over the window
+  (default 2 h ending at `now`), one row per session (Codex rows indented under their parent per T11), a
+  **session span** `started_at`..`last_activity` labelled as such (it includes idle gaps; busy intervals are
+  not in the model, so no busy swimlanes; Codex P2 #10), hand-off markers at `at`: exact `●`, heuristic `○`, ambiguous `?`
+  with candidate count, unlinked Codex rows top-level; legend line.
+- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/timeline*.txt`
+- Verify: `cargo test -p multi-link-tui` → `ok` with a timeline snapshot for the ambiguous repo and the
+  exact-link repo, plus tests for a span clipped by the window, a link outside the window (not drawn) and a
+  zero-length span; goldens reviewed as in 3.5.
+
+### Step 3.7 — `multi-link tui`: loop, refresh, keys, bell, open (Codex)
+- Depends on: 3.4, 3.5, 3.6. Parallel with: none.
+- CLI subcommand `tui [--root] [--now] [--since]` (cli depends on tui). Refresh thread per T9; pure
+  `App` state machine (`update(event) -> Vec<Effect>`) for keys: `↑/↓` select, `enter`/`t` timeline,
+  `esc` back, `o` open, `f` fork, `q` quit; bell per T6 as an `Effect`; open recomputes the action from a
+  fresh pass for the selected full id (T7), then suspends and restores the terminal per T9 (a guard type
+  whose `Drop` restores); `Unavailable` shows its reason and command text in the footer. Raw mode is
+  restored on panic and on every exit.
+- Files: `crates/cli/{Cargo.toml,src/**,tests/**}`, `crates/tui/src/**`, `Cargo.lock`
+- Verify: `cargo test --workspace` → all `ok`, including `App` tests: bell once on idle→waiting, not on the
+  first report or on waiting→waiting; `o` on a running fixture session yields no `Resume` effect; `o` on a
+  session that was `finished` in the drawn report but is running in the fresh pass yields no `Resume`; a
+  failed refresh keeps the last report and never feeds `o`; `cargo clippy --workspace -- -D warnings` clean.
+
+### Step 3.8 — Real check, README, Release 1 close (Claude)
+- Depends on: 3.7.
+- On real `~`: `refresh_timing -- 3` (now including overview) → pass 2–3 ≤ 2000 ms; run `multi-link tui`
+  under `script`/`expect` in a pty for ~5 s, capture the screen text (repo names only, no conversation
+  content), `q` exits 0 and the terminal is restored (`stty -a` unchanged); in the pty, `o` on a session
+  whose action runs a stub program (`PATH` with a fake `claude` that prints and exits, or is missing) comes
+  back to a working TUI in both cases; resize the pty once. In the sandbox, end an interactive `claude`
+  session and record what its record does on exit (kept → `open --dry-run` prints `Resume`; deleted →
+  `unknown` / `Unavailable`, logged honestly as a Release 1 limitation). README: what Release 1 does, how to run it, limitations
+  (undocumented formats, Codex waiting unsupported, app link undocumented), numbers only from these
+  outputs.
+- Files: `README.md`, `docs/phase3-check.md`
+- Verify: the timings and checks above pasted in `docs/phase3-check.md`; whole-phase Verify passes.
 
 ### Backlog (ordered, uncommitted)
-Step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+Hook reads the background task output path (T10) · offset tailing if T1 is not enough · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-30 — Phase 3 plan (Claude, Codex critique, read-only)
+Planned from a real-data measurement (Phase 3 header): `sessions --json` 16.4–16.9 s warm, ~10 s of it
+per-session `git` / `ps` spawns. Decisions T1–T11. No stop-and-ask: nothing changes the goal or needs the
+owner. Codex verdict: "Revise before implementation"; 2 P1, 8 P2.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P1: `unknown` (completed Codex turn, record-less Claude) can be a live process; a y/n confirm doesn't make resume safe | Accepted: `Resume` only for `finished` (positive exit evidence); `unknown`, all Codex and an unavailable probe → `Unavailable` with the command as text. Rejected cutting open from Release 1: FR18 is in the Release 1 Verify, and with this rule the risk is bounded |
+| 2 | P1: open could act on a stale report (resumed elsewhere since, or a failed refresh kept the old one) | Accepted: T7 recomputes the action from a fresh pass for the full id right before running; 3.7 tests finished→running and failed refresh |
+| 3 | P2: `read_session_record` drops `hostSessionId`; 3.3's file list can't add it | Accepted: `crates/claude/src/lib.rs` added to 3.3 with absent / different-id tests |
+| 4 | P2: fixture mode can't produce `finished`, so the dry-run `Resume` check had no input | Accepted: `Resume` tested in core with `FakeProcessProbe`; CLI dry-run checks only the non-resume cases; 3.8 records honestly what a real record does on exit |
+| 5 | P2: fixture `repo` is `/home/dev/repo-a`, plans live under `fixtures/sessions/repos/`; overview would find no plan | Accepted: 3.2 specifies the fixture-mode lookup `<root>/repos/<basename>` and requires a real latest step + Verify in the key |
+| 6 | P2: unchanged rescans don't measure refresh; 3.8 couldn't edit the example | Accepted: the example reports files/bytes re-parsed and needs `k ≥ 1`; 3.3 extends it with overview; 3.7 depends on offset tailing if 3.1 misses |
+| 7 | P2: one Codex child has two parents (exec + resume); nesting and `claude ×N` selection undefined | Accepted as T11: under its latest hand-off's parent, all hand-offs kept, merged rows expand before `o` / `f` |
+| 8 | P2: suspending for an external program needs raw mode off, input paused, restore on every path | Accepted: T9 sequence + `Drop` guard in 3.7; 3.8 pty check with a stub and a missing program, plus a resize; small-size renders in 3.5 |
+| 9 | P2: 3.4 ∥ 3.5 workspace tests / clippy read each other's unfinished work | Accepted: parallel steps run crate-local checks; the coordinator runs the workspace gate and writes both PROGRESS entries |
+| 10 | P2: `started_at..last_activity` is not busy time | Accepted: drawn and labelled as a session span; clip / out-of-window / zero-length tests in 3.6; no busy swimlanes |
 
 ### 2026-10-30 — Phase 2 close (Step 2.8 results, coordinator)
 | # | Finding | Decision |

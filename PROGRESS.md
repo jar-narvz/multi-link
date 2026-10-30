@@ -1,11 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0, 1 and 2 are done and committed locally (not pushed). Next: **plan Phase 3**
-(TUI home + repo timeline + open, Release 1), which is still "to be split later" in PLAN.md. Use one planning
-session, as for Phase 2: decisions with a why, Steps 3.x with Files / Verify / Depends on / Parallel with,
-Codex critique logged in PLAN.md's Review log, then one fresh session per step (CLAUDE.md "Autonomous mode").
+**Resume here (2026-10-30).** Phases 0–2 done; **Phase 3 is planned** (PLAN.md Steps 3.1–3.8, decisions
+T1–T11, Codex critique logged). Next: **Step 3.1** (refresh speed, Codex) via one fresh session per step
+(CLAUDE.md "Autonomous mode"). Order: 3.1 → 3.2 → 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
 
+- **Baseline for 3.1 (measured 2026-10-30, warm release build, real `~`):** `sessions --json` 16.4–16.9 s
+  (10.4 s user, 4.5 s sys); `--root ~` (no ps/git) 6.0 s; `links` 9.8 s; `steps` 7.0 s. Cause: one `git
+  rev-parse` per session before the window filter, one `ps` per record, and a full re-parse of every file.
 - **What exists:** Rust workspace `crates/{model,claude,codex,plan,core,hook,cli}`. `multi-link sessions | links |
   steps` (JSON or text; `--root` fixture mode, `--now`, `--since`) and `multi-link hook record | install |
   uninstall` (install only prints). `cargo test --workspace` → 24 binaries ok; clippy `-D warnings` clean.
@@ -15,11 +17,8 @@ Codex critique logged in PLAN.md's Review log, then one fresh session per step (
   Claude session record first (H11), hook second; freshness limit applies to `busy` only; liveness = pid +
   start time in UTC (1.10); step ids `N`, `N.M` (letter-suffix decision in design.md); multi-link never writes
   to `~/.claude/` or `~/.codex/`.
-- **Open for Phase 3 planning:** (1) background hook evidence fails in clean-environment `claude -p` (no
-  `scratchpad_dir`); candidate fallback is the transcript's "Output is being written to" path (PLAN.md Review
-  log, Phase 2 close #3). (2) Phase 3 Verify needs the ≤ 2 s home refresh measured on real `~` (not yet measured;
-  a full `sessions --json` on real data took ~6 s including a release build, so measure warm).
-  (3) Small nits left in 2.5/2.6 entries (hook dir read errors fail the report; hook files read twice).
+- **Settled in Phase 3 planning:** background hook child `null` in clean-env `-p` → deferred to backlog (T10);
+  hook dir read errors → diagnostics (T9, in 3.1's Scanner work); hook files read twice → gone with the cache.
 - **Parallel-step rule:** parallel sessions don't commit; the coordinator commits each step separately
   (learned in 1.2/1.5).
 - **Leftovers outside the repo:** `~/multi-link-sandbox/` (sandbox repos, deps clones, `state/hook/` from 2.8)
