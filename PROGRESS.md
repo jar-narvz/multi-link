@@ -176,7 +176,32 @@
   whitespace; ps inherits the user's locale, which is assumed to match how Claude wrote `procStart` (unverified
   outside an English locale); any stderr from ps → `Unavailable`. Inside the Codex sandbox the two real-`ps`
   tests print SKIP; outside it they run.
+- Step 2.2 done (Claude, Codex-reviewed): `Link.step`, `evidence: "hook"`, reserved `state_evidence: "hook"`
+  and the Tagged variant are in `docs/output-schema.md`. Red until 2.3: model `every_expected_report_round_trips`
+  and cli `phase_one_json_matches_answer_keys`.
+
 ## Log (newest first)
+
+### 2026-10-29 — Step 2.2: Output contract: step tags, hook evidence, waiting — Claude
+- Did: output-schema.md: Link gains `step` (string|null) with a "Step tags" section (H6: first tag in the
+  launch segment's text, P11 id grammar, read from the command run, indirect prompts → null). Link `evidence`
+  gains `"hook"` as source 5 after the four transcript sources (H5: transcript wins, conflict counted, details
+  in 2.4); every exact link incl. hook claims its child for the heuristic exclusion unless `resume`.
+  `state_evidence` lists `hook`, reserved for 2.4's `waiting` row. Segments unchanged; `step_source` is
+  `unknown | prompt_tag`. New "Tagged variant" section. Expected files: every link gains `"step": null`; new
+  links-tagged.json = links.json with exec link `toolu_01EGmZWsd8PbTTNmjK67yApw` `step: "1.2"`.
+  Answer key first: two Phase 1 tests are red until 2.3.
+- Changed: docs/output-schema.md, fixtures/expected/{links,links-amb-hidden,links-tagged}.json; PLAN.md
+  Step 2.2 Verify corrected by the coordinator.
+- Verify: `jq . fixtures/expected/*.json > /dev/null` → ok; `jq '[.links[]|has("step")]|all' fixtures/expected/links*.json`
+  → true true true; tagged vs plain diff without `step` → same; `cargo test --workspace --no-fail-fast` → FAILED
+  only model `every_expected_report_round_trips` and cli `phase_one_json_matches_answer_keys` (expected until 2.3).
+  Re-run by the coordinator: identical.
+- Review: Codex (read-only), 1 P2: the step's Verify named the wrong red tests (core passes because serde drops
+  the unknown `step`). Accepted; PLAN.md Verify line fixed. Verdict: schema, fixtures and tag grammar match.
+- Gotchas: no struct uses `deny_unknown_fields`, so a new answer-key field never fails a deserialize-only test;
+  only Value-level comparisons (model round-trip, CLI) catch it. The tag regex uses lookahead, which the Rust
+  `regex` crate lacks, so 2.3 checks the trailing boundary by hand.
 
 ### 2026-10-29 — Phase 2 plan: hook — Claude
 - Did: Split Phase 2 into Steps 2.1–2.8 with files, Verify, Depends on / Parallel with. Checked hook facts

@@ -349,8 +349,9 @@ confirms them on real payloads, like Phase 0 did for transcripts.
 - Verify: `jq . fixtures/expected/*.json > /dev/null` succeeds;
   `jq '[.links[]|has("step")]|all' fixtures/expected/links*.json` prints `true` ×3;
   `diff <(jq -S 'del(.links[].step)' fixtures/expected/links.json) <(jq -S 'del(.links[].step)' fixtures/expected/links-tagged.json) && echo same`
-  prints `same`; `cargo test -p multi-link-core` fails only in the links answer-key tests (expected red,
-  paste the failing test names); Codex reviews the schema diff (read-only).
+  prints `same`; `cargo test --workspace --no-fail-fast` fails only in model
+  `every_expected_report_round_trips` and cli `phase_one_json_matches_answer_keys` (expected red until 2.3;
+  core stays green because serde drops the unknown `step` key); Codex reviews the schema diff (read-only).
 
 ### Step 2.3 — Step tags in links, model changes, hook crate skeleton (Codex)
 - Depends on: 2.2. Parallel with: 2.4 (2.4 puts its expected files in `fixtures/expected/hook/`, which the

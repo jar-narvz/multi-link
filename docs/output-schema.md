@@ -1,8 +1,13 @@
 # Output schema — `multi-link sessions | links | steps --json`
 
-Binding contract for Phase 1. `docs/design.md` → Data model is illustrative only; this file wins.
-Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and
-`fixtures/expected/links-amb-hidden.json` (derived variant, see Links → Ambiguous variant).
+Binding contract for Phases 1 and 2. `docs/design.md` → Data model is illustrative only; this file wins.
+Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
+`fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
+`fixtures/expected/links-tagged.json` (Links → Tagged variant).
+
+**Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
+`state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
+Hook record files, their reader rules and hook fixtures are defined in Step 2.4 (section "Hook records").
 
 Transcript formats are undocumented. Every field path below was observed in the Phase 0 fixtures
 (`docs/phase0.md`), not in any spec.
@@ -69,6 +74,11 @@ multi-link steps    --root fixtures/sessions --repo repos/repo-a --repo repos/re
 `state` ∈ `busy | idle | finished | stale | unknown`. `waiting` is reserved for the Phase 2 hook;
 Phase 1 never emits it (Phase 0 (b): no waiting signal in transcripts).
 
+`state_evidence` ∈ `process_exit | session_record | open_turn | turns_complete | no_signal | hook`.
+`hook` is reserved for the `waiting` row, which Step 2.4 adds (after `finished`, before `busy`, design
+H8) once Step 2.1 has confirmed the clearing signal. Until then no row emits `waiting` or `hook`, and the
+rows below are unchanged.
+
 Rows are checked top to bottom; the first match wins. If the process probe cannot run (fixture mode,
 `ps` denied, permission error) the record is trusted as written and the `finished` row is skipped.
 
@@ -98,11 +108,12 @@ to another machine). With `--now 2026-10-29T23:15:00Z` the one busy record (`sta
 ### Segments
 `{"from": timestamp, "to": timestamp, "step": string|null, "step_source": "unknown"}`
 
-A step comes only from explicit evidence (hook tag or prompt tag, FR7). The prompt-tag format is still
-an open question in `docs/design.md`, so Phase 1 recognises no tags: every transcript session has
-exactly one segment `[started_at, last_activity]` with `step: null`, `step_source: "unknown"`.
-The fixtures' prompts are placeholders (`CASE-<name>: <prompt>`), so this is also what they support.
-`step_source` values `prompt_tag` and `hook` are reserved for the step that defines tags.
+A step comes only from explicit evidence (FR7). Phase 2 defines the tag (Links → Step tags) but puts it
+on the link only (design H7): every transcript session still has exactly one segment
+`[started_at, last_activity]` with `step: null`, `step_source: "unknown"`. Splitting sessions into
+per-hand-off segments is deferred to Phase 3; `step_source` value `prompt_tag` stays reserved for it.
+`hook` is no longer a `step_source` value: the hook records no step of its own (a tag comes from the
+transcript command, H6), so `step_source` ∈ `unknown | prompt_tag`.
 
 ### Skipped
 One entry per line not used, `reason` ∈:
@@ -141,8 +152,9 @@ Subagent transcripts are scanned too. A skipped line never stops the file; later
 | `checkout` | string | `cwd` of that record. |
 | `match` | `"exact"` \| `"heuristic"` \| `"ambiguous"` \| `"unlinked"` | |
 | `child` | string \| null | Codex id for `exact` / `heuristic`; `null` otherwise. |
-| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| null | What made it exact; `null` unless `exact`. |
+| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"hook"` \| null | What made it exact; `null` unless `exact`. `hook` only in Phase 2, see Exact evidence. |
 | `candidates` | `{"id": string, "gap_ms": int}`[] | Heuristic candidates (1 for `heuristic`, ≥ 2 for `ambiguous`); `[]` for `exact` and `unlinked`. Ordered by `gap_ms`, then `id`. |
+| `step` | string \| null | Step tag of the launch segment (Step tags), set on every link whatever its `match`. `null` when the segment has no tag. |
 
 ### Recognised invocations
 Only `tool_use` blocks inside `type=assistant` records count (`api-request-blob` records repeat the
@@ -167,6 +179,15 @@ One launch per `tool_use`. Env-var prefixes (`FOO=1 codex exec`) are not recogni
    (the named `/tmp/dev/...` path does not exist). A missing file is not an error; it just gives no
    evidence, and the link falls through to the heuristic. Temp task files vanish, so real-mode
    background links will often end up heuristic — by design, never guessed exact.
+5. *(Phase 2)* A hook record for this invocation (joined on `tool_use_id` = `invocation`) names a child
+   the hook observed → `"hook"` (design H5). Checked only after sources 1–4 found nothing; when a
+   transcript source exists and the hook names a different child, the transcript wins and the conflict
+   is counted, never shown as the link. A hook record with no child gives no evidence. Record format,
+   which child values count as observed, fixture-mode lookup and how conflicts are reported: Step 2.4
+   ("Hook records"). Without hook records (Phase 1, or the hook not installed) this source never fires.
+
+Every `exact` link, whatever its evidence (`hook` included), claims its child for the heuristic
+exclusion below unless its `form` is `resume`.
 
 ### Heuristic (no exact evidence)
 **Launch directory must be certain.** If the launch segment follows a `cd` in the same command, or the
@@ -177,6 +198,31 @@ Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_
 `[at, at + 60 s]`, excluding sessions that are the child of another invocation's `exact` link with
 `form` ≠ `resume` (that invocation created them). `gap_ms` = `started_at − at`. 0 → `unlinked`; 1 → `heuristic`; ≥ 2 → `ambiguous`.
 `gap_ms` is a ranking value, not a probability.
+
+### Step tags (Phase 2, design H6)
+`step` is the first step tag in the launch segment's text (the segment as split above, quotes and all;
+other segments of the same command are not searched). A tag is `step` in any letter case, at the start
+of the segment or after a character that is not a letter, digit or `_`, then one or more spaces or tabs,
+then an `<id>` in the PLAN.md step-id grammar (`steps` → Step `id`: digits, optionally `.` digits,
+optionally one lowercase letter), ending at the end of the text or before a character that is not a
+letter, digit or `_` and is not a `.` followed by a digit. As a regex (case-insensitivity on `step` only):
+`(?:^|[^A-Za-z0-9_])[Ss][Tt][Ee][Pp][ \t]+([0-9]+(?:\.[0-9]+)?[a-z]?)(?![A-Za-z0-9_]|\.[0-9])`
+(a specification in PCRE style; Rust's `regex` crate has no lookahead, so code may check the boundaries by hand).
+
+| Segment text contains | `step` |
+| --- | --- |
+| `Read AGENTS.md, then do Step 1.2 in PLAN.md.` | `"1.2"` |
+| `step 4`, `Step 0.2a`, `Step 0.10` | `"4"`, `"0.2a"`, `"0.10"` |
+| `Steps 1`, `step1.2`, `Step 1.2.3`, `Step 1.2ab` | `null` |
+| `Step 2.1 … Step 2.2` | `"2.1"` (the first) |
+
+The tag is read from the command actually run (the transcript's `tool_use.input.command`), not from a
+prompt Claude was given: the Codex plugin's subagent rewrites its prompt, and a rewrite that drops the
+tag gives `null`, never a guess. A prompt passed indirectly (`"$(cat prompt.txt)"`, a heredoc on another
+line, a file) has no tag in the segment, so `step: null`. The hand-off convention (CLAUDE.md) starts each
+prompt with `Read AGENTS.md, then do Step <id> in PLAN.md.` Tags come from transcripts, so they work
+without the hook and on history. The fixtures' prompts are placeholders (`CASE-<name>: <prompt>`), so
+every link in `links.json` and `links-amb-hidden.json` has `step: null`.
 
 ### Fixture results
 - 8 sandbox hand-offs, all `exact` (ground truth rows exec, resume, plugin, bg, par-main, par-wt, amb-1, amb-2):
@@ -194,6 +240,16 @@ ambiguous case in a test: copy `fixtures/sessions` to a temp dir and, in
 `links-amb-hidden.json`: amb-1 → `ambiguous` (candidates d501 at 746 ms, d953 at 1822 ms); amb-2 →
 `heuristic` d953 (447 ms; d501 started before amb-2's call, so it is outside the window); d501 joins
 `unparented`. Everything else is unchanged.
+
+### Tagged variant (`fixtures/expected/links-tagged.json`)
+Built in a test like the Ambiguous variant: copy `fixtures/sessions` to a temp dir and, in the exec case
+(`bb792d9c-….jsonl`, the `type=assistant` record holding `tool_use` `toolu_01EGmZWsd8PbTTNmjK67yApw`),
+change only that `tool_use`'s `input.command` from
+`codex exec -s workspace-write --skip-git-repo-check "CASE-exec: <prompt>" | tail -n 1` to
+`codex exec -s workspace-write --skip-git-repo-check "Read AGENTS.md, then do Step 1.2 in PLAN.md. CASE-exec: <prompt>" | tail -n 1`.
+Tool results and every other record (including any `api-request-blob` copy) stay unchanged. `links` on
+that copy must equal `links-tagged.json`: the exec link has `step: "1.2"`; every other field and link equals
+`links.json` (the resume link to the same child keeps `step: null`, since its own command has no tag).
 
 ## `steps`
 
