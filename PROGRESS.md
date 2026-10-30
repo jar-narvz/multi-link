@@ -7,7 +7,8 @@ Next: **Phase 4 (home screen cleanup, Release 1.1)**, planned 2026-10-30 after t
 home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coordinator workspace gate
 2026-10-30: `cargo test --workspace` 28 `test result: ok`, 0 failed; clippy `-D warnings` clean).
 `-C .` / `-C "$PWD"` no longer count as a directory move (real-`~` counts in the 4.1 entry).
-Next: **4.3**, then 4.4 → 4.6 in order, one fresh step session each.
+**4.3 is committed** (Claude-reviewed; `cargo test --workspace` 29 `test result: ok`, clippy clean).
+Next: **4.4**, then 4.5 → 4.6 in order, one fresh step session each.
 4.6 ends with a stop-and-ask: the owner confirms the real screen meets the need. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
 stub/missing-program child handling and terminal restoration. The child checks used a synthetic
@@ -17,6 +18,11 @@ exited terminal Claude session deletes its record, leaving `unknown` / `Unavaila
 resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
 Codex-off mode is off: Codex implements, Claude plans and reviews.
 
+- **What 4.4 needs from 4.3:** `MergedRow.harness` exists; core emits `codex ×N` and `claude ×N` (at most
+  one per harness per group). `merged_line` (`crates/tui/src/home.rs`) labels by harness but still prints
+  `0 codex children` on a Codex merged row: drop that for Codex when 4.4 reworks home lines. App refresh keeps
+  a merged row selected by (repo, harness); merged-row `enter` expansion stays keyed by repo (expands both).
+  Core test `crates/core/tests/overview.rs` already pins the phase4 key; render the 4.4 golden from that key.
 - **What 4.3 / 4.4 need from 4.2:** contract in `docs/output-schema.md` → Overview → Rows (Merge) and
   "Phase 4 fixture results"; design U1–U5. Test target: `overview --root fixtures/sessions-phase4 --now
   2026-10-29T23:15:00Z --since all --json` == `fixtures/expected/phase4/overview.json`. U3 keys: separate
@@ -82,6 +88,70 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 4.3: Core: `codex ×N` merge — Codex
+- Did: Merge quiet top-level rows independently by harness at four members, retaining each harness's
+  first position and member order. Added required MergedRow `harness`, harness-specific home labels,
+  and refresh selection keyed by repo plus harness for merged rows. Added threshold/active-row,
+  interleaved two-merge, Phase 4 answer-key, model round-trip, and App selection/expansion coverage.
+- Changed: `crates/core/src/overview.rs`, `crates/core/tests/overview.rs`, `crates/model/src/lib.rs`,
+  `crates/model/tests/model.rs`, `crates/tui/src/app.rs`, `crates/tui/src/home.rs`,
+  `fixtures/expected/overview.json`, `fixtures/expected/hook/overview.json`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines and new tests:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.24s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test overview::tests::codex_merge_threshold_excludes_active_rows ... ok
+test overview::tests::interleaved_harnesses_merge_independently_at_their_first_member ... ok
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test phase4_overview_matches_answer_key ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test app::tests::refresh_preserves_selected_merged_harness_and_enter_expands_both ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace -- -D warnings` → exit 0, no warnings; actual final output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+- Review: Claude, 2026-10-30, round 1, clean (no fix round). Diff touches only the step's files (no
+  `fixtures/expected/tui/home*.txt` change; existing goldens have only `claude ×N`, so none needed).
+  Merge matches output-schema Overview → Merge: per harness, threshold 4, slot = first member, order kept,
+  waiting/busy/stale excluded; Codex children are never top-level so cannot merge. App keeps (repo, harness)
+  for merged rows. Claude re-ran Verify: `cargo test --workspace` → 29 `test result: ok`, 0 failed, same
+  counts and new tests as pasted above; clippy `-D warnings` clean; CLI `overview --root
+  fixtures/sessions-phase4 --now 2026-10-29T23:15:00Z --since all --json` == phase4 key (parsed: True).
+  Non-blocking, for 4.4: `crates/tui/src/home.rs:359` prints `codex ×4  0 codex children` on a Codex merged
+  row (children count only means something for Claude); 4.4 owns that line's rendering and goldens.
+- Gotchas: Initial Verify build failed because the new test called `.unwrap()` on `StepsReport`;
+  removed that call and reran the full workspace successfully. Existing overview keys only gained
+  `"harness": "claude"`; Phase 4 keys and existing home snapshots remain unchanged. Merged expansion
+  remains keyed by repo, so Enter expands both harnesses together per U3. Quiet rows with handoffs
+  remain mergeable when top-level; child placement still occurs before merging.
 
 ### 2026-10-30 — Step 4.2: Contract: `codex ×N`, collapsed repos, header — Claude
 - Did: Wrote U1–U5 into `docs/design.md` ("Phase 4 decisions", plus the heuristic paragraph's `-C` note).

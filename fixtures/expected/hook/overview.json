@@ -332,6 +332,7 @@
       "rows": [
         {
           "kind": "merged",
+          "harness": "claude",
           "count": 5,
           "rows": [
             {

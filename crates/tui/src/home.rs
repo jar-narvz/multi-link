@@ -343,7 +343,7 @@ fn session_line(
     ])
 }
 
-/// `claude ×N`: core already merged the quiet rows; show what they hold.
+/// Core already merged the quiet rows by harness; show what they hold.
 fn merged_line(merged: &MergedRow, now: Option<i64>) -> Line<'static> {
     let children: usize = merged.rows.iter().map(|row| row.children.len()).sum();
     let newest = merged.rows.iter().map(|row| row.last_activity).max();
@@ -351,8 +351,12 @@ fn merged_line(merged: &MergedRow, now: Option<i64>) -> Line<'static> {
         || "-".to_string(),
         |at| age(now, &at).trim_start().to_string(),
     );
+    let harness = match merged.harness {
+        Harness::Claude => "claude",
+        Harness::Codex => "codex",
+    };
     Line::from(format!(
-        "  ▸ claude ×{}  {} · newest {newest} · enter expands",
+        "  ▸ {harness} ×{}  {} · newest {newest} · enter expands",
         merged.count,
         plural(children, "codex child", "codex children")
     ))

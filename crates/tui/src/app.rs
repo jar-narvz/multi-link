@@ -89,7 +89,15 @@ impl App {
                 self.refresh_error = Some(format!("refresh failed: {error}; keeping last report"));
             }
             Event::Refresh(Ok(report)) => {
-                let selected = self.selected();
+                let selected = self.view().and_then(|view| {
+                    selectable(&view).get(self.selection).map(|(repo, target)| {
+                        let (id, harness) = match target {
+                            Target::Session(row) => (Some(row.id.clone()), row.harness),
+                            Target::Merged(row) => (None, row.harness),
+                        };
+                        (repo.to_string(), id, harness)
+                    })
+                });
                 let waiting = waiting_ids(&report.overview);
                 let bells = self
                     .waiting
@@ -103,12 +111,14 @@ impl App {
                 if let Some(view) = self.view() {
                     let targets = selectable(&view);
                     self.selection = selected
-                        .and_then(|(repo, id)| {
+                        .and_then(|(repo, id, harness)| {
                             targets.iter().position(|(r, target)| {
                                 *r == repo
                                     && match target {
                                         Target::Session(row) => id.as_deref() == Some(&row.id),
-                                        Target::Merged(_) => id.is_none(),
+                                        Target::Merged(row) => {
+                                            id.is_none() && row.harness == harness
+                                        }
                                     }
                             })
                         })
@@ -541,6 +551,46 @@ mod tests {
             assert_eq!(selected_lines.len(), 1, "height {height}");
             assert!(selected_lines[0].contains(&crate::home::short_id(&selected.id)));
         }
+    }
+
+    #[test]
+    fn refresh_preserves_selected_merged_harness_and_enter_expands_both() {
+        use multi_link_model::Harness;
+        let mut refresh = report();
+        refresh.overview = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase4/overview.json"
+        ))
+        .unwrap();
+        refresh
+            .overview
+            .repos
+            .retain(|group| group.repo == "/home/dev/repo-i");
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh)));
+        let mut reordered = report();
+        reordered.overview = app.report.as_ref().unwrap().overview.clone();
+        reordered.overview.repos[0].rows.reverse();
+        assert_eq!(app.selection, 0);
+        app.update(Event::Refresh(Ok(reordered)));
+        assert_eq!(app.selection, 1);
+        let view = app.view().unwrap();
+        assert!(matches!(selectable(&view)[app.selection].1,
+            Target::Merged(row) if row.harness == Harness::Codex));
+        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
+        let area = Rect::new(0, 0, 140, 20);
+        let mut buffer = Buffer::empty(area);
+        app.render(area, &mut buffer);
+        let rendered: String = buffer.content.iter().map(|cell| cell.symbol()).collect();
+        assert!(rendered.contains("codex ×4"));
+        assert!(rendered.contains("claude ×4"));
+        app.update(Event::Key(KeyCode::Enter));
+        let view = app.view().unwrap();
+        assert_eq!(selectable(&view).len(), 8);
+        assert!(
+            selectable(&view)
+                .iter()
+                .all(|(_, target)| matches!(target, Target::Session(_)))
+        );
     }
 
     #[test]

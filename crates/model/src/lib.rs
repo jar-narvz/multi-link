@@ -242,10 +242,11 @@ pub struct SessionRow {
     pub children: Vec<SessionRow>,
 }
 
-/// `claude ×N`: four or more quiet top-level Claude rows. Not actionable (T11).
+/// Four or more quiet top-level rows of one harness. Not actionable (T11).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename = "merged")]
 pub struct MergedRow {
+    pub harness: Harness,
     pub count: usize,
     pub rows: Vec<SessionRow>,
 }

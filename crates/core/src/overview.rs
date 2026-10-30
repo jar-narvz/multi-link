@@ -14,7 +14,7 @@ use multi_link_model::{
 
 use crate::RepoMode;
 
-/// `claude ×N` threshold: 4 or more quiet top-level Claude rows merge.
+/// Per-harness threshold: 4 or more quiet top-level rows merge.
 pub const MERGE_AT: usize = 4;
 
 /// Where a group's PLAN.md / PROGRESS.md live. Real mode: the repo itself (the
@@ -283,39 +283,40 @@ fn quiet_state(state: State) -> bool {
     matches!(state, State::Idle | State::Unknown | State::Finished)
 }
 
-/// Quiet = a top-level Claude row that is idle / unknown / finished and whose
-/// children all are too (a busy or stale Codex child keeps its parent visible).
+/// Quiet top-level rows merge by harness; an active child keeps its parent visible.
 fn quiet(row: &SessionRow) -> bool {
-    row.harness == Harness::Claude
-        && quiet_state(row.state)
-        && row.children.iter().all(|child| quiet_state(child.state))
+    quiet_state(row.state) && row.children.iter().all(|child| quiet_state(child.state))
 }
 
-/// After ordering: 4 or more quiet rows become one MergedRow at the place of
-/// the first of them, keeping their order and children.
+/// Replace each harness's quiet rows at its first member's position, preserving
+/// member order even when the two harnesses are interleaved.
 fn merge(rows: Vec<SessionRow>) -> Vec<Row> {
-    if rows.iter().filter(|row| quiet(row)).count() < MERGE_AT {
-        return rows.into_iter().map(Row::Session).collect();
-    }
-    let mut out = Vec::new();
-    let mut merged = Vec::new();
-    let mut slot = None;
-    for row in rows {
-        if quiet(&row) {
-            slot.get_or_insert(out.len());
-            merged.push(row);
-        } else {
-            out.push(Row::Session(row));
+    let mut out: Vec<Row> = rows.iter().cloned().map(Row::Session).collect();
+    for harness in [Harness::Claude, Harness::Codex] {
+        let merged: Vec<_> = rows
+            .iter()
+            .filter(|row| row.harness == harness && quiet(row))
+            .cloned()
+            .collect();
+        if merged.len() < MERGE_AT {
+            continue;
         }
+        let slot = out
+            .iter()
+            .position(
+                |row| matches!(row, Row::Session(row) if row.harness == harness && quiet(row)),
+            )
+            .expect("at least MERGE_AT quiet rows");
+        out.retain(|row| !matches!(row, Row::Session(row) if row.harness == harness && quiet(row)));
+        out.insert(
+            slot,
+            Row::Merged(MergedRow {
+                harness,
+                count: merged.len(),
+                rows: merged,
+            }),
+        );
     }
-    let slot = slot.expect("at least MERGE_AT quiet rows");
-    out.insert(
-        slot,
-        Row::Merged(MergedRow {
-            count: merged.len(),
-            rows: merged,
-        }),
-    );
     out
 }
 
@@ -480,13 +481,85 @@ mod tests {
             vec![],
         );
         let rows = &four.repos[0].rows;
-        // Merged row takes the first quiet row's place; Codex rows never merge.
+        // Merged row takes the first quiet row's place; one Codex row stays separate.
         assert_eq!(ids(rows), ["busy", "merged4", "solo"]);
         let Row::Merged(merged) = &rows[1] else {
             panic!("expected merged")
         };
         let members: Vec<_> = merged.rows.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(members, ["q0", "q3", "q1", "q2"]);
+    }
+
+    #[test]
+    fn codex_merge_threshold_excludes_active_rows() {
+        for count in [3, 4] {
+            let sessions = (0..count)
+                .map(|i| codex(&format!("q{i}"), "/r", State::Unknown, i * 2))
+                .chain([
+                    codex("busy", "/r", State::Busy, 3),
+                    codex("waiting", "/r", State::Waiting, 1),
+                    codex("stale", "/r", State::Stale, 5),
+                ])
+                .collect();
+            let report = run(sessions, vec![]);
+            let rows = &report.repos[0].rows;
+            if count == 3 {
+                assert_eq!(ids(rows), ["waiting", "busy", "stale", "q2", "q1", "q0"]);
+            } else {
+                assert_eq!(ids(rows), ["waiting", "busy", "stale", "merged4"]);
+                let Row::Merged(merged) = &rows[3] else {
+                    panic!("expected merged")
+                };
+                assert_eq!(merged.harness, Harness::Codex);
+                assert_eq!(
+                    merged
+                        .rows
+                        .iter()
+                        .map(|r| r.id.as_str())
+                        .collect::<Vec<_>>(),
+                    ["q3", "q2", "q1", "q0"]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn interleaved_harnesses_merge_independently_at_their_first_member() {
+        for first in [Harness::Codex, Harness::Claude] {
+            let second = if first == Harness::Codex {
+                Harness::Claude
+            } else {
+                Harness::Codex
+            };
+            let sessions = (0..4)
+                .flat_map(|i| {
+                    [
+                        session(&format!("first{i}"), first, "/r", State::Idle, i * 2 + 1),
+                        session(&format!("second{i}"), second, "/r", State::Idle, i * 2),
+                    ]
+                })
+                .collect();
+            let report = run(sessions, vec![]);
+            let rows = &report.repos[0].rows;
+            assert_eq!(rows.len(), 2);
+            for (row, harness, prefix) in [(&rows[0], first, "first"), (&rows[1], second, "second")]
+            {
+                let Row::Merged(merged) = row else {
+                    panic!("expected merged")
+                };
+                assert_eq!(merged.harness, harness);
+                assert_eq!(merged.count, 4);
+                assert_eq!(
+                    merged.rows.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
+                    [
+                        format!("{prefix}3"),
+                        format!("{prefix}2"),
+                        format!("{prefix}1"),
+                        format!("{prefix}0")
+                    ]
+                );
+            }
+        }
     }
 
     #[test]
