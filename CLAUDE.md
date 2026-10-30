@@ -26,8 +26,10 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
-**Codex-off mode (owner, 2026-10-30, Codex usage running out; default from Step 3.2 on until the owner
-says otherwise):** no `codex exec` for anything. The roles stay the same, but Claude agents fill them:
+**Codex-off mode (owner, 2026-10-30) — TEMPORARY, not a permanent change.** It applies only while the
+owner's Codex usage is used up. When the owner says usage is back, return to the normal Codex loop above
+(Codex implements, Codex critiques plans) from the next step on. Steps finished in this mode stay as they are.
+While it is on: no `codex exec` for anything. The roles stay the same, but Claude agents fill them:
 - Implementer = a Claude subagent (Agent tool, general-purpose) given the same prompt Codex would get
   ("Read AGENTS.md, then do Step <id> in PLAN.md."). It follows AGENTS.md exactly as Codex would: only the
   step's files, runs Verify, writes the PROGRESS.md entry with agent `Claude (implementer)`, never commits.
