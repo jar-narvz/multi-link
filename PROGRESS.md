@@ -80,8 +80,63 @@
   schema `skipped` reason; 1.7 decides whether to surface it. Known gaps: a directory traversal error
   (e.g. permission denied on a subfolder) returns `Err` for the whole discovery; a `task_started` without a
   parseable top-level `timestamp` is dropped, so the "latest turn" falls back to the one before it.
+- Step 1.4 done (Codex, reviewed by Claude, 0 fix rounds): `multi_link_plan::steps_report(root, &[String])`
+  → `StepsReport` (relative repos join `root`, absolute kept; `repo` echoes the input string). Also
+  `parse_plan(&str) -> Option<Vec<Step>>` (None = unsupported) and `parse_progress(&str) -> Vec<(id, Entry)>`.
+  For 1.9: the CLI only passes `--root` and the `--repo` list (default: each session's `repo`) and
+  serialises the report; no I/O errors surface (absent PLAN.md → `missing`, unreadable → `unsupported`,
+  absent/unreadable PROGRESS.md → no entries). Gotcha: per the schema, `result` is `pass` only when the
+  text after `→` starts with pass/ok, so this repo's own entries (`→` followed by a backticked `test result: ok`) read `unknown`.
 
+- Step 1.2 done (Codex, reviewed by Claude, 1 fix round): `multi_link_claude::scan(root)` → `ClaudeScan {
+  transcripts, records, skipped, bad_records }`. `Transcript { id, transcript, cwd, branch, started_at,
+  last_activity, subagents, subagent_files: [SubagentFile { id, transcript }] }`; metadata fields are
+  `Option` (None if no known record carries them). `SessionRecord { pid, proc_start, session_id, cwd,
+  status: String, status_updated_at, started_at, updated_at, record }`. All paths root-relative, sorted.
+  For 1.6: re-read `Transcript::transcript` and each `subagent_files[].transcript` (join with root) to
+  extract tool calls; `known_type` is private, so check `type == "assistant"` yourself. For 1.7: merge
+  records into transcripts by `session_id == id`; `bad_records` (unreadable/invalid record files) is not a
+  schema `skipped` reason. Known gaps: a transcript deleted between listing and open is left out; other
+  I/O errors (e.g. permission denied) fail the whole scan.
 ## Log (newest first)
+
+### 2026-10-29 — Step 1.2: Claude transcripts and session records — Codex
+- Did: `scan(root)` discovers main transcripts (`projects/*/*.jsonl`, one level) and subagents
+  (`<id>/subagents/agent-*.jsonl`), reads cwd / branch / first and last timestamp from known records,
+  skips unknown types (subagent lines included), and parses `sessions/*.json` records. Round 1: files
+  missing at open are left out; bad record files are listed in `bad_records`.
+- Changed: `crates/claude/src/lib.rs`, `crates/claude/tests/fixtures.rs`.
+- Verify: `cargo test -p multi-link-claude` → exit 0:
+  `test result: ok. 1 passed` (unit), `test result: ok. 8 passed` (tests/fixtures.rs), `test result: ok. 0 passed` (doc);
+  `cargo fmt -p multi-link-claude -- --check` → no output, exit 0.
+- Review: Claude, 1 round. #1 `crates/claude/src/lib.rs:165` a transcript deleted between `read_dir` and
+  open failed the whole scan (live `~/.claude`) → fixed (NotFound → omitted; unit test). #2
+  `crates/claude/src/lib.rs:124` bad session records dropped silently, against "skip and count" → fixed
+  (`bad_records`, 12 bad files asserted). Checked: 13 transcripts' 7 fields equal sessions.json, 5 records
+  (1 busy, 4 idle), Claude skipped = repo-e lines 3/4/5, known type list equals the schema, field paths
+  match `docs/phase0.md`, no network code, only the step's files changed. Claude re-ran Verify and fmt:
+  matches the paste.
+- Gotchas: Field paths are from Phase 0 fixtures, not a spec. A vanished main transcript also hides its
+  subagents. `.json` entries in `sessions/` that are directories count as bad records.
+
+### 2026-10-29 — Step 1.4: PLAN.md / PROGRESS.md parser and steps report — Codex
+- Did: Implemented `steps_report`, pure parsers, strict step ids (`N` / `N.M` + one lowercase letter),
+  fenced-code exclusion, Verify extraction, exact-id progress attachment, and filesystem fallbacks
+  (missing / unsupported, lossy UTF-8, CRLF). Added the fixture comparison and edge-case tests.
+- Changed: `crates/plan/src/lib.rs`, `crates/plan/src/markdown.rs`, `crates/plan/src/plan.rs`,
+  `crates/plan/src/progress.rs`, `crates/plan/tests/fixtures.rs`
+- Verify: `cargo test -p multi-link-plan` → `tests/fixtures.rs`: `test result: ok. 8 passed; 0 failed`
+  (fixture_report_matches_answer_key, strict_ids_and_plan_order, fences_boundaries_crlf_and_first_verify,
+  progress_results_are_reported_and_case_insensitive, progress_missing_verify_and_invalid_headings,
+  report_joins_exact_ids_and_keeps_latest_unmatched_entry, absolute_repo_missing_progress_and_lossy_utf8,
+  missing_unsupported_and_unreadable_files); unit tests and doc-tests 0, ok.
+- Review: Claude, 0 fix rounds. Re-ran Verify: same 8 passed. Checked against the step: both id styles
+  (fixture `0.4` / `3`) and both Verify styles (bold / plain) via the answer key; `0.2a`, `3b`, `0.10` ≠ `0.1`,
+  invalid ids rejected; pass / ok / fail / other → unknown; absent PLAN.md → `missing`; no headings or
+  unreadable → `unsupported`, never a panic; only the step's files changed. All 16 `### Step` headings in
+  this repo's PLAN.md fit the grammar. Non-blocking: titles are not trimmed (trailing spaces in a heading
+  leak into `title`); an unclosed ``` fence hides the rest of the file (CommonMark does the same).
+- Gotchas: Codex hit a non-ASCII byte literal in a test on first compile; fixed. No dependencies changed.
 
 ### 2026-10-29 — Step 1.3: Codex rollouts — Codex
 - Did: Sorted recursive discovery of `.codex/sessions/**/rollout-*.jsonl`, first-`session_meta` fields
