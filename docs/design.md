@@ -10,6 +10,9 @@ Oct 29, 2026 · Status: draft
 > Revised in Step 0.6 (2026-10-29) with the Phase 0 results (`docs/phase0.md`): see "Phase 0 results
 > and decisions" under Solution design. Sections changed: Glossary, Major decisions (Reuse), Linking
 > algorithm, Repo and step assignment, Session state, Edge cases, Proposed plan, Open questions.
+>
+> Revised in Step 3.2 (2026-10-30): "Phase 3 decisions" (T1–T11) under Solution design, the NFRs
+> "Incremental reads" and "Speed", and the "Opening a session (FR18)" table.
 
 ## Abstract
 
@@ -94,8 +97,8 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 
 - **Local and read-only.** No network calls; never writes to either harness's folders (`~/.claude/`, `~/.codex/`, including settings), PLAN.md or PROGRESS.md. multi-link's own state lives in `~/.multi-link/`.
 - **Fails soft.** Unknown transcript records are skipped and counted, never fatal (both formats are undocumented).
-- **Incremental reads.** Each file is tailed from its last offset; a partial last line is buffered; a truncated or replaced file is re-read from the start. Minimal metadata (ids, checkout, links) is kept so an old parent can be backfilled when a new child references it.
-- **Speed (pass threshold).** The home screen refreshes in 2 s or less on my laptop with my real `~/.claude` and `~/.codex`. Checked in Phase 3; not yet measured.
+- **Incremental reads (revised in Phase 3, T1).** A refresh re-parses only the files whose (path, length, mtime, inode) changed since the last pass, each from the start; unchanged files reuse their cached parse, and linking, state and windowing are recomputed from the cached results every pass, so an old parent is still found when a new child references it. A partial last line is buffered, never skipped; a truncated or replaced file is just a changed key. Byte-offset tailing was the original plan; it is deferred because whole-file re-parse of the few changed files was fast enough (Step 3.1), and it returns as its own step only if a later measurement misses the speed threshold.
+- **Speed (pass threshold).** The home screen refreshes in 2 s or less on my laptop with my real `~/.claude` and `~/.codex`. Step 3.1 measured the sessions + links refresh on one warm `Scanner` at 29 ms and 31 ms (passes 2 and 3, real `~`, `PROGRESS.md` 3.1); the full home refresh including the overview is measured in Step 3.8.
 - **Testable.** Parsers, repo assignment, state, linking and step assignment run on saved fixtures with a fixed clock and hand-labelled expected outputs, including negative and ambiguous cases.
 - **Swappable parsers.** Each harness's format lives behind one interface, so a format change touches one module.
 - **One core, many front ends.** Front ends contain no parsing, state or linking logic.
@@ -175,6 +178,32 @@ Planned 2026-10-29. Hook facts come from the Claude Code hooks docs (code.claude
 
 Codex waiting stays unsupported (no Codex hook in scope). Enabling the hook in real repos is the owner's paste.
 
+### Phase 3 decisions (TUI home, timeline, open)
+
+Planned 2026-10-30 from a real-data measurement (PLAN.md → Phase 3 header; Codex critique in PLAN.md →
+Review log). Binding field rules: `docs/output-schema.md` → Session, Overview, Open (Step 3.2).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| T1 | Speed first, offsets only if needed: a core `Scanner` caches each file's parse keyed by (path, length, mtime, inode); git lookups memoised per `cwd`, only for listed sessions; one `ps` per pass for every record pid | Measured before planning: `sessions --json` took 16.4–16.9 s warm, ~10 s of it per-session `git` / `ps` spawns and ~6 s re-parsing every file. Between refreshes only a few files change, so re-parsing them whole is cheap; offset tailing would rewrite every parser as a resumable fold. 3.1 then measured 29–31 ms warm |
+| T2 | The overview (repo groups, needs-you order, Codex nesting, `claude ×N` merge, FR17 warnings, latest hand-off, per-repo plan line) is computed in `core::overview`, printed by `multi-link overview --json` and answer-keyed | Front ends contain no logic; the desktop app reuses it; a JSON key is reviewable where a screen snapshot is not |
+| T3 | TUI stack `ratatui` + `crossterm`, crate `crates/tui` depending on `model` only | Standard pair; `TestBackend` renders without a terminal; no ncurses; depending on `model` only lets TUI steps run beside core steps |
+| T4 | Screen snapshots are generated once, then reviewed line by line against `overview.json`, and pinned | Hand-typing a 100×30 screen is error-prone; the semantic truth is the overview key |
+| T5 | Needs-you order: repos with a `waiting` session first, then `busy`, then the rest; inside a tier latest activity first, ties by repo path. Rows in a repo: waiting, busy, stale, idle, unknown, finished, then latest activity | The screen answers "which one needs me"; activity order keeps the hottest repo on top |
+| T6 | Bell: one `\a` when a session id enters `waiting` between two refreshes (not on the first refresh, not repeated while it waits) | A bell per refresh trains me to ignore it; macOS notifications are desktop backlog (FR14/FR15) |
+| T7 | Open is a pure decision in core, `open::action(&Session, fork)`: `resume` only for Claude `finished` (positive exit evidence); a running Claude (`busy`, `idle`, `waiting`, `stale`) gets the app link when its record has `hostSessionId`, else `unavailable`; Claude `unknown` and every Codex session get `unavailable` with the command as text. The action is recomputed from a fresh pass for that one id right before it runs. `codex://` links stay out | `unknown` can be a live process (a completed Codex turn, a record-less `-p` session), so only exit evidence makes resume safe; testable without a terminal; a stale report could have been resumed elsewhere since |
+| T8 | Session gains `checkout` (git toplevel of `cwd`; fixture mode `cwd`) and `host_session_id` (record `hostSessionId`) in the one Session type | Worktree labels need the checkout (Codex 0.6 #1); the app link needs the host id, which differs from the transcript id |
+| T9 | Refresh every 2 s on a background thread that owns the `Scanner`; the UI thread never blocks on disk. Running a program suspends raw mode, the alternate screen and input, and restores them on success, spawn failure and panic. A failing pass keeps the last good report and shows the error; hook read errors are diagnostics | A dashboard that dies on one bad file is worse than a stale one; a broken terminal after `claude` exits is worse still |
+| T10 | Background hand-offs whose hook child is `null` (clean-env `-p`) keep today's rule: exact through the task output file while it exists, heuristic after. Teaching the hook the output path is backlog | It changes link evidence, not the TUI; the fallback is already honest |
+| T11 | A Codex session sits under the parent of its latest same-repo hand-off, listed once, every hand-off kept in its `handoffs`; children ordered by that hand-off; a parent's place follows its own state; a repo's tier is the best of its sessions. A merged `claude ×N` row (4 or more quiet Claude rows) is not actionable: it expands before `o` / `f` | One child can have several parents (exec + resume); a fixed rule keeps the screen stable and open always targets one full id |
+
+Step 3.2 clarifications (output-schema.md): the merge takes top-level Claude rows that are `idle`,
+`unknown` or `finished` with no busy or stale child; several records for one id are `finished` only when
+all are gone; `open` looks ids up with the window off; a child is nested only under a parent in its own repo (else top-level, its
+`handoffs` still list the link); `fork` on a running session is `unavailable` with the fork command (the
+app link cannot fork); when the process probe cannot run no session is `finished`, so nothing resumes and
+record sessions follow their record status; ids that are not lowercase uuids are never put in argv.
+
 ### Linking algorithm
 
 1. **Recognised invocations only.** A hand-off is a Bash `tool_use` in an `assistant` record whose command has a segment (split on `&&`, `||`, `;`, `|`, newlines outside quotes) of the form `codex exec …`, `codex [exec] resume <uuid>`, or `node …/codex-companion.mjs task …` (the plugin, called from a subagent). Other commands that merely mention `codex` are ignored. Exact grammar: `docs/output-schema.md`.
@@ -248,17 +277,22 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 
 ### Opening a session (FR18)
 
-| Session | Running | Finished |
-| --- | --- | --- |
-| Claude, desktop app | `open "claude://code/continue?session=local_<id>"` (verified 2026-10-29) | Same link, once the `local_` id can be found (Phase 0) |
-| Claude, terminal | Jump to its tmux / Herdr pane; other terminals later | `claude --resume <id>` in the TUI's terminal, return on exit |
-| Codex, desktop app | `open "codex://threads/<id>"` (from repo-sessions' code, untested) | Same |
-| Codex, terminal | Jump to its pane | `codex resume <id>` |
+Phase 3 rules (decision T7; exact table in `docs/output-schema.md` → Open). "Running" = `busy`, `idle`,
+`waiting` or `stale`; "finished" = `finished` (session record whose process is gone, or pid reused).
+
+| Session | Running | Finished | Unknown (no exit evidence) |
+| --- | --- | --- | --- |
+| Claude, record has `hostSessionId` (desktop app) | `open "claude://code/continue?session=<hostSessionId>"` (tested once, 2026-10-29); `f` → unavailable, fork command shown | `claude --resume <id>` (`--fork-session` with `f`) in its `cwd`, return on exit | — (a record session is never `unknown` unless its status is new) → unavailable, command shown |
+| Claude, no `hostSessionId` (terminal) | unavailable, `claude --resume <id>` shown; jumping to a tmux / Herdr pane is backlog | Same resume as above | unavailable, `claude --resume <id>` shown |
+| Codex | unavailable, `codex resume <id>` (`codex fork <id>` with `f`) shown | Codex has no exit evidence, so never finished | Same |
+
+`codex://threads/<id>` (from repo-sessions' code) stays out until tested.
 
 - **App vs terminal:** a running Claude session's `~/.claude/sessions/<pid>.json` has a `hostSessionId` (`local_…`) only when the desktop app started it. That id differs from the transcript id `claude --resume` uses.
 - **Fork:** `claude --resume <id> --fork-session` or `codex fork` starts a side conversation without touching the original.
-- **Unreachable running session:** if the app link fails or the pane is unknown, show "unavailable". Resume only once the session is finished.
-- **Phase 3 scope:** resume for finished sessions and the app link for running app sessions. Jumping to tmux / Herdr panes is backlog.
+- **Unreachable running session:** no app link → "unavailable" with the command for me to run. Resume only once the session is finished; a record-only finished session with no transcript is unavailable too.
+- **Fresh decision:** the action is recomputed from a fresh pass for the full id right before it runs, so a session resumed elsewhere since the last draw is not resumed twice.
+- **Phase 3 scope:** resume for finished Claude sessions and the app link for running app sessions. Jumping to tmux / Herdr panes and `codex://` links are backlog.
 
 ### Edge cases
 

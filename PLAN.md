@@ -526,9 +526,10 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
   Rules: `Resume` only with positive exit evidence, i.e. Claude `finished` (record + process gone) →
   `claude --resume <id>` (`--fork-session` with `f`) in its `cwd`. Claude running (`busy`, `idle`,
   `waiting`, `stale`) → `AppLink` if the record has `hostSessionId`, else `Unavailable`. Everything else
-  (Claude `unknown`, every Codex session, probe unavailable) → `Unavailable` carrying the command as text
+  (Claude `unknown`, every Codex session) → `Unavailable` carrying the command as text
   (`claude --resume <id>` / `codex resume <id>`) for me to run myself, because `unknown` can be a live
-  process (a completed Codex turn, a `-p` session without a record). `codex://` links stay out (untested).
+  process (a completed Codex turn, a `-p` session without a record). A probe that cannot run makes no
+  session `finished`, so nothing resumes; records then follow their status (3.2 review #2). `codex://` links stay out (untested).
   The action is recomputed from a fresh pass for that one full id right before it runs, never taken from
   the last drawn report. Why: "never resume a running session" must hold without a liveness signal and be
   testable without a terminal; Session gains `host_session_id` (from the record) for the app link.
@@ -595,8 +596,8 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 - Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/expected/**`, `fixtures/sessions/**` (only
   additions), `fixtures/README.md`
 - Verify: `python3 -m json.tool` parses every new/changed expected file; a short script checks every
-  Session in the changed keys has `checkout` and `host_session_id` keys and every `overview` session id
-  exists in `sessions.json`; Codex critique of the contract (read-only) logged in the Review log.
+  Session in the changed keys has `checkout` and `host_session_id` keys and each `overview` key's session
+  ids equal its own sessions key's ids, each once (`overview.json` ↔ `sessions.json`, hook ↔ hook); adversarial Claude review of the contract (Codex-off mode) logged in the Review log.
 
 ### Step 3.3 — Core: new Session fields, overview report, CLI `overview` (Codex)
 - Depends on: 3.2. Parallel with: none.
@@ -621,9 +622,11 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
   `crates/cli/tests/cli.rs`
 - Verify (crate-local while 3.5 runs): `cargo test -p multi-link-core -p multi-link` → all `ok`,
   including a table test over every fixture session × {open, fork} asserting `Resume` appears only for
-  `finished`; core unit tests with `FakeProcessProbe` for: record + `Gone` → `Resume`; record + `Alive`
-  with/without `hostSessionId` → `AppLink` / `Unavailable`; probe `Unavailable`, transcript-only Claude,
-  completed-turn Codex → `Unavailable` with command text; and `--dry-run` CLI output for an app-linked
+  `finished`; core unit tests with `FakeProcessProbe` for: record + transcript + `Gone` → `Resume`; record-only + `Gone` →
+  `Unavailable` `no_transcript`; two records for one id, one `Gone` and one `Alive` → not `Resume`; record + `Alive`
+  with/without `hostSessionId` → `AppLink` / `Unavailable`; probe `Unavailable` (record follows its status, never `Resume`), transcript-only Claude,
+  completed-turn Codex → `Unavailable` with command text; an id older than the `--since` window is still
+  found; no match → exit 4; and `--dry-run` CLI output for an app-linked
   running Claude, a transcript-only Claude and a Codex session (fixture mode can't produce `finished`).
 
 ### Step 3.5 — TUI crate: home screen render (Codex)
@@ -631,7 +634,7 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 - New crate `crates/tui` (`multi-link-tui`, lib, deps: model, ratatui, crossterm); workspace deps added.
   `render_home(&OverviewReport, selection, area, buf)`: per repo header (◆ when waiting, counts), steps
   line, one mini lane per session (harness, id prefix, state, checkout label when ≠ repo, step tag, age
-  from `now`), Codex lanes indented under the parent, `claude ×N` over 4, FR17 warning, latest hand-off,
+  from `now`), Codex lanes indented under the parent, `claude ×N` for 4 or more quiet rows, FR17 warning, latest hand-off,
   footer with keys. Snapshot test at 100×30 from `overview.json` and `hook/overview.json` (T4).
 - Files: `Cargo.toml`, `Cargo.lock`, `crates/tui/**`, `fixtures/expected/tui/home*.txt`
 - Verify (crate-local while 3.4 runs): `cargo test -p multi-link-tui` → `ok`, including renders at 40×10
@@ -682,6 +685,25 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
 Hook reads the background task output path (T10) · offset tailing if T1 is not enough · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-10-30 — Step 3.2 contract (Claude, adversarial Claude review, Codex-off mode)
+A fresh general-purpose subagent saw only the diff, the Phase 3 header, Steps 3.2–3.4 and the fixtures.
+Round 1: answer keys all correct by hand-check; 10 findings on the contract. Round 2 (fixes only): 2 P3
+wording fixes, both accepted; verdict "clean, 3.3 can start". No stop-and-ask.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P1: several records per `sessionId` (a crashed one plus a live resume) could make a running session `finished` → resumed twice | Accepted: `finished` only when every matching record is gone; otherwise state from the live record with the greatest `updatedAt`; 3.4 test. Rejected the extra "transcript ≤ record `updatedAt` + 5 s" guard: a Session carries no record `updatedAt` for a transcript session; the record-less `-p --resume` case is written down as a known limit |
+| 2 | P2: T7 / 3.4 said "probe unavailable → Unavailable", but `action(&Session)` can't see the probe and fixture keys rely on `app_link` | Accepted: reworded T7 and 3.4: a probe that cannot run makes nothing `finished`, records follow their status |
+| 3 | P2: 3.4 "record + Gone → Resume" contradicts `no_transcript` | Accepted: 3.4 now says record + transcript + Gone → Resume; record-only → `no_transcript` |
+| 4 | P2: merge decided by the parent's state could hide a busy Codex child in `claude ×N` | Accepted: quiet needs every child `idle` / `unknown` / `finished`; keys unchanged (all repo-b children `unknown`) |
+| 5 | P2: 3.5 said "over 4", schema "4 or more"; no fixture on the boundary | Accepted: 3.5 reworded; 3.3 unit tests at exactly 3 and 4 |
+| 6 | P2: open lookup unspecified (window, no match, TUI miss) | Accepted: window off, no match → exit 4, TUI footer; added to 3.4 Verify (round 2) |
+| 7 | P2: resume is crash-only if Claude deletes records on clean exit; consider fork on `unknown` | Accepted the limit sentence (3.8 checks the real behaviour). Rejected fork on `unknown`: the original may be live and mid-write; command text is offered |
+| 8 | P3: 3.2 Verify text "every overview id in sessions.json" fails for the hook key | Accepted: each overview key pairs with its own sessions key, id sets equal |
+| 9 | P3: fixture plan lookup by basename can collide | Accepted: allowed, same plan, 3.3 unit test |
+| 10 | P3: stale / finished row place, busy child, equal-activity tie unpinned | Accepted: "Required 3.3 unit tests" paragraph in the schema |
+| R2-1 | P3: known-limit sentence named the wrong condition | Accepted: "old record remains but its process has exited" |
+| R2-2 | P3: 3.4 Verify didn't test window-off lookup or exit 4 | Accepted: added |
 
 ### 2026-10-30 — Phase 3 plan (Claude, Codex critique, read-only)
 Planned from a real-data measurement (Phase 3 header): `sessions --json` 16.4–16.9 s warm, ~10 s of it

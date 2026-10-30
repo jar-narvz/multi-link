@@ -1,10 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30).** Phases 0–2 and **Step 3.1 done** (refresh speed). Next: **Step 3.2**
-(output contract, Claude) via one fresh session per step (CLAUDE.md "Autonomous mode").
-Order: 3.1 → 3.2 → 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
+**Resume here (2026-10-30).** Phases 0–2, **Step 3.1** (refresh speed) and **Step 3.2** (Phase 3 output
+contract) done. Next: **Step 3.3** (core Session fields, overview report, CLI `overview`; Codex-off mode, so a
+Claude implementer subagent). Order: 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
 
+- **What 3.3 needs from 3.2:** the contract is `docs/output-schema.md` → Session (`checkout`, `host_session_id`,
+  the several-records-per-id rule on `record`), "`overview`" (RepoGroup, Rows, Codex placement, merge, Plan,
+  the "Required 3.3 unit tests" list) and "Open" (for 3.4). Keys: `fixtures/expected/overview.json`,
+  `fixtures/expected/hook/overview.json` (hook variant command: `overview --since all`), plus the two new fields
+  in `sessions.json` and `hook/sessions*.json`. `cargo test` is **red until 3.3**: every sessions key gained the
+  two fields and the new synthetic busy record `fixtures/sessions/.claude/sessions/70001.json` (row
+  `00000000-0000-4000-8000-000000000010`), and the model round-trip test has no type for `overview.json` yet.
+- `checkout` already exists as `RepoPaths::checkout` in `crates/core/src/repo.rs`; `hostSessionId` must be kept
+  by `claude::read_session_record` (today dropped).
+- A key-consistency checker for the overview keys (independent of the code) is in the shared notes folder,
+  `step-3.2/check_keys.py` (run from the repo root); not committed.
 - **3.1 result (Claude, real `~`, real `ps`, warm release build):** `refresh_timing -- 3` → pass 1 3058 ms,
   pass 2 29 ms (k=1), pass 3 31 ms (k=2). Warm refresh ≤ 2000 ms with k ≥ 1, so **offset tailing is not needed**
   before 3.7 (T1 holds as written). Passes with k=0 also occur (live sessions write in bursts).
@@ -38,6 +49,40 @@ Order: 3.1 → 3.2 → 3.3 → (3.4 ∥ 3.5, then 3.6) → 3.7 → 3.8.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 3.2: Output contract: checkout, host id, overview, open rules — Claude
+- Did: Wrote the Phase 3 contract. `docs/design.md`: "Phase 3 decisions" T1–T11 plus 3.2 clarifications, NFR
+  "Incremental reads" revised per T1 and "Speed" with the 3.1 numbers, FR18 table rewritten to T7.
+  `docs/output-schema.md`: Session `checkout` / `host_session_id`, several records per id, new "`overview`"
+  section (groups, tiers, T5 order, T11 placement, `claude ×N` for 4+ quiet rows, FR17, latest hand-off,
+  plan lookup incl. fixture `<root>/repos/<basename>`) and "Open" (rules table, reasons, lookup, known limits).
+  New fixture: synthetic busy record `70001.json` (second busy session in repo-c for FR17; no `hostSessionId`),
+  documented in `fixtures/README.md`. No worktree fixture: fixture mode has no git, so `checkout` ≠ `repo`
+  can only be a temp-repo unit test. Answer keys hand-labelled: the session keys got the two fields by line
+  edits (`checkout` = `cwd` in fixture mode, host ids read from each record) plus the new row; the overview
+  layout (order, nesting, merge, tiers, warnings, latest hand-off, plan) was typed by hand in a small
+  assembler that only copies Session fields / Link objects by id from the existing keys.
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/README.md`, `fixtures/expected/sessions.json`,
+  `fixtures/expected/hook/sessions.json`, `fixtures/expected/hook/sessions-2h.json`,
+  `fixtures/expected/overview.json` (new), `fixtures/expected/hook/overview.json` (new),
+  `fixtures/sessions/.claude/sessions/70001.json` (new), `PLAN.md` (Review log; T7, 3.2/3.4/3.5 wording per
+  review), `PROGRESS.md`.
+- Verify: `python3 -m json.tool` on the 5 changed/new keys + `70001.json` → `parse ok` ×6; key check →
+  ```text
+sessions.json: 28 sessions, all have checkout + host_session_id
+hook/sessions.json: 29 sessions, all have checkout + host_session_id
+hook/sessions-2h.json: 25 sessions, all have checkout + host_session_id
+overview.json: 8 repos, 28 sessions = every id in sessions.json once; tiers, order, merge, nesting, FR17, latest hand-off consistent
+hook/overview.json: 8 repos, 29 sessions = every id in hook/sessions.json once; tiers, order, merge, nesting, FR17, latest hand-off consistent
+  ```
+  Scrub `rg` → nothing (exit 1); local `check-scrub.py` → exit 0. `cargo test --workspace` → red as expected
+  until 3.3 (cli tests: `phase_one_json_matches_answer_keys` and 3 others FAILED on the new fields/row).
+- Review: adversarial Claude review (fresh subagent, diff + steps + fixtures only), 2 rounds: keys correct by
+  hand-check; 12 findings, 11 accepted, 1 partly (see PLAN.md Review log, Step 3.2).
+- Gotchas: the git-ignored `fixtures/raw/check-scrub.py` needed `70001.json` added to its expected file set
+  (local only, not committed). Overview keys are pretty-printed with multi-line Link objects (~700 lines);
+  tests compare parsed JSON. `open` resume is crash-only in practice if Claude deletes records on clean exit
+  (3.8 checks).
 
 ### 2026-10-30 — Step 3.1: Refresh speed: scanner cache, memoised git, one ps — Codex
 - Did: Added Scanner caches keyed by path, length, mtime and inode for main/subagent Claude

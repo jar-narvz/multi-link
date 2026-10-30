@@ -1,10 +1,11 @@
-# Output schema — `multi-link sessions | links | steps --json`
+# Output schema — `multi-link sessions | links | steps | overview --json`, `open`
 
-Binding contract for Phases 1 and 2. `docs/design.md` → Data model is illustrative only; this file wins.
+Binding contract for Phases 1–3. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
 `fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
 `fixtures/expected/links-tagged.json` (Links → Tagged variant); Phase 2 hook answer keys in
-`fixtures/expected/hook/` (Hook records → Hook variant).
+`fixtures/expected/hook/` (Hook records → Hook variant); Phase 3 `fixtures/expected/overview.json` and
+`fixtures/expected/hook/overview.json` (Overview).
 
 **Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
 `state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
@@ -12,6 +13,11 @@ Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` a
 **Phase 2 changes (Step 2.4):** new section "Hook records" (file layout, record fields, reader rules,
 Hook variant); State gains two `waiting` rows, session record first (design H11), hook second (H8);
 a `waiting` session is always listed; hook lines appear in `sessions` → `skipped`.
+
+**Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
+(`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
+synthetic busy record `.claude/sessions/70001.json` (a second busy session in `/home/dev/repo-c`, for the
+FR17 warning; no `hostSessionId`), which adds one row to every sessions key.
 
 Transcript formats are undocumented. Every field path below was observed in the Phase 0 fixtures
 (`docs/phase0.md`), not in any spec.
@@ -21,7 +27,7 @@ Transcript formats are undocumented. Every field path below was observed in the 
 ### Flags
 | Flag | Meaning |
 | --- | --- |
-| `--root <dir>` | Home-shaped root. Reads `<dir>/.claude/projects/`, `<dir>/.claude/sessions/`, `<dir>/.codex/sessions/`. Default: `$HOME`. When given (fixture mode): no process probing, no git lookups, task outputs come from `<dir>/task-output/` (see Links), hook records from `<dir>/.multi-link/hook/` (see Hook records). |
+| `--root <dir>` | Home-shaped root. Reads `<dir>/.claude/projects/`, `<dir>/.claude/sessions/`, `<dir>/.codex/sessions/`. Default: `$HOME`. When given (fixture mode): no process probing, no git lookups, task outputs come from `<dir>/task-output/` (see Links), hook records from `<dir>/.multi-link/hook/` (see Hook records), plans from `<dir>/repos/<basename of repo>/` (see Overview → Plan). |
 | `--now <RFC 3339>` | Replaces the clock. Used by two things only: the `--since` window and the 300 s freshness check in State. |
 | `--since <duration>\|all` | History window, default `2h`: a transcript session is listed if its `last_activity` ≥ now − window. Session-record sessions and `waiting` sessions are always listed (active discovery, FR1; State → Visibility). `all` disables the window. The window filters **output only**: Phase 1 parses every transcript under the root, so exact evidence from old files still excludes heuristic candidates. A link is listed when its `parent` or `child` is a listed session; `unparented` lists only listed sessions. |
 | `--json` | Print the JSON below (pretty-printed; tests compare parsed JSON, not bytes). |
@@ -34,6 +40,8 @@ multi-link links    --root fixtures/sessions --now 2026-10-29T23:15:00Z --since 
 multi-link steps    --root fixtures/sessions --repo repos/repo-a --repo repos/repo-b --json
 ```
 `--since all` is needed because the organic and malformed fixtures are older than 2 h at that `--now`.
+**Phase 3 Verify command:** `multi-link overview --root fixtures/sessions --now 2026-10-29T23:15:00Z --since all --json`
+must equal `fixtures/expected/overview.json` (parsed); the Hook variant has its own row (Hook variant).
 
 ### Values
 - **Ids:** always full ids, exactly as in the source (Claude: transcript file stem / `sessionId`;
@@ -63,9 +71,11 @@ multi-link steps    --root fixtures/sessions --repo repos/repo-a --repo repos/re
 | `id` | string | Claude: transcript file stem (what `claude --resume` takes), or `sessionId` of a record-only session. Codex: `session_meta.payload.id`. |
 | `harness` | `"claude"` \| `"codex"` | |
 | `transcript` | string \| null | Main transcript path. `null` for a record-only session. |
-| `record` | string \| null | `.claude/sessions/<pid>.json` whose `sessionId` equals `id`, else `null`. |
+| `record` | string \| null | `.claude/sessions/<pid>.json` whose `sessionId` equals `id`, else `null`. **Several records with one `sessionId`** (a crashed record left behind plus a live resume, Phase 3 review #1): the session is `finished` only when **every** matching record is confirmed gone; otherwise `record` (and the state, `host_session_id`) come from the matching record that is not confirmed gone with the greatest `updatedAt`; when all are gone, from the greatest `updatedAt`. Ties by file name. 3.3 unit test. |
+| `host_session_id` | string \| null | The record's `hostSessionId` (`local_…`, present when the Claude desktop app started the session; design → Opening a session), exactly as written. `null` when there is no record, the record has no such field or it is not a string, and for every Codex session. It differs from `id` (Codex P2 #3: the reader must keep it, not drop it). |
 | `cwd` | string | Claude: `cwd` of the last record in file order that has one (a resumed file can carry earlier records with another `sessionId` and other cwds). Record-only: record `cwd`. Codex: `session_meta.payload.cwd`. |
 | `repo` | string | Git root of `cwd`. In fixture mode (`--root`) git lookups are off, so `repo` = `cwd`; the worktree `repo-a-wt` is therefore its own repo in the fixtures. Git-root and worktree grouping is a Phase 1 unit test on a temp repo. |
+| `checkout` | string | Git toplevel of `cwd` (`git rev-parse --show-toplevel`, the same call that gives `repo`): the main checkout or the worktree the session ran in (design T8). For a worktree `repo` is the main repo and `checkout` the worktree; for a main checkout both are equal. Fixture mode, and a failed git lookup: `checkout` = `cwd`, like `repo`. Real-mode values are a unit test on a temp repo with a worktree (fixture mode cannot show them). |
 | `branch` | string \| null | Claude: last `gitBranch`. Codex: `session_meta.payload.git.branch`. Record-only: `null`. |
 | `started_at` | timestamp | Claude: first top-level `timestamp` in file order (any record, including inherited ones). Codex: `session_meta.payload.timestamp`, else first record `timestamp`. Record-only: `startedAt`. |
 | `last_activity` | timestamp | Last top-level `timestamp` in file order (main transcript only). Record-only: `updatedAt`. |
@@ -105,8 +115,8 @@ transcripts. A missing session record proves nothing (`claude -p` may never writ
 Codex turn ends the turn, not the process. Showing `finished` would be a guess.
 
 In fixture mode the session records are trusted as written (process probing is off; their pids belong
-to another machine). With `--now 2026-10-29T23:15:00Z` the one busy record (`statusUpdatedAt`
-23:12:39.714Z, age 140 s) is `busy`; the four idle records are `idle`; all transcript sessions are
+to another machine). With `--now 2026-10-29T23:15:00Z` the two busy records are `busy` (`60243.json`, `statusUpdatedAt`
+23:12:39.714Z, age 140 s; synthetic `70001.json`, 23:13:30.000Z, age 90 s); the four idle records are `idle`; all transcript sessions are
 `unknown`. `stale` and `finished` have no fixture: Phase 1 covers them with state-machine unit tests
 (busy record at now + 301 s → `stale`; open Codex turn; process gone → `finished`). `waiting` has no row
 in the plain fixtures; the Hook variant has one of each evidence (Hook records → Hook variant).
@@ -402,6 +412,7 @@ Commands (`--root <tmp> --now 2026-10-29T23:15:00Z --json`):
 | `links --since all` | `hook/links.json` |
 | `sessions --since all` | `hook/sessions.json` |
 | `sessions` (default `2h` window) | `hook/sessions-2h.json` |
+| `overview --since all` (Phase 3) | `hook/overview.json` |
 
 | Hook file (`.multi-link/hook/`) | Records | Expected effect |
 | --- | --- | --- |
@@ -426,4 +437,162 @@ the bg link's `evidence` `"hook"`. `hook/sessions.json` = `sessions.json` with 1
 without the four sessions whose `last_activity` is before 2026-10-29T21:15:00Z and that are neither
 record sessions nor `waiting` (0d7faed4, 85a715ba, the synthetic `…000e` and `…000f`); `skipped` is not
 windowed. Exactly one session is `waiting` / `hook` (11c1f13c) and one `waiting` / `session_record`
-(d1f3b188) in both session files.
+(d1f3b188) in both session files. (Phase 3: the synthetic `70001.json` row is in `sessions.json`, so it is
+in all three session keys; as a record session it is never windowed out.)
+
+## `overview`
+
+Phase 3 (design T2): the home screen's data, computed in core so every front end shows the same thing.
+`multi-link overview [--root] [--now] [--since] [--json]` takes the flags of `sessions`. Text mode (one line
+per repo) is not compared by any test.
+
+```json
+{
+  "now": "2026-10-29T23:15:00.000Z",
+  "repos": [ RepoGroup, ... ]
+}
+```
+
+**Inputs.** One refresh (`Scanner::refresh`, Step 3.1) gives the listed sessions and listed links, exactly
+as `sessions` and `links` with the same flags would list them; the plan comes from the steps parser.
+Every listed session appears **exactly once** in the report: as a top-level row, as a child row, or as a
+member of a merged row. No other session appears. Subagents are never rows (they are part of their session).
+
+### RepoGroup — one per distinct Session `repo` among the shown rows
+| Field | Type | Rule |
+| --- | --- | --- |
+| `repo` | string | Session `repo`, the recorded string (fixtures: `/home/dev/...`). |
+| `tier` | `"waiting"` \| `"busy"` \| `"other"` | Best tier of any session shown in the group (rows, children, merged members): `waiting` if any is `waiting`, else `busy` if any is `busy`, else `other` (design T5; `stale` is `other`). |
+| `last_activity` | timestamp | Greatest `last_activity` of every session shown in the group. |
+| `plan` | Plan | See Plan. |
+| `active_steps` | string[] | Distinct non-null Link `step` of the group's active hand-offs, ascending (string order). A hand-off (listed link) belongs to the group that shows its `parent`; it is active when its parent's `state`, or its `child`'s `state` if the child is listed, is `waiting`, `busy` or `stale`. Fixtures: `[]` everywhere (no tags, nothing active). |
+| `concurrency` | Warning[] | FR17: one `{"cwd": string, "sessions": [id, ...]}` per `cwd` with **2 or more** `busy` sessions shown in the group (any harness; Session `cwd`, exact string; `stale` does not count). `sessions` ascending; warnings by `cwd`. `[]` if none. |
+| `latest_handoff` | Link \| null | Among listed links whose `parent` is shown in this group, the greatest (`at`, `invocation`), any `match` (an `unlinked` launch is still the latest hand-off). The Link object is copied from `links` unchanged. `null` if none. |
+| `rows` | Row[] | Top-level rows, see Rows. |
+
+Repos are ordered by `tier` (`waiting`, `busy`, `other`), then `last_activity` descending, then `repo`
+ascending.
+
+### Rows
+A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
+
+SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
+"started_at", "last_activity", "handoffs": Link[], "children": SessionRow[]}`. The plain fields are copied
+from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
+(`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
+under this Claude row (below); always `[]` on a Codex row.
+
+**Codex placement (design T11).** A Codex session's *placing hand-off* is the greatest (`at`,
+`invocation`) among listed links whose `child` is its id and whose `parent` is a listed session with the
+same `repo` as the Codex session. With one, the Codex row is a child of that parent's row; otherwise it
+is a top-level row of its own repo (the manual run, ambiguous candidates, a child whose parent is outside
+the window or in another repo; its `handoffs` still lists every link). A child is listed once, however many
+hand-offs it has. Children are ordered by their placing hand-off (`at`, `invocation`). The same-repo
+condition keeps every row inside its own repo's group; no fixture has a cross-repo link (3.3 unit test).
+
+**Top-level order (design T5).** `state`: `waiting`, `busy`, `stale`, `idle`, `unknown`, `finished`; then
+`last_activity` descending; then `id` ascending. A parent's place follows its own `state` and
+`last_activity`, never its children's.
+
+**Merge (`claude ×N`).** After ordering, the *quiet* rows are the top-level Claude SessionRows whose `state`
+is `idle`, `unknown` or `finished` **and** whose children are all `idle`, `unknown` or `finished` (a busy
+or stale Codex child keeps its parent visible, review #4). If a group has **4 or more** quiet rows, they are removed and one
+MergedRow `{"kind": "merged", "count": N, "rows": [SessionRow, ...]}` takes the place of the first of
+them; `rows` keeps their order and their children. Fewer than 4: no merge. Codex top-level rows and
+`waiting` / `busy` / `stale` rows never merge. A MergedRow is not actionable: the TUI expands it before
+`o` / `f`, so open always gets one full session id (T11).
+
+### Plan
+`{"convention": "supported" | "missing" | "unsupported", "latest_step": LatestStep | null}`, from the
+steps parser (`steps` rules) on the group's plan folder:
+- **Real mode:** `<repo>/PLAN.md` and `<repo>/PROGRESS.md` (the main checkout; worktrees share it).
+- **Fixture mode (`--root <dir>`, Codex P2 #5):** `<dir>/repos/<basename of repo>/`, where the basename is
+  the last `/`-separated component of the recorded `repo` string (`/home/dev/multi-link-sandbox/repo-a` →
+  `<dir>/repos/repo-a/`). The group's `repo` keeps the recorded string. No folder or no `PLAN.md` →
+  `missing`. Two repos with the same basename read the same folder and show the same plan (allowed; no
+  fixture has it; 3.3 unit test).
+
+`latest_step` is `null` unless `convention` is `supported` and PROGRESS.md has an entry. Then it is
+`{"id": latest_logged_step, "title": string | null, "entry": Entry | null}`: `title` and `entry` come from
+the steps report's Step with that `id` (`entry` = its `progress[0]`, the newest entry, which is the first
+entry of PROGRESS.md); a logged id with no PLAN.md step gives `title: null`, `entry: null`. Entry is the
+`steps` Entry (`date`, `agent`, `verify`).
+
+**Required 3.3 unit tests** (no fixture pins them): a cross-repo link (child stays top-level in its repo);
+merge at exactly 3 and exactly 4 quiet rows; a busy Codex child under an `unknown` parent (no merge of that
+parent); a `stale` row (between `busy` and `idle`) and a `finished` row (last); two repos in one tier with
+equal `last_activity` (ordered by `repo`); two repos with one plan basename; several records for one id.
+
+### Fixture results (`overview.json`, `--since all`)
+- 8 groups: `/home/dev/repo-c` is `busy` (two busy records); the rest are `other`, by `last_activity`:
+  `/home/dev/project`, sandbox `repo-a`, sandbox `repo-b`, sandbox `repo-a-wt`, the `Library/…/scratch-…`
+  folder, `/home/dev/repo-d`, `/home/dev/repo-e`.
+- repo-c: FR17 warning `{"cwd": "/home/dev/repo-c", "sessions": ["00000000-…-000000000010", "6358ec7e-…"]}`;
+  rows: the two busy records (90 s-old `70001` first, by activity), then 11c1f13c, 85a715ba; latest
+  hand-off `toolu_014Qp7cwQso6jcrnVvi6GhGq` (`unlinked`).
+- sandbox repo-a (T11): Codex `01a189e2-…` has two hand-offs (exec from bb792d9c 22:58:26, resume from
+  ef72378c 22:58:53); it sits under ef72378c (the later one) with both links in `handoffs`; bb792d9c has
+  no children. The manual run `01a189e5-…` is a top-level row, first by activity. 3 quiet Claude rows: no
+  merge. Plan: `supported`, latest step `0.4` "Parse sample records" with its reported Verify.
+- sandbox repo-b: 5 quiet Claude rows → one MergedRow (`count` 5) holding all of them, each with its Codex
+  child (plugin, bg, amb-1, amb-2); `mention` (df403bfa) has none. Plan: latest step `3`.
+- sandbox repo-a-wt: its own group in fixture mode (`repo` = `cwd`), c86d374f with child `01a189e4-8084-…`.
+- repo-e: the synthetic Codex file is a top-level row (unparented).
+
+Hook variant (`hook/overview.json`, `--since all`, built as in Hook records → Hook variant): sandbox repo-a
+(d1f3b188 `waiting` / `session_record`, latest activity 2026-10-30T06:08Z) and repo-c (11c1f13c `waiting` /
+`hook`) form the `waiting` tier, in that order; no group is `busy`; the `other` order is unchanged. A
+waiting row comes first in its group. repo-a now has 4 Claude rows but only 3 quiet ones: still no merge.
+The bg child's hand-off carries `evidence: "hook"`.
+
+## Open
+
+Phase 3, FR18, design T7. `open::action(&Session, fork: bool) -> OpenAction` is a pure function of the
+Session (no I/O); the CLI (`multi-link open <id-prefix> [--fork] [--dry-run]`, Step 3.4) and the TUI only
+execute what it returns. Before executing, the caller recomputes the Session from a fresh pass for that
+one full id, never from the last drawn report (Codex P1 #2).
+
+### OpenAction (JSON, as `open --dry-run` prints it)
+| `action` | Other fields | Executed as |
+| --- | --- | --- |
+| `"resume"` | `program`: `"claude"`; `args`: `["--resume", id]`, plus `"--fork-session"` when `fork`; `cwd`: Session `cwd` | Spawn `program args…` in `cwd` with inherited stdio (no shell), wait for it. |
+| `"app_link"` | `url`: `"claude://code/continue?session=" + host_session_id` | `open <url>` (macOS). Undocumented app behaviour, tested once (2026-10-29). |
+| `"unavailable"` | `reason` (below); `command`: string \| null, the command for me to run myself; `cwd`: Session `cwd` | Nothing runs. CLI: reason on stderr, exit 3; TUI: footer message with `command`. |
+
+### Rules, checked top to bottom (first match wins)
+| Session | `fork` | Action | `reason` / `command` |
+| --- | --- | --- | --- |
+| `id` is not a lowercase uuid (8-4-4-4-12 hex) | any | `unavailable` | `unsafe_id`, `command: null` (ids reach argv and text; a file stem could start with `-`) |
+| Codex (any state) | false | `unavailable` | `codex_not_supported`, `codex resume <id>` |
+| Codex (any state) | true | `unavailable` | `codex_not_supported`, `codex fork <id>` |
+| Claude `finished`, `transcript` not null | any | `resume` | (positive exit evidence: record + process gone or pid reused) |
+| Claude `finished`, `transcript` null (record-only) | any | `unavailable` | `no_transcript`, `claude --resume <id>` (+ ` --fork-session`) |
+| Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches `^local_[A-Za-z0-9-]+$` | false | `app_link` | |
+| Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches | true | `unavailable` | `fork_needs_finished`, `claude --resume <id> --fork-session` (the app link cannot fork, and multi-link resumes nothing that may be running) |
+| Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` null or not matching | any | `unavailable` | `running_without_app_link`, `claude --resume <id>` (+ ` --fork-session`) |
+| Claude `unknown` | any | `unavailable` | `not_known_finished`, `claude --resume <id>` (+ ` --fork-session`) |
+
+**Lookup.** `open <id-prefix>` and the fresh pass before executing search every parsed session with the
+`--since` window off (an old finished session is exactly the one to resume). Prefix matching is on full
+ids. No match → `no session matches <prefix>` on stderr, exit 4; several → exit 2 listing them. TUI: if
+the fresh pass no longer finds the id, a footer message and nothing runs.
+
+**Known limits.** Resume is reachable only when a record outlives its process (a crash, a kill); if
+Claude deletes its record on a clean exit (Step 3.8 checks), a normally closed session is `unknown` →
+`not_known_finished`, so FR18 resume is crash-only in practice, by design of the safety rule. A second
+process that writes no record (`claude -p --resume <id>`) while the old record remains but its process
+has exited cannot be seen; such a session would show `finished` and could be resumed twice. Fork stays refused for `unknown`: the original may be live and
+mid-write, and the command text is offered instead.
+
+`command` strings use single spaces and the full id. `resume` is the only action that starts a harness,
+and it needs `state: finished`, which only the process probe can produce. When the probe cannot run
+(fixture mode, `ps` denied) no session is `finished` (State), so nothing resumes; record sessions then
+follow their record status (`app_link` or `unavailable`), and opening the app view resumes nothing in this
+terminal. A `waiting` / `hook` session has no record, so it is `running_without_app_link`.
+
+Fixture coverage (`--root fixtures/sessions`, probe off, so no `resume`): the five desktop records (busy
+6358ec7e, idle 1f47e9b3, f8017fcd, 9d02a552, bed52539) → `app_link`; the synthetic busy `70001` record (no
+`hostSessionId`) → `running_without_app_link`; every transcript-only Claude → `not_known_finished`; every
+Codex → `codex_not_supported`; with `fork`, the desktop records → `fork_needs_finished`. Hook variant:
+d1f3b188 (`waiting`, `entrypoint: cli`, no `hostSessionId`) and 11c1f13c (`waiting` / `hook`) →
+`running_without_app_link`. `resume` and `no_transcript` are unit tests with `FakeProcessProbe`.
