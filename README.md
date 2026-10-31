@@ -2,8 +2,9 @@
 
 A local terminal dashboard for Claude Code and Codex sessions across your repos.
 Release 1 is complete (see [check results](docs/phase3-check.md)). Release 1.1 (home screen
-cleanup) is built and measured; it awaits the owner's check of the real screen
-([before / after](docs/phase4-check.md)).
+cleanup) did not meet the need ([owner verdict](docs/phase4-check.md#owner-check-stop-and-ask)).
+Release 1.2 rebuilds the home screen to an approved mockup; it is built and awaits the owner's check
+of the real screen ([visual check](docs/phase5-check.md)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -13,20 +14,35 @@ cleanup) is built and measured; it awaits the owner's check of the real screen
 
 ## Home screen
 
-- **Top line:** waiting, busy and stale sessions, warnings, repos, sessions and hand-offs, so you can
-  see whether anything needs you before scrolling. A second line labels the time axis.
-- **Busy and waiting repos expanded first.** Each shows its latest PLAN.md step and Verify result,
-  its sessions with a state glyph, and its latest hand-off with the link kind.
-- **Quiet repos as one line each** (repo, counts, latest step and Verify) until you press Enter on them.
-  A repo with a `stale` session stays expanded.
-- **Merged rows:** four or more quiet top-level Claude or Codex sessions in a repo become one
-  `claude ×N` / `codex ×N` row; Enter expands it.
-- **Mini time bars:** at 60 columns or wider (and 4 rows or taller), each session row ends in a
-  bar of its span (start to last activity, idle gaps included) over the last 2 hours. Merged rows and collapsed repos have none.
+![Home screen on real data](docs/img/home-real.png)
 
-On the owner's real home directory, at one pinned time, the default 2-hour window went from 28 to 15
-non-blank lines and `--since all` from 246 to 30 non-blank lines, compared with Release 1 (full
-output and method in [docs/phase4-check.md](docs/phase4-check.md); counts change with what is running).
+*HTML render of the home buffer on the owner's real `~` at 120×40, 2026-10-30 17:08 local time
+(`crates/tui/examples/home_html.rs`; method and every difference from the approved mockup in
+[docs/phase5-check.md](docs/phase5-check.md)). The real terminal uses your own font.*
+
+- **Top line:** busy, idle and done-or-unknown counts, repos and hand-offs, and on the right `◆ N need you`
+  in yellow when a session is waiting. With nothing waiting and no hook records seen, it says
+  `◆ needs-you partial: no hook records seen` instead of claiming zero. When space is short the
+  hand-off count is dropped first (as in the image above).
+- **One card per repo** with a rounded border: orange when a session is busy, yellow when one is waiting.
+  The card title shows the latest PLAN.md step and its Verify result.
+- **Lanes named by step**, e.g. `step 5.3 · claude → codex · matched by time`. A Claude session and the one
+  Codex run it handed a step to share a lane; sessions without a hand-off read `claude · no hand-off` or
+  `codex · no parent found`. Link words are plain: `confirmed`, `matched by time`, `N possible runs`,
+  `no run found`.
+- **Bars on a shared 2-hour axis** in local time, ending at `now`: Claude a thin orange line, Codex a
+  solid blue block, bright when busy, dim when idle or done; `◂` / `▸` mark spans cut by the window.
+- **Waiting, busy and stale sessions always show.** Up to 8 quiet lanes with activity in
+  the 2-hour window follow, oldest first; older or extra sessions are one `N earlier sessions · enter shows
+  all` line. The last line names the latest hand-off.
+- **Quiet repos are one line:** name, plan step, counts by harness and state, last activity.
+- **Colour** uses truecolor when `COLORTERM` is `truecolor`/`24bit`, else 256 colours; `NO_COLOR` keeps
+  every glyph and word. Narrower terminals shorten labels; below 60 columns bars are dropped.
+
+Known rough edges on real data (from the check): lane tracks touch in a terminal, so a card's bar area
+reads as one dark block; a hand-off with no step prints `step ?` on the `last:` line; a lane whose
+sessions both lack a step shows no step; and the hand-off count covers every link in the scan, not only
+those inside the window.
 
 Scanning only reads local agent files (`~/.claude`, `~/.codex`), repo metadata and optional
 hook state in `~/.multi-link`. It makes no network calls. Opening a session launches the
@@ -41,7 +57,8 @@ cargo build --release -p multi-link
 target/release/multi-link tui
 ```
 
-Use ↑/↓ to select, Enter to expand a quiet repo or merged row or open its timeline, `t` for the timeline,
+Use ↑/↓ to select, Enter to expand a quiet repo, split a shared lane, show hidden sessions or
+open the timeline, `t` for the timeline,
 `o` to open, `f` to fork, Esc to return/collapse, and `q` to quit. In the timeline,
 `+`/`-` zoom, ←/→ pan, and `0` resets the window. The default history window is `2h`;
 use `--since all` for all history.
@@ -75,9 +92,10 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
   (crossterm 0.29).
 - macOS only for now.
 
-Workspace tests and clippy passed in the Step 3.8 run and again in the Step 4.6 run. Real-home
+Workspace tests and clippy passed in the Step 3.8, 4.6 and 5.5 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
-the home screen before / after check is in [docs/phase4-check.md](docs/phase4-check.md).
+the Phase 4 home check is in [docs/phase4-check.md](docs/phase4-check.md) and the Phase 5 visual check in
+[docs/phase5-check.md](docs/phase5-check.md).
 
 ## Docs
 

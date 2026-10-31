@@ -1,7 +1,7 @@
-# Phase 4 real check — 2026-10-30
+# Phase 4 real check — 2026-10-30 (closed: need not met, see Owner check)
 
-**Step 4.6: measured before / after on real `~`. Phase 4 is NOT closed yet.** The owner still has
-to look at the real home screen and confirm the Phase 4 need is met (stop-and-ask, below).
+**Step 4.6: measured before / after on real `~`. Phase 4 is closed as not meeting the need** (owner
+verdict 2026-10-30, see [Owner check](#owner-check-stop-and-ask)); Phase 5 replaces its home layout.
 No code changed in this step. Claude ran every command below.
 
 ## Environment and privacy
@@ -148,7 +148,7 @@ cargo clippy --workspace --all-targets -- -D warnings → exit 0, 0 warning/erro
                                                       (re-run after touching crate roots, not cached)
 ```
 
-## Owner check (stop-and-ask) — pending
+## Owner check (stop-and-ask)
 
 Need: "from the home screen I can tell in a few seconds which repo needs me and what is running, the way
 mockup screen 6 promises." The captures above show the screen got shorter and the header now carries
@@ -160,4 +160,9 @@ target/release/multi-link tui
 target/release/multi-link tui --since all
 ```
 
-Owner's answer: _not yet recorded._
+Owner's answer (2026-10-30): "shorter but still very hard to read, nothing like the mockup".
+
+**Result: Phase 4 closes as not meeting the need.** The line counts above did go down, but the need is
+reading the screen in a few seconds, and the owner judged that it still fails. Phase 5 replaces the
+Phase 4 home layout: it was built against a picture the owner approved (board 7) with colour and
+readability as requirements. Its check is in [phase5-check.md](phase5-check.md).

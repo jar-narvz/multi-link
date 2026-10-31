@@ -5,8 +5,22 @@
 screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
 (home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
 5.2 is committed** (Claude-reviewed, 0 fix rounds). **5.3 is committed** (Claude-reviewed, 0 fix rounds).
-**5.4 is committed** (Claude-reviewed, 1 Codex fix round: narrow-width truncation). **Next: Step 5.5** (Claude: real-data HTML/screenshot check vs board 7, README, Phase 4 verdict, then stop-and-ask the owner). The older notes below are history.
+**5.4 is committed** (Claude-reviewed, 1 Codex fix round: narrow-width truncation). **5.5 is committed
+but Phase 5 is NOT closed: waiting on the owner.** Next: the owner runs `target/release/multi-link tui` on
+the real screen and says whether the need is met; Claude records the answer in `docs/phase5-check.md`
+("Owner check") and here. If not met, the owner's notes become new Phase 5 steps. The older notes below are history.
 
+- **What the owner check / any follow-up step needs from 5.5:** `docs/phase5-check.md` has the real-`~`,
+  fixture and board 7 images (`docs/img/`) and 18 numbered differences. Found issues for a possible next
+  step (none fixed in 5.5, which may not touch `home.rs`): (1) in a terminal the lane tracks touch, so a
+  card's bar area reads as one dark slab, unlike board 7's separated lanes — the biggest visual gap;
+  (13) `last: claude handed step ? …` when the newest hand-off has no step (V6 has no wording for it);
+  (14) the header hand-off count is `links.len()` over the whole scan (14 on real `~`, 5 inside the
+  window) and is dropped first at 120 columns when the long needs-you note shows; (15) a combined lane
+  whose rows both lack a step shows no step. `cargo run -p multi-link-tui --example home_html --
+  OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local]` renders any home to HTML.
+  The owner's Phase 4 verdict is quoted two ways in the repo (phase4-check.md vs PLAN.md / design.md);
+  confirm the exact words with the owner.
 - **What 5.5 needs from 5.4:** home draws via `render_home_with_options(report, selection, &HomeOptions { links, theme, offset, expanded_repos, split, show_all, .. }, area, buf)`; `HomeOptions::default()` is UTC and truecolor. The lane model is `multi_link_tui::view::lanes(report, group, split, show_all)`; `view::local_offset(now)` gives the offset (UTC fallback). The CLI passes the env theme into `App.theme` and still runs `theme.apply_no_color` after each draw. Phase5 120×40 render == the 5.1 pair (test `phase5_matches_immutable_text_and_styles`, no update path). Narrow widths drop whole header parts (hand-offs, repos, done/unknown, idle, busy) and footer keys (keeps `↑↓ move` + `q quit`), and `fit` never leaves `·…` / `→…`. Known rough edges for 5.5 to judge on real data: at 80 the waiting label loses its time (`waiting since…`); at 100 the title can end `Verify…`; Esc on home now clears expanded/split/show-all; below the screen height there is no "more below" hint.
 - **What 5.4 needs from 5.3:** `multi_link_tui::theme::Theme::from_env(colorterm, no_color)` gives every
   palette role as a `Color` (`Rgb` truecolor, `Indexed` 256, `Reset` under nonempty `NO_COLOR`) plus
@@ -152,6 +166,47 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 5.5: Visual check on real data and README — Claude
+- Did: Wrote `crates/tui/examples/home_html.rs` (overview + links JSON → 120×40 home buffer → HTML, one
+  full-height block per row so backgrounds touch like terminal rows; truecolor only, errors on any other
+  colour; DIM blends text toward its background; wide symbols span their cells; `--offset H[:MM]|local`).
+  Rendered the phase5 fixture (text equals `home-phase5.txt`) and real `~` at 2026-10-31T00:08:56Z
+  (`--since 2h`). Opened each page and board 7 (`project/HomeTarget.dc.html` read from the canvas artifact
+  with the Artifact tool, rendered locally without the canvas runtime) in the built-in browser pane and
+  screenshotted them; committed PNGs captured from the same HTML with local headless Chrome (pane
+  screenshots are small JPEG previews). Checked every image: repo names, step titles, counts, times only.
+  Wrote `docs/phase5-check.md` (method, images, 18 differences from board 7, Verify, owner check pending).
+  README home-screen section rewritten from these outputs with the real image. Recorded the owner's
+  Phase 4 verdict in `docs/phase4-check.md` and closed Phase 4 as not meeting the need.
+- Changed: `crates/tui/examples/home_html.rs`, `docs/phase5-check.md`, `docs/phase4-check.md`, `README.md`,
+  `docs/img/{home-real,home-phase5-fixture,board7-target}.png`, `PROGRESS.md`. (`.claude/launch.json`, a
+  local static server for the pane, is untracked and not committed.)
+- Verify (whole phase): Rust PATH set per AGENTS.md.
+  ```text
+  cargo test --workspace → exit 0, 31 `test result: ok`, 0 failed (re-run after review fixes: 31 ok)
+    test phase5_matches_immutable_text_and_styles ... ok
+    test older_keys_only_add_made_and_hook ... ok
+  cargo clippy --workspace --all-targets -- -D warnings → exit 0, 0 warning/error lines (re-run after fixes)
+  existing keys vs 7d399ba with made/hook removed → overview.json, hook/overview.json, phase4/overview.json
+    all equal-after-strip
+  p5.html text vs fixtures/expected/tui/home-phase5.txt → golden-text-equal
+  ```
+  Screenshots in `docs/phase5-check.md`. Owner's answer: not yet (stop-and-ask).
+- Review: adversarial Claude subagent (diff + Step 5.5 + images + scratch inputs), 9 findings. Accepted
+  1–8: (1) inline `<pre>` left page-colour strips between rows, hiding that terminal tracks merge into one
+  slab — renderer fixed, images retaken, now difference 1; it also removed a false "blank row inside the
+  card" claim; (2) idle count: 7 quiet lanes + 5 out of window, not 8 + cap; (3) "14 links in the window"
+  false — reviewer said 6, Claude's own count from `real-links.json` is 5 (one at 22:08:41 is before the
+  22:08:56 window start), doc says 5 and logs the header-count issue; (4) phase4-check intro still said
+  "not closed"; (5) README omitted the window condition; (6) selection and 256-colour not shown by images —
+  listed; (7) card-title count colour difference added; (8) non-RGB fallback, wide chars, DIM on bg,
+  fractional offsets — fixed in the example. Rejected for this step (9): the verdict quote differs from
+  PLAN.md/design.md wording; PLAN.md is outside 5.5's files and only the owner knows the exact words —
+  flagged in Current state.
+- Gotchas: zsh does not word-split `$F` flag strings. The phase5 key was made with `--since all`; with
+  `--since 2h` the header reads `9 done or unknown`, not the golden's 10. The built-in pane cannot screenshot
+  `file://` pages; a `127.0.0.1` static server from `.claude/launch.json` works.
 
 ### 2026-10-30 — Step 5.4: TUI home to board 7 — Codex
 - Did: Added a pure home lane model that flattens merged members, combines eligible Claude/Codex
