@@ -224,6 +224,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
         .name("multi-link-refresh".into())
         .spawn(move || worker(args, root, receiver, sender))?;
     let mut app = App::default();
+    app.theme = Some(theme);
     loop {
         match messages.try_recv() {
             Ok(Message::Refresh(result)) => {
@@ -394,8 +395,8 @@ mod tests {
         let mut app = App::default();
         let report = refresh(&mut scanner, &root, &options).unwrap();
         app.update(Event::Refresh(Ok(report)));
-        app.selection = multi_link_tui::selectable(&app.report.as_ref().unwrap().overview)
-            .iter().position(|(_, target)| matches!(target, multi_link_tui::Target::Session(row) if row.state == multi_link_model::State::Busy)).unwrap();
+        app.selection = multi_link_tui::selectable_home(&app.report.as_ref().unwrap().overview, &Default::default())
+            .iter().position(|(_, target)| matches!(target, multi_link_tui::Target::Session(row) if row.id == "00000000-0000-4000-8000-000000000010")).unwrap();
         let (id, fork) = request(&mut app);
         assert_eq!(id, "00000000-0000-4000-8000-000000000010");
         let action = open::fresh_action(&mut scanner, &root, &options, &id, fork).unwrap();

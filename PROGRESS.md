@@ -5,8 +5,9 @@
 screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
 (home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
 5.2 is committed** (Claude-reviewed, 0 fix rounds). **5.3 is committed** (Claude-reviewed, 0 fix rounds).
-**Next: Step 5.4** (Codex). Run 5.4 → 5.5 in order, one fresh step session each; 5.5 ends with a stop-and-ask for the owner. The older notes below are history.
+**5.4 is committed** (Claude-reviewed, 1 Codex fix round: narrow-width truncation). **Next: Step 5.5** (Claude: real-data HTML/screenshot check vs board 7, README, Phase 4 verdict, then stop-and-ask the owner). The older notes below are history.
 
+- **What 5.5 needs from 5.4:** home draws via `render_home_with_options(report, selection, &HomeOptions { links, theme, offset, expanded_repos, split, show_all, .. }, area, buf)`; `HomeOptions::default()` is UTC and truecolor. The lane model is `multi_link_tui::view::lanes(report, group, split, show_all)`; `view::local_offset(now)` gives the offset (UTC fallback). The CLI passes the env theme into `App.theme` and still runs `theme.apply_no_color` after each draw. Phase5 120×40 render == the 5.1 pair (test `phase5_matches_immutable_text_and_styles`, no update path). Narrow widths drop whole header parts (hand-offs, repos, done/unknown, idle, busy) and footer keys (keeps `↑↓ move` + `q quit`), and `fit` never leaves `·…` / `→…`. Known rough edges for 5.5 to judge on real data: at 80 the waiting label loses its time (`waiting since…`); at 100 the title can end `Verify…`; Esc on home now clears expanded/split/show-all; below the screen height there is no "more below" hint.
 - **What 5.4 needs from 5.3:** `multi_link_tui::theme::Theme::from_env(colorterm, no_color)` gives every
   palette role as a `Color` (`Rgb` truecolor, `Indexed` 256, `Reset` under nonempty `NO_COLOR`) plus
   `text_style(fg, bg)`. The CLI builds it once in `crates/cli/src/tui.rs::run` but today only calls
@@ -151,6 +152,74 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-10-30 — Step 5.4: TUI home to board 7 — Codex
+- Did: Added a pure home lane model that flattens merged members, combines eligible Claude/Codex
+  pairs, ranks attention outside the window/cap, orders quiet history, and exposes hidden rows.
+  Rebuilt home with rounded tinted cards, explicit theme colours, step labels, independent overlaid
+  bars, plain link words, honest idle summaries, local dates/offsets, word-boundary truncation and
+  selection scrolling. App uses the same targets; enter expands idle repos, splits combined lanes,
+  or reveals history; o opens the combined Claude parent. Refresh/return preserves session identity.
+  CLI supplies the theme; App reads the offset once per successful refresh, falling back to UTC.
+- Changed: `Cargo.toml`, `Cargo.lock`, `crates/tui/src/{lib,view,home,app}.rs`,
+  `crates/tui/tests/{home,view}.rs`, `crates/cli/src/tui.rs`,
+  `fixtures/expected/tui/home{,-full,-hook,-hook-full,-phase4}{,.styles}.txt`, `PROGRESS.md`.
+  The phase5 text/style acceptance pair and PLAN.md are unchanged. No files staged or committed.
+- Verify (round-1 rerun): Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Acceptance test in that run: `test phase5_matches_immutable_text_and_styles ... ok` (direct text
+  and style equality; deliberately has no snapshot-update path). Tests also pin yesterday's waiting
+  row, nine quiet rows capped at eight, child ending after parent, differing/nullable steps, placing
+  links, independent bars and clip markers, midnight and offsets −7/0/+5:30, widths 120/100/80/60/40
+  at height 10, NO_COLOR tracks, header counts/partial evidence, the three enter cases, combined o,
+  and selection across refresh/timeline. Legacy home snapshots regenerated for the new design.
+- Verify: `cargo fmt --all -- --check` → no output, exit 0;
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.13s
+  ```
+  `git diff --check` → no output, exit 0;
+  `git diff --name-only -- fixtures/expected/tui/home-phase5.txt fixtures/expected/tui/home-phase5.styles.txt`
+  → no output, exit 0.
+- Review: Claude (2026-10-30), 1 fix round. Round 1 (4 findings, all fixed): header cut inside parts (`3 repos · 4…`, `●…`); lane labels ended `·…` / `→…`; footer cut keys and lost `q quit`; plan wording cut to one word (`latest…`). Claude re-read the phase5 renders at 120/100/80/60/40 cols after the fix: 120 equals the golden, narrower widths drop whole fields, no dangling separators. `git diff 05cd20b` on `home-phase5.txt` / `.styles.txt` → empty (byte-identical). Every changed file is in the step list. Checked `local_offset` in a multi-threaded process: time 0.3.55 no longer refuses (soundness check removed in 0.3.37). Claude re-ran Verify: `cargo test --workspace` → 31 `test result: ok`, 239 passed, 0 failed (matches the paste); clippy `-D warnings` clean; fmt clean. Not fixed (left for 5.5 on real data): waiting label loses its time at 80 cols; no "more below" hint when lanes exceed the height.
+- Gotchas: One offset per frame uses the offset at now across DST, as specified in V7. Timeline
+  rendering is unchanged. Initial verification exposed legacy tests that selected by core's old
+  row order/merged UI; these now select via the home model and test the replacement interactions.
+  A new split-bar test initially put its quiet child beyond now (correctly hidden by V3); it now
+  checks future clipping while combined, then moves the child inside the window for the split check.
+
 
 ### 2026-10-30 — Step 5.3: TUI theme and styled goldens — Codex
 - Did: Added a pure V4 theme selected from passed COLORTERM / NO_COLOR values, with every RGB and

@@ -1,30 +1,30 @@
-multi-link  0 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 28 sessions · 13 hand-offs
-  session span · idle gaps included · UTC                                   21:15              23:15
-● repo-c  2 busy · 2 unknown  /home/dev/repo-c
-  steps  no PLAN.md
-  ● claude 00000000…0010  busy       1m ago                                 ······················━━
-  ● claude 6358ec7e…cedc  busy       2m ago                                 ◂━━━━━━━━━━━━━━━━━━━━━━━
-  ? claude 11c1f13c…3b43  unknown   37h ago                                 ························
-  ? claude 85a715ba…66f9  unknown   37h ago                                 ························
-  ! 2 busy sessions in one folder /home/dev/repo-c: 00000000…0010, 6358ec7e…cedc
-  ↳ hand-off 11c1f13c…3b43 → -  unlinked exec bg · 37h ago
+ All repos · last 2h   ● 2 busy   ⚠ 1 shared checkouts    ◆ needs-you partial: no hook records seen
+────────────────────────────────────────────────────────────────────────────────────────────────────
+   ━ claude  █ codex  bright busy · dim idle/done  21:15 UTC            22:15           23:15 now
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ● repo-c   no PLAN.md                                                                   2 busy │
+ │ ● claude · busy now                             ◂━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+ │ ● claude · busy now                                                                       ━━━━ │
+ │ 2 earlier sessions · enter shows all                                                           │
+ │ ⚠ shared checkout: repo-c                                                                      │
+ │ last: claude handed step ? to codex at Oct 28 09:58 (no run found)                             │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-▸ project  1 idle  steps  no PLAN.md · /home/dev/project
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ project            no PLAN.md                                     1 claude idle · last 23:12 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-▸ repo-a  6 unknown  steps  latest 0.4 Parse sample records · Verify ? (2026-10-29) · /home/dev/mult
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ repo-a                       3 claude done or unknown · 3 codex done or unknown · last 23:01 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-▸ repo-b  9 unknown  steps  latest 3 Parse sample records · Verify ? (2026-10-29) · /home/dev/multi-
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ repo-b                       5 claude done or unknown · 4 codex done or unknown · last 23:00 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-▸ repo-a-wt  2 unknown  steps  no PLAN.md · /home/dev/multi-link-sandbox/repo-a-wt
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ○ repo-a-wt                    1 claude done or unknown · 1 codex done or unknown · last 23:00 │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-▸ scratch-2026-10-29-338fd3  1 idle  steps  no PLAN.md · /home/dev/Library/Application Support/Claud
-
-▸ repo-d  2 idle · 1 unknown  steps  no PLAN.md · /home/dev/repo-d
-
-▸ repo-e  2 unknown  steps  no PLAN.md · /home/dev/repo-e
-
-
-
-
-
-↑↓ select · enter expand/timeline · t timeline · o open · f fork · q quit
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit         times in UTC

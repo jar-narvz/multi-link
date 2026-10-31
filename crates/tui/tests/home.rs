@@ -5,9 +5,9 @@ mod support;
 
 use std::{fs, path::PathBuf};
 
-use multi_link_model::{Link, OverviewReport, Row, State};
-use multi_link_tui::{HomeOptions, Target, render_home, render_home_with_options, selectable};
-use ratatui::{buffer::Buffer, layout::Rect, style::Modifier, text::Span};
+use multi_link_model::OverviewReport;
+use multi_link_tui::{HomeOptions, render_home_with_options};
+use ratatui::{buffer::Buffer, layout::Rect, text::Span};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -16,22 +16,6 @@ fn repo_root() -> PathBuf {
 fn load(path: &str) -> OverviewReport {
     let text = fs::read_to_string(repo_root().join(path)).expect("read overview fixture");
     serde_json::from_str(&text).expect("overview fixture is an OverviewReport")
-}
-
-fn render(report: &OverviewReport, selection: Option<usize>, width: u16, height: u16) -> Buffer {
-    let area = Rect::new(0, 0, width, height);
-    let mut buf = Buffer::empty(area);
-    // Detailed lane tests explicitly expand repos; snapshots below exercise default collapse.
-    let options = HomeOptions {
-        expanded_repos: report
-            .repos
-            .iter()
-            .map(|group| group.repo.clone())
-            .collect(),
-        ..HomeOptions::default()
-    };
-    render_home_with_options(report, selection, &options, area, &mut buf);
-    buf
 }
 
 /// One line per buffer row, trailing spaces trimmed. A wide character's trailing cell is
@@ -120,7 +104,6 @@ fn home_phase4_snapshot_160x30() {
     );
 }
 
-/// Tall enough for every group, so each overview row can be reviewed against the answer key.
 #[test]
 fn home_full_snapshot_100x80() {
     check_snapshot("fixtures/expected/overview.json", "home-full.txt", 100, 80);
@@ -136,515 +119,325 @@ fn home_hook_full_snapshot_100x80() {
     );
 }
 
-#[test]
-fn small_sizes_do_not_panic() {
-    for fixture in [
-        "fixtures/expected/overview.json",
-        "fixtures/expected/hook/overview.json",
-    ] {
-        let report = load(fixture);
-        let count = selectable(&report).len();
-        for (width, height) in [
-            (0, 0),
-            (1, 1),
-            (0, 5),
-            (5, 0),
-            (20, 5),
-            (40, 10),
-            (2, 2),
-            (3, 3),
-            (60, 1),
-            (60, 2),
-            (60, 3),
-            (60, 4),
-            (100, 4),
-        ] {
-            for selection in [None, Some(0), count.checked_sub(1), Some(count + 5)] {
-                render(&report, selection, width, height);
-            }
-        }
-    }
+fn phase5() -> OverviewReport {
+    load("fixtures/expected/phase5/overview.json")
 }
-
-#[test]
-fn area_outside_the_buffer_is_ignored() {
-    let report = load("fixtures/expected/overview.json");
-    let mut buf = Buffer::empty(Rect::new(0, 0, 10, 4));
-    render_home(&report, Some(0), Rect::new(5, 2, 50, 50), &mut buf);
-    render_home(&report, Some(0), Rect::new(20, 20, 5, 5), &mut buf);
-}
-
-/// Rows whose every cell is reversed: the selection bar.
-fn highlighted_rows(buf: &Buffer) -> Vec<u16> {
-    (0..buf.area.height)
-        .filter(|&y| (0..buf.area.width).all(|x| buf[(x, y)].modifier.contains(Modifier::REVERSED)))
-        .collect()
-}
-
-fn row_text(buf: &Buffer, y: u16) -> String {
-    text(buf)
-        .lines()
-        .nth(usize::from(y))
-        .unwrap_or_default()
-        .to_string()
-}
-
-#[test]
-fn selection_highlights_the_selected_row() {
-    let report = load("fixtures/expected/overview.json");
-    let targets = selectable(&report);
-
-    // Index 2 is repo-c's third row, 11c1f13c (rows come from the report as given).
-    let Target::Session(third) = targets[2].1 else {
-        panic!("expected a session row")
-    };
-    assert_eq!(&third.id[..8], "11c1f13c");
-    let buf = render(&report, Some(2), 100, 30);
-    let rows = highlighted_rows(&buf);
-    assert_eq!(rows.len(), 1, "exactly one highlighted row");
-    assert!(row_text(&buf, rows[0]).contains("11c1f13c"));
-
-    // No selection, no highlight.
-    assert!(highlighted_rows(&render(&report, None, 100, 30)).is_empty());
-    // Past the end: no highlight, no panic.
-    assert!(highlighted_rows(&render(&report, Some(targets.len()), 100, 30)).is_empty());
-}
-
-#[test]
-fn selection_below_the_fold_scrolls_into_view() {
-    let report = load("fixtures/expected/overview.json");
-    let targets = selectable(&report);
-    let last = targets.len() - 1;
-    let Target::Session(session) = targets[last].1 else {
-        panic!("expected a session row")
-    };
-    let buf = render(&report, Some(last), 100, 30);
-    let rows = highlighted_rows(&buf);
-    assert_eq!(rows.len(), 1);
-    // The last body row (just above the footer) holds the selection.
-    assert_eq!(rows[0], 28);
-    assert!(row_text(&buf, rows[0]).contains(&session.id[..8]));
-    // Title and footer stay in place.
-    assert!(row_text(&buf, 0).starts_with("multi-link"));
-    assert!(row_text(&buf, 29).contains("q quit"));
-}
-
-#[test]
-fn selectable_lists_children_and_one_line_per_merged_row() {
-    let report = load("fixtures/expected/overview.json");
-    let targets = selectable(&report);
-    let mut expected = 0;
-    for group in &report.repos {
-        for row in &group.rows {
-            expected += match row {
-                Row::Session(session) => 1 + session.children.len(),
-                Row::Merged(_) => 1,
-            };
-        }
-    }
-    assert_eq!(targets.len(), expected);
-    let merged = targets
-        .iter()
-        .filter(|(_, target)| matches!(target, Target::Merged(_)))
-        .count();
-    assert_eq!(merged, 1, "repo-b's claude ×5 is one line");
-}
-
-/// No fixture has a worktree checkout, a step tag, an active step or an ambiguous latest
-/// hand-off, so pin those on a modified report.
-#[test]
-fn checkout_label_step_tag_and_ambiguous_handoff() {
-    let mut report = load("fixtures/expected/overview.json");
-    let group = report
-        .repos
-        .iter_mut()
-        .find(|group| group.repo.ends_with("/repo-a"))
-        .expect("repo-a group");
-    group.active_steps = vec!["3.5".to_string()];
-    let Row::Session(parent) = group
-        .rows
-        .iter_mut()
-        .find(|row| matches!(row, Row::Session(s) if s.id.starts_with("ef72378c")))
-        .expect("ef72378c row")
-    else {
-        unreachable!()
-    };
-    parent.checkout = "/home/dev/multi-link-sandbox/repo-a-wt2".to_string();
-    let child = &mut parent.children[0];
-    let link: &mut Link = child.handoffs.last_mut().expect("child hand-off");
-    link.step = Some("3.5".to_string());
-    let mut latest = link.clone();
-    latest.child = None;
-    latest.r#match = multi_link_model::Match::Ambiguous;
-    latest.candidates = vec![
-        multi_link_model::Candidate {
-            id: "a".into(),
-            gap_ms: 1,
-        },
-        multi_link_model::Candidate {
-            id: "b".into(),
-            gap_ms: 2,
-        },
-    ];
-    group.latest_handoff = Some(latest);
-
-    let screen = text(&render(&report, None, 160, 80));
-    let line = |needle: &str| {
-        screen
-            .lines()
-            .find(|line| line.contains(needle))
-            .unwrap_or_else(|| panic!("no line with {needle}:\n{screen}"))
-            .to_string()
-    };
-    assert!(line("ef72378c").contains("@repo-a-wt2"));
-    assert!(line("01a189e2").contains("step 3.5"));
-    assert!(line("Parse sample records").contains("active 3.5"));
-    assert!(line("↳ hand-off ef72378c").contains("? (2 candidates)  ambiguous"));
-    // A row whose checkout is the repo carries no label.
-    assert!(!line("bb792d9c").contains('@'));
-}
-
-/// A long unicode title is cut at the area edge, on a character boundary, without panicking.
-#[test]
-fn long_unicode_title_is_truncated() {
-    let mut report = load("fixtures/expected/overview.json");
-    let group = report
-        .repos
-        .iter_mut()
-        .find(|group| group.plan.latest_step.is_some())
-        .expect("a group with a latest step");
-    group.plan.latest_step.as_mut().unwrap().title = Some("ステップ".repeat(40));
-    for width in [10, 21, 40, 99] {
-        let screen = text(&render(&report, None, width, 80));
-        for line in screen.lines() {
-            assert!(
-                Span::raw(line).width() <= usize::from(width),
-                "{line:?} wider than {width}"
-            );
-        }
-    }
-}
-
-#[test]
-fn waiting_repo_gets_the_marker() {
-    let report = load("fixtures/expected/hook/overview.json");
-    let screen = text(&render(&report, None, 100, 80));
-    let headers: Vec<&str> = screen
-        .lines()
-        .filter(|line| line.starts_with('◆'))
-        .collect();
-    assert_eq!(headers.len(), 2, "repo-a and repo-c wait:\n{screen}");
-    assert!(headers[0].contains("1 waiting"));
-    let waiting = report.repos[0]
-        .rows
-        .iter()
-        .filter(|row| matches!(row, Row::Session(s) if s.state == State::Waiting))
-        .count();
-    assert_eq!(waiting, 1);
-}
-
-/// A Rect at the very end of the u16 range must not overflow the row arithmetic.
-#[test]
-fn area_at_the_bottom_of_the_u16_range_does_not_overflow() {
-    let report = load("fixtures/expected/overview.json");
-    for rect in [Rect::new(0, 65534, 1, 1), Rect::new(0, 65533, 3, 2)] {
-        let mut buf = Buffer::empty(rect);
-        for selection in [None, Some(0), Some(3)] {
-            render_home(&report, selection, rect, &mut buf);
-        }
-    }
-}
-
-/// A child row shows its placing hand-off (T11: the latest link from its parent), not a later
-/// link from another parent.
-#[test]
-fn child_row_shows_its_placing_handoff() {
-    let mut report = load("fixtures/expected/overview.json");
-    let group = report
-        .repos
-        .iter_mut()
-        .find(|group| group.repo.ends_with("/repo-a"))
-        .expect("repo-a group");
-    let Row::Session(parent) = group
-        .rows
-        .iter_mut()
-        .find(|row| matches!(row, Row::Session(s) if s.id.starts_with("ef72378c")))
-        .expect("ef72378c row")
-    else {
-        unreachable!()
-    };
-    let parent_id = parent.id.clone();
-    let child = &mut parent.children[0];
-    let placing = child
-        .handoffs
-        .iter_mut()
-        .rev()
-        .find(|link| link.parent == parent_id)
-        .expect("placing hand-off");
-    placing.step = Some("3.5".to_string());
-    let mut other = placing.clone();
-    other.parent = "bb792d9c-7f69-410b-a571-b6d97d3aaffa".to_string();
-    other.r#match = multi_link_model::Match::Heuristic;
-    other.step = Some("9.9".to_string());
-    child.handoffs.push(other);
-
-    let screen = text(&render(&report, None, 160, 80));
-    let line = screen
-        .lines()
-        .find(|line| line.contains("01a189e2"))
-        .expect("child row");
-    assert!(
-        line.contains("step 3.5") && line.contains("exact"),
-        "{line}"
-    );
-    assert!(
-        !line.contains("heuristic") && !line.contains("9.9"),
-        "{line}"
-    );
-    assert!(line.contains("3 hand-offs"), "{line}");
-    // A top-level Codex row with no links says so without claiming there was no hand-off.
-    let manual = screen
-        .lines()
-        .find(|line| line.contains("01a189e5"))
-        .expect("manual run");
-    assert!(manual.contains("no linked hand-off"), "{manual}");
-}
-
-/// Clipped content says how much is hidden below, and the selection stays visible above it.
-#[test]
-fn clipped_body_shows_lines_below() {
-    let report = load("fixtures/expected/overview.json");
-    let full = text(&render(&report, None, 100, 200));
-    // Body lines = rows between the title and the footer, up to the last non-empty one.
-    let rows: Vec<&str> = full.lines().collect();
-    let body = &rows[2..rows.len() - 1];
-    let body_total = body.iter().rposition(|line| !line.is_empty()).unwrap() + 1;
-    let buf = render(&report, None, 100, 30);
-    let marker = row_text(&buf, 28);
-    assert_eq!(marker, format!("  ↓ {} more lines", body_total - 26));
-
-    // Selecting the first row below the fold scrolls it just above the marker.
-    let screen = text(&buf);
-    let targets = selectable(&report);
-    let hidden = targets
-        .iter()
-        .position(|(_, target)| match target {
-            Target::Session(session) => !screen.contains(&session.id[..8]),
-            Target::Merged(_) | Target::Repo(_) => false,
-        })
-        .expect("a row below the fold");
-    let buf = render(&report, Some(hidden), 100, 30);
-    assert_eq!(highlighted_rows(&buf), vec![27]);
-    assert!(row_text(&buf, 28).contains("more lines"));
-    // Nothing hidden: no marker.
-    assert!(!text(&render(&report, None, 100, 80)).contains("more lines"));
-}
-
-#[test]
-fn header_counts_hidden_members_children_and_the_full_link_report() {
-    let mut report = load("fixtures/expected/hook/overview.json");
-    // Latest-per-repo hand-offs cannot supply the full count.
-    for group in &mut report.repos {
-        group.latest_handoff = None;
-    }
-    let links = serde_json::from_str(
-        &fs::read_to_string(repo_root().join("fixtures/expected/hook/links.json")).unwrap(),
-    )
-    .unwrap();
-    let area = Rect::new(0, 0, 160, 80);
-    let mut buf = Buffer::empty(area);
-    let mut options = HomeOptions {
-        links: Some(&links),
+fn phase5_options() -> HomeOptions<'static> {
+    HomeOptions {
+        offset: time::UtcOffset::from_hms(-7, 0, 0).unwrap(),
         ..HomeOptions::default()
-    };
-    render_home_with_options(&report, None, &options, area, &mut buf);
-    let expected = "multi-link  2 waiting · 2 busy · 0 stale · 1 warning · 8 repos · 29 sessions · 13 hand-offs  now 2026-10-29T23:15:00.000Z";
-    assert_eq!(row_text(&buf, 0), expected);
-    options.expanded_repos = report
-        .repos
-        .iter()
-        .map(|group| group.repo.clone())
-        .collect();
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &options, area, &mut buf);
-    assert_eq!(row_text(&buf, 0), expected);
-    assert!(row_text(&buf, 0).contains("  now "));
-    let area = Rect::new(0, 0, 100, 30);
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &options, area, &mut buf);
-    assert_eq!(row_text(&buf, 0), expected.split("  now ").next().unwrap());
-    assert!(row_text(&buf, 0).ends_with("hand-offs"));
+    }
 }
-
 #[test]
-fn header_uses_singular_counts() {
-    let mut report = load("fixtures/expected/phase4/overview.json");
-    report.repos.retain(|group| group.repo.ends_with("/repo-j"));
-    let mut links: multi_link_model::LinksReport = serde_json::from_str(
-        &fs::read_to_string(repo_root().join("fixtures/expected/links.json")).unwrap(),
-    )
-    .unwrap();
-    links.links.truncate(1);
+fn phase5_matches_immutable_text_and_styles() {
+    let links =
+        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
     let options = HomeOptions {
         links: Some(&links),
-        ..HomeOptions::default()
+        ..phase5_options()
     };
-    let area = Rect::new(0, 0, 100, 10);
+    let area = Rect::new(0, 0, 120, 40);
     let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &options, area, &mut buf);
+    render_home_with_options(&phase5(), None, &options, area, &mut buf);
+    // Deliberately no update-snapshot path for the acceptance pair.
     assert_eq!(
-        row_text(&buf, 0),
-        "multi-link  0 waiting · 0 busy · 0 stale · 0 warnings · 1 repo · 1 session · 1 hand-off"
+        text(&buf),
+        include_str!("../../../fixtures/expected/tui/home-phase5.txt")
+    );
+    assert_eq!(
+        support::dump_styles(&buf),
+        include_str!("../../../fixtures/expected/tui/home-phase5.styles.txt")
     );
 }
 
 #[test]
-fn default_collapse_highlights_only_repo_summaries_and_stale_lanes() {
-    let report = load("fixtures/expected/phase4/overview.json");
-    let targets = multi_link_tui::selectable_home(&report, &Default::default());
-    assert_eq!(targets.len(), 8);
-    let area = Rect::new(0, 0, 160, 30);
-    for (index, (_, target)) in targets.iter().enumerate() {
+fn required_widths_scroll_selection_and_truncate_at_words() {
+    let report = phase5();
+    let expected = [
+        (120, "○ step 4.3 · claude → codex · matched by time"),
+        (100, "○ step 4.3 · claude → codex · matched by time"),
+        (80, "○ step 4.3 · claude → codex…"),
+        (60, "○ step 4.3 · claude…"),
+        (40, "○ step 4.3 · claude → codex…"),
+    ];
+    for (width, label) in expected {
+        let area = Rect::new(0, 0, width, 10);
         let mut buf = Buffer::empty(area);
-        render_home(&report, Some(index), area, &mut buf);
-        let rows = highlighted_rows(&buf);
-        assert_eq!(rows.len(), 1);
-        let expected = match target {
-            Target::Session(row) => format!("00000000…{}", &row.id[row.id.len() - 4..]),
-            Target::Repo(group) => format!("▸ {}", group.repo.rsplit('/').next().unwrap()),
-            Target::Merged(_) => panic!("quiet merged rows should be hidden"),
-        };
-        assert!(row_text(&buf, rows[0]).contains(&expected));
+        // Selected step 4.3 must remain visible at a height of ten rows.
+        render_home_with_options(&report, Some(4), &phase5_options(), area, &mut buf);
+        let screen = text(&buf);
+        assert!(
+            screen.lines().any(|l| l.contains(label)),
+            "width {width}: {screen}"
+        );
+        assert!(
+            screen
+                .lines()
+                .all(|l| Span::raw(l).width() <= usize::from(width))
+        );
+        let selected: Vec<_> = (0..10)
+            .filter(|y| buf[(3, *y)].bg == phase5_options().theme.selected)
+            .collect();
+        assert_eq!(selected, [7]);
+        if width < 60 {
+            assert!(!screen.contains(['━', '█', '◂', '▸']));
+        }
+        if width < 80 {
+            assert!(!screen.lines().next().unwrap().contains("hand-offs"));
+        }
+        assert!(
+            buf.content
+                .iter()
+                .all(|c| !c.modifier.contains(ratatui::style::Modifier::DIM))
+        );
     }
 }
 
-/// A single expanded repo with controlled spans on the default 21:15..23:15 UTC axis.
-fn mini_bar_report() -> OverviewReport {
-    let mut report = load("fixtures/expected/phase4/overview.json");
-    report.repos.retain(|group| group.repo.ends_with("/repo-h"));
-    let group = &mut report.repos[0];
-    group.rows.truncate(1);
-    let Row::Session(row) = &mut group.rows[0] else {
-        panic!("session")
-    };
-    row.id = "parent".into();
-    row.started_at = "2026-10-29T21:00:00Z".parse().unwrap();
-    row.last_activity = "2026-10-29T21:25:00Z".parse().unwrap();
-    row.children.clear();
-    let mut child = row.clone();
-    child.id = "child".into();
-    child.checkout = "/home/dev/a-long-worktree-label".into();
-    child.started_at = "2026-10-29T22:15:00Z".parse().unwrap();
-    child.last_activity = child.started_at;
-    row.children.push(child);
-    report
-}
-
-fn cells(buf: &Buffer, y: u16, from: u16, to: u16) -> String {
-    (from..to).map(|x| buf[(x, y)].symbol()).collect()
+#[test]
+fn sizes_offsets_and_word_boundaries_are_safe() {
+    let mut report = phase5();
+    report.repos[0].plan.latest_step.as_mut().unwrap().title = Some("ステップ".repeat(80));
+    for (width, height) in [
+        (0, 0),
+        (0, 5),
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (5, 10),
+        (7, 3),
+        (10, 1),
+        (10, 10),
+        (40, 10),
+        (60, 3),
+        (60, 4),
+        (120, 40),
+    ] {
+        let area = Rect::new(7, 3, width, height);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 140, 50));
+        render_home_with_options(&report, Some(0), &phase5_options(), area, &mut buf);
+        assert_eq!(buf[(0, 0)].symbol(), " ");
+    }
+    let area = Rect::new(0, 65533, 3, 2);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
 }
 
 #[test]
-fn mini_bars_clip_spans_and_draw_zero_length_children_on_the_shared_axis() {
-    let mut report = mini_bar_report();
-    let buf = render(&report, Some(1), 100, 10);
-    assert_eq!(
-        row_text(&buf, 0),
-        "multi-link  0 waiting · 2 busy · 0 stale · 0 warnings · 1 repo · 2 sessions · ? hand-offs"
+fn no_color_keeps_glyphs_and_dotted_tracks() {
+    let options = HomeOptions {
+        theme: multi_link_tui::theme::Theme::from_env(
+            Some("truecolor"),
+            Some(std::ffi::OsStr::new("1")),
+        ),
+        ..phase5_options()
+    };
+    let area = Rect::new(0, 0, 120, 40);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&phase5(), None, &options, area, &mut buf);
+    let screen = text(&buf);
+    assert!(screen.contains("◆ claude main · waiting"));
+    assert!(screen.contains("◂····"));
+    assert!(screen.contains("██━"));
+    assert!(
+        buf.content
+            .iter()
+            .all(|c| c.fg == ratatui::style::Color::Reset
+                && c.bg == ratatui::style::Color::Reset
+                && !c.modifier.contains(ratatui::style::Modifier::DIM))
     );
-    assert_eq!(cells(&buf, 1, 76, 100), "21:15              23:15");
-    assert!(row_text(&buf, 1).contains("session span · idle gaps included · UTC"));
-    assert_eq!(cells(&buf, 4, 76, 100), "◂━━·····················");
-    assert_eq!(cells(&buf, 5, 76, 100), "············━···········");
-    assert_eq!(highlighted_rows(&buf), vec![5]);
-
-    let Row::Session(row) = &mut report.repos[0].rows[0] else {
-        panic!("session")
-    };
-    row.started_at = "2026-10-29T22:15:00Z".parse().unwrap();
-    row.last_activity = "2026-10-29T23:30:00Z".parse().unwrap();
-    let buf = render(&report, None, 100, 10);
-    assert_eq!(cells(&buf, 4, 76, 100), "············━━━━━━━━━━━▸");
-    // Parent and child have different indentation and metadata lengths, but identical starts.
-    assert_eq!(buf[(88, 4)].symbol(), "━");
-    assert_eq!(buf[(88, 5)].symbol(), "━");
 }
 
 #[test]
-fn mini_bars_show_empty_tracks_for_spans_outside_the_window() {
-    let mut report = mini_bar_report();
-    let Row::Session(row) = &mut report.repos[0].rows[0] else {
-        panic!("session")
-    };
-    row.started_at = "2026-10-29T20:00:00Z".parse().unwrap();
-    row.last_activity = "2026-10-29T21:00:00Z".parse().unwrap();
-    row.children[0].started_at = "2026-10-30T00:00:00Z".parse().unwrap();
-    row.children[0].last_activity = "2026-10-30T00:01:00Z".parse().unwrap();
-    let buf = render(&report, None, 100, 10);
-    assert_eq!(cells(&buf, 4, 76, 100), "························");
-    assert_eq!(cells(&buf, 5, 76, 100), "························");
-}
-
-#[test]
-fn mini_bars_start_at_sixty_columns_and_respect_offset_areas() {
-    let report = mini_bar_report();
-    let narrow = text(&render(&report, None, 59, 10));
-    assert!(!narrow.contains("session span"));
-    assert!(!narrow.contains(['━', '◂', '▸']));
-    let buf = render(&report, None, 60, 10);
-    assert_eq!(cells(&buf, 1, 48, 60), "21:15  23:15");
-    assert_eq!(cells(&buf, 4, 48, 60), "◂━··········");
-    let area = Rect::new(7, 3, 100, 10);
-    let mut offset = Buffer::empty(Rect::new(0, 0, 120, 20));
-    render_home(&report, None, area, &mut offset);
-    assert_eq!(cells(&offset, 7, 83, 107), "◂━━·····················");
-    assert_eq!(offset[(107, 7)].symbol(), " ");
-}
-
-#[test]
-fn merged_and_collapsed_repo_rows_have_no_mini_bar() {
-    let report = load("fixtures/expected/phase4/overview.json");
-    let buf = render(&report, None, 160, 80);
-    let screen = text(&buf);
-    let merged: Vec<_> = screen
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.contains("×4"))
-        .collect();
-    assert_eq!(merged.len(), 3);
-    for (y, _) in merged {
-        assert_eq!(cells(&buf, y as u16, 136, 160), "                        ");
+fn local_axis_handles_midnight_and_fractional_offsets() {
+    let mut report = phase5();
+    let area = Rect::new(0, 0, 120, 40);
+    for (hours, minutes, start, end, footer) in [
+        (-7, 0, "14:20", "16:20 now", "UTC-7"),
+        (0, 0, "21:20 UTC", "23:20 now", "UTC"),
+        (5, 30, "02:50", "04:50 now", "UTC+5:30"),
+    ] {
+        let options = HomeOptions {
+            offset: time::UtcOffset::from_hms(hours, minutes, 0).unwrap(),
+            ..HomeOptions::default()
+        };
+        let mut buf = Buffer::empty(area);
+        render_home_with_options(&report, None, &options, area, &mut buf);
+        let screen = text(&buf);
+        let lines: Vec<_> = screen.lines().collect();
+        assert!(lines[2].contains(start), "{}", lines[2]);
+        assert!(lines[2].ends_with(end));
+        assert!(lines[39].ends_with(footer));
     }
-    let mut buf = Buffer::empty(Rect::new(0, 0, 160, 30));
-    render_home(&report, None, buf.area, &mut buf);
+    report.now = "2026-10-30T07:20:00Z".parse().unwrap();
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
+    assert!(text(&buf).lines().nth(2).unwrap().contains("Oct 29 22:20"));
+    let middle: String = (82..87).map(|x| buf[(x, 2)].symbol()).collect();
+    assert_eq!(middle, "23:20");
+}
+
+#[test]
+fn header_counts_every_session_and_only_zero_waiting_is_partial() {
+    let mut report = phase5();
+    let links =
+        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
+    let options = HomeOptions {
+        links: Some(&links),
+        ..phase5_options()
+    };
+    let area = Rect::new(0, 0, 160, 40);
+    let header = |report: &OverviewReport| {
+        let mut buf = Buffer::empty(area);
+        render_home_with_options(report, None, &options, area, &mut buf);
+        text(&buf).lines().next().unwrap().to_owned()
+    };
+    assert!(header(&report).starts_with(
+        " All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos · 4 hand-offs"
+    ));
+    assert!(header(&report).ends_with("◆ 1 need you"));
+    let multi_link_model::Row::Session(waiting) = &mut report.repos[0].rows[0] else {
+        panic!("session")
+    };
+    waiting.state = multi_link_model::State::Stale;
+    let line = header(&report);
+    assert!(line.contains("● 1 busy   ◌ 1 stale"));
+    assert!(line.ends_with("◆ needs-you partial: no hook records seen"));
+    report.hook.records = 1;
+    assert!(!header(&report).contains("◆"));
+}
+
+#[test]
+fn combined_bar_maps_child_independently_and_placing_step_wins() {
+    use multi_link_model::{Row, State};
+    let mut report = phase5();
+    let mut parent = multi_link_tui::view::sessions(&report.repos[0])
+        .find(|r| r.id.ends_with("5011"))
+        .unwrap()
+        .clone();
+    parent.started_at = "2026-10-29T21:20:00Z".parse().unwrap();
+    parent.last_activity = "2026-10-29T22:20:00Z".parse().unwrap();
+    parent.children[0].started_at = parent.last_activity;
+    parent.children[0].last_activity = "2026-10-29T23:30:00Z".parse().unwrap();
+    parent.state = State::Busy;
+    let mut other = parent.children[0].handoffs[0].clone();
+    other.parent = "another-parent".into();
+    other.step = Some("9.9".into());
+    parent.children[0].handoffs.push(other);
+    report.repos.truncate(1);
+    report.repos[0].rows = vec![Row::Session(parent.clone())];
+    let area = Rect::new(0, 0, 120, 10);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
+    let bar: String = (51..117).map(|x| buf[(x, 5)].symbol()).collect();
+    assert_eq!(bar, format!("{}{}▸", "━".repeat(33), "█".repeat(32)));
+    assert!(!text(&buf).contains("9.9"));
+    parent.made = vec!["4.2".into()];
+    parent.children[0].last_activity = report.now;
+    report.repos[0].rows = vec![Row::Session(parent)];
+    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
     let screen = text(&buf);
-    let collapsed: Vec<_> = screen
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| line.starts_with("▸ "))
-        .collect();
-    assert_eq!(collapsed.len(), 3);
-    for (y, _) in collapsed {
-        assert_eq!(cells(&buf, y as u16, 136, 160), "                        ");
+    assert!(screen.lines().any(|l| l.contains("● step 4.2 · claude")));
+    assert!(
+        screen
+            .lines()
+            .any(|l| l.contains("? step 4.1 · codex · confirmed"))
+    );
+}
+
+#[test]
+fn full_height_widths_keep_whole_fields_and_quit_visible() {
+    let report = phase5();
+    let links =
+        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
+    let options = HomeOptions {
+        links: Some(&links),
+        ..phase5_options()
+    };
+    for width in [120, 100, 80, 60, 40] {
+        let area = Rect::new(0, 0, width, 40);
+        let mut buf = Buffer::empty(area);
+        render_home_with_options(&report, None, &options, area, &mut buf);
+        let screen = text(&buf);
+        let lines: Vec<_> = screen.lines().collect();
+        assert!(
+            !screen.contains("·…") && !screen.contains("→…"),
+            "width {width}: {screen}"
+        );
+        assert!(!lines[0].contains('…'), "width {width}: {}", lines[0]);
+        assert!(!lines[39].contains('…'), "width {width}: {}", lines[39]);
+        assert!(lines[0].ends_with("◆ 1 need you"));
+        assert!(lines[39].contains("q quit"));
+        for line in &lines {
+            for (index, _) in line.match_indices('…') {
+                let before = &line[..index];
+                assert!(
+                    !before.ends_with("latest")
+                        && !before.ends_with("no")
+                        && !before.ends_with("PLAN.md"),
+                    "single-word plan at {width}: {line}"
+                );
+            }
+        }
+        let repo_m = lines.iter().find(|line| line.contains("repo-m")).unwrap();
+        if width >= 80 {
+            assert!(repo_m.contains("last 16:19"), "width {width}: {repo_m}");
+        }
+        let expected_header = match width {
+            120 => {
+                "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos · 4 hand-offs"
+            }
+            100 => "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos",
+            80 => "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown",
+            60 => "All repos · last 2h   ● 1 busy   ○ 7 idle",
+            40 => "All repos · last 2h",
+            _ => unreachable!(),
+        };
+        assert_eq!(lines[0].split("◆").next().unwrap().trim(), expected_header);
+        let expected_keys = match width {
+            120 | 100 => {
+                "↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit"
+            }
+            80 => "↑↓ move · enter expand / open · t timeline · q quit",
+            60 => "↑↓ move · enter expand / open · q quit",
+            40 => "↑↓ move · q quit",
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            lines[39].split("times in").next().unwrap().trim(),
+            expected_keys
+        );
     }
 }
 
 #[test]
-fn mini_bars_include_both_window_endpoints_and_follow_report_now() {
-    let mut report = mini_bar_report();
-    let Row::Session(row) = &mut report.repos[0].rows[0] else {
+fn footer_drops_time_only_when_minimum_keys_and_note_cannot_fit() {
+    let report = phase5();
+    let area = Rect::new(0, 0, 30, 40);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
+    assert_eq!(
+        text(&buf).lines().nth(39).unwrap().trim(),
+        "↑↓ move · q quit"
+    );
+}
+#[test]
+fn partial_header_note_survives_narrow_layout_without_ellipsis() {
+    let mut report = phase5();
+    let multi_link_model::Row::Session(row) = &mut report.repos[0].rows[0] else {
         panic!("session")
     };
-    row.started_at = "2026-10-29T21:15:00Z".parse().unwrap();
-    row.last_activity = "2026-10-29T23:15:00Z".parse().unwrap();
-    row.children[0].started_at = row.last_activity;
-    row.children[0].last_activity = row.last_activity;
-    let buf = render(&report, None, 100, 10);
-    assert_eq!(cells(&buf, 4, 76, 100), "━━━━━━━━━━━━━━━━━━━━━━━━");
-    assert_eq!(cells(&buf, 5, 76, 100), "·······················━");
-    report.now = "2026-10-30T00:15:00Z".parse().unwrap();
-    let buf = render(&report, None, 100, 10);
-    assert_eq!(cells(&buf, 1, 76, 100), "22:15              00:15");
-    assert_eq!(cells(&buf, 4, 76, 100), "◂━━━━━━━━━━━━···········");
-    assert_eq!(cells(&buf, 5, 76, 100), "············━···········");
+    row.state = multi_link_model::State::Idle;
+    for width in [120, 100, 80, 60, 40] {
+        let area = Rect::new(0, 0, width, 40);
+        let mut buf = Buffer::empty(area);
+        render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
+        let screen = text(&buf);
+        let header = screen.lines().next().unwrap();
+        assert!(!header.contains('…'));
+        assert!(header.ends_with(if width == 40 {
+            "◆ partial: no hook records"
+        } else {
+            "◆ needs-you partial: no hook records seen"
+        }));
+    }
 }

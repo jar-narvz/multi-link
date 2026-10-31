@@ -34,7 +34,10 @@ pub struct App {
     pub footer: String,
     refresh_error: Option<String>,
     pub selection: usize,
-    expanded: HashSet<String>,
+    split: HashSet<String>,
+    show_all: HashSet<String>,
+    pub theme: Option<crate::theme::Theme>,
+    offset: Option<time::UtcOffset>,
     expanded_repos: HashSet<String>,
     timeline: Option<(String, TimeWindow)>,
     home_selection: Option<SelectionIdentity>,
@@ -55,7 +58,7 @@ impl SelectionIdentity {
         let (id, harness) = match target {
             Target::Session(row) => (Some(row.id.clone()), Some(row.harness)),
             Target::Merged(row) => (None, Some(row.harness)),
-            Target::Repo(_) => (None, None),
+            Target::Repo(_) | Target::Hidden(_) => (None, None),
         };
         Self {
             repo: repo.to_string(),
@@ -76,9 +79,10 @@ impl SelectionIdentity {
                         Target::Merged(row) => {
                             self.id.is_none() && self.harness == Some(row.harness)
                         }
-                        Target::Repo(_) => true,
+                        Target::Repo(_) | Target::Hidden(_) => self.id.is_none(),
                     }
             })
+            .or_else(|| targets.iter().position(|(repo, target)| *repo == self.repo && matches!(target, Target::Session(row) if row.children.iter().any(|c|Some(c.id.as_str())==self.id.as_deref()))))
             .or_else(|| targets.iter().position(|(repo, _)| *repo == self.repo))
     }
 }
@@ -91,7 +95,7 @@ impl App {
             report.repos.retain(|group| &group.repo == repo);
         }
         for group in &mut report.repos {
-            if self.timeline.is_some() || self.expanded.contains(&group.repo) {
+            if self.timeline.is_some() {
                 group.rows = group
                     .rows
                     .iter()
@@ -111,10 +115,23 @@ impl App {
         if self.timeline.is_some() {
             selectable(view)
         } else {
-            crate::selectable_home(view, &self.expanded_repos)
+            crate::home::home_targets(view, &self.home_options())
         }
     }
 
+    fn home_options(&self) -> crate::HomeOptions<'_> {
+        crate::HomeOptions {
+            expanded_repos: self.expanded_repos.clone(),
+            split: self.split.clone(),
+            show_all: self.show_all.clone(),
+            links: self.report.as_ref().map(|r| &r.links),
+            theme: self
+                .theme
+                .unwrap_or_else(|| crate::theme::Theme::from_env(Some("truecolor"), None)),
+            offset: self.offset.unwrap_or(time::UtcOffset::UTC),
+            ..crate::HomeOptions::default()
+        }
+    }
     fn selection_identity(&self) -> Option<SelectionIdentity> {
         let view = self.view()?;
         let targets = self.targets(&view);
@@ -140,7 +157,7 @@ impl App {
             repo.to_string(),
             match target {
                 Target::Session(row) => Some(row.id.clone()),
-                Target::Merged(_) | Target::Repo(_) => None,
+                Target::Merged(_) | Target::Repo(_) | Target::Hidden(_) => None,
             },
         ))
     }
@@ -163,6 +180,7 @@ impl App {
                     .map_or(0, |previous| waiting.difference(previous).count());
                 self.waiting = Some(waiting);
                 self.refresh_error = None;
+                self.offset = Some(crate::view::local_offset(report.overview.now));
                 self.report = Some(report);
                 self.healthy = true;
                 self.restore_selection(selected.as_ref(), self.selection);
@@ -184,20 +202,46 @@ impl App {
                         let selected = self.home_selection.take();
                         self.restore_selection(selected.as_ref(), 0);
                     } else {
-                        self.expanded.clear();
+                        self.split.clear();
+                        self.show_all.clear();
                         self.expanded_repos.clear();
                         self.selection = 0;
                     }
                 }
                 KeyCode::Enter | KeyCode::Char('t') if self.timeline.is_none() => {
                     if let Some((repo, id)) = self.selected() {
-                        if key == KeyCode::Enter && id.is_none() {
-                            let view = self.view().unwrap();
-                            if matches!(self.targets(&view)[self.selection].1, Target::Repo(_)) {
-                                self.expanded_repos.insert(repo);
-                            } else {
-                                self.expanded.insert(repo);
+                        let view = self.view().unwrap();
+                        let target = self.targets(&view)[self.selection].1;
+                        if key == KeyCode::Enter
+                            && matches!(target, Target::Repo(_) | Target::Hidden(_))
+                        {
+                            match target {
+                                Target::Repo(_) => {
+                                    self.expanded_repos.insert(repo);
+                                }
+                                Target::Hidden(_) => {
+                                    self.show_all.insert(repo);
+                                }
+                                _ => unreachable!(),
                             }
+                        } else if key == KeyCode::Enter
+                            && id.as_ref().is_some_and(|id| {
+                                view.repos.iter().any(|g| {
+                                    crate::view::lanes(
+                                        &view,
+                                        g,
+                                        &self.split,
+                                        self.show_all.contains(&g.repo),
+                                    )
+                                    .visible
+                                    .iter()
+                                    .any(|l| l.row.id == *id && l.child.is_some())
+                                })
+                            })
+                        {
+                            let identity = self.selection_identity();
+                            self.split.insert(id.unwrap());
+                            self.restore_selection(identity.as_ref(), self.selection);
                         } else {
                             self.home_selection = self.selection_identity();
                             self.timeline = Some((
@@ -221,7 +265,7 @@ impl App {
                             fork: key == KeyCode::Char('f'),
                         }];
                     } else {
-                        self.footer = "enter expands a repo or merged row first".into();
+                        self.footer = "enter expands a repo or earlier sessions first".into();
                     }
                 }
                 // +/- zoom around the right edge; left/right pan by half a window.
@@ -274,13 +318,30 @@ impl App {
                     buf,
                 );
             } else {
-                let options = crate::HomeOptions {
-                    expanded_repos: self.expanded_repos.clone(),
-                    links: Some(&report.links),
-                    hide_footer: true,
-                };
-                crate::render_home_with_options(&view, Some(self.selection), &options, body, buf);
+                let options = self.home_options();
+                crate::render_home_with_options(&view, Some(self.selection), &options, area, buf);
             }
+        }
+        if self.timeline.is_none()
+            && self.report.is_some()
+            && self.footer.is_empty()
+            && self.refresh_error.is_none()
+            && self
+                .report
+                .as_ref()
+                .is_some_and(|r| r.diagnostics.is_empty())
+        {
+            return;
+        }
+        let style = if self.timeline.is_none() {
+            let t = self.home_options().theme;
+            t.text_style(t.text, t.screen)
+        } else {
+            Style::default()
+        };
+        buf.set_style(Rect::new(area.x, area.bottom() - 1, area.width, 1), style);
+        for x in area.x..area.right() {
+            buf[(x, area.bottom() - 1)].set_symbol(" ");
         }
         let footer = self.footer_text();
         buf.set_stringn(
@@ -288,7 +349,7 @@ impl App {
             area.bottom() - 1,
             &footer,
             area.width as usize,
-            Style::default(),
+            style,
         );
     }
 
@@ -438,7 +499,7 @@ mod tests {
         );
         app.update(Event::Refresh(Ok(report())));
         assert_eq!(
-            rendered_footer(&app, 200),
+            app.footer_text(),
             "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · q quit"
         );
     }
@@ -523,57 +584,6 @@ mod tests {
         assert!(!app.update(Event::Key(KeyCode::Char('f'))).is_empty());
     }
     #[test]
-    fn merged_rows_expand_before_action_and_timeline_navigates() {
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(report())));
-        app.expanded_repos = app
-            .report
-            .as_ref()
-            .unwrap()
-            .overview
-            .repos
-            .iter()
-            .map(|g| g.repo.clone())
-            .collect();
-        let view = app.view().unwrap();
-        app.selection = app
-            .targets(&view)
-            .iter()
-            .position(|(_, t)| matches!(t, Target::Merged(_)))
-            .unwrap();
-        let (repo, _) = app.selected().unwrap();
-        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
-        app.update(Event::Key(KeyCode::Enter));
-        assert!(app.selected().unwrap().1.is_some());
-        let home_selection = app.selection;
-        app.update(Event::Key(KeyCode::Char('t')));
-        assert_eq!(app.timeline.as_ref().unwrap().0, repo);
-        let window = app.timeline.as_ref().unwrap().1;
-        app.update(Event::Key(KeyCode::Char('+')));
-        assert_eq!(
-            app.timeline.as_ref().unwrap().1,
-            TimeWindow::ending_at(window.end, std::time::Duration::from_secs(3600))
-        );
-        app.update(Event::Key(KeyCode::Right));
-        assert_ne!(app.timeline.as_ref().unwrap().1.end, window.end);
-        app.update(Event::Key(KeyCode::Char('0')));
-        assert_eq!(app.timeline.as_ref().unwrap().1, window);
-        for _ in 0..100 {
-            app.update(Event::Key(KeyCode::Down));
-        }
-        let view = app.view().unwrap();
-        assert_eq!(app.selection, selectable(&view).len() - 1);
-        for (width, height) in [(0, 0), (1, 1), (30, 8), (100, 16)] {
-            let area = Rect::new(0, 0, width, height);
-            app.render(area, &mut Buffer::empty(area));
-        }
-        app.update(Event::Key(KeyCode::Esc));
-        assert_eq!(app.selection, home_selection);
-        app.update(Event::Key(KeyCode::Esc));
-        assert!(app.expanded.is_empty());
-        assert_eq!(app.update(Event::Key(KeyCode::Char('q'))), [Effect::Quit]);
-    }
-    #[test]
     fn timeline_scroll_keeps_last_selected_lane_visible_even_in_one_body_row() {
         let mut app = App::default();
         app.update(Event::Refresh(Ok(report())));
@@ -616,47 +626,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn refresh_preserves_selected_merged_harness_and_enter_expands_both() {
-        use multi_link_model::Harness;
-        let mut refresh = report();
-        refresh.overview = serde_json::from_str(include_str!(
-            "../../../fixtures/expected/phase4/overview.json"
-        ))
-        .unwrap();
-        refresh
-            .overview
-            .repos
-            .retain(|group| group.repo == "/home/dev/repo-i");
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(refresh)));
-        app.update(Event::Key(KeyCode::Enter));
-        let mut reordered = report();
-        reordered.overview = app.report.as_ref().unwrap().overview.clone();
-        reordered.overview.repos[0].rows.reverse();
-        assert_eq!(app.selection, 0);
-        app.update(Event::Refresh(Ok(reordered)));
-        assert_eq!(app.selection, 1);
-        let view = app.view().unwrap();
-        assert!(matches!(selectable(&view)[app.selection].1,
-            Target::Merged(row) if row.harness == Harness::Codex));
-        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
-        let area = Rect::new(0, 0, 140, 20);
-        let mut buffer = Buffer::empty(area);
-        app.render(area, &mut buffer);
-        let rendered: String = buffer.content.iter().map(|cell| cell.symbol()).collect();
-        assert!(rendered.contains("codex ×4"));
-        assert!(rendered.contains("claude ×4"));
-        app.update(Event::Key(KeyCode::Enter));
-        let view = app.view().unwrap();
-        assert_eq!(selectable(&view).len(), 8);
-        assert!(
-            selectable(&view)
-                .iter()
-                .all(|(_, target)| matches!(target, Target::Session(_)))
-        );
-    }
-
     fn phase4() -> Box<Refresh> {
         let mut refresh = report();
         refresh.overview = serde_json::from_str(include_str!(
@@ -666,81 +635,6 @@ mod tests {
         refresh.links.links.clear();
         refresh.links.unparented.clear();
         refresh
-    }
-
-    #[test]
-    fn quiet_repo_expansion_is_separate_from_merged_expansion_and_survives_refresh() {
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(phase4())));
-        let view = app.view().unwrap();
-        let targets = app.targets(&view);
-        assert_eq!(targets.len(), 8); // h:4, j:1, k:1, g:1, i:1
-        assert!(matches!(targets[4].1, Target::Repo(group) if group.repo.ends_with("/repo-j")));
-        assert!(matches!(targets[5].1, Target::Session(row) if row.state == State::Stale));
-        app.selection = 6;
-        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
-        assert!(!app.opening);
-        app.update(Event::Key(KeyCode::Down));
-        assert_eq!(app.selected().unwrap(), ("/home/dev/repo-i".into(), None));
-        app.update(Event::Key(KeyCode::Enter));
-        assert!(app.timeline.is_none());
-        assert!(app.expanded.is_empty());
-        let view = app.view().unwrap();
-        assert_eq!(app.targets(&view).len(), 9);
-        assert!(
-            matches!(app.targets(&view)[7].1, Target::Merged(row) if row.harness == multi_link_model::Harness::Codex)
-        );
-        assert!(
-            matches!(app.targets(&view)[8].1, Target::Merged(row) if row.harness == multi_link_model::Harness::Claude)
-        );
-        let mut refresh = phase4();
-        refresh.overview.repos.rotate_right(1);
-        app.update(Event::Refresh(Ok(refresh)));
-        assert_eq!(app.selection, 0);
-        assert!(app.expanded_repos.contains("/home/dev/repo-i"));
-        app.update(Event::Key(KeyCode::Enter));
-        let view = app.view().unwrap();
-        assert_eq!(app.targets(&view).len(), 15);
-        assert_eq!(
-            app.selected().unwrap().1.unwrap(),
-            "00000000-0000-4000-8000-0000000040c4"
-        );
-        app.update(Event::Key(KeyCode::Esc));
-        assert!(app.expanded_repos.is_empty());
-        assert!(app.expanded.is_empty());
-        assert_eq!(app.selection, 0);
-        let view = app.view().unwrap();
-        assert_eq!(app.targets(&view).len(), 8);
-        assert!(matches!(app.targets(&view)[0].1, Target::Repo(_)));
-    }
-
-    #[test]
-    fn stale_children_and_merged_members_prevent_repo_collapse() {
-        let mut refresh = phase4();
-        let group = &mut refresh.overview.repos[4]; // repo-i
-        let Row::Merged(merged) = &mut group.rows[0] else {
-            panic!("merged")
-        };
-        merged.rows[0].state = State::Stale;
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(refresh)));
-        let view = app.view().unwrap();
-        assert_eq!(app.targets(&view).len(), 9);
-        assert!(matches!(app.targets(&view)[7].1, Target::Merged(_)));
-
-        let mut refresh = phase4();
-        let group = &mut refresh.overview.repos[1]; // repo-j
-        let Row::Session(parent) = &mut group.rows[0] else {
-            panic!("session")
-        };
-        let mut child = parent.clone();
-        child.id = "stale-child".into();
-        child.state = State::Stale;
-        parent.children.push(child);
-        app.update(Event::Refresh(Ok(refresh)));
-        let view = app.view().unwrap();
-        assert_eq!(app.targets(&view).len(), 9);
-        assert!(matches!(app.targets(&view)[5].1, Target::Session(row) if row.id == "stale-child"));
     }
 
     #[test]
@@ -848,5 +742,146 @@ mod tests {
         reordered.overview.repos.reverse();
         app.update(Event::Refresh(Ok(reordered)));
         assert_eq!(app.selected().unwrap(), selected);
+    }
+}
+
+#[cfg(test)]
+mod phase5_tests {
+    use super::*;
+    fn refresh() -> Box<Refresh> {
+        Box::new(Refresh {
+            overview: serde_json::from_str(include_str!(
+                "../../../fixtures/expected/phase5/overview.json"
+            ))
+            .unwrap(),
+            links: serde_json::from_str(include_str!(
+                "../../../fixtures/expected/phase5/links.json"
+            ))
+            .unwrap(),
+            diagnostics: String::new(),
+        })
+    }
+    fn app() -> App {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh())));
+        app
+    }
+    fn select(app: &mut App, predicate: impl Fn(Target<'_>) -> bool) {
+        let view = app.view().unwrap();
+        app.selection = app
+            .targets(&view)
+            .iter()
+            .position(|(_, t)| predicate(*t))
+            .unwrap();
+    }
+    #[test]
+    fn enter_expands_idle_repo_and_flattens_merged_rows() {
+        let mut app = app();
+        select(
+            &mut app,
+            |t| matches!(t,Target::Repo(g) if g.repo.ends_with("repo-m")),
+        );
+        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
+        app.update(Event::Key(KeyCode::Enter));
+        assert!(app.timeline.is_none());
+        assert_eq!(
+            app.expanded_repos,
+            HashSet::from(["/home/dev/repo-m".into()])
+        );
+        assert_eq!(
+            app.selected().unwrap().1.as_deref(),
+            Some("00000000-0000-4000-8000-000000005031")
+        );
+        let view = app.view().unwrap();
+        assert!(
+            app.targets(&view)
+                .iter()
+                .all(|(_, t)| !matches!(t, Target::Merged(_)))
+        );
+        app.update(Event::Key(KeyCode::Esc));
+        assert!(app.expanded_repos.is_empty());
+    }
+    #[test]
+    fn combined_lane_opens_claude_and_enter_splits_with_selection_preserved() {
+        let mut app = app();
+        select(
+            &mut app,
+            |t| matches!(t,Target::Session(r) if r.id.ends_with("5011")),
+        );
+        let selected = app.selected().unwrap();
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen {
+                id: selected.1.clone().unwrap(),
+                fork: false
+            }]
+        );
+        app.update(Event::Opened(String::new()));
+        app.update(Event::Key(KeyCode::Enter));
+        assert!(app.timeline.is_none());
+        assert_eq!(app.split, HashSet::from([selected.1.clone().unwrap()]));
+        assert_eq!(app.selected().unwrap(), selected);
+        select(
+            &mut app,
+            |t| matches!(t,Target::Session(r) if r.id.ends_with("5021")),
+        );
+        let child = app.selected().unwrap();
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(app.selected().unwrap(), child);
+        // Even if the split is collapsed, identity follows the combined parent lane.
+        app.split.clear();
+        let identity = SelectionIdentity {
+            repo: child.0,
+            id: child.1,
+            harness: Some(multi_link_model::Harness::Codex),
+        };
+        app.restore_selection(Some(&identity), 0);
+        assert_eq!(app.selected().unwrap(), selected);
+    }
+    #[test]
+    fn enter_shows_hidden_history_and_survives_refresh() {
+        let mut app = app();
+        select(&mut app, |t| matches!(t, Target::Hidden(_)));
+        app.update(Event::Key(KeyCode::Enter));
+        assert!(app.timeline.is_none());
+        assert_eq!(app.show_all, HashSet::from(["/home/dev/repo-l".into()]));
+        let view = app.view().unwrap();
+        assert!(
+            !app.targets(&view)
+                .iter()
+                .any(|(_, t)| matches!(t, Target::Hidden(_)))
+        );
+        select(
+            &mut app,
+            |t| matches!(t,Target::Session(r) if r.id.ends_with("5003")),
+        );
+        let selected = app.selected().unwrap();
+        let mut refresh = refresh();
+        refresh.overview.repos.reverse();
+        app.update(Event::Refresh(Ok(refresh)));
+        assert_eq!(app.selected().unwrap(), selected);
+    }
+    #[test]
+    fn timeline_navigation_and_return_preserve_home_identity() {
+        let mut app = app();
+        select(
+            &mut app,
+            |t| matches!(t,Target::Session(r) if r.id.ends_with("5011")),
+        );
+        let selected = app.selected().unwrap();
+        app.update(Event::Key(KeyCode::Char('t')));
+        let window = app.timeline.as_ref().unwrap().1;
+        app.update(Event::Key(KeyCode::Char('+')));
+        assert_eq!(
+            app.timeline.as_ref().unwrap().1,
+            TimeWindow::ending_at(window.end, std::time::Duration::from_secs(3600))
+        );
+        app.update(Event::Key(KeyCode::Right));
+        assert_ne!(app.timeline.as_ref().unwrap().1.end, window.end);
+        app.update(Event::Key(KeyCode::Char('0')));
+        assert_eq!(app.timeline.as_ref().unwrap().1, window);
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.selected().unwrap(), selected);
+        assert_eq!(app.update(Event::Key(KeyCode::Char('q'))), [Effect::Quit]);
     }
 }
