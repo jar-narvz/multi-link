@@ -951,7 +951,10 @@ as images (W10).
   null, W3), `imported` (bool, W2) and `state_since` (timestamp or null, W5). Hiding imports, counting them
   and every screen rule below live in the TUI view models.
 - **W1 Recorded activity = bursts.** Sources: every timestamped record of the session's own file and of its
-  subagent files (Claude), minus records inside imported turns (W2). Timestamps are sorted and deduplicated;
+  subagent files (Claude), minus records inside imported turns (W2) and minus the Codex `session_meta`
+  header (Step 6.1: in an import it carries the copy time, so it would draw a fake one-cell burst), minus
+  Claude records whose `sessionId` differs from the session's (inherited history, as W3); an `imported` rollout
+  has no activity (Step 6.1 review). Timestamps are sorted and deduplicated;
   consecutive ones at most 5 min apart form one burst `[first, last]`; a single record is `[t, t]` and draws
   as one cell; bursts are clipped to the report window (none after `now`). Measured 2026-11-01 on the 12 newest
   real Claude transcripts: 2 of 117 closed turns have an inner gap over 5 min (the rule splits them); a
@@ -1049,7 +1052,8 @@ as images (W10).
   existing key equals its committed version once the four fields are removed; unit tests: gaps of 299 / 300 /
   301 s, a one-record burst, out-of-order and duplicate timestamps, subagent-only activity, clipping at the
   window edges; all-import / mixed / no-import rollouts, an unmatched complete, an import interrupted by a
-  real turn, real work appended to a cached all-import rollout (second scanner pass); `asked` skipping
+  real turn, real work appended to a cached all-import rollout (second scanner pass), an all-import rollout with a record
+  outside every turn (still `[]`), inherited Claude records inside the window (not activity); `asked` skipping
   inherited, tool-result, blank and `<…>` records, a text-block prompt, multibyte truncation at 120;
   `state_since` for waiting by record, waiting by hook, stale, Codex turns_complete, and null; clippy clean.
 
@@ -1096,6 +1100,22 @@ as images (W10).
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-01 — Step 6.1 review (adversarial Claude subagent, diff + Step 6.1 + W0–W10 + board 7c/8c descriptions)
+Claude also clarified W1 while writing the keys: the Codex `session_meta` header is not activity (in an import it carries
+the copy time, so every import would draw a fake one-cell burst). The reviewer recomputed all 13 sessions' four fields
+from the fixture lines and every golden cell from the written rules: all matched. 0 P1, 3 P2, 6 P3; no key or golden changed.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: schema said old fixtures' `asked` is null; `CASE-<name>: <prompt>` prompts don't start with `<` | Accepted: schema states which old sessions get a string and which get null |
+| 2 | P2: W1 counted inherited history (resumed/forked files) as activity | Accepted: Claude records with another `sessionId` are not activity (as W3); W1 and 6.2 Verify updated |
+| 3 | P2: W5 never listed which phrases are relative (`started 21:29` could render `56 min ago`) | Accepted: only `last active …` is relative; every other time is a clock time |
+| 4 | P3: legend colours ambiguous (`◆ waiting on you` all yellow; `│ ╎ ≈` colour unstated) | Accepted: rule states both |
+| 5 | P3: hidden-imports time source, idle `last active` source, quiet-line position, "first text block" unpinned | Accepted: all four pinned in design.md / schema |
+| 6 | P3: 2 of 140 real all-import rollouts have an `event_msg` outside every turn → non-empty activity | Accepted: an `imported` rollout has `activity` `[]` and `asked` null; 6.2 test added |
+| 7 | P3: PLAN.md W1 edited outside Step 6.1's Files, not logged | Accepted: this entry records it (Claude owns PLAN.md) |
+| 8 | P3: shape test counts chars, not display width; accepts CRLF; doesn't check the four fields | Partly accepted: CRLF rejected and four fields checked; width rejected (no width table in deps; 6.3/6.4's cell-for-cell compare catches a wide glyph) |
+| 9 | P3: canvas artifact id (22 chars) trips the W10 "long id" check | Accepted: recorded in design.md as a W10 exception (owner's private canvas link, not a session id) |
 
 ### 2026-11-01 — Phase 6 plan (Claude, Codex critique, read-only)
 Owner rejected Phase 5's bars on the real screen and approved boards 7c (home in words) and 8c (board 2's

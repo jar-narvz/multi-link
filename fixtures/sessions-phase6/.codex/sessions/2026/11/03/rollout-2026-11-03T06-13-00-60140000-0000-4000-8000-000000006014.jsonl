@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-03T06:13:00.000Z", "payload": {"id": "60140000-0000-4000-8000-000000006014", "cwd": "/home/dev/repo-r", "originator": "Codex Desktop", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-03T06:13:00.000Z", "payload": {"type": "task_started", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-03T06:13:00.000Z", "payload": {"type": "user_message", "message": "Copied question from another chat.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-03T06:13:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-03T06:13:00.000Z", "payload": {"type": "task_complete", "turn_id": "external-import-turn-1"}}

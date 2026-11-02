@@ -1,0 +1,410 @@
+{
+  "now": "2026-11-03T06:25:00.000Z",
+  "sessions": [
+    {
+      "id": "60410000-0000-4000-8000-000000006041",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/76041.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-s",
+      "repo": "/home/dev/repo-s",
+      "checkout": "/home/dev/repo-s",
+      "branch": null,
+      "started_at": "2026-10-30T17:00:00.000Z",
+      "last_activity": "2026-10-30T19:00:00.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60030000-0000-4000-8000-000000006003",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/76003.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": null,
+      "started_at": "2026-10-31T18:00:00.000Z",
+      "last_activity": "2026-10-31T19:20:00.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60040000-0000-4000-8000-000000006004",
+      "harness": "claude",
+      "transcript": null,
+      "record": ".claude/sessions/76004.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": null,
+      "started_at": "2026-11-01T17:00:00.000Z",
+      "last_activity": "2026-11-01T17:45:00.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [],
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60010000-0000-4000-8000-000000006001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p/60010000-0000-4000-8000-000000006001.jsonl",
+      "record": ".claude/sessions/76001.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": "main",
+      "started_at": "2026-11-02T00:30:00.000Z",
+      "last_activity": "2026-11-02T00:41:00.000Z",
+      "state": "waiting",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-02T00:30:00.000Z",
+          "to": "2026-11-02T00:41:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [],
+      "asked": "Draft the release notes, then wait for my review before you publish.",
+      "imported": false,
+      "state_since": "2026-11-02T00:41:00.000Z"
+    },
+    {
+      "id": "60220000-0000-4000-8000-000000006022",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/03/rollout-2026-11-03T04-50-00-60220000-0000-4000-8000-000000006022.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": null,
+      "started_at": "2026-11-03T04:50:00.000Z",
+      "last_activity": "2026-11-03T05:44:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-03T04:50:00.000Z",
+          "to": "2026-11-03T05:44:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T05:40:00.000Z",
+          "to": "2026-11-03T05:44:00.000Z"
+        }
+      ],
+      "asked": "Summarise the failing tests in the CI log.",
+      "imported": false,
+      "state_since": "2026-11-03T05:44:00.000Z"
+    },
+    {
+      "id": "60310000-0000-4000-8000-000000006031",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-q/60310000-0000-4000-8000-000000006031.jsonl",
+      "record": ".claude/sessions/76031.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-q",
+      "repo": "/home/dev/repo-q",
+      "checkout": "/home/dev/repo-q",
+      "branch": "feature-x",
+      "started_at": "2026-11-03T05:05:00.000Z",
+      "last_activity": "2026-11-03T06:24:50.000Z",
+      "state": "busy",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-03T05:05:00.000Z",
+          "to": "2026-11-03T06:24:50.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T05:05:00.000Z",
+          "to": "2026-11-03T05:10:00.000Z"
+        },
+        {
+          "from": "2026-11-03T05:50:00.000Z",
+          "to": "2026-11-03T05:57:00.000Z"
+        },
+        {
+          "from": "2026-11-03T06:23:00.000Z",
+          "to": "2026-11-03T06:24:50.000Z"
+        }
+      ],
+      "asked": "Where do we stand now, and what is left?",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60020000-0000-4000-8000-000000006002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p/60020000-0000-4000-8000-000000006002.jsonl",
+      "record": ".claude/sessions/76002.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": "main",
+      "started_at": "2026-11-03T05:10:00.000Z",
+      "last_activity": "2026-11-03T06:24:30.000Z",
+      "state": "busy",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-03T05:10:00.000Z",
+          "to": "2026-11-03T06:24:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T05:10:00.000Z",
+          "to": "2026-11-03T05:14:00.000Z"
+        },
+        {
+          "from": "2026-11-03T05:20:00.000Z",
+          "to": "2026-11-03T05:25:00.000Z"
+        },
+        {
+          "from": "2026-11-03T05:31:30.000Z",
+          "to": "2026-11-03T05:33:00.000Z"
+        },
+        {
+          "from": "2026-11-03T06:20:00.000Z",
+          "to": "2026-11-03T06:24:30.000Z"
+        }
+      ],
+      "asked": "Plan the home screen sentences and hand the next step to codex.",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60120000-0000-4000-8000-000000006012",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r/60120000-0000-4000-8000-000000006012.jsonl",
+      "record": ".claude/sessions/76012.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r",
+      "repo": "/home/dev/repo-r",
+      "checkout": "/home/dev/repo-r",
+      "branch": "main",
+      "started_at": "2026-11-03T05:23:00.000Z",
+      "last_activity": "2026-11-03T05:28:00.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-03T05:23:00.000Z",
+          "to": "2026-11-03T05:28:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T05:23:00.000Z",
+          "to": "2026-11-03T05:28:00.000Z"
+        }
+      ],
+      "asked": "Can we recheck the export at 9?",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60210000-0000-4000-8000-000000006021",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/03/rollout-2026-11-03T05-25-02-60210000-0000-4000-8000-000000006021.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p",
+      "repo": "/home/dev/repo-p",
+      "checkout": "/home/dev/repo-p",
+      "branch": null,
+      "started_at": "2026-11-03T05:25:02.000Z",
+      "last_activity": "2026-11-03T05:31:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-03T05:25:02.000Z",
+          "to": "2026-11-03T05:31:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T05:25:03.000Z",
+          "to": "2026-11-03T05:31:00.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 6.3 in PLAN.md.",
+      "imported": false,
+      "state_since": "2026-11-03T05:31:00.000Z"
+    },
+    {
+      "id": "60110000-0000-4000-8000-000000006011",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r/60110000-0000-4000-8000-000000006011.jsonl",
+      "record": ".claude/sessions/76011.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r",
+      "repo": "/home/dev/repo-r",
+      "checkout": "/home/dev/repo-r",
+      "branch": "main",
+      "started_at": "2026-11-03T05:29:00.000Z",
+      "last_activity": "2026-11-03T06:24:10.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-03T05:29:00.000Z",
+          "to": "2026-11-03T06:24:10.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [
+        "a6011sub0000001"
+      ],
+      "activity": [
+        {
+          "from": "2026-11-03T05:29:00.000Z",
+          "to": "2026-11-03T05:33:30.000Z"
+        },
+        {
+          "from": "2026-11-03T06:16:00.000Z",
+          "to": "2026-11-03T06:24:10.000Z"
+        }
+      ],
+      "asked": "Let's pick back up. Where do we stand after the scheduled runs?",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "60510000-0000-4000-8000-000000006051",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/03/rollout-2026-11-03T05-50-00-60510000-0000-4000-8000-000000006051.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-t",
+      "repo": "/home/dev/repo-t",
+      "checkout": "/home/dev/repo-t",
+      "branch": null,
+      "started_at": "2026-11-03T05:50:00.000Z",
+      "last_activity": "2026-11-03T05:50:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-03T05:50:00.000Z",
+          "to": "2026-11-03T05:50:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": true,
+      "state_since": null
+    },
+    {
+      "id": "60140000-0000-4000-8000-000000006014",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/03/rollout-2026-11-03T06-13-00-60140000-0000-4000-8000-000000006014.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r",
+      "repo": "/home/dev/repo-r",
+      "checkout": "/home/dev/repo-r",
+      "branch": null,
+      "started_at": "2026-11-03T06:13:00.000Z",
+      "last_activity": "2026-11-03T06:13:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-03T06:13:00.000Z",
+          "to": "2026-11-03T06:13:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": true,
+      "state_since": null
+    },
+    {
+      "id": "60130000-0000-4000-8000-000000006013",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/03/rollout-2026-11-03T06-23-56-60130000-0000-4000-8000-000000006013.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r",
+      "repo": "/home/dev/repo-r",
+      "checkout": "/home/dev/repo-r",
+      "branch": null,
+      "started_at": "2026-11-03T06:23:56.000Z",
+      "last_activity": "2026-11-03T06:24:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-03T06:23:56.000Z",
+          "to": "2026-11-03T06:24:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-03T06:23:57.000Z",
+          "to": "2026-11-03T06:24:40.000Z"
+        }
+      ],
+      "asked": "Run the unit tests and fix the date parser.",
+      "imported": false,
+      "state_since": "2026-11-03T06:24:40.000Z"
+    }
+  ],
+  "skipped": []
+}

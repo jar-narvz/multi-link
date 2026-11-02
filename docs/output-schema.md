@@ -1,13 +1,14 @@
 # Output schema — `multi-link sessions | links | steps | overview --json`, `open`
 
-Binding contract for Phases 1–5. `docs/design.md` → Data model is illustrative only; this file wins.
+Binding contract for Phases 1–6. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
 `fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
 `fixtures/expected/links-tagged.json` (Links → Tagged variant); Phase 2 hook answer keys in
 `fixtures/expected/hook/` (Hook records → Hook variant); Phase 3 `fixtures/expected/overview.json` and
 `fixtures/expected/hook/overview.json` (Overview); Phase 4 `fixtures/expected/phase4/overview.json`
 (Overview → Phase 4 fixture results); Phase 5 `fixtures/expected/phase5/{overview,links}.json` (Overview →
-Phase 5 fixture results).
+Phase 5 fixture results); Phase 6 `fixtures/expected/phase6/{sessions,overview}.json` (Phase 6 fixture
+results).
 
 **Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
 `state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
@@ -27,6 +28,15 @@ gains `hook`. No existing value, key or row order changes. New isolated fixture 
 `fixtures/sessions-phase5/` (board 7's shape) with answer keys `fixtures/expected/phase5/overview.json` and
 `links.json` (Overview → Phase 5 fixture results). Step 5.2 adds `made` / `hook` to the existing overview
 keys (`overview.json`, `hook/overview.json`, `phase4/overview.json`) and nothing else.
+
+**Phase 6 changes (Step 6.1, all additive, design W0–W3, W5):** Session and SessionRow gain `activity`,
+`asked`, `imported` and `state_since` (Session → Phase 6 fields). No existing value, key, window membership,
+group or row order changes; imported sessions stay in every report. **The JSON now exports prompt text**
+(`asked`). New isolated fixture root `fixtures/sessions-phase6/` (boards 7c/8c's shape, synthetic prompts) with
+answer keys `fixtures/expected/phase6/sessions.json` and `overview.json` (Phase 6 fixture results). Step 6.2
+adds the four fields to every existing key and nothing else. `asked` there follows W3 as written: the
+`fixtures/sessions` Claude transcripts whose first own prompt is `CASE-<name>: <prompt>` get that string; the
+phase4/phase5 Claude prompts (`<prompt>`) and every older Codex fixture (no `user_message`) get `null`.
 
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
@@ -97,6 +107,42 @@ must equal `fixtures/expected/overview.json` (parsed); the Hook variant has its 
 | `state_evidence` | enum | See State. |
 | `segments` | Segment[] | See Segments. `[]` for record-only sessions. |
 | `subagents` | string[] | Claude: `agentId`s of `<id>/subagents/agent-<agentId>.jsonl` files. A subagent is part of its parent session, never a session of its own. Codex: `[]`. |
+| `activity` | `{"from": timestamp, "to": timestamp}`[] | Phase 6, design W1: recorded activity as bursts, oldest first. See Phase 6 fields. |
+| `asked` | string \| null | Phase 6, design W3: the session's first prompt. See Phase 6 fields. |
+| `imported` | bool | Phase 6, design W2: a Codex Desktop import. Always `false` for Claude. |
+| `state_since` | timestamp \| null | Phase 6, design W5: when the current `state` began, from the evidence `state` used. |
+
+### Phase 6 fields
+Transcript formats are undocumented; the import marker and the `user_message` event were observed on local
+data on 2026-11-01 and are assumptions (design W2).
+- **`activity` (W1).** Timestamps: Claude, every top-level `timestamp` of the main transcript and of each
+  `<id>/subagents/agent-*.jsonl`, except records whose `sessionId` is present and differs from the session id
+  (inherited history of a resumed or forked file, as W3 skips it; subagent records carry the parent's id and
+  count); Codex, every record's `timestamp` except the `session_meta` record and records inside imported turns.
+  An `imported` rollout has `activity` `[]` and `asked` `null` whatever else it holds (real all-import files can
+  carry an `event_msg` outside every turn, e.g. `thread_settings_applied`). Sort, drop duplicates, then split where two consecutive timestamps are more
+  than 300 s apart (300 s exactly stays in one burst); each burst is `{"from": first, "to": last}` (one record:
+  `from` = `to`). Clip to the report window: drop bursts that end before `now − since` or start after `now`,
+  and cut `from` / `to` to the window (with `--since all` only `now` cuts). Record-only sessions: `[]`.
+- **Imported turns (W2).** Walking the rollout in file order, an imported turn opens at an `event_msg`
+  `task_started` whose `payload.turn_id` starts with `external-import` and closes at the first of: the
+  `task_complete` with the same `turn_id` (that record is inside), the next `task_started` (outside; it opens
+  the next turn), end of file. `imported` is `true` when the rollout has at least one `task_started` and every
+  `task_started` opens an imported turn. Imported records still count for `state`, `started_at` and
+  `last_activity` (unchanged).
+- **`asked` (W3).** Claude, main transcript only: the first record with `type` `user` whose `sessionId`
+  equals the session id and whose `message.content` is a string, or an array holding a block of `type` `text`
+  (the first such block's string `text` is used, whatever blocks come before it) (records whose content holds a `tool_result` are skipped); trim leading whitespace; skip it if
+  that leaves nothing or starts with `<`, and keep looking. Codex: `payload.message` of the first `event_msg`
+  `user_message` outside an imported turn. Then every whitespace run becomes one space, trailing space is
+  trimmed, and text over 120 characters is cut to 119 characters (on a char boundary) plus `…`. None found or
+  record-only: `null`.
+- **`state_since` (W5).** `waiting` or `stale` with `state_evidence` `session_record`: the record's
+  `statusUpdatedAt`; `waiting` by `hook`: the `at` of the hook record that made it waiting; Codex `unknown` /
+  `turns_complete`: the `timestamp` of the last `task_complete` outside an imported turn (`null` if every turn
+  was imported); every other case `null` (busy, idle, finished, `no_signal`, Codex `stale` / `open_turn`).
+- SessionRow copies the four fields from its Session (children and merged members too), placed after `made`.
+
 
 ### State
 `state` ∈ `busy | waiting | idle | finished | stale | unknown`. `waiting` means Claude is blocked on the
@@ -504,7 +550,8 @@ ascending.
 A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
 
 SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
-"started_at", "last_activity", "handoffs": Link[], "made": string[], "children": SessionRow[]}`. The plain fields are copied
+"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "imported",
+"state_since", "children": SessionRow[]}` (the four Phase 6 fields: Session → Phase 6 fields). The plain fields are copied
 from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
 (`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
 under this Claude row (below); always `[]` on a Codex row.
@@ -654,6 +701,47 @@ they are named by their last 4 digits. Times are UTC (board 7's local times are 
 - repo-n: Codex only, `5052` (22:58 → 23:05) and `5051` (22:30 → 22:35), both `unknown`; plan `missing`.
 - Header counts for the target golden (design V8): 1 busy, 7 idle, 10 done or unknown (`5003`, five Codex
   in repo-l, two in repo-m, two in repo-n), 1 waiting, 3 repos, 4 hand-offs.
+
+### Phase 6 fixture results (`phase6/{sessions,overview}.json`, `--since 2h`)
+Verify commands (Step 6.2 adds the tests): `multi-link sessions --root fixtures/sessions-phase6 --now
+2026-11-03T06:25:00Z --since 2h --json` must equal `fixtures/expected/phase6/sessions.json`, and `overview` with
+the same flags `fixtures/expected/phase6/overview.json` (parsed). `--since 2h` is the TUI default, so the keys
+are what the target screens are drawn from (design → Phase 6 decisions → Target screens). The keys are the CLI
+output at d4d862a plus the four fields, written by hand per session and cross-checked by an independent
+scratch script. The root is synthetic, in the Phase 5 formats plus Codex `user_message` / `agent_message`
+events, one Claude subagent file and Codex Desktop imports; prompts are invented sentences. Ids are
+`<tag>0000-0000-4000-8000-00000000<tag>` with a 4-digit tag, named by tag below (the 8-character prefix differs
+per session). Times are UTC; local (UTC−8) in brackets. No hook folder. 13 sessions, 0 skipped lines.
+- **Links** (2, `form: "exec"`): `6002` → `6021` `exact` / `stdout`, step `6.3`, at 05:25:00 [21:25];
+  `6011` → `6013` `heuristic` (gap 12000 ms), step `null`, at 06:23:44 [22:23]. `unparented`: `6014`, `6022`,
+  `6051`.
+- **Groups:** `repo-p` `waiting`, `repo-q` `busy`, then `other` by `last_activity`: `repo-r` (06:24:40),
+  `repo-t` (05:50:00), `repo-s` (2026-10-30T19:00:00). `active_steps`: `["6.3"]` in repo-p (its parent is
+  busy), else `[]`. No FR17 warning. No merged rows.
+- **repo-p** (plan `supported`, latest step `6.3` "Show prompts on the home screen"; `latest_handoff` the 6.3
+  link): `6001` `waiting` / `session_record` (transcript and record on Nov 2 00:30–00:41, i.e. yesterday Nov 1
+  local; `activity` `[]` after clipping; `state_since` 2026-11-02T00:41:00.000Z = `statusUpdatedAt`); `6002`
+  `busy` (bursts 05:10–05:14, 05:20–05:25, 05:31:30–05:33, 06:20–06:24:30: the 6.5 min wait on its Codex run
+  is a gap, design W1's limitation), child `6021` (`unknown` / `turns_complete`, burst 05:25:03–05:31:00, its
+  `session_meta` at 05:25:02 is not activity; `state_since` 05:31:00); `6004`, `6003` record-only `idle`
+  (Nov 1 / Oct 31; `activity` `[]`, `asked` `null`); `6022` the **mixed rollout**: one imported turn at
+  04:50:00, then a real turn 05:40–05:44 → `imported` false, `activity` 05:40–05:44, `asked` from the real turn,
+  `state_since` 05:44:00.
+- **repo-q** (plan `missing`): `6031` `busy`, branch `feature-x`, three bursts (05:05–05:10, 05:50–05:57,
+  06:23–06:24:50 = 830 s in all); `asked` from a `text` block, with a `?`.
+- **repo-r** (plan `supported`, latest step `2.4` "Fix the date parser"; `latest_handoff` the heuristic link):
+  `6011` `idle` (record), bursts 05:29:00–05:33:30 and 06:16:00–06:24:10 — the second exists only because its
+  subagent file (`agent-a6011sub0000001`, 06:19:00–06:22:00) bridges a 6:44 gap in the main file; child `6013`
+  (`unknown` / `turns_complete`, burst 06:23:57–06:24:40, `state_since` 06:24:40); `6012` `idle`, burst
+  05:23:00–05:28:00, first user record is a `<local-command-caveat>` wrapper (skipped), `asked` has a `?`;
+  `6014` the **all-import rollout** at 06:13:00 (`imported` true, `activity` `[]`, `asked` `null`,
+  `state_since` `null`). The idle stretch 05:33:30–06:16:00 (42.5 min) has no burst on any shown row.
+- **repo-t** (plan `missing`): only `6051`, an all-import rollout with two imported turns at 05:50:00.
+- **repo-s** (plan `missing`): only `6041`, a record-only `idle` session last active 2026-10-30; listed (records
+  always are) with no activity in the window.
+- Header counts for the home golden (design W4, imports not counted): 2 working now (`6002`, `6031`), 1
+  waiting, 5 idle (`6003`, `6004`, `6011`, `6012`, `6041`), 3 done or unknown (`6021`, `6022`, `6013`), 5
+  repos, 2 hand-offs; 2 imports hidden (`6014`, `6051`).
 
 ## Open
 

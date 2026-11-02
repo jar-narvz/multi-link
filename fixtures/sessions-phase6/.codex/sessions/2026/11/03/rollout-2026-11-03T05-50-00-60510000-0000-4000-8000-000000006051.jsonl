@@ -1,0 +1,9 @@
+{"type": "session_meta", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"id": "60510000-0000-4000-8000-000000006051", "cwd": "/home/dev/repo-t", "originator": "Codex Desktop", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "task_started", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "user_message", "message": "Copied question from another chat.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "task_complete", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "task_started", "turn_id": "external-import-turn-2"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "user_message", "message": "Copied follow-up from another chat.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:50:00.000Z", "payload": {"type": "task_complete", "turn_id": "external-import-turn-2"}}

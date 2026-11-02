@@ -11,6 +11,9 @@ Oct 29, 2026 · Status: draft
 > and decisions" under Solution design. Sections changed: Glossary, Major decisions (Reuse), Linking
 > algorithm, Repo and step assignment, Session state, Edge cases, Proposed plan, Open questions.
 >
+> Revised in Step 6.1 (2026-11-01): "Phase 6 decisions" (W0–W10, target screens) under Solution design;
+> FR10 reworded to the swimlane repo view.
+>
 > Revised in Step 3.2 (2026-10-30): "Phase 3 decisions" (T1–T11) under Solution design, the NFRs
 > "Incremental reads" and "Speed", and the "Opening a session (FR18)" table.
 
@@ -83,7 +86,7 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 | FR7 | Split each session into work segments (time ranges) and assign each a step from explicit evidence (hook tag or a `step N` tag in the hand-off prompt), else `unknown`. Inferring steps from history is deferred. | 3, 6 |
 | FR8 | `multi-link` CLI prints sessions, segments, links and steps as JSON or plain text. | 2, 3 |
 | FR9 | TUI home screen (`multi-link tui`): every active repo, sorted needs-you first. Per repo: steps in progress with their Verify, one mini lane per session with its step and checkout, Codex lanes nested under their parent. Over 4 sessions, lanes merge into "claude ×N". | 1, 3, 5 |
-| FR10 | Repo timeline: swimlanes, Codex rows nested under their Claude parent, hand-off arrows, ambiguous links shown as such. | 2, 5 |
+| FR10 | Repo view (Phase 6, replaces the repo timeline): one swimlane per session active in the window, Codex rows nested under their Claude parent, bars only where transcripts show activity, an axis fitted to the work with long idle gaps folded, a link line per hand-off (solid confirmed, dashed matched by time), ambiguous links shown as such. | 2, 5 |
 | FR11 | Backlog: step graph, Claude plan → Codex work → Claude review for one step, scrubbable. | 4, 5 |
 | FR12 | Backlog: live grid, one card per active session under a feed of hand-offs. | 1, 2, 5 |
 | FR13 | Optional hook records exact links when the child id is observable, and explicit step tags. | 2, 3, 6 |
@@ -344,6 +347,170 @@ note. Step 4.1 reads `confirmed` (the plan asks for one exact link) where board 
 
 Non-goals for Phase 5: Codex waiting detection; installing the hook for the owner (it stays print-only);
 the timeline screen; themes beyond the one palette.
+
+### Phase 6 decisions (home in words, repo swimlanes)
+
+Planned 2026-11-01 after the owner ran Phase 5 on the real screen: the bars on home and the timeline screen
+were "really hard to read … random blocks and timestamps on top". Phase 5 closes as not meeting the need for
+its bars. The owner approved two targets on the mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C),
+both drawn on the 120×40 cell grid from real data: **board 7c** (home: no timeline, one sentence per session)
+and **board 8c** (repo view: board 2's swimlanes on real data). They show real prompts, so they are described
+here, never committed as images (W10). Codex critique: PLAN.md → Review log. Binding JSON rules:
+`docs/output-schema.md` (the four added fields, Phase 6 fixture results). Binding pictures: the styled target
+goldens `fixtures/expected/tui/home-phase6.txt` / `.styles.txt` and `repo-phase6.txt` / `.styles.txt` (Step
+6.1, drawn by hand from the rules below; Steps 6.3 and 6.4 must match them cell for cell).
+
+Why Phase 5's bars failed: a bar ran from a session's start to its last activity, so a session open for two
+days filled the window; real work comes in 3–5 minute bursts, which a 2-hour axis turns into specks; 6 of the
+rows on the owner's screen were Codex Desktop imports, not runs. Measured 2026-11-01 on local data: 140 of 260
+Codex rollouts are Codex Desktop imports; a 5-minute burst gap splits 2 of 117 closed turns in the 12 newest
+Claude transcripts.
+
+| # | Decision | Why |
+| --- | --- | --- |
+| W0 | JSON stays stable; presentation stays in the TUI. Every existing key keeps its value (`last_activity`, `state`, window membership, groups, row order, merges); imported sessions stay in every report. Additive only: Session and SessionRow gain `activity`, `asked`, `imported`, `state_since`. Hiding imports, counting them and every screen rule live in the TUI view models | The JSON is a contract; the screen is what failed, not the data |
+| W1 | Recorded activity = bursts. Sources: every timestamped record of the session's own file and (Claude) of its subagent files, minus records inside imported turns (W2), minus the Codex `session_meta` header (a file header, not work; in an import it carries the copy time) and minus Claude records whose `sessionId` differs from the session's (inherited history, as in W3). An `imported` rollout has no activity. Timestamps sorted and deduplicated; consecutive ones at most 300 s apart form one burst `[first, last]`; a single record is `[t, t]`; bursts are clipped to the report window `[now − since, now]` (none after `now`; `--since all` clips only at `now`). Screens say "active", never "worked" or "busy time". Limitation: a tool call silent for over 5 min shows as a gap (the phase6 fixture has one: Claude waits 6.5 min on a Codex run) | Start-to-last-activity bars filled the window; bursts show when work happened. A turn-based rule was rejected: one real turn left waiting stayed open for 52 h |
+| W2 | Codex Desktop imports. In file order, an imported turn opens at a `task_started` whose `turn_id` starts `external-import` and closes at its matching `task_complete` (inclusive), the next `task_started`, or end of file; every record from open to close is excluded from `activity` and `asked`. `imported` = the rollout has at least one `task_started` and all of them are imported. State and `last_activity` unchanged (W0). Undocumented format, observed 2026-11-01 (all such rollouts have originator `Codex Desktop`): an assumption | Imports are Claude chats copied into Codex Desktop, stamped at copy time; they are not runs |
+| W3 | `asked` = the session's first prompt. Claude (main transcript only): the first `user` record whose `sessionId` equals the session id, not a tool result, with string content or a first `text` block; leading whitespace trimmed; skipped when blank or when it then starts with `<`. Codex: the first `user_message` event (`payload.message`) outside an imported turn. Whitespace runs collapse to one space; cut at 120 characters on a char boundary with `…`. Label order on screen: Claude latest made step (`step 6.3`) › `asked` in quotes › `claude · no prompt`; Codex its placing link's step › `asked` › `codex · no prompt`. Ids stay in `o`, the selected line and JSON. JSON now exports prompt text (README) | The owner recognises a session by what they asked, not by an id |
+| W4 | Home is words (board 7c): no bars, no axis. Header as V8 with `● N working now`. A repo with a waiting, busy or stale session is a card; a repo with other activity in the window is one bordered sentence; repos with no activity in the window share one `quiet` line; imported rows are hidden and counted in the footer. Layout: Target screens below | The owner reads sentences faster than bars |
+| W5 | Status phrases and times. `state_since`: waiting/stale → the record's `statusUpdatedAt` or the winning hook record's `at`; Codex `unknown` / `turns_complete` → the last non-imported `task_complete`; otherwise null. Phrases: `working now · for N min` (from the last burst's start; `working now` with no burst), `waiting on you · since T`, `stale since T`, `idle · last active N min ago` (last burst end, else `last_activity`), Codex `done T`. Codex "done" means its last turn completed; there is no process-exit evidence. Times: only `last active …` is relative (`N min ago` under 60 min, else a clock time); every other time (`since`, `done`, `at`, `started`, `last hand-off`, `active T1–T2`) is a clock time: `HH:MM` on `now`'s local date, `Mon D` before. Minutes are whole minutes rounded down, at least 1. Hand-offs: `handed step X to codex` / `handed work to codex` (untagged); outcome `codex done` (child `turns_complete`), `codex running` (child busy or stale), `codex state unknown` (other child states), `no codex run found` (unlinked), `N possible runs` (ambiguous). No generated `?` placeholder anywhere (prompts may contain `?`) | Times the owner can act on, from evidence the core already has |
+| W6 | The repo view (board 8c) replaces the timeline screen; `enter` and `t` on a home repo open it. Rows: top-level non-imported sessions with activity in the window, by `started_at` descending (newest first), then id; each Codex child nested under its parent. Two text rows per lane: label + bars, then a sub line. Bars are W1 bursts as `█`; `✓` after a `done` Codex run; `◆` after a waiting session's last burst. No rows: `no recorded activity in the last 2h` | Board 2's swimlanes, now drawn from when work happened |
+| W7 | The axis fits the work: fitted range = first burst start of the shown rows to `now`, never outside the report window. Idle stretches over 15 min with no burst on any shown row fold: at most 3 (the longest; ties to the earlier), each a 5-column band with its length in the axis row; `z` unfolds. Ticks from the ladder 1, 2, 5, 10, 15, 30 min, 1, 2, 6, 12 h, 1 d. `+`/`-`/`←`/`→` switch to an explicit range (folds off, the last label shows its time, `now` only when in range); `0` returns to fitted | Short bursts get wide bars; a 43-minute lunch does not eat the screen |
+| W8 | Link lines: at the hand-off column, a vertical line between the parent's bar row and the child's: `│` confirmed, `╎` matched by time; an ambiguous child stays top-level with `N possible runs`. `i` shows imported rows (dim, marked `import`). Bottom `selected` line: harness, first 8 characters of the id, started, `active about N min in K stretches`, its hand-off; `o` opens, `f` forks (Phase 3 safety rules) | The need: which run came from which session, and how sure the link is |
+| W9 | Colour and widths: Phase 5 roles keep their values and contrast tests; two roles are added (done green, child row background) and pass the same ≥ 4.5:1 test. NO_COLOR keeps every glyph and word. Repo view below 80 columns drops the bars and shows the lanes as a list (same labels and sub lines). Home below 80 columns drops the branch, then shortens labels with `…` on a word boundary | Board 8c needs a done mark and a nested-row tint the Phase 5 palette lacked |
+| W10 | Privacy: fixtures use synthetic prompts only. Real renders, board screenshots and JSON with real prompts stay in scratch storage. Each step's Review checks every committed file for real prompts, real ids, secrets and personal paths | Screens and JSON now carry prompt text; the repo is public |
+
+Non-goals for Phase 6: hook-free needs-you detection; the step graph (board 3, backlog); live grid; changing
+`--since`.
+
+#### Target screens (Step 6.1): layout rules the goldens are drawn from
+Fixture `fixtures/sessions-phase6`, `--now 2026-11-03T06:25:00Z`, `--since 2h` (the TUI default; keys in
+`fixtures/expected/phase6/`, links = `multi-link links` with the same flags), fixed offset UTC−8 (`now` is
+Nov 2 22:25 local), truecolor palette, 120 × 40 cells. Columns are 0-based, inclusive; `w` = 120, `h` = 40.
+Every cell paints its background (screen unless stated). Text styles are BOLD or nothing (V4: no DIM).
+
+**Home (`home-phase6.*`), nothing selected.**
+- **Rows:** 0 header; 1 rule `─` at columns 1..`w−2` (border colour); 2 blank; then the cards, then the idle
+  sentences (each in overview repo order), then the quiet line (always last, its groups in overview order), one
+  blank row between blocks; `h−2` rule as
+  row 1; `h−1` footer.
+- **Header (row 0):** from column 1, parts separated by 3 blanks: `All repos · last 2h` (text, bold),
+  `● N working now` (orange; N = busy sessions), `◌ N stale` (red, only when N > 0), `○ N idle · N done or
+  unknown` (grey; done or unknown = `unknown` and `finished`), `N repos · N hand-offs` (grey; repos = groups
+  in the overview, hand-offs = listed links). Imported sessions are not counted. Right part ending at column
+  `w−2`: `◆ N need you` yellow when any session waits, else V8's hook note, else nothing.
+- **Card** (a group with a waiting, busy or stale non-imported session): rounded box at columns 1..`w−2`,
+  border yellow (tier waiting) / orange (busy) / red (only stale); border cells on the screen background;
+  inside cells (2..`w−3`) on the V4 card tint (waiting / busy; screen for stale). Rows inside:
+  1. title: tier glyph at 3 (`◆` yellow / `●` orange / `◌` red), repo name (last path component) bold at 5,
+     2 blanks, plan wording: `step <id> <title>` in text colour, or `no PLAN.md` / `PLAN.md not in the step
+     format` / `no step logged yet` grey; right-aligned to column `w−5`: `N waiting` yellow, `N working now`
+     orange, `N stale` red, joined by grey ` · `, zero counts left out.
+  2. blank.
+  3. one row per waiting, busy or stale session (that order, then `started_at`): state glyph at 3, harness at 5
+     (`claude` orange / `codex` blue), label at 15 in text colour (W3 order; a prompt is quoted `“…”`; cut on a
+     word boundary with `…` inside the closing quote so it ends by column 63), status phrase at 66 (W5; bold;
+     yellow waiting / orange working / red stale), branch grey right-aligned to column `w−5` (left out when
+     null).
+  4. the rest (the group's other non-imported sessions, children and merged members included), grey at 5:
+     `N older session(s), none active in the last 2h · enter shows all` or `N other session(s), K active in the
+     last 2h · enter shows all`; with no rest, `active about M min in the last 2h, in K stretch(es)` over the
+     card's sessions (M = total burst length, W5 minutes).
+  5. hand-off: when the group has a `latest_handoff`, its own row, grey at 5: `last hand-off  T · claude handed
+     step X to codex · <outcome>` (two blanks after `last hand-off`); otherwise ` · no hand-offs` is appended to
+     row 4.
+- **Idle sentence** (a group with no card but a burst in the window): grey box 3 rows high; `○` grey at 3, name
+  bold at 5, then 2 blanks and grey `idle · last active T · <hand-off>` (T = the latest burst end of the group's
+  non-imported sessions, W5) where the hand-off is `claude handed
+  step X to codex at T, <outcome>` / `claude handed work to codex at T, <outcome>`, or `no hand-offs`.
+- **Quiet line** (every remaining group, i.e. no burst in the window): `quiet` grey at 3, then at 9 the groups
+  joined by ` · `, each `name (last active T)` from the group's `last_activity`, or `name (only Codex Desktop
+  imports)` when all its sessions are imported.
+- **Footer (row `h−1`):** from column 1, key in text colour, a blank, its words grey, 3 blanks between pairs:
+  `↑↓ move`, `enter repo view`, `o open session`, `q quit`. Right-aligned to `w−2`, grey: `N Codex Desktop
+  import(s) hidden · ` (only when N > 0) then `times UTC-8` (`times UTC` on the fallback; `UTC+5:30` when
+  fractional).
+
+**Repo view (`repo-phase6.*`) on repo-r, its newest lane (the parent) selected.**
+- **Row 0:** `Sessions in <name>` bold at 1, 2 blanks, plan wording grey; right-aligned to `w−2`, grey: `last
+  2h · active T1–T2` (first burst start – last burst end of the shown rows, `HH:MM`). Row 1 rule.
+- **Row 3 (axis):** `session` grey at 2; bar columns 44..`w−3` (74 at 120); tick labels and fold lengths
+  grey; `HH:MM now` right-aligned to `w−3`. Row 4 rule.
+- **Mapping:** the fitted range minus the folded gaps is a list of segments. With F folds, the segments share
+  `A = 74 − 5F` columns in proportion to their length in integer milliseconds: `floor` each share, then hand the
+  remaining columns to the largest fractional parts (ties to the earlier segment). Segment i starts after the
+  previous segment and its fold band; a time `t` in segment `[a, b]` of width `wᵢ` maps to `xᵢ + min(wᵢ − 1,
+  floor((t − a) · wᵢ / (b − a)))`. A burst fills `col(from)..col(to)` (at least one cell).
+- **Ticks:** at local times that are multiples of the step (from local midnight), inside a segment, never at
+  `now`. The step is the smallest ladder value for which every two adjacent ticks in one segment are ≥ 13
+  columns apart (a 5-character label plus 8 blanks). A tick's label is drawn at its column when it fits inside
+  its segment and leaves at least one blank before the `now` label. Grid `│` (track colour) at every tick column.
+- **Fold band:** 5 columns `≈ ≈ ≈` (border colour) right after its segment; its length in the axis row starting at
+  band + floor((5 − length) / 2) (`42m`; `1h05` from 1 h;
+  `13h` from 10 h; `2d` from 100 h), grey.
+- **Grid and fold rows:** from row 5 to the row after the last lane's sub line; under bars, text and lines.
+- **Lanes:** from row 6; a parent lane is its bar row and sub line, then each child's two rows after one blank
+  row, then one blank row before the next parent. Parent: harness at 2, label at 9 (cut to end by column 41);
+  sub line grey at 4: `<branch> · <W5 status phrase>` (no branch → the phrase alone). Child (both rows on the
+  child background across the width): `└▸` grey at 3, harness at 6, label at 12 (cut to end by 41); sub line
+  grey at 6: `<link words> · N s after the call` (`confirmed` / `matched by time`; N = child `started_at` −
+  link `at` in whole seconds, `N min` from 60 s). Bars: `█` orange (Claude) / blue (Codex). `✓` green in the
+  cell after a done Codex run's last burst; `◆` yellow after a waiting session's last burst (both only inside
+  the bar columns).
+- **Link line:** at `col(link at)`, on every row strictly between the parent's bar row and the child's bar row:
+  `│` (confirmed) or `╎` (matched by time), grey.
+- **Selected lane:** both rows on the selected background across the width, `▌` in the harness colour at
+  column 0.
+- **Hidden imports:** every imported session of the group in the report, times from their `last_activity`;
+  one row after the grid, grey at 2: `▸ N Codex Desktop import(s) at HH:MM hidden (copies
+  of Claude chats, not runs)` (`between HH:MM and HH:MM` when they differ).
+- **Bottom block:** row `h−11` rule; row `h−10` `selected` grey at 2, then at 12 in text colour `<harness>
+  <id[0..8]> · started T · active about M min in K stretch(es) · <hand-off words>` (`handed work to codex at
+  T`, `handed step X to codex at T`, or `no hand-offs`); row `h−9` at 12: `o open in Claude` and `f fork` (keys
+  in text colour, words grey, 3 blanks between). Row `h−4` legend from column 1, items 3 blanks apart: `█
+  claude active` (█ orange), `█ codex active` (█ blue), `│ confirmed link`, `╎ matched by time`, `◆ waiting on
+  you` (glyph and words yellow), `≈ idle folded`, `✓ done` (✓ green); every other glyph (`│`, `╎`, `≈`) and word grey. Row `h−2` rule, row `h−1` footer like home:
+  `↑↓ select`, `o open`, `f fork`, `+/- zoom`, `z unfold idle`, `i imports`, `esc home`, `q quit`; right
+  `times UTC-8`.
+
+**Palette additions** (W9; every other role is the Phase 5 table). Ratios as in Phase 5 (WCAG 2.x).
+
+| Role | Truecolor | 256 |
+| --- | --- | --- |
+| Done green (text) | `#7CCB8E` | 114 |
+| Child row background | `#12151B` | 234 |
+
+| Text colour | on child row | on selected | 256: child | 256: selected |
+| --- | --- | --- | --- | --- |
+| Text | 13.05 | 9.97 | 12.19 | 10.83 |
+| Grey | 7.04 | 5.38 | 7.17 | 6.36 |
+| Orange | 8.90 | 6.80 | 9.37 | 8.32 |
+| Blue | 8.50 | 6.49 | 7.80 | 6.92 |
+| Yellow | 10.90 | 8.33 | 12.28 | 10.91 |
+| Red | 6.04 | 4.61 | 5.72 | 5.08 |
+| Green | 9.39 (screen 9.78) | 7.18 | 9.82 (screen 10.79) | 8.72 |
+
+Grid lines use the track colour and fold bands the border colour; neither is text.
+
+**What the targets differ from boards 7c / 8c in, and why** (PLAN.md wins over the boards):
+- Words: "active" for "worked" (W1); `done` for "finished" (W5); `idle · last active N min ago` for "idle
+  since HH:MM" / "last work" (W5); `enter repo view` for "repo timeline" (W6 replaces the timeline).
+- Home: the fixture has a waiting session from yesterday, so the header shows `◆ 1 need you` instead of the
+  hook note and the first card is yellow with two session rows; cards keep the V4 tint (board 7c drew none);
+  the header keeps V8's counts (`○ 5 idle · 3 done or unknown   5 repos · 2 hand-offs`), where board 7c showed
+  only in-window idle; the hand-off row uses W5 words; zones are offsets (`times UTC-8`), not names (`PST`),
+  because only the offset is known.
+- Repo view: the fold is 5 columns with its length in the axis row (W7), where board 8c drew 7 columns and
+  "43 min idle" under the grid; sub lines use the W5 phrase; the legend says `│ confirmed link` (any exact
+  evidence, not only the hook) and adds `✓ done`; the footer swaps `enter open` for `o open` (W8) and adds
+  `i imports`; selected-line keys are in text colour like the footer; the selected background is the Phase 5
+  role `#262C3A` and grid lines use the track colour (board 8c: `#1B2130`, `#252A33`).
+- Repo names and prompts are synthetic placeholders.
+- W10 exception: the private canvas artifact id (`R5Bh9iX6bsn3jSu8F8D58C`, cited in this doc and PLAN.md) is a
+  link to the owner's own private canvas, not a session id; W10 reviews accept it.
+- Known wording issue (kept, PLAN W4 is literal): the card's `· enter shows all` opens the repo view, which shows
+  only sessions active in the window, so it does not show "all" older sessions. Step 6.3 / 6.5 should report it
+  to the owner rather than change the golden.
 
 ### Linking algorithm
 

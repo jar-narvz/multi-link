@@ -1,0 +1,40 @@
+ Sessions in repo-r  step 2.4 Fix the date parser                                          last 2h · active 21:23–22:24
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  session                                          21:25            21:30         42m               22:20    22:25 now
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                   │                │            ≈ ≈ ≈              │
+▌ claude “Let's pick back up. Where do…”           │             ████████████████≈ ≈ ≈██████████████████████████████
+▌   main · idle · last active 1 min ago            │                │            ≈ ≈ ≈              │            ╎
+                                                   │                │            ≈ ≈ ≈              │            ╎
+   └▸ codex “Run the unit tests and fix…”          │                │            ≈ ≈ ≈              │             ███✓
+      matched by time · 12 s after the call        │                │            ≈ ≈ ≈              │
+                                                   │                │            ≈ ≈ ≈              │
+  claude “Can we recheck the export at 9?”  ██████████████████      │            ≈ ≈ ≈              │
+    main · idle · last active 57 min ago           │                │            ≈ ≈ ≈              │
+                                                   │                │            ≈ ≈ ≈              │
+  ▸ 1 Codex Desktop import at 22:13 hidden (copies of Claude chats, not runs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  selected  claude 60110000 · started 21:29 · active about 12 min in 2 stretches · handed work to codex at 22:23
+            o open in Claude   f fork
+
+
+
+
+ █ claude active   █ codex active   │ confirmed link   ╎ matched by time   ◆ waiting on you   ≈ idle folded   ✓ done
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ select   o open   f fork   +/- zoom   z unfold idle   i imports   esc home   q quit                     times UTC-8

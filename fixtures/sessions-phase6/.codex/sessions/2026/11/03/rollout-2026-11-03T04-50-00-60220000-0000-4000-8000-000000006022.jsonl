@@ -1,0 +1,9 @@
+{"type": "session_meta", "timestamp": "2026-11-03T04:50:00.000Z", "payload": {"id": "60220000-0000-4000-8000-000000006022", "cwd": "/home/dev/repo-p", "originator": "Codex Desktop", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-03T04:50:00.000Z", "payload": {"type": "task_started", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-03T04:50:00.000Z", "payload": {"type": "user_message", "message": "Copied question from another chat.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-03T04:50:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-03T04:50:00.000Z", "payload": {"type": "task_complete", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:40:00.000Z", "payload": {"type": "task_started", "turn_id": "60220001-0000-4000-8000-000000016022"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:40:00.000Z", "payload": {"type": "user_message", "message": "Summarise the failing tests in the CI log.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:42:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-03T05:44:00.000Z", "payload": {"type": "task_complete", "turn_id": "60220001-0000-4000-8000-000000016022"}}

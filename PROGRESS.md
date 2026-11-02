@@ -1,7 +1,26 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-01, latest).** The owner ran Phase 5 on the real screen: the bars on home and the
+**Resume here (2026-11-01, latest): Step 6.1 is committed.** Next: Step 6.2 (Codex). What 6.2 needs:
+- Contract: `docs/output-schema.md` → Session → "Phase 6 fields" (exact rules for `activity`, `asked`,
+  `imported`, `state_since`) and "Phase 6 fixture results". Rules added in 6.1 beyond PLAN's first wording (all in
+  PLAN W1 / the Review log): the Codex `session_meta` record is not activity; Claude records whose `sessionId`
+  differs from the session's are not activity; an `imported` rollout has `activity` `[]` and `asked` `null`.
+- Test target: `multi-link sessions|overview --root fixtures/sessions-phase6 --now 2026-11-03T06:25:00Z --since 2h
+  --json` == `fixtures/expected/phase6/{sessions,overview}.json` (parsed). With the four fields removed, both keys
+  equal today's CLI output (checked in 6.1), so 6.2 should only need to add them. Field place: Session after
+  `subagents`; SessionRow after `made` (order does not matter to the parsed compare).
+- Existing keys gain the four fields; `asked` there is NOT always null: `fixtures/sessions` Claude prompts like
+  `CASE-exec: <prompt>` give that string; `<prompt>` (phase4/5) and Codex without `user_message` give null.
+- The fixture has a real W1 case: `6002` is silent 6.5 min while its Codex run works, so it has 4 bursts.
+- `crates/tui/tests/phase6_shape.rs` pins the goldens' shape and that the keys carry the four fields.
+- For 6.3/6.4: design.md → "Phase 6 decisions" → "Target screens" has every column rule; the goldens
+  `fixtures/expected/tui/{home,repo}-phase6.txt` + `.styles.txt` were drawn by a scratch script from those rules (a
+  copy is in the coordinator's notes folder, `step-6.1/`). New theme roles 6.4 must add: done green `#7CCB8E` / 114,
+  child row background `#12151B` / 234. Known wording issue kept for the owner: the card's `· enter shows all` opens
+  the repo view, which lists only sessions active in the window.
+
+**Earlier (2026-11-01).** The owner ran Phase 5 on the real screen: the bars on home and the
 timeline screen are "really hard to read … random blocks and timestamps on top". Phase 5 closes as not
 meeting the need for its bars (6.5 records this in `docs/phase5-check.md`). The owner approved **board 7c**
 (home in words, no timeline) and **board 8c** (repo view: board 2's swimlanes on real data) on the mockup
@@ -178,6 +197,47 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-01 — Step 6.1: Contract and target screens — Claude
+- Did: Wrote W0–W10 into `docs/design.md` ("Phase 6 decisions", FR10 reworded to the swimlane repo view, target
+  screen rules for home and repo view, palette additions with contrast, differences from boards 7c/8c) and the
+  four additive fields plus the Phase 6 fixture results into `docs/output-schema.md`. Built the synthetic root
+  `fixtures/sessions-phase6/` (6 Claude transcripts + 1 subagent file, 8 session records, 5 Codex rollouts,
+  repo-p and repo-r PLAN/PROGRESS; prompts invented). Took the CLI output at d4d862a for `sessions` and
+  `overview` (`--since 2h`) and added the four fields by hand per session; an independent scratch script
+  recomputed them from the fixture lines and caught one hand error (6002 has 4 bursts, not 3), fixed. Drew the
+  two 120×40 styled goldens with a scratch script from the written rules, rendered them to HTML and checked them
+  by eye against boards 7c/8c. Wrote the shape test. While writing the keys, clarified W1: the Codex
+  `session_meta` header is not activity (PLAN.md W1 edited, logged).
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase6/**`,
+  `fixtures/expected/phase6/{sessions,overview}.json`, `fixtures/expected/tui/{home,repo}-phase6.txt`,
+  `fixtures/expected/tui/{home,repo}-phase6.styles.txt`, `crates/tui/tests/phase6_shape.rs`, `PLAN.md` (W1, 6.2
+  Verify tests, Review log)
+- Verify: `cargo test --workspace` → 32 `test result: ok`, 0 failed (incl. `phase6_shape`: 3 passed);
+  `cargo clippy --workspace --all-targets -- -D warnings` → clean; keys parse; cross-check script → `checked 13
+  mismatches 0`; a deleted styles line makes the shape test fail (mutation check, restored).
+  Traceability (tags = last 4 id digits): repo-p ← `.claude/projects/-home-dev-repo-p/{6001,6002}.jsonl`,
+  `.claude/sessions/{76001–76004}.json`, Codex `rollout-…-{6021,6022}.jsonl`, `repos/repo-p/`; repo-q ← `6031.jsonl`,
+  `76031.json`; repo-r ← `{6011,6012}.jsonl`, `6011/subagents/agent-a6011sub0000001.jsonl`, `76011.json`,
+  `76012.json`, `rollout-…-{6013,6014}.jsonl`, `repos/repo-r/`; repo-s ← `76041.json`; repo-t ← `rollout-…-6051.jsonl`.
+  Links ← the Bash `tool_use` in 6002 (+ its `session id:` tool result) and 6011. Contrast (new roles): green 9.78
+  screen / 9.39 child / 7.18 selected (256: 10.79 / 9.82 / 8.72); every text colour on the child row ≥ 6.04 (256 ≥ 5.72).
+- Review: adversarial Claude subagent (given the diff, Step 6.1, W0–W10 and board descriptions): recomputed every
+  key value and golden cell, all matched; 0 P1, 3 P2, 6 P3, all doc or test wording, all accepted (one partly; PLAN.md
+  → Review log). Eye check, home vs 7c: header same parts and colours, `◆ 1 need you` instead of the hook note
+  (fixture has a waiting session) and V8 counts instead of in-window idle; cards: same rows and columns (title,
+  blank, session rows with prompt at 15 / status at 66 bold / branch right, rest line, hand-off line), first card
+  yellow with a waiting row from yesterday, V4 tint kept; idle sentence and quiet line as 7c with `last active` /
+  `done`; footer `enter repo view` and `times UTC-8`. Repo vs 8c: header, axis (`session`, 5-min ticks, `HH:MM now`),
+  selected parent with `▌`, nested child with `└▸` on the child background, `╎` link line, `✓`, second session,
+  hidden-imports row, selected line, legend and footer all in place; differences (PLAN wins): fold 5 columns with
+  `42m` in the axis row, W5 sub lines, "active" not "worked", legend `│ confirmed link` + `✓ done`, `o open` +
+  `i imports` in the footer, Phase 5 selected colour and track-coloured grid. W10: every new file has synthetic
+  prompts and ids only (pattern `<tag>0000-…-00000000<tag>`), no `/Users/` paths or secrets (`rg` scrub empty);
+  the canvas artifact id is a recorded exception.
+- Gotchas: zsh does not word-split `$F`; pass CLI flags as an array. A synchronous `codex exec` makes its Claude
+  parent silent for the run's length, so the parent's bursts split around it (W1 limitation, in the fixture).
+  Kept for the owner: `· enter shows all` on a card opens the repo view, which shows only in-window sessions.
 
 ### 2026-10-30 — Step 5.5: Visual check on real data and README — Claude
 - Did: Wrote `crates/tui/examples/home_html.rs` (overview + links JSON → 120×40 home buffer → HTML, one
