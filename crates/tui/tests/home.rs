@@ -52,13 +52,10 @@ fn check_snapshot(fixture: &str, golden: &str, width: u16, height: u16) {
     } else {
         serde_json::from_str(&fs::read_to_string(repo_root().join(links_path)).unwrap()).unwrap()
     };
-    let mut options = HomeOptions {
+    let options = HomeOptions {
         links: Some(&links),
         ..HomeOptions::default()
     };
-    if fixture.contains("phase4") {
-        options.expanded_repos.insert("/home/dev/repo-i".into());
-    }
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
     render_home_with_options(&report, None, &options, area, &mut buf);
@@ -119,85 +116,120 @@ fn home_hook_full_snapshot_100x80() {
     );
 }
 
-fn phase5() -> OverviewReport {
-    load("fixtures/expected/phase5/overview.json")
+fn phase6() -> OverviewReport {
+    load("fixtures/expected/phase6/overview.json")
 }
-fn phase5_options() -> HomeOptions<'static> {
+fn options() -> HomeOptions<'static> {
     HomeOptions {
-        offset: time::UtcOffset::from_hms(-7, 0, 0).unwrap(),
+        offset: time::UtcOffset::from_hms(-8, 0, 0).unwrap(),
         ..HomeOptions::default()
     }
 }
-#[test]
-fn phase5_matches_immutable_text_and_styles() {
-    let links =
-        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
-    let options = HomeOptions {
-        links: Some(&links),
-        ..phase5_options()
+fn render(report: &OverviewReport, width: u16, height: u16, selection: Option<usize>) -> Buffer {
+    let links = multi_link_model::LinksReport {
+        links: report
+            .repos
+            .iter()
+            .filter_map(|g| g.latest_handoff.clone())
+            .collect(),
+        unparented: vec![],
     };
-    let area = Rect::new(0, 0, 120, 40);
+    let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
-    render_home_with_options(&phase5(), None, &options, area, &mut buf);
-    // Deliberately no update-snapshot path for the acceptance pair.
+    render_home_with_options(
+        report,
+        selection,
+        &HomeOptions {
+            links: Some(&links),
+            ..options()
+        },
+        area,
+        &mut buf,
+    );
+    buf
+}
+#[test]
+fn phase6_matches_immutable_text_and_styles() {
+    let buf = render(&phase6(), 120, 40, None);
     assert_eq!(
         text(&buf),
-        include_str!("../../../fixtures/expected/tui/home-phase5.txt")
+        include_str!("../../../fixtures/expected/tui/home-phase6.txt")
     );
     assert_eq!(
         support::dump_styles(&buf),
-        include_str!("../../../fixtures/expected/tui/home-phase5.styles.txt")
+        include_str!("../../../fixtures/expected/tui/home-phase6.styles.txt")
     );
 }
-
 #[test]
-fn required_widths_scroll_selection_and_truncate_at_words() {
-    let report = phase5();
-    let expected = [
-        (120, "○ step 4.3 · claude → codex · matched by time"),
-        (100, "○ step 4.3 · claude → codex · matched by time"),
-        (80, "○ step 4.3 · claude → codex…"),
-        (60, "○ step 4.3 · claude…"),
-        (40, "○ step 4.3 · claude → codex…"),
-    ];
-    for (width, label) in expected {
-        let area = Rect::new(0, 0, width, 10);
-        let mut buf = Buffer::empty(area);
-        // Selected step 4.3 must remain visible at a height of ten rows.
-        render_home_with_options(&report, Some(4), &phase5_options(), area, &mut buf);
+fn widths_keep_words_quotes_and_scroll_selected_rows() {
+    let report = phase6();
+    for width in [120, 100, 80, 60] {
+        let buf = render(&report, width, 40, None);
         let screen = text(&buf);
-        assert!(
-            screen.lines().any(|l| l.contains(label)),
-            "width {width}: {screen}"
-        );
-        assert!(
-            screen
-                .lines()
-                .all(|l| Span::raw(l).width() <= usize::from(width))
-        );
-        let selected: Vec<_> = (0..10)
-            .filter(|y| buf[(3, *y)].bg == phase5_options().theme.selected)
-            .collect();
-        assert_eq!(selected, [7]);
-        if width < 60 {
-            assert!(!screen.contains(['━', '█', '◂', '▸']));
+        assert!(screen.contains("q quit"));
+        assert!(!screen.contains("·…"));
+        assert!(!screen.contains(['█', '━']));
+        assert!(!screen.contains("step ?"));
+        for line in screen.lines() {
+            assert!(Span::raw(line).width() <= usize::from(width));
+            assert_eq!(
+                line.matches('“').count(),
+                line.matches('”').count(),
+                "{line}"
+            );
         }
-        if width < 80 {
-            assert!(!screen.lines().next().unwrap().contains("hand-offs"));
-        }
-        assert!(
-            buf.content
-                .iter()
-                .all(|c| !c.modifier.contains(ratatui::style::Modifier::DIM))
-        );
+        let scrolled = render(&report, width, 10, Some(3));
+        assert!(text(&scrolled).contains("claude"));
+        assert!((3..8).any(|y| scrolled[(3, y)].bg == options().theme.selected));
     }
 }
-
 #[test]
-fn sizes_offsets_and_word_boundaries_are_safe() {
-    let mut report = phase5();
-    report.repos[0].plan.latest_step.as_mut().unwrap().title = Some("ステップ".repeat(80));
-    for (width, height) in [
+fn imports_yesterday_waiting_and_rest_counts() {
+    let screen = text(&render(&phase6(), 120, 40, None));
+    assert!(screen.contains("waiting on you · since Nov 1"));
+    assert!(screen.contains("4 other sessions, 2 active in the last 2h"));
+    assert!(screen.contains("repo-t (only Codex Desktop imports)"));
+    assert!(screen.contains("2 Codex Desktop imports hidden"));
+    assert!(screen.contains("○ 5 idle · 3 done or unknown"));
+}
+#[test]
+fn no_color_preserves_every_word_and_glyph() {
+    let report = phase6();
+    let area = Rect::new(0, 0, 120, 40);
+    let mut buf = Buffer::empty(area);
+    let color = render(&report, 120, 40, None);
+    let links = multi_link_model::LinksReport {
+        links: report
+            .repos
+            .iter()
+            .filter_map(|g| g.latest_handoff.clone())
+            .collect(),
+        unparented: vec![],
+    };
+    render_home_with_options(
+        &report,
+        None,
+        &HomeOptions {
+            links: Some(&links),
+            theme: multi_link_tui::theme::Theme::from_env(
+                Some("truecolor"),
+                Some(std::ffi::OsStr::new("1")),
+            ),
+            ..options()
+        },
+        area,
+        &mut buf,
+    );
+    assert_eq!(text(&buf), text(&color));
+    assert!(
+        buf.content
+            .iter()
+            .all(|c| c.fg == ratatui::style::Color::Reset && c.bg == ratatui::style::Color::Reset)
+    );
+}
+#[test]
+fn small_and_offset_areas_are_safe() {
+    for (w, h) in [
         (0, 0),
         (0, 5),
         (1, 1),
@@ -209,235 +241,180 @@ fn sizes_offsets_and_word_boundaries_are_safe() {
         (10, 10),
         (40, 10),
         (60, 3),
-        (60, 4),
-        (120, 40),
     ] {
-        let area = Rect::new(7, 3, width, height);
+        let area = Rect::new(7, 3, w, h);
         let mut buf = Buffer::empty(Rect::new(0, 0, 140, 50));
-        render_home_with_options(&report, Some(0), &phase5_options(), area, &mut buf);
+        render_home_with_options(&phase6(), Some(0), &options(), area, &mut buf);
         assert_eq!(buf[(0, 0)].symbol(), " ");
     }
-    let area = Rect::new(0, 65533, 3, 2);
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
 }
 
 #[test]
-fn no_color_keeps_glyphs_and_dotted_tracks() {
-    let options = HomeOptions {
-        theme: multi_link_tui::theme::Theme::from_env(
-            Some("truecolor"),
-            Some(std::ffi::OsStr::new("1")),
-        ),
-        ..phase5_options()
-    };
-    let area = Rect::new(0, 0, 120, 40);
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&phase5(), None, &options, area, &mut buf);
-    let screen = text(&buf);
-    assert!(screen.contains("◆ claude main · waiting"));
-    assert!(screen.contains("◂····"));
-    assert!(screen.contains("██━"));
-    assert!(
-        buf.content
-            .iter()
-            .all(|c| c.fg == ratatui::style::Color::Reset
-                && c.bg == ratatui::style::Color::Reset
-                && !c.modifier.contains(ratatui::style::Modifier::DIM))
-    );
-}
-
-#[test]
-fn local_axis_handles_midnight_and_fractional_offsets() {
-    let mut report = phase5();
-    let area = Rect::new(0, 0, 120, 40);
-    for (hours, minutes, start, end, footer) in [
-        (-7, 0, "14:20", "16:20 now", "UTC-7"),
-        (0, 0, "21:20 UTC", "23:20 now", "UTC"),
-        (5, 30, "02:50", "04:50 now", "UTC+5:30"),
-    ] {
-        let options = HomeOptions {
-            offset: time::UtcOffset::from_hms(hours, minutes, 0).unwrap(),
-            ..HomeOptions::default()
-        };
-        let mut buf = Buffer::empty(area);
-        render_home_with_options(&report, None, &options, area, &mut buf);
-        let screen = text(&buf);
-        let lines: Vec<_> = screen.lines().collect();
-        assert!(lines[2].contains(start), "{}", lines[2]);
-        assert!(lines[2].ends_with(end));
-        assert!(lines[39].ends_with(footer));
+fn every_target_scrolls_into_view_and_quiet_selection_identifies_one_repo() {
+    let report = phase6();
+    let targets = multi_link_tui::selectable_home(&report, &Default::default());
+    assert_eq!(targets.len(), 7);
+    for width in [120, 100, 80, 60] {
+        for i in 0..targets.len() {
+            let buf = render(&report, width, 10, Some(i));
+            assert!(
+                (3..8).any(|y| (0..width).any(|x| buf[(x, y)].bg == options().theme.selected)),
+                "width {width}, target {i}"
+            );
+        }
     }
-    report.now = "2026-10-30T07:20:00Z".parse().unwrap();
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
-    assert!(text(&buf).lines().nth(2).unwrap().contains("Oct 29 22:20"));
-    let middle: String = (82..87).map(|x| buf[(x, 2)].symbol()).collect();
-    assert_eq!(middle, "23:20");
+    let imports = render(&report, 120, 40, Some(5));
+    assert_eq!(imports[(9, 23)].bg, options().theme.selected);
+    assert_ne!(imports[(51, 23)].bg, options().theme.selected);
+    let quiet = render(&report, 120, 40, Some(6));
+    assert_ne!(quiet[(9, 23)].bg, options().theme.selected);
+    assert_eq!(quiet[(51, 23)].bg, options().theme.selected);
+}
+#[test]
+fn unknown_labels_and_untagged_handoffs_do_not_generate_question_marks() {
+    let mut report = phase6();
+    for group in &mut report.repos {
+        for row in &mut group.rows {
+            let rows = match row {
+                multi_link_model::Row::Session(s) => std::slice::from_mut(s),
+                multi_link_model::Row::Merged(m) => m.rows.as_mut_slice(),
+            };
+            for row in rows {
+                row.asked = None;
+                row.made.clear();
+                row.handoffs.clear();
+                for child in &mut row.children {
+                    child.asked = None;
+                    child.handoffs.clear();
+                }
+            }
+        }
+        if let Some(link) = &mut group.latest_handoff {
+            link.step = None;
+        }
+    }
+    for width in [120, 100, 80, 60] {
+        assert!(!text(&render(&report, width, 40, None)).contains('?'));
+    }
 }
 
 #[test]
-fn header_counts_every_session_and_only_zero_waiting_is_partial() {
-    let mut report = phase5();
-    let links =
-        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
-    let options = HomeOptions {
-        links: Some(&links),
-        ..phase5_options()
-    };
-    let area = Rect::new(0, 0, 160, 40);
-    let header = |report: &OverviewReport| {
-        let mut buf = Buffer::empty(area);
-        render_home_with_options(report, None, &options, area, &mut buf);
-        text(&buf).lines().next().unwrap().to_owned()
-    };
-    assert!(header(&report).starts_with(
-        " All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos · 4 hand-offs"
-    ));
-    assert!(header(&report).ends_with("◆ 1 need you"));
-    let multi_link_model::Row::Session(waiting) = &mut report.repos[0].rows[0] else {
-        panic!("session")
-    };
-    waiting.state = multi_link_model::State::Stale;
-    let line = header(&report);
-    assert!(line.contains("● 1 busy   ◌ 1 stale"));
-    assert!(line.ends_with("◆ needs-you partial: no hook records seen"));
-    report.hook.records = 1;
-    assert!(!header(&report).contains("◆"));
+fn attention_status_phrases_survive_narrow_widths() {
+    let report = phase6();
+    for width in [120, 100, 80, 60] {
+        let screen = text(&render(&report, width, 80, None));
+        let mut lines: Vec<_> = screen
+            .lines()
+            .filter(|line| line.contains("claude") || line.contains("codex"))
+            .collect();
+        for row in report
+            .repos
+            .iter()
+            .flat_map(multi_link_tui::view::attention)
+        {
+            let phrase = multi_link_tui::view::status(row, report.now, options().offset);
+            let index = lines
+                .iter()
+                .position(|line| line.contains(&phrase))
+                .unwrap_or_else(|| panic!("width {width}: missing {phrase}"));
+            lines.remove(index);
+        }
+    }
 }
 
 #[test]
-fn combined_bar_maps_child_independently_and_placing_step_wins() {
-    use multi_link_model::{Row, State};
-    let mut report = phase5();
-    let mut parent = multi_link_tui::view::sessions(&report.repos[0])
-        .find(|r| r.id.ends_with("5011"))
-        .unwrap()
-        .clone();
-    parent.started_at = "2026-10-29T21:20:00Z".parse().unwrap();
-    parent.last_activity = "2026-10-29T22:20:00Z".parse().unwrap();
-    parent.children[0].started_at = parent.last_activity;
-    parent.children[0].last_activity = "2026-10-29T23:30:00Z".parse().unwrap();
-    parent.state = State::Busy;
-    let mut other = parent.children[0].handoffs[0].clone();
-    other.parent = "another-parent".into();
-    other.step = Some("9.9".into());
-    parent.children[0].handoffs.push(other);
-    report.repos.truncate(1);
-    report.repos[0].rows = vec![Row::Session(parent.clone())];
-    let area = Rect::new(0, 0, 120, 10);
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
-    let bar: String = (51..117).map(|x| buf[(x, 5)].symbol()).collect();
-    assert_eq!(bar, format!("{}{}▸", "━".repeat(33), "█".repeat(32)));
-    assert!(!text(&buf).contains("9.9"));
-    parent.made = vec!["4.2".into()];
-    parent.children[0].last_activity = report.now;
-    report.repos[0].rows = vec![Row::Session(parent)];
-    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
+fn shared_checkout_warnings_have_a_red_header_and_card_row() {
+    let report = load("fixtures/expected/overview.json");
+    let buf = render(&report, 160, 80, None);
     let screen = text(&buf);
-    assert!(screen.lines().any(|l| l.contains("● step 4.2 · claude")));
     assert!(
         screen
             .lines()
-            .any(|l| l.contains("? step 4.1 · codex · confirmed"))
+            .next()
+            .unwrap()
+            .contains("⚠ 1 shared checkouts")
     );
-}
-
-#[test]
-fn full_height_widths_keep_whole_fields_and_quit_visible() {
-    let report = phase5();
-    let links =
-        serde_json::from_str(include_str!("../../../fixtures/expected/phase5/links.json")).unwrap();
-    let options = HomeOptions {
-        links: Some(&links),
-        ..phase5_options()
-    };
-    for width in [120, 100, 80, 60, 40] {
-        let area = Rect::new(0, 0, width, 40);
-        let mut buf = Buffer::empty(area);
-        render_home_with_options(&report, None, &options, area, &mut buf);
-        let screen = text(&buf);
-        let lines: Vec<_> = screen.lines().collect();
-        assert!(
-            !screen.contains("·…") && !screen.contains("→…"),
-            "width {width}: {screen}"
-        );
-        assert!(!lines[0].contains('…'), "width {width}: {}", lines[0]);
-        assert!(!lines[39].contains('…'), "width {width}: {}", lines[39]);
-        assert!(lines[0].ends_with("◆ 1 need you"));
-        assert!(lines[39].contains("q quit"));
-        for line in &lines {
-            for (index, _) in line.match_indices('…') {
-                let before = &line[..index];
-                assert!(
-                    !before.ends_with("latest")
-                        && !before.ends_with("no")
-                        && !before.ends_with("PLAN.md"),
-                    "single-word plan at {width}: {line}"
-                );
-            }
-        }
-        let repo_m = lines.iter().find(|line| line.contains("repo-m")).unwrap();
-        if width >= 80 {
-            assert!(repo_m.contains("last 16:19"), "width {width}: {repo_m}");
-        }
-        let expected_header = match width {
-            120 => {
-                "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos · 4 hand-offs"
-            }
-            100 => "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown   3 repos",
-            80 => "All repos · last 2h   ● 1 busy   ○ 7 idle · 10 done or unknown",
-            60 => "All repos · last 2h   ● 1 busy   ○ 7 idle",
-            40 => "All repos · last 2h",
-            _ => unreachable!(),
-        };
-        assert_eq!(lines[0].split("◆").next().unwrap().trim(), expected_header);
-        let expected_keys = match width {
-            120 | 100 => {
-                "↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit"
-            }
-            80 => "↑↓ move · enter expand / open · t timeline · q quit",
-            60 => "↑↓ move · enter expand / open · q quit",
-            40 => "↑↓ move · q quit",
-            _ => unreachable!(),
-        };
-        assert_eq!(
-            lines[39].split("times in").next().unwrap().trim(),
-            expected_keys
-        );
+    let warning_line = screen
+        .lines()
+        .position(|line| line.contains("⚠ shared checkout: repo-c"))
+        .unwrap();
+    assert!(
+        screen
+            .lines()
+            .nth(warning_line - 1)
+            .unwrap()
+            .contains("claude")
+    );
+    for (y, words) in [
+        (0, "⚠ 1 shared checkouts"),
+        (warning_line, "⚠ shared checkout: repo-c"),
+    ] {
+        let line = screen.lines().nth(y).unwrap();
+        let byte = line.find(words).unwrap();
+        let x = Span::raw(&line[..byte]).width() as u16;
+        assert_eq!(buf[(x, y as u16)].fg, options().theme.warning);
     }
+    let clean = text(&render(&phase6(), 160, 80, None));
+    assert!(!clean.contains("shared checkout"));
 }
 
 #[test]
-fn footer_drops_time_only_when_minimum_keys_and_note_cannot_fit() {
-    let report = phase5();
-    let area = Rect::new(0, 0, 30, 40);
-    let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
-    assert_eq!(
-        text(&buf).lines().nth(39).unwrap().trim(),
-        "↑↓ move · q quit"
-    );
+fn footer_at_80_keeps_navigation_before_import_note() {
+    let buf = render(&phase6(), 80, 40, None);
+    let screen = text(&buf);
+    let footer = screen.lines().last().unwrap();
+    for words in [
+        "↑↓ move",
+        "enter repo view",
+        "o open session",
+        "q quit",
+        "times UTC-8",
+    ] {
+        assert!(footer.contains(words), "missing {words}: {footer}");
+    }
+    assert!(!footer.contains("imports hidden"));
 }
+
 #[test]
-fn partial_header_note_survives_narrow_layout_without_ellipsis() {
-    let mut report = phase5();
-    let multi_link_model::Row::Session(row) = &mut report.repos[0].rows[0] else {
-        panic!("session")
-    };
-    row.state = multi_link_model::State::Idle;
-    for width in [120, 100, 80, 60, 40] {
-        let area = Rect::new(0, 0, width, 40);
-        let mut buf = Buffer::empty(area);
-        render_home_with_options(&report, None, &phase5_options(), area, &mut buf);
-        let screen = text(&buf);
-        let header = screen.lines().next().unwrap();
-        assert!(!header.contains('…'));
-        assert!(header.ends_with(if width == 40 {
-            "◆ partial: no hook records"
-        } else {
-            "◆ needs-you partial: no hook records seen"
-        }));
+fn header_at_100_keeps_working_now_before_shared_checkouts() {
+    let report = load("fixtures/expected/overview.json");
+    let screen = text(&render(&report, 100, 30, None));
+    let header = screen.lines().next().unwrap();
+    assert!(header.contains("● 2 working now"), "{header}");
+    assert!(!header.contains("shared checkouts"), "{header}");
+}
+
+#[test]
+fn attention_status_columns_align_within_each_card() {
+    let report = phase6();
+    for width in [120, 80, 60] {
+        let screen = text(&render(&report, width, 80, None));
+        for group in &report.repos {
+            let rows = multi_link_tui::view::attention(group);
+            if rows.is_empty() {
+                continue;
+            }
+            let name = group.repo.rsplit('/').next().unwrap();
+            let mut card = screen
+                .lines()
+                .skip_while(|line| !line.contains(name))
+                .take_while(|line| !line.contains('╰'));
+            let mut columns = Vec::new();
+            for row in rows {
+                let phrase = multi_link_tui::view::status(row, report.now, options().offset);
+                let line = card
+                    .find(|line| line.contains(&phrase))
+                    .unwrap_or_else(|| panic!("width {width}, {name}: missing {phrase}"));
+                let byte = line.find(&phrase).unwrap();
+                columns.push(Span::raw(&line[..byte]).width());
+            }
+            assert!(
+                columns.iter().all(|x| *x == columns[0]),
+                "width {width}, {name}: {columns:?}"
+            );
+            if width == 120 {
+                assert_eq!(columns[0], 66, "{name}");
+            }
+        }
     }
 }

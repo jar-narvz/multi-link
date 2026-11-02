@@ -171,10 +171,10 @@ fn parse_color(s: &str) -> Color {
 }
 
 #[test]
-fn dumper_reproduces_the_fixed_phase5_styled_golden_byte_for_byte() {
-    let path = root().join("fixtures/expected/tui/home-phase5.styles.txt");
+fn dumper_reproduces_the_fixed_phase6_styled_golden_byte_for_byte() {
+    let path = root().join("fixtures/expected/tui/home-phase6.styles.txt");
     let styles = fs::read_to_string(&path).unwrap();
-    let text = fs::read_to_string(root().join("fixtures/expected/tui/home-phase5.txt")).unwrap();
+    let text = fs::read_to_string(root().join("fixtures/expected/tui/home-phase6.txt")).unwrap();
     let mut buf = Buffer::empty(Rect::new(0, 0, 120, 40));
     for (y, line) in text.lines().enumerate() {
         buf.set_string(0, y as u16, line, Style::default());

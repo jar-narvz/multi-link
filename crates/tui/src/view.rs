@@ -1,8 +1,7 @@
-//! Home-only lanes. Core's report and timeline ordering remain unchanged.
+//! Presentation rules derived from reports; core grouping and values stay unchanged.
 use multi_link_model::{
-    Harness, Link, Match, OverviewReport, RepoGroup, Row, SessionRow, State, Tier, Timestamp,
+    Harness, Link, Match, OverviewReport, RepoGroup, Row, SessionRow, State, Timestamp,
 };
-use std::collections::HashSet;
 use time::{OffsetDateTime, UtcOffset, format_description::well_known::Rfc3339};
 
 pub fn datetime(at: Timestamp) -> OffsetDateTime {
@@ -21,7 +20,7 @@ pub fn clock(at: Timestamp, now: Timestamp, offset: UtcOffset) -> String {
         let month = [
             "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
         ][at.month() as usize - 1];
-        format!("{month} {} {time}", at.day())
+        format!("{month} {}", at.day())
     }
 }
 pub fn offset_label(offset: UtcOffset) -> String {
@@ -61,12 +60,6 @@ pub fn sessions(group: &RepoGroup) -> impl Iterator<Item = &SessionRow> {
         })
         .flat_map(|r| std::iter::once(r).chain(&r.children))
 }
-pub fn collapsed(group: &RepoGroup, expanded: &HashSet<String>) -> bool {
-    group.tier == Tier::Other
-        && group.concurrency.is_empty()
-        && !expanded.contains(&group.repo)
-        && !sessions(group).any(|r| rank(r.state) < 3)
-}
 pub fn placing<'a>(child: &'a SessionRow, parent: Option<&str>) -> Option<&'a Link> {
     child
         .handoffs
@@ -82,104 +75,121 @@ pub fn link_words(link: &Link) -> String {
         Match::Unlinked => "no run found".into(),
     }
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Lane<'a> {
-    pub row: &'a SessionRow,
-    pub child: Option<&'a SessionRow>,
-    pub link: Option<&'a Link>,
+/// Home attention rows are individual sessions; imports never affect presentation counts.
+pub fn attention(group: &RepoGroup) -> Vec<&SessionRow> {
+    let mut rows: Vec<_> = sessions(group)
+        .filter(|r| !r.imported && rank(r.state) < 3)
+        .collect();
+    rows.sort_by_key(|r| (rank(r.state), r.started_at, &r.id));
+    rows
 }
-impl Lane<'_> {
-    pub fn state(&self) -> State {
-        self.child.map_or(self.row.state, |c| {
-            if rank(c.state) < rank(self.row.state) {
-                c.state
+
+pub fn minutes(milliseconds: i64) -> i64 {
+    (milliseconds / 60_000).max(1)
+}
+
+pub fn last_active(at: Timestamp, now: Timestamp, offset: UtcOffset) -> String {
+    let age = now.epoch_ms() - at.epoch_ms();
+    if age < 3_600_000 {
+        format!("{} min ago", minutes(age))
+    } else {
+        clock(at, now, offset)
+    }
+}
+
+pub fn status(row: &SessionRow, now: Timestamp, offset: UtcOffset) -> String {
+    let since = || clock(row.state_since.unwrap_or(row.last_activity), now, offset);
+    match row.state {
+        State::Busy => row.activity.last().map_or_else(
+            || "working now".into(),
+            |burst| {
+                format!(
+                    "working now · for {} min",
+                    minutes(now.epoch_ms() - burst.from.epoch_ms())
+                )
+            },
+        ),
+        State::Waiting => format!("waiting on you · since {}", since()),
+        State::Stale => format!("stale since {}", since()),
+        State::Unknown
+            if row.harness == Harness::Codex
+                && row.state_evidence == multi_link_model::StateEvidence::TurnsComplete =>
+        {
+            format!("done {}", since())
+        }
+        State::Idle => format!(
+            "idle · last active {}",
+            last_active(
+                row.activity.last().map_or(row.last_activity, |b| b.to),
+                now,
+                offset
+            )
+        ),
+        State::Finished => "finished".into(),
+        State::Unknown => "state unknown".into(),
+    }
+}
+
+pub fn session_label(row: &SessionRow) -> String {
+    session_label_for(row, None)
+}
+
+/// A nested run uses its placing parent's link even when it has later hand-offs elsewhere.
+pub fn home_label(group: &RepoGroup, row: &SessionRow) -> String {
+    let parent = sessions(group).find(|r| r.children.iter().any(|c| c.id == row.id));
+    session_label_for(row, parent.map(|r| r.id.as_str()))
+}
+
+fn session_label_for(row: &SessionRow, parent: Option<&str>) -> String {
+    let step = if row.harness == Harness::Claude {
+        row.made.first().map(String::as_str)
+    } else {
+        placing(row, parent).and_then(|l| l.step.as_deref())
+    };
+    if let Some(step) = step {
+        format!("step {step}")
+    } else if let Some(prompt) = row.asked.as_deref().filter(|s| !s.trim().is_empty()) {
+        format!("“{prompt}”")
+    } else {
+        format!(
+            "{} · no prompt",
+            if row.harness == Harness::Claude {
+                "claude"
             } else {
-                self.row.state
+                "codex"
             }
-        })
-    }
-    pub fn step(&self) -> Option<&str> {
-        if self.row.harness == Harness::Claude {
-            self.row
-                .made
-                .first()
-                .map(String::as_str)
-                .or_else(|| self.link.and_then(|l| l.step.as_deref()))
-        } else {
-            self.link.and_then(|l| l.step.as_deref())
-        }
+        )
     }
 }
-pub struct Lanes<'a> {
-    pub visible: Vec<Lane<'a>>,
-    pub hidden: usize,
+
+pub fn handed(link: &Link) -> String {
+    link.step.as_ref().map_or_else(
+        || "handed work to codex".into(),
+        |step| format!("handed step {step} to codex"),
+    )
 }
-pub fn lanes<'a>(
-    report: &OverviewReport,
-    group: &'a RepoGroup,
-    split: &HashSet<String>,
-    show_all: bool,
-) -> Lanes<'a> {
-    let mut all = Vec::new();
-    for row in &group.rows {
-        let rows = match row {
-            Row::Session(r) => std::slice::from_ref(r),
-            Row::Merged(r) => r.rows.as_slice(),
-        };
-        for r in rows {
-            let child = r.children.first();
-            let link = child.and_then(|c| placing(c, Some(&r.id)));
-            let combine = r.harness == Harness::Claude
-                && r.children.len() == 1
-                && child.is_some_and(|c| c.harness == Harness::Codex)
-                && !split.contains(&r.id)
-                && link.is_some_and(|l| {
-                    r.made
-                        .first()
-                        .zip(l.step.as_ref())
-                        .is_none_or(|(a, b)| a == b)
-                });
-            all.push(Lane {
-                row: r,
-                child: if combine { child } else { None },
-                link: if combine { link } else { placing(r, None) },
-            });
-            if !combine {
-                all.extend(r.children.iter().map(|c| Lane {
-                    row: c,
-                    child: None,
-                    link: placing(c, Some(&r.id)),
-                }));
+
+pub fn outcome(link: &Link, report: &OverviewReport) -> String {
+    match link.r#match {
+        Match::Unlinked => "no codex run found".into(),
+        Match::Ambiguous => format!("{} possible runs", link.candidates.len()),
+        _ => {
+            let child = report
+                .repos
+                .iter()
+                .flat_map(sessions)
+                .find(|r| Some(&r.id) == link.child.as_ref());
+            match child {
+                Some(r)
+                    if r.state == State::Unknown
+                        && r.state_evidence == multi_link_model::StateEvidence::TurnsComplete =>
+                {
+                    "codex done"
+                }
+                Some(r) if matches!(r.state, State::Busy | State::Stale) => "codex running",
+                _ => "codex state unknown",
             }
+            .into()
         }
-    }
-    all.sort_by(|a, b| {
-        let priority = |l: &Lane<'_>| {
-            if rank(l.state()) < 3 {
-                rank(l.state())
-            } else {
-                3
-            }
-        };
-        (priority(a), a.row.started_at, &a.row.id).cmp(&(priority(b), b.row.started_at, &b.row.id))
-    });
-    let start = crate::TimeWindow::default_for(report).start;
-    let mut quiet = 0;
-    let total = all.len();
-    all.retain(|l| {
-        if show_all || rank(l.state()) < 3 {
-            return true;
-        }
-        let in_window = |r: &SessionRow| r.last_activity >= start && r.last_activity <= report.now;
-        if in_window(l.row) || l.child.is_some_and(in_window) {
-            quiet += 1;
-            quiet <= 8
-        } else {
-            false
-        }
-    });
-    Lanes {
-        hidden: total - all.len(),
-        visible: all,
     }
 }

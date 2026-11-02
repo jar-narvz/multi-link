@@ -1,49 +1,42 @@
- All repos · last 2h   ● 2 busy   ⚠ 1 shared checkouts   ○ 4 idle                      ◆ 2 need you
-────────────────────────────────────────────────────────────────────────────────────────────────────
-   ━ claude  █ codex  bright busy · dim idle/done  21:15 UTC            22:15           23:15 now
+ All repos · last 2h   ● 2 working now   ⚠ 1 shared checkouts   ○ 4 idle               ◆ 2 need you
+ ──────────────────────────────────────────────────────────────────────────────────────────────────
+
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ◆ repo-a   latest step 0.4 Parse sample records · Verify unclear                     1 waiting │
- │ ◆ claude · waiting since Oct 30 06:08                                                        ▸ │
- │ ? claude · no hand-off                                                                 ━       │
- │ ? claude → codex · confirmed                                                           █       │
- │ ? claude → codex · confirmed                                                            █      │
- │ ? codex · no parent found                                                               █      │
- │ last: claude handed step ? to codex at 23:00 (confirmed)                                       │
+ │ ◆ repo-a  step 0.4 Parse sample records                                             1 waiting  │
+ │                                                                                                │
+ │ ◆ claude    claude · no prompt                       waiting on you · since Oct 30             │
+ │   6 other sessions, 6 active in the last 2h · enter shows all                                  │
+ │   last hand-off  23:00 · claude handed work to codex · codex done                              │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ◆ repo-c   no PLAN.md                                                       1 waiting · 2 busy │
- │ ◆ claude main · waiting since Oct 28 10:03      ◂                                              │
- │ ● claude · busy now                             ◂━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
- │ ● claude · busy now                                                                       ━━━━ │
- │ 1 earlier session · enter shows all                                                            │
- │ ⚠ shared checkout: repo-c                                                                      │
- │ last: claude handed step ? to codex at Oct 28 09:58 (no run found)                             │
+ │ ◆ repo-c  no PLAN.md                                                1 waiting · 2 working now  │
+ │                                                                                                │
+ │ ◆ claude    claude · no prompt                       waiting on you · since Oct 28       main  │
+ │ ● claude    claude · no prompt                       working now                               │
+ │ ● claude    claude · no prompt                       working now                               │
+ │   ⚠ shared checkout: repo-c                                                                    │
+ │   1 other session, 1 active in the last 2h · enter shows all                                   │
+ │   last hand-off  Oct 28 · claude handed work to codex · no codex run found                     │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ project            no PLAN.md                                     1 claude idle · last 23:12 │
+ │ ○ repo-b  idle · last active 14 min ago · claude handed work to codex at 23:00, codex done     │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-b                       5 claude done or unknown · 4 codex done or unknown · last 23:00 │
+ │ ○ repo-a-wt  idle · last active 14 min ago · claude handed work to codex at 23:00, codex done  │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-a-wt                    1 claude done or unknown · 1 codex done or unknown · last 23:00 │
+ │ ○ repo-d  idle · last active Oct 27 · no hand-offs                                             │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ …                  no PLAN.md                                     1 claude idle · last 21:35 │
+ │ ○ repo-e  idle · last active 00:00 · no hand-offs                                              │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
- ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-d             no PLAN.md          2 claude idle · 1 claude done or unknown · last 21:33 │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
-
- ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-e                       1 claude done or unknown · 1 codex done or unknown · last 00:00 │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+   quiet project (last active 23:12) · scratch-2026-10-29-338fd3 (last active 21:35)
 
 
 
@@ -76,5 +69,12 @@
 
 
 
-────────────────────────────────────────────────────────────────────────────────────────────────────
- ↑↓ move · enter expand / open · t timeline · o open session · f fork · q quit         times in UTC
+
+
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ move   enter repo view   o open session   q quit                                      times UTC

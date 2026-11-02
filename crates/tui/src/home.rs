@@ -1,11 +1,7 @@
-//! Board 7 home renderer: explicit palette, local clock and shared lane model.
-use crate::{
-    theme::{ColorMode, Theme},
-    view::{self, Lane},
-};
+//! Board 7c home: words, attention cards, idle sentences and a quiet line.
+use crate::{theme::Theme, view};
 use multi_link_model::{
     Convention, Harness, LinksReport, MergedRow, OverviewReport, RepoGroup, Row, SessionRow, State,
-    Tier, VerifyResult,
 };
 use ratatui::{
     buffer::Buffer,
@@ -44,9 +40,6 @@ pub fn selectable(report: &OverviewReport) -> Vec<(&str, Target<'_>)> {
 }
 /// Deterministic home presentation state. The CLI supplies its theme and per-refresh offset.
 pub struct HomeOptions<'a> {
-    pub expanded_repos: HashSet<String>,
-    pub split: HashSet<String>,
-    pub show_all: HashSet<String>,
     pub links: Option<&'a LinksReport>,
     pub hide_footer: bool,
     pub theme: Theme,
@@ -55,9 +48,6 @@ pub struct HomeOptions<'a> {
 impl Default for HomeOptions<'_> {
     fn default() -> Self {
         Self {
-            expanded_repos: HashSet::new(),
-            split: HashSet::new(),
-            show_all: HashSet::new(),
             links: None,
             hide_footer: false,
             theme: Theme::from_env(Some("truecolor"), None),
@@ -65,30 +55,23 @@ impl Default for HomeOptions<'_> {
         }
     }
 }
-/// Selectable targets in precisely the order used by the renderer.
+/// Targets follow the rendered blocks: cards, idle sentences, then quiet repos.
 pub fn home_targets<'a>(
     report: &'a OverviewReport,
-    options: &HomeOptions<'_>,
+    _: &HomeOptions<'_>,
 ) -> Vec<(&'a str, Target<'a>)> {
     let mut out = Vec::new();
-    for g in &report.repos {
-        if view::collapsed(g, &options.expanded_repos) {
-            out.push((g.repo.as_str(), Target::Repo(g)));
+    for group in ordered_groups(report) {
+        let rows = view::attention(group);
+        if rows.is_empty() {
+            out.push((group.repo.as_str(), Target::Repo(group)));
         } else {
-            let lanes = view::lanes(
-                report,
-                g,
-                &options.split,
-                options.show_all.contains(&g.repo),
-            );
             out.extend(
-                lanes
-                    .visible
-                    .iter()
-                    .map(|l| (g.repo.as_str(), Target::Session(l.row))),
+                rows.into_iter()
+                    .map(|r| (group.repo.as_str(), Target::Session(r))),
             );
-            if lanes.hidden > 0 {
-                out.push((g.repo.as_str(), Target::Hidden(g)));
+            if view::sessions(group).any(|r| !r.imported && view::rank(r.state) >= 3) {
+                out.push((group.repo.as_str(), Target::Hidden(group)));
             }
         }
     }
@@ -96,15 +79,23 @@ pub fn home_targets<'a>(
 }
 pub fn selectable_home<'a>(
     report: &'a OverviewReport,
-    expanded: &HashSet<String>,
+    _expanded: &HashSet<String>,
 ) -> Vec<(&'a str, Target<'a>)> {
-    home_targets(
-        report,
-        &HomeOptions {
-            expanded_repos: expanded.clone(),
-            ..HomeOptions::default()
-        },
-    )
+    home_targets(report, &HomeOptions::default())
+}
+fn category(g: &RepoGroup) -> u8 {
+    if !view::attention(g).is_empty() {
+        0
+    } else if view::sessions(g).any(|r| !r.imported && !r.activity.is_empty()) {
+        1
+    } else {
+        2
+    }
+}
+fn ordered_groups(report: &OverviewReport) -> Vec<&RepoGroup> {
+    (0..3)
+        .flat_map(|kind| report.repos.iter().filter(move |g| category(g) == kind))
+        .collect()
 }
 /// Word-boundary truncation, measuring terminal cells rather than bytes.
 pub fn fit(text: &str, width: usize) -> String {
@@ -137,7 +128,7 @@ fn plan(g: &RepoGroup) -> String {
             || "no step logged yet".into(),
             |s| {
                 format!(
-                    "latest step {}{}",
+                    "step {}{}",
                     s.id,
                     s.title.as_ref().map_or(String::new(), |t| format!(" {t}"))
                 )
@@ -151,7 +142,7 @@ fn glyph(s: State) -> &'static str {
         State::Busy => "●",
         State::Stale => "◌",
         State::Idle => "○",
-        State::Unknown => "?",
+        State::Unknown => "○",
         State::Finished => "✓",
     }
 }
@@ -182,168 +173,21 @@ fn write(buf: &mut Buffer, x: u16, y: u16, text: &str, width: u16, fg: Color, bg
         Style::default().fg(fg).bg(bg),
     );
 }
-fn count(g: &RepoGroup, state: State) -> usize {
-    view::sessions(g).filter(|r| r.state == state).count()
-}
-fn label(
-    l: Lane<'_>,
-    report: &OverviewReport,
-    o: &HomeOptions<'_>,
-    bg: Color,
-) -> Vec<Span<'static>> {
-    let t = o.theme;
-    let state = l.state();
-    let mut spans = vec![segment(
-        format!("{} ", glyph(state)),
-        state_color(t, state),
-        bg,
-        false,
-    )];
-    if let Some(step) = l.step() {
-        spans.push(segment(format!("step {step}"), t.text, bg, false));
-        spans.push(segment(" · ", t.secondary, bg, false));
-    }
-    let harness = if l.row.harness == Harness::Claude {
-        "claude"
-    } else {
-        "codex"
-    };
-    spans.push(segment(
-        harness,
-        if harness == "claude" && view::rank(state) < 2 {
-            t.claude
-        } else {
-            t.secondary
-        },
-        bg,
-        false,
-    ));
-    if l.child.is_some() {
-        spans.push(segment(
-            format!(" → codex · {}", view::link_words(l.link.unwrap())),
-            t.secondary,
-            bg,
-            false,
-        ));
-    } else if l.step().is_none() {
-        if l.row.harness == Harness::Claude && view::rank(state) < 3 {
-            if let Some(branch) = &l.row.branch {
-                spans.push(segment(format!(" {branch}"), t.text, bg, false));
-            }
-            let words = match state {
-                State::Busy => " · busy now".into(),
-                State::Waiting => format!(
-                    " · waiting since {}",
-                    view::clock(l.row.last_activity, report.now, o.offset)
-                ),
-                _ => format!(
-                    " · stale since {}",
-                    view::clock(l.row.last_activity, report.now, o.offset)
-                ),
-            };
-            spans.push(segment(
-                words,
-                if state == State::Waiting {
-                    t.needs_you
-                } else if state == State::Stale {
-                    t.warning
-                } else {
-                    t.secondary
-                },
-                bg,
-                false,
-            ));
-        } else {
-            spans.push(segment(
-                if harness == "claude" {
-                    " · no hand-off"
-                } else {
-                    " · no parent found"
-                },
-                t.secondary,
-                bg,
-                false,
-            ));
+
+fn label_fit(text: &str, width: usize) -> String {
+    if let Some(prompt) = text.strip_prefix('“').and_then(|s| s.strip_suffix('”')) {
+        if width < 3 {
+            return fit(text, width);
         }
-    } else if let Some(link) = l.link {
-        spans.push(segment(
-            format!(" · {}", view::link_words(link)),
-            t.secondary,
-            bg,
-            false,
-        ));
+        format!("“{}”", fit(prompt, width - 2))
+    } else {
+        fit(text, width)
     }
-    spans
 }
 fn draw_spans(buf: &mut Buffer, x: u16, y: u16, spans: Vec<Span<'static>>, width: u16) {
-    let full: String = spans.iter().map(|s| s.content.as_ref()).collect();
-    let fitted = fit(&full, usize::from(width));
-    if fitted == full {
-        buf.set_line(x, y, &Line::from(spans), width);
-        return;
-    }
-    let mut remaining = fitted.trim_end_matches('…').chars().count();
-    let mut clipped = Vec::new();
-    for mut span in spans {
-        let count = span.content.chars().count();
-        if remaining < count {
-            span.content = format!(
-                "{}…",
-                span.content.chars().take(remaining).collect::<String>()
-            )
-            .into();
-            clipped.push(span);
-            break;
-        }
-        remaining -= count;
-        clipped.push(span);
-    }
-    buf.set_line(x, y, &Line::from(clipped), width);
+    buf.set_line(x, y, &Line::from(spans), width);
 }
-fn draw_bar(
-    buf: &mut Buffer,
-    y: u16,
-    col: u16,
-    cells: u16,
-    l: Lane<'_>,
-    report: &OverviewReport,
-    t: Theme,
-) {
-    let window = crate::TimeWindow::default_for(report);
-    let ms = |at| view::datetime(at).unix_timestamp_nanos() / 1_000_000;
-    let (s, e) = (ms(window.start), ms(window.end));
-    for x in col..col + cells {
-        buf[(x, y)]
-            .set_symbol(if t.mode == ColorMode::NoColor {
-                "·"
-            } else {
-                " "
-            })
-            .set_bg(t.track)
-            .set_fg(Color::Reset);
-    }
-    let bright = view::rank(l.state()) < 2;
-    for r in std::iter::once(l.row).chain(l.child) {
-        let a = ms(r.started_at);
-        let b = ms(r.last_activity);
-        let pos =
-            |v: i128| (((v.clamp(s, e) - s) * i128::from(cells) / (e - s)) as u16).min(cells - 1);
-        let (first, last) = (pos(a), pos(b.max(a)));
-        let (symbol, color) = match r.harness {
-            Harness::Claude => ("━", if bright { t.claude } else { t.claude_dim }),
-            Harness::Codex => ("█", if bright { t.codex } else { t.codex_dim }),
-        };
-        for x in first..=last {
-            buf[(col + x, y)].set_symbol(symbol).set_fg(color);
-        }
-        if a < s {
-            buf[(col + first, y)].set_symbol("◂");
-        }
-        if b > e {
-            buf[(col + last, y)].set_symbol("▸");
-        }
-    }
-}
+
 pub fn render_home(
     report: &OverviewReport,
     selection: Option<usize>,
@@ -363,173 +207,99 @@ pub fn render_home_with_options(
     if area.is_empty() {
         return;
     }
-    let w = area.width;
-    let h = area.height;
-    let t = o.theme;
-    // Lay out complete cards before scrolling so selected rows share the exact same model.
+    let (w, h, t) = (area.width, area.height, o.theme);
     let capacity = report
         .repos
         .iter()
-        .map(|g| view::sessions(g).count() + g.concurrency.len() + 7)
+        .map(|g| view::sessions(g).count() + 10)
         .sum::<usize>()
         + 1;
     let mut body = Buffer::empty(Rect::new(0, 0, w, capacity.min(65500) as u16));
     body.set_style(body.area, Style::default().bg(t.screen));
     let mut y = 0;
-    let mut target = 0;
-    let mut selected_y = None;
-    let labels = if w >= 100 {
-        46
-    } else if w >= 80 {
-        30
-    } else {
-        24
+    let mut cursor = SelectionCursor {
+        requested: selection,
+        ..SelectionCursor::default()
     };
-    let col = labels + 5;
-    let bars = w >= 60;
-    let cells = w.saturating_sub(col + 3);
     if w >= 10 {
-        for g in &report.repos {
-            let quiet = view::collapsed(g, &o.expanded_repos);
-            let lanes = view::lanes(report, g, &o.split, o.show_all.contains(&g.repo));
-            let rows = if quiet {
-                1
-            } else {
-                1 + lanes.visible.len()
-                    + usize::from(lanes.hidden > 0)
-                    + usize::from(g.latest_handoff.is_some())
-                    + g.concurrency.len()
-            };
-            let bg = match g.tier {
-                Tier::Waiting => t.waiting_card,
-                Tier::Busy => t.busy_card,
-                _ => t.screen,
-            };
-            let border = match g.tier {
-                Tier::Waiting => t.needs_you,
-                Tier::Busy => t.claude,
-                _ => t.border,
-            };
-            for (dy, left, right) in [(0, "╭", "╮"), (rows as u16 + 1, "╰", "╯")] {
-                body.set_string(
-                    1,
-                    y + dy,
-                    format!("{left}{}{right}", "─".repeat(usize::from(w - 4))),
-                    Style::default().fg(border).bg(t.screen),
+        let groups = ordered_groups(report);
+        for g in groups.iter().copied().filter(|g| category(g) < 2) {
+            y = draw_group(&mut body, y, g, report, o, &mut cursor);
+        }
+
+        let quiet: Vec<_> = groups.into_iter().filter(|g| category(g) == 2).collect();
+        if !quiet.is_empty() {
+            write(&mut body, 3, y, "quiet", 5, t.secondary, t.screen);
+            let mut x = 9;
+            for (i, g) in quiet.iter().enumerate() {
+                let words = if view::sessions(g).all(|r| r.imported) {
+                    format!("{} (only Codex Desktop imports)", basename(&g.repo))
+                } else {
+                    format!(
+                        "{} (last active {})",
+                        basename(&g.repo),
+                        view::clock(g.last_activity, report.now, o.offset)
+                    )
+                };
+                let separator = if i > 0 { " · " } else { "" };
+                let words = if x > 9
+                    && usize::from(x) + Span::raw(separator).width() + Span::raw(&words).width()
+                        > usize::from(w.saturating_sub(2))
+                {
+                    y += 1;
+                    x = 9;
+                    words
+                } else {
+                    format!("{separator}{words}")
+                };
+                let first = x.min(w - 1);
+                let length =
+                    Span::raw(fit(&words, usize::from(w.saturating_sub(x + 2)))).width() as u16;
+                if cursor.requested == Some(cursor.index) {
+                    cursor.columns = Some((first, first + length));
+                }
+                cursor.mark(y);
+                write(
+                    &mut body,
+                    first,
+                    y,
+                    &words,
+                    w.saturating_sub(x + 2),
+                    t.secondary,
+                    t.screen,
                 );
+                x = x.saturating_add(Span::raw(words).width() as u16);
             }
-            for dy in 1..=rows as u16 {
-                body.set_style(Rect::new(2, y + dy, w - 4, 1), Style::default().bg(bg));
-                body[(1, y + dy)].set_symbol("│").set_fg(border);
-                body[(w - 2, y + dy)].set_symbol("│").set_fg(border);
-            }
-            y += 1;
-            draw_card_title(&mut body, y, g, report, o, quiet, bg);
-            if quiet {
-                if selection == Some(target) {
-                    selected_y = Some(y);
-                }
-                target += 1;
-                y += 1;
-            } else {
-                y += 1;
-                for l in lanes.visible {
-                    if selection == Some(target) {
-                        selected_y = Some(y);
-                    }
-                    target += 1;
-                    draw_spans(
-                        &mut body,
-                        3,
-                        y,
-                        label(l, report, o, bg),
-                        if bars { labels } else { w - 6 },
-                    );
-                    if bars && cells > 0 {
-                        draw_bar(&mut body, y, col, cells, l, report, t);
-                    }
-                    y += 1;
-                }
-                if lanes.hidden > 0 {
-                    if selection == Some(target) {
-                        selected_y = Some(y);
-                    }
-                    target += 1;
-                    write(
-                        &mut body,
-                        3,
-                        y,
-                        &format!(
-                            "{} earlier session{} · enter shows all",
-                            lanes.hidden,
-                            if lanes.hidden == 1 { "" } else { "s" }
-                        ),
-                        w - 6,
-                        t.secondary,
-                        bg,
-                    );
-                    y += 1;
-                }
-                for warning in &g.concurrency {
-                    write(
-                        &mut body,
-                        3,
-                        y,
-                        &format!("⚠ shared checkout: {}", basename(&warning.cwd)),
-                        w - 6,
-                        t.warning,
-                        bg,
-                    );
-                    y += 1;
-                }
-                if let Some(l) = &g.latest_handoff {
-                    let step = l.step.as_deref().unwrap_or("?");
-                    let words = view::link_words(l);
-                    let text = if w >= 100 {
-                        format!(
-                            "last: claude handed step {step} to codex at {} ({words})",
-                            view::clock(l.at, report.now, o.offset)
-                        )
-                    } else {
-                        format!("last: step {step} → codex · {words}")
-                    };
-                    write(&mut body, 3, y, &text, w - 6, t.secondary, bg);
-                    y += 1;
-                }
-            }
-            y += 2;
         }
     }
     let mut screen = Buffer::empty(Rect::new(0, 0, w, h));
     screen.set_style(screen.area, Style::default().bg(t.screen));
     draw_header(&mut screen, report, o);
     if h > 1 {
-        screen.set_string(
-            0,
-            1,
-            "─".repeat(usize::from(w)),
-            Style::default().fg(t.border).bg(t.screen),
-        );
-    }
-    if h > 2 && bars && cells > 0 {
-        draw_axis(&mut screen, report, o, labels, col, cells);
+        rule(&mut screen, 1, t);
     }
     let footer_rows = if o.hide_footer { 0 } else { 2 };
     let body_height = h.saturating_sub(3 + footer_rows);
-    let offset = selected_y.map_or(0, |sy| sy.saturating_sub(body_height.saturating_sub(1)));
+    let offset = cursor.line.map_or(0, |sy: u16| {
+        sy.saturating_sub(body_height.saturating_sub(1))
+    });
     for dy in 0..body_height {
         if offset + dy >= body.area.height {
             break;
         }
         for x in 0..w {
             screen[(x, dy + 3)] = body[(x, offset + dy)].clone();
-            if selected_y == Some(offset + dy) {
+            if cursor.line == Some(offset + dy)
+                && cursor
+                    .columns
+                    .is_none_or(|(first, end)| x >= first && x < end)
+            {
                 screen[(x, dy + 3)].set_bg(t.selected);
             }
         }
     }
     if !o.hide_footer && h >= 2 {
-        draw_footer(&mut screen, o);
+        draw_footer(&mut screen, report, o);
     }
     for dy in 0..h {
         for dx in 0..w {
@@ -537,24 +307,342 @@ pub fn render_home_with_options(
         }
     }
 }
-pub(crate) fn short_id(id: &str) -> String {
-    let chars: Vec<char> = id.chars().collect();
-    if chars.len() <= 13 {
-        return id.to_string();
-    }
-    let head: String = chars[..8].iter().collect();
-    let tail: String = chars[chars.len() - 4..].iter().collect();
-    format!("{head}…{tail}")
+#[derive(Default)]
+struct SelectionCursor {
+    requested: Option<usize>,
+    index: usize,
+    line: Option<u16>,
+    columns: Option<(u16, u16)>,
 }
-
-/// Last `/`-separated component of a recorded path.
+impl SelectionCursor {
+    fn mark(&mut self, y: u16) {
+        if self.requested == Some(self.index) {
+            self.line = Some(y);
+        }
+        self.index += 1;
+    }
+}
+fn draw_group(
+    body: &mut Buffer,
+    mut y: u16,
+    g: &RepoGroup,
+    report: &OverviewReport,
+    o: &HomeOptions<'_>,
+    cursor: &mut SelectionCursor,
+) -> u16 {
+    let (w, t) = (body.area.width, o.theme);
+    let rows = view::attention(g);
+    let card = !rows.is_empty();
+    let state = rows.first().map_or(State::Idle, |r| r.state);
+    let bg = match state {
+        State::Waiting => t.waiting_card,
+        State::Busy => t.busy_card,
+        _ => t.screen,
+    };
+    let border = if card {
+        state_color(t, state)
+    } else {
+        t.border
+    };
+    let inside = if card {
+        3 + rows.len()
+            + usize::from(g.latest_handoff.is_some())
+            + usize::from(!g.concurrency.is_empty())
+    } else {
+        1
+    };
+    box_rows(body, y, inside as u16, border, bg);
+    y += 1;
+    let name = basename(&g.repo);
+    body.set_string(3, y, glyph(state), t.text_style(state_color(t, state), bg));
+    let name = fit(name, usize::from(w.saturating_sub(12)));
+    body.set_string(
+        5,
+        y,
+        &name,
+        t.text_style(t.text, bg).add_modifier(Modifier::BOLD),
+    );
+    let px = 7 + Span::raw(&name).width() as u16;
+    if card {
+        draw_counts_and_plan(body, y, g, &rows, o, bg, px);
+        y += 2;
+        let sx = status_column(w, &rows, report, o);
+        for row in &rows {
+            cursor.mark(y);
+            draw_session(body, y, (row, &view::home_label(g, row)), report, o, bg, sx);
+            y += 1;
+        }
+        if !g.concurrency.is_empty() {
+            let names = g
+                .concurrency
+                .iter()
+                .map(|warning| basename(&warning.cwd))
+                .collect::<Vec<_>>()
+                .join(", ");
+            write(
+                body,
+                5,
+                y,
+                &format!("⚠ shared checkout: {names}"),
+                w - 9,
+                t.warning,
+                bg,
+            );
+            y += 1;
+        }
+        let rest: Vec<_> = view::sessions(g)
+            .filter(|r| !r.imported && view::rank(r.state) >= 3)
+            .collect();
+        if !rest.is_empty() {
+            cursor.mark(y);
+        }
+        let mut summary = activity_summary(&rows, &rest);
+        if g.latest_handoff.is_none() {
+            summary.push_str(" · no hand-offs");
+        }
+        write(body, 5, y, &summary, w - 9, t.secondary, bg);
+        y += 1;
+        if let Some(link) = &g.latest_handoff {
+            let words = format!(
+                "last hand-off  {} · claude {} · {}",
+                view::clock(link.at, report.now, o.offset),
+                view::handed(link),
+                view::outcome(link, report)
+            );
+            write(body, 5, y, &words, w - 9, t.secondary, bg);
+            y += 1;
+        }
+    } else {
+        cursor.mark(y);
+        let last = view::sessions(g)
+            .filter(|r| !r.imported)
+            .flat_map(|r| &r.activity)
+            .map(|b| b.to)
+            .max()
+            .unwrap();
+        let handoff = g.latest_handoff.as_ref().map_or_else(
+            || "no hand-offs".into(),
+            |l| {
+                format!(
+                    "claude {} at {}, {}",
+                    view::handed(l),
+                    view::clock(l.at, report.now, o.offset),
+                    view::outcome(l, report)
+                )
+            },
+        );
+        write(
+            body,
+            px,
+            y,
+            &format!(
+                "idle · last active {} · {handoff}",
+                view::last_active(last, report.now, o.offset)
+            ),
+            w.saturating_sub(px + 4),
+            t.secondary,
+            bg,
+        );
+        y += 1;
+    }
+    y += 2;
+    y
+}
+fn draw_counts_and_plan(
+    body: &mut Buffer,
+    y: u16,
+    g: &RepoGroup,
+    rows: &[&SessionRow],
+    o: &HomeOptions<'_>,
+    bg: Color,
+    px: u16,
+) {
+    let (w, t) = (body.area.width, o.theme);
+    let mut counts = Vec::new();
+    for (state, words) in [
+        (State::Waiting, "waiting"),
+        (State::Busy, "working now"),
+        (State::Stale, "stale"),
+    ] {
+        let n = rows.iter().filter(|r| r.state == state).count();
+        if n > 0 {
+            if !counts.is_empty() {
+                counts.push(segment(" · ", t.secondary, bg, false));
+            }
+            counts.push(segment(
+                format!("{n} {words}"),
+                state_color(t, state),
+                bg,
+                false,
+            ));
+        }
+    }
+    let rw = spans_width(&counts) as u16;
+    let rx = w.saturating_sub(4 + rw);
+    let wording = plan(g);
+    if rx > px + 3 {
+        let fg = if g.plan.latest_step.is_some() {
+            t.text
+        } else {
+            t.secondary
+        };
+        write(body, px, y, &wording, rx - px - 2, fg, bg);
+    }
+    if rx > px {
+        draw_spans(body, rx, y, counts, rw);
+    }
+}
+fn activity_summary(rows: &[&SessionRow], rest: &[&SessionRow]) -> String {
+    if rest.is_empty() {
+        let bursts: Vec<_> = rows.iter().flat_map(|r| &r.activity).collect();
+        let ms = bursts
+            .iter()
+            .map(|b| b.to.epoch_ms() - b.from.epoch_ms())
+            .sum();
+        format!(
+            "active about {} min in the last 2h, in {} stretch{}",
+            view::minutes(ms),
+            bursts.len(),
+            if bursts.len() == 1 { "" } else { "es" }
+        )
+    } else {
+        let active = rest.iter().filter(|r| !r.activity.is_empty()).count();
+        let n = rest.len();
+        let plural = if n == 1 { "" } else { "s" };
+        if active == 0 {
+            format!("{n} older session{plural}, none active in the last 2h · enter shows all")
+        } else {
+            format!("{n} other session{plural}, {active} active in the last 2h · enter shows all")
+        }
+    }
+}
+fn box_rows(buf: &mut Buffer, y: u16, inside: u16, border: Color, bg: Color) {
+    let w = buf.area.width;
+    for (dy, left, right) in [(0, "╭", "╮"), (inside + 1, "╰", "╯")] {
+        buf.set_string(
+            1,
+            y + dy,
+            format!("{left}{}{right}", "─".repeat(usize::from(w - 4))),
+            Style::default().fg(border),
+        );
+    }
+    for dy in 1..=inside {
+        buf.set_style(Rect::new(2, y + dy, w - 4, 1), Style::default().bg(bg));
+        for x in [1, w - 2] {
+            buf[(x, y + dy)].set_symbol("│").set_fg(border);
+        }
+    }
+}
+fn session_branch(row: &SessionRow, w: u16, phrase_width: u16) -> String {
+    let branch = if w >= 80 {
+        row.branch.as_deref().unwrap_or("")
+    } else {
+        ""
+    };
+    // Three label cells retain a quoted ellipsis; only then may the branch shrink.
+    let branch_budget = w.saturating_sub(4 + 20 + phrase_width + 2);
+    fit(branch, usize::from((w / 6).min(branch_budget)))
+}
+fn status_column(
+    w: u16,
+    rows: &[&SessionRow],
+    report: &OverviewReport,
+    o: &HomeOptions<'_>,
+) -> u16 {
+    let preferred = if w >= 120 {
+        66
+    } else if w >= 80 {
+        w / 2 + 6
+    } else {
+        w / 2
+    };
+    // Reserve every row's phrase and branch before assigning one label budget to the card.
+    rows.iter().fold(preferred, |sx, row| {
+        let phrase_width = Span::raw(view::status(row, report.now, o.offset)).width() as u16;
+        let branch = session_branch(row, w, phrase_width);
+        let end = w.saturating_sub(
+            4 + Span::raw(&branch).width() as u16 + u16::from(!branch.is_empty()) * 2,
+        );
+        sx.min(end.saturating_sub(phrase_width).max(20.min(end)))
+    })
+}
+fn draw_session(
+    buf: &mut Buffer,
+    y: u16,
+    (row, label): (&SessionRow, &str),
+    report: &OverviewReport,
+    o: &HomeOptions<'_>,
+    bg: Color,
+    sx: u16,
+) {
+    let (w, t) = (buf.area.width, o.theme);
+    let fg = state_color(t, row.state);
+    write(buf, 3, y, glyph(row.state), 1, fg, bg);
+    let harness = if row.harness == Harness::Claude {
+        "claude"
+    } else {
+        "codex"
+    };
+    write(
+        buf,
+        5,
+        y,
+        harness,
+        6,
+        if row.harness == Harness::Claude {
+            t.claude
+        } else {
+            t.codex
+        },
+        bg,
+    );
+    let phrase = view::status(row, report.now, o.offset);
+    let branch = session_branch(row, w, Span::raw(&phrase).width() as u16);
+    let bw = Span::raw(&branch).width() as u16;
+    let bx = w.saturating_sub(4 + bw);
+    let label = label_fit(label, usize::from(sx.saturating_sub(17)));
+    write(buf, 15, y, &label, sx.saturating_sub(17), t.text, bg);
+    let available = bx.saturating_sub(sx + u16::from(!branch.is_empty()) * 2);
+    let phrase = fit(&phrase, usize::from(available));
+    buf.set_stringn(
+        sx,
+        y,
+        phrase,
+        usize::from(available),
+        t.text_style(fg, bg).add_modifier(Modifier::BOLD),
+    );
+    if !branch.is_empty() {
+        write(buf, bx, y, &branch, bw, t.secondary, bg);
+    }
+}
+fn rule(buf: &mut Buffer, y: u16, t: Theme) {
+    let w = buf.area.width;
+    if w > 2 {
+        buf.set_string(
+            1,
+            y,
+            "─".repeat(usize::from(w - 2)),
+            t.text_style(t.border, t.screen),
+        );
+    }
+}
+pub(crate) fn short_id(id: &str) -> String {
+    if id.chars().count() <= 13 {
+        id.into()
+    } else {
+        format!(
+            "{}…{}",
+            id.chars().take(8).collect::<String>(),
+            id.chars().skip(id.chars().count() - 4).collect::<String>()
+        )
+    }
+}
 pub(crate) fn basename(path: &str) -> &str {
     path.trim_end_matches('/')
         .rsplit('/')
         .next()
         .unwrap_or(path)
 }
-
 /// A header part is indivisible; related counts share a separator when both survive.
 struct HeaderPart {
     span: Span<'static>,
@@ -586,7 +674,12 @@ fn spans_width(spans: &[Span<'_>]) -> usize {
 fn draw_header(screen: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>) {
     let w = screen.area.width;
     let t = o.theme;
-    let all: Vec<_> = report.repos.iter().flat_map(view::sessions).collect();
+    let all: Vec<_> = report
+        .repos
+        .iter()
+        .flat_map(view::sessions)
+        .filter(|r| !r.imported)
+        .collect();
     let n = |s| all.iter().filter(|r| r.state == s).count();
     let mut parts = Vec::new();
     let mut add = |text: String, fg, bold, group, drop_priority| {
@@ -596,8 +689,14 @@ fn draw_header(screen: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>
             drop_priority,
         })
     };
-    add("All repos · last 2h".into(), t.text, true, 0, 5);
-    add(format!("● {} busy", n(State::Busy)), t.claude, false, 1, 4);
+    add("All repos · last 2h".into(), t.text, true, 0, 6);
+    add(
+        format!("● {} working now", n(State::Busy)),
+        t.claude,
+        false,
+        1,
+        5,
+    );
     if n(State::Stale) > 0 {
         add(
             format!("◌ {} stale", n(State::Stale)),
@@ -614,7 +713,7 @@ fn draw_header(screen: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>
             t.warning,
             false,
             3,
-            6,
+            4,
         );
     }
     add(
@@ -699,253 +798,59 @@ fn draw_header(screen: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>
     }
 }
 
-fn draw_axis(
-    screen: &mut Buffer,
-    report: &OverviewReport,
-    o: &HomeOptions<'_>,
-    labels: u16,
-    col: u16,
-    cells: u16,
-) {
-    let t = o.theme;
-    let legend = vec![
-        segment("━", t.claude, t.screen, false),
-        segment(" claude  ", t.secondary, t.screen, false),
-        segment("█", t.codex, t.screen, false),
-        segment(
-            " codex  bright busy · dim idle/done",
-            t.secondary,
-            t.screen,
-            false,
-        ),
-    ];
-    let full: String = legend.iter().map(|s| s.content.as_ref()).collect();
-    if Span::raw(&full).width() <= usize::from(labels) {
-        screen.set_line(3, 2, &Line::from(legend), labels);
+fn draw_footer(buf: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>) {
+    let (w, h, t) = (buf.area.width, buf.area.height, o.theme);
+    rule(buf, h - 2, t);
+    let imports = report
+        .repos
+        .iter()
+        .flat_map(view::sessions)
+        .filter(|r| r.imported)
+        .count();
+    let tz = format!("times {}", view::offset_label(o.offset));
+    let mut note = if imports > 0 {
+        format!(
+            "{imports} Codex Desktop import{} hidden · {tz}",
+            if imports == 1 { "" } else { "s" }
+        )
     } else {
-        write(
-            screen,
-            3,
-            2,
-            "━ claude  █ codex",
-            labels,
-            t.secondary,
-            t.screen,
-        );
-    }
-    let window = crate::TimeWindow::default_for(report);
-    let mid = multi_link_model::Timestamp::from_epoch_ms(
-        (view::datetime(window.start).unix_timestamp_nanos() / 1_000_000) as i64 + 3_600_000,
-    )
-    .unwrap();
-    let mut start = view::clock(window.start, report.now, o.offset);
-    if o.offset == UtcOffset::UTC {
-        start.push_str(" UTC");
-    }
-    let end = format!("{} now", view::clock(window.end, report.now, o.offset));
-    write(screen, col, 2, &start, cells, t.secondary, t.screen);
-    if cells >= 30 {
-        let mid = view::datetime(mid).to_offset(o.offset);
-        let middle = format!("{:02}:{:02}", mid.hour(), mid.minute());
-        write(
-            screen,
-            col + cells / 2 - 2,
-            2,
-            &middle,
-            5,
-            t.secondary,
-            t.screen,
-        );
-    }
-    if cells >= 16 {
-        let ew = Span::raw(&end).width() as u16;
-        write(screen, col + cells - ew, 2, &end, ew, t.secondary, t.screen);
-    }
-}
-
-fn draw_footer(screen: &mut Buffer, o: &HomeOptions<'_>) {
-    let w = screen.area.width;
-    let h = screen.area.height;
-    let t = o.theme;
-    screen.set_string(
-        0,
-        h - 2,
-        "─".repeat(usize::from(w)),
-        Style::default().fg(t.border).bg(t.screen),
-    );
+        tz.clone()
+    };
     let mut keys = vec![
         ("↑↓", "move"),
-        ("enter", "expand / open"),
-        ("t", "timeline"),
+        ("enter", "repo view"),
         ("o", "open session"),
-        ("f", "fork"),
         ("q", "quit"),
     ];
-    let tz = format!("times in {}", view::offset_label(o.offset));
-    let tw = Span::raw(&tz).width() as u16;
-    let minimum = Span::raw("↑↓ move · q quit").width();
-    let show_time = minimum + usize::from(tw) + 4 <= usize::from(w);
-    let available = w.saturating_sub(if show_time { tw + 4 } else { 2 });
+    if Span::raw(&note).width() + spans_width(&footer_spans(&keys, t)) + 5 > usize::from(w) {
+        note = tz;
+    }
+    let minimum_keys = footer_spans(&[("↑↓", "move"), ("q", "quit")], t);
+    if Span::raw(&note).width() + spans_width(&minimum_keys) + 5 > usize::from(w) {
+        note.clear();
+    }
+    let nw = Span::raw(&note).width() as u16;
+    let available = w.saturating_sub(if note.is_empty() { 2 } else { nw + 5 });
     let mut spans = footer_spans(&keys, t);
     while spans_width(&spans) > usize::from(available) && keys.len() > 2 {
         keys.remove(keys.len() - 2);
         spans = footer_spans(&keys, t);
     }
-    // Extremely small surfaces can show only the complete quit item (or nothing).
-    if spans_width(&spans) > usize::from(available) {
-        spans = footer_spans(&[("q", "quit")], t);
-    }
     if spans_width(&spans) <= usize::from(available) {
-        screen.set_line(1.min(w - 1), h - 1, &Line::from(spans), available);
+        buf.set_line(1, h - 1, &Line::from(spans), available);
     }
-    if show_time {
-        screen.set_string(w - tw - 1, h - 1, tz, t.text_style(t.secondary, t.screen));
+    if nw + 2 <= w {
+        buf.set_string(w - nw - 1, h - 1, note, t.text_style(t.secondary, t.screen));
     }
 }
-
 fn footer_spans(keys: &[(&str, &str)], t: Theme) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
-    for (index, (key, words)) in keys.iter().enumerate() {
-        if index > 0 {
-            spans.push(segment(" · ", t.secondary, t.screen, false));
+    for (i, (key, words)) in keys.iter().enumerate() {
+        if i > 0 {
+            spans.push(segment("   ", t.secondary, t.screen, false));
         }
         spans.push(segment(*key, t.text, t.screen, false));
         spans.push(segment(format!(" {words}"), t.secondary, t.screen, false));
     }
     spans
-}
-
-fn draw_card_title(
-    body: &mut Buffer,
-    y: u16,
-    g: &RepoGroup,
-    report: &OverviewReport,
-    o: &HomeOptions<'_>,
-    quiet: bool,
-    bg: Color,
-) {
-    let w = body.area.width;
-    let t = o.theme;
-    let name = basename(&g.repo);
-    let mut right = Vec::new();
-    if quiet {
-        for harness in [Harness::Claude, Harness::Codex] {
-            for (states, words) in [
-                (&[State::Idle][..], "idle"),
-                (&[State::Unknown, State::Finished][..], "done or unknown"),
-            ] {
-                let n = view::sessions(g)
-                    .filter(|r| r.harness == harness && states.contains(&r.state))
-                    .count();
-                if n > 0 {
-                    right.push(format!(
-                        "{n} {} {words}",
-                        if harness == Harness::Claude {
-                            "claude"
-                        } else {
-                            "codex"
-                        }
-                    ));
-                }
-            }
-        }
-        right.push(format!(
-            "last {}",
-            view::clock(g.last_activity, report.now, o.offset)
-        ));
-    } else {
-        for (state, word) in [
-            (State::Waiting, "waiting"),
-            (State::Busy, "busy"),
-            (State::Stale, "stale"),
-            (State::Idle, "idle"),
-        ] {
-            let n = count(g, state);
-            if n > 0 {
-                right.push(format!("{n} {word}"));
-            }
-        }
-    }
-    while right.len() > 1
-        && Span::raw(right.join(" · ")).width() + Span::raw(name).width().min(18) + 8
-            > usize::from(w - 3)
-    {
-        right.pop();
-    }
-    let right_text = right.join(" · ");
-    let rw = Span::raw(&right_text).width() as u16;
-    let rx = w.saturating_sub(3 + rw);
-    let state = match g.tier {
-        Tier::Waiting => State::Waiting,
-        Tier::Busy => State::Busy,
-        _ => State::Idle,
-    };
-    write(body, 3, y, glyph(state), 1, state_color(t, state), bg);
-    body.set_line(
-        5,
-        y,
-        &Line::from(segment(
-            fit(
-                name,
-                if quiet {
-                    18
-                } else {
-                    usize::from(rx.saturating_sub(8))
-                },
-            ),
-            t.text,
-            bg,
-            true,
-        )),
-        w - 8,
-    );
-    let px = if quiet {
-        24
-    } else {
-        8 + Span::raw(name).width() as u16
-    };
-    let mut plan_spans = vec![segment(
-        plan(g),
-        if quiet { t.secondary } else { t.text },
-        bg,
-        false,
-    )];
-    if !quiet && let Some(entry) = g.plan.latest_step.as_ref().and_then(|s| s.entry.as_ref()) {
-        let (word, color) = match entry.verify.result {
-            VerifyResult::Pass => ("✓", t.secondary),
-            VerifyResult::Fail => ("✗", t.warning),
-            _ => ("unclear", t.secondary),
-        };
-        plan_spans.push(segment(format!(" · Verify {word}"), color, bg, false));
-    }
-    let pw = rx.saturating_sub(px + 3);
-    let wording = plan(g);
-    let fitted = fit(&wording, usize::from(pw));
-    let useful_plan =
-        !fitted.ends_with('…') || fitted.trim_end_matches('…').split_whitespace().count() > 1;
-    if px < w - 3 && useful_plan {
-        draw_spans(body, px, y, plan_spans, pw);
-    }
-    if rw + 6 < w {
-        let mut x = rx;
-        for (i, part) in right.iter().enumerate() {
-            if i > 0 {
-                body.set_string(x, y, " · ", Style::default().fg(t.secondary).bg(bg));
-                x += 3;
-            }
-            let color = if quiet {
-                t.secondary
-            } else if part.ends_with("waiting") {
-                t.needs_you
-            } else if part.ends_with("busy") {
-                t.claude
-            } else if part.ends_with("stale") {
-                t.warning
-            } else {
-                t.secondary
-            };
-            body.set_string(x, y, part, Style::default().fg(color).bg(bg));
-            x += Span::raw(part).width() as u16;
-        }
-    }
 }

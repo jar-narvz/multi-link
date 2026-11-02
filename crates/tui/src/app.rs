@@ -34,11 +34,8 @@ pub struct App {
     pub footer: String,
     refresh_error: Option<String>,
     pub selection: usize,
-    split: HashSet<String>,
-    show_all: HashSet<String>,
     pub theme: Option<crate::theme::Theme>,
     offset: Option<time::UtcOffset>,
-    expanded_repos: HashSet<String>,
     timeline: Option<(String, TimeWindow)>,
     home_selection: Option<SelectionIdentity>,
     waiting: Option<HashSet<String>>,
@@ -121,9 +118,6 @@ impl App {
 
     fn home_options(&self) -> crate::HomeOptions<'_> {
         crate::HomeOptions {
-            expanded_repos: self.expanded_repos.clone(),
-            split: self.split.clone(),
-            show_all: self.show_all.clone(),
             links: self.report.as_ref().map(|r| &r.links),
             theme: self
                 .theme
@@ -202,57 +196,20 @@ impl App {
                         let selected = self.home_selection.take();
                         self.restore_selection(selected.as_ref(), 0);
                     } else {
-                        self.split.clear();
-                        self.show_all.clear();
-                        self.expanded_repos.clear();
                         self.selection = 0;
                     }
                 }
                 KeyCode::Enter | KeyCode::Char('t') if self.timeline.is_none() => {
                     if let Some((repo, id)) = self.selected() {
-                        let view = self.view().unwrap();
-                        let target = self.targets(&view)[self.selection].1;
-                        if key == KeyCode::Enter
-                            && matches!(target, Target::Repo(_) | Target::Hidden(_))
-                        {
-                            match target {
-                                Target::Repo(_) => {
-                                    self.expanded_repos.insert(repo);
-                                }
-                                Target::Hidden(_) => {
-                                    self.show_all.insert(repo);
-                                }
-                                _ => unreachable!(),
-                            }
-                        } else if key == KeyCode::Enter
-                            && id.as_ref().is_some_and(|id| {
-                                view.repos.iter().any(|g| {
-                                    crate::view::lanes(
-                                        &view,
-                                        g,
-                                        &self.split,
-                                        self.show_all.contains(&g.repo),
-                                    )
-                                    .visible
-                                    .iter()
-                                    .any(|l| l.row.id == *id && l.child.is_some())
-                                })
-                            })
-                        {
-                            let identity = self.selection_identity();
-                            self.split.insert(id.unwrap());
-                            self.restore_selection(identity.as_ref(), self.selection);
-                        } else {
-                            self.home_selection = self.selection_identity();
-                            self.timeline = Some((
-                                repo,
-                                TimeWindow::default_for(&self.report.as_ref().unwrap().overview),
-                            ));
-                            self.selection = 0;
-                            if let Some(id) = id {
-                                let view = self.view().unwrap();
-                                self.selection = selectable(&view).iter().position(|(_, target)| matches!(target, Target::Session(row) if row.id == id)).unwrap_or(0);
-                            }
+                        self.home_selection = self.selection_identity();
+                        self.timeline = Some((
+                            repo,
+                            TimeWindow::default_for(&self.report.as_ref().unwrap().overview),
+                        ));
+                        self.selection = 0;
+                        if let Some(id) = id {
+                            let view = self.view().unwrap();
+                            self.selection = selectable(&view).iter().position(|(_, target)| matches!(target, Target::Session(row) if row.id == id)).unwrap_or(0);
                         }
                     }
                 }
@@ -265,7 +222,7 @@ impl App {
                             fork: key == KeyCode::Char('f'),
                         }];
                     } else {
-                        self.footer = "enter expands a repo or earlier sessions first".into();
+                        self.footer = "enter opens the repo view; select a session there".into();
                     }
                 }
                 // +/- zoom around the right edge; left/right pan by half a window.
@@ -366,7 +323,7 @@ impl App {
         let help = if self.timeline.is_some() {
             "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · q quit"
         } else {
-            "↑↓ select · enter expand/timeline · t timeline · esc collapse · o open · f fork · q quit"
+            "↑↓ move · enter repo view · o open session · q quit"
         };
         if report.diagnostics.is_empty() {
             help.into()
@@ -441,7 +398,7 @@ mod tests {
             assert!(app.footer.is_empty());
             assert_eq!(
                 rendered_footer(&app, 200),
-                "↑↓ select · enter expand/timeline · t timeline · esc collapse · o open · f fork · q quit · incomplete: 1"
+                "↑↓ move · enter repo view · o open session · q quit · incomplete: 1"
             );
         }
     }
@@ -475,9 +432,9 @@ mod tests {
         app.update(Event::Refresh(Ok(initial)));
         assert_eq!(
             rendered_footer(&app, 200),
-            "↑↓ select · enter expand/timeline · t timeline · esc collapse · o open · f fork · q quit · bad records: 2 · incomplete: 1"
+            "↑↓ move · enter repo view · o open session · q quit · bad records: 2 · incomplete: 1"
         );
-        assert_eq!(rendered_footer(&app, 9), "↑↓ select");
+        assert_eq!(rendered_footer(&app, 9), "↑↓ move ·");
         app.update(Event::Key(KeyCode::Char('t')));
         assert_eq!(
             rendered_footer(&app, 200),
@@ -626,113 +583,6 @@ mod tests {
         }
     }
 
-    fn phase4() -> Box<Refresh> {
-        let mut refresh = report();
-        refresh.overview = serde_json::from_str(include_str!(
-            "../../../fixtures/expected/phase4/overview.json"
-        ))
-        .unwrap();
-        refresh.links.links.clear();
-        refresh.links.unparented.clear();
-        refresh
-    }
-
-    #[test]
-    fn refresh_collapses_newly_quiet_repo_without_selecting_a_hidden_row() {
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(phase4())));
-        app.selection = 3; // last visible session in busy repo-h
-        let mut refresh = phase4();
-        refresh.overview.repos[0].tier = multi_link_model::Tier::Other;
-        let Row::Session(row) = &mut refresh.overview.repos[0].rows[0] else {
-            panic!("session")
-        };
-        row.state = State::Unknown;
-        app.update(Event::Refresh(Ok(refresh)));
-        assert_eq!(app.selection, 0);
-        let view = app.view().unwrap();
-        assert!(
-            matches!(app.targets(&view)[0].1, Target::Repo(group) if group.repo.ends_with("/repo-h"))
-        );
-        app.update(Event::Key(KeyCode::Down));
-        assert_eq!(app.selection, 1);
-        assert_eq!(app.selected().unwrap().0, "/home/dev/repo-j");
-    }
-
-    #[test]
-    fn refresh_keeps_newly_expanded_repo_summary_in_the_same_repo() {
-        for state in [State::Busy, State::Stale] {
-            let mut app = App::default();
-            app.update(Event::Refresh(Ok(phase4())));
-            app.selection = 4; // collapsed repo-j, after repo-h's four lanes
-            let mut refresh = phase4();
-            let group = &mut refresh.overview.repos[1];
-            if state == State::Busy {
-                group.tier = multi_link_model::Tier::Busy;
-            }
-            let Row::Session(row) = &mut group.rows[0] else {
-                panic!("session")
-            };
-            row.state = state;
-            refresh.overview.repos.swap(0, 1);
-            app.update(Event::Refresh(Ok(refresh)));
-            assert_eq!(app.selection, 0);
-            assert_eq!(
-                app.selected().unwrap(),
-                (
-                    "/home/dev/repo-j".into(),
-                    Some("00000000-0000-4000-8000-0000000040d1".into()),
-                )
-            );
-        }
-    }
-
-    #[test]
-    fn timeline_escape_restores_home_identity_after_repo_visibility_changes() {
-        // A collapsed summary becomes a visible session while in the timeline.
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(phase4())));
-        app.selection = 4; // repo-j summary
-        app.update(Event::Key(KeyCode::Char('t')));
-        let mut refresh = phase4();
-        refresh.overview.repos[1].tier = multi_link_model::Tier::Busy;
-        refresh.overview.repos.swap(0, 1);
-        app.update(Event::Refresh(Ok(refresh)));
-        app.update(Event::Key(KeyCode::Esc));
-        assert_eq!(app.selection, 0);
-        assert_eq!(app.selected().unwrap().0, "/home/dev/repo-j");
-        assert_eq!(
-            app.selected().unwrap().1.as_deref(),
-            Some("00000000-0000-4000-8000-0000000040d1")
-        );
-
-        // A selected session becomes hidden by collapse; return to its repo summary.
-        app.update(Event::Key(KeyCode::Char('t')));
-        app.update(Event::Refresh(Ok(phase4())));
-        app.update(Event::Key(KeyCode::Esc));
-        assert_eq!(app.selection, 4);
-        assert_eq!(app.selected().unwrap(), ("/home/dev/repo-j".into(), None));
-
-        // Preserve an exact session identity when an earlier repo expands.
-        app.selection = 5; // stale repo-k session
-        let selected = app.selected().unwrap();
-        app.update(Event::Key(KeyCode::Char('t')));
-        let mut refresh = phase4();
-        refresh.overview.repos[1].tier = multi_link_model::Tier::Busy;
-        let Row::Session(row) = &mut refresh.overview.repos[1].rows[0] else {
-            panic!("session")
-        };
-        let mut extra = row.clone();
-        extra.id = "extra-session".into();
-        refresh.overview.repos[1]
-            .rows
-            .insert(0, Row::Session(extra));
-        app.update(Event::Refresh(Ok(refresh)));
-        app.update(Event::Key(KeyCode::Esc));
-        assert_eq!(app.selection, 6);
-        assert_eq!(app.selected().unwrap(), selected);
-    }
-
     #[test]
     fn refresh_preserves_selected_full_id_when_order_changes() {
         let mut app = App::default();
@@ -746,18 +596,18 @@ mod tests {
 }
 
 #[cfg(test)]
-mod phase5_tests {
+mod phase6_tests {
     use super::*;
     fn refresh() -> Box<Refresh> {
         Box::new(Refresh {
             overview: serde_json::from_str(include_str!(
-                "../../../fixtures/expected/phase5/overview.json"
+                "../../../fixtures/expected/phase6/overview.json"
             ))
             .unwrap(),
-            links: serde_json::from_str(include_str!(
-                "../../../fixtures/expected/phase5/links.json"
-            ))
-            .unwrap(),
+            links: LinksReport {
+                links: vec![],
+                unparented: vec![],
+            },
             diagnostics: String::new(),
         })
     }
@@ -766,48 +616,74 @@ mod phase5_tests {
         app.update(Event::Refresh(Ok(refresh())));
         app
     }
-    fn select(app: &mut App, predicate: impl Fn(Target<'_>) -> bool) {
+    fn select_repo(app: &mut App, suffix: &str) {
         let view = app.view().unwrap();
         app.selection = app
             .targets(&view)
             .iter()
-            .position(|(_, t)| predicate(*t))
+            .position(|(repo, _)| repo.ends_with(suffix))
             .unwrap();
     }
     #[test]
-    fn enter_expands_idle_repo_and_flattens_merged_rows() {
-        let mut app = app();
-        select(
-            &mut app,
-            |t| matches!(t,Target::Repo(g) if g.repo.ends_with("repo-m")),
-        );
-        assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
-        app.update(Event::Key(KeyCode::Enter));
-        assert!(app.timeline.is_none());
-        assert_eq!(
-            app.expanded_repos,
-            HashSet::from(["/home/dev/repo-m".into()])
-        );
-        assert_eq!(
-            app.selected().unwrap().1.as_deref(),
-            Some("00000000-0000-4000-8000-000000005031")
-        );
-        let view = app.view().unwrap();
-        assert!(
-            app.targets(&view)
-                .iter()
-                .all(|(_, t)| !matches!(t, Target::Merged(_)))
-        );
-        app.update(Event::Key(KeyCode::Esc));
-        assert!(app.expanded_repos.is_empty());
+    fn enter_opens_cards_summaries_and_quiet_repos_and_escape_restores_identity() {
+        for suffix in ["repo-p", "repo-r", "repo-s", "repo-t"] {
+            let mut app = app();
+            select_repo(&mut app, suffix);
+            let selected = app.selected().unwrap();
+            app.update(Event::Key(KeyCode::Enter));
+            assert_eq!(app.timeline.as_ref().unwrap().0, selected.0);
+            let view = app.view().unwrap();
+            assert!(
+                app.targets(&view)
+                    .iter()
+                    .all(|(_, t)| !matches!(t, Target::Merged(_)))
+            );
+            app.update(Event::Key(KeyCode::Esc));
+            assert_eq!(app.selected().unwrap(), selected);
+        }
     }
     #[test]
-    fn combined_lane_opens_claude_and_enter_splits_with_selection_preserved() {
+    fn refresh_hides_and_reveals_imported_attention_rows_without_leaving_repo() {
         let mut app = app();
-        select(
-            &mut app,
-            |t| matches!(t,Target::Session(r) if r.id.ends_with("5011")),
+        app.selection = 1;
+        let original = app.selected().unwrap();
+        let mut hidden = refresh();
+        let Row::Session(row) = &mut hidden.overview.repos[0].rows[1] else {
+            panic!("session")
+        };
+        row.imported = true;
+        app.update(Event::Refresh(Ok(hidden)));
+        assert_eq!(app.selected().unwrap().0, original.0);
+        assert_eq!(
+            app.selected().unwrap().1.as_deref(),
+            Some("60010000-0000-4000-8000-000000006001")
         );
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(app.selection, 0);
+        app.update(Event::Key(KeyCode::Down));
+        assert_eq!(app.selected().unwrap(), original);
+    }
+    #[test]
+    fn refresh_collapses_attention_to_summary_and_reveals_it_on_return_from_repo() {
+        let mut app = app();
+        select_repo(&mut app, "repo-q");
+        let selected = app.selected().unwrap();
+        app.update(Event::Key(KeyCode::Enter));
+        let mut quiet = refresh();
+        let Row::Session(row) = &mut quiet.overview.repos[1].rows[0] else {
+            panic!("session")
+        };
+        row.state = State::Idle;
+        app.update(Event::Refresh(Ok(quiet)));
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.selected().unwrap(), (selected.0.clone(), None));
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(app.selected().unwrap(), selected);
+    }
+    #[test]
+    fn navigation_open_refresh_and_zoom_preserve_identity() {
+        let mut app = app();
+        app.update(Event::Key(KeyCode::Down));
         let selected = app.selected().unwrap();
         assert_eq!(
             app.update(Event::Key(KeyCode::Char('o'))),
@@ -818,58 +694,6 @@ mod phase5_tests {
         );
         app.update(Event::Opened(String::new()));
         app.update(Event::Key(KeyCode::Enter));
-        assert!(app.timeline.is_none());
-        assert_eq!(app.split, HashSet::from([selected.1.clone().unwrap()]));
-        assert_eq!(app.selected().unwrap(), selected);
-        select(
-            &mut app,
-            |t| matches!(t,Target::Session(r) if r.id.ends_with("5021")),
-        );
-        let child = app.selected().unwrap();
-        app.update(Event::Refresh(Ok(refresh())));
-        assert_eq!(app.selected().unwrap(), child);
-        // Even if the split is collapsed, identity follows the combined parent lane.
-        app.split.clear();
-        let identity = SelectionIdentity {
-            repo: child.0,
-            id: child.1,
-            harness: Some(multi_link_model::Harness::Codex),
-        };
-        app.restore_selection(Some(&identity), 0);
-        assert_eq!(app.selected().unwrap(), selected);
-    }
-    #[test]
-    fn enter_shows_hidden_history_and_survives_refresh() {
-        let mut app = app();
-        select(&mut app, |t| matches!(t, Target::Hidden(_)));
-        app.update(Event::Key(KeyCode::Enter));
-        assert!(app.timeline.is_none());
-        assert_eq!(app.show_all, HashSet::from(["/home/dev/repo-l".into()]));
-        let view = app.view().unwrap();
-        assert!(
-            !app.targets(&view)
-                .iter()
-                .any(|(_, t)| matches!(t, Target::Hidden(_)))
-        );
-        select(
-            &mut app,
-            |t| matches!(t,Target::Session(r) if r.id.ends_with("5003")),
-        );
-        let selected = app.selected().unwrap();
-        let mut refresh = refresh();
-        refresh.overview.repos.reverse();
-        app.update(Event::Refresh(Ok(refresh)));
-        assert_eq!(app.selected().unwrap(), selected);
-    }
-    #[test]
-    fn timeline_navigation_and_return_preserve_home_identity() {
-        let mut app = app();
-        select(
-            &mut app,
-            |t| matches!(t,Target::Session(r) if r.id.ends_with("5011")),
-        );
-        let selected = app.selected().unwrap();
-        app.update(Event::Key(KeyCode::Char('t')));
         let window = app.timeline.as_ref().unwrap().1;
         app.update(Event::Key(KeyCode::Char('+')));
         assert_eq!(
@@ -880,6 +704,9 @@ mod phase5_tests {
         assert_ne!(app.timeline.as_ref().unwrap().1.end, window.end);
         app.update(Event::Key(KeyCode::Char('0')));
         assert_eq!(app.timeline.as_ref().unwrap().1, window);
+        let mut refresh = refresh();
+        refresh.overview.repos.reverse();
+        app.update(Event::Refresh(Ok(refresh)));
         app.update(Event::Key(KeyCode::Esc));
         assert_eq!(app.selected().unwrap(), selected);
         assert_eq!(app.update(Event::Key(KeyCode::Char('q'))), [Effect::Quit]);

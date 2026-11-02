@@ -1,7 +1,24 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-01, latest): Step 6.2 is committed.** Next: Step 6.3 (Codex, TUI home to board 7c). What 6.3 needs:
+**Resume here (2026-11-01, latest): Step 6.3 is committed.** Next: Step 6.4 (Codex, repo view to board 8c). What 6.4 needs:
+- Home is board 7c (`crates/tui/src/home.rs`); the phase6 120x40 render equals the 6.1 `home-phase6.txt` + `.styles.txt`
+  (test `phase6_matches_immutable_text_and_styles`, no update path). Phase 5 home goldens and their immutability test are gone.
+- `enter` and `t` on any home target (card, card row, idle sentence, quiet entry) still open the OLD timeline
+  (`crates/tui/src/timeline.rs`); 6.4 replaces that screen and its goldens. Home selection keeps full session ids or the
+  repo across refreshes and across opening/closing the repo screen (tests in `app.rs`).
+- Presentation helpers 6.4 can reuse are in `crates/tui/src/view.rs`: `sessions(group)` (rows, merged members, children),
+  `attention`, `status` (W5 phrases), `clock` / `last_active` / `offset_label`, `home_label` / `session_label` (W3 order),
+  `handed` / `outcome`, `link_words` (`confirmed` / `matched by time` / `N possible runs`), `minutes`.
+- Narrow widths (home): status phrases are never cut; within a card all phrases share one column; below 80 the branch drops
+  first, then labels shrink on a word boundary. Header drop order: hand-offs/repos, done-or-unknown, idle, shared checkouts,
+  working now. Footer drops the imports note before keys. The V8 `⚠ N shared checkouts` header part and the card's
+  `⚠ shared checkout: <name>` line are kept (FR17).
+- Real-data look (scratch only, W10): matches board 7c's structure and colours. Open readability points for 6.5 / the owner:
+  at 120 the header drops `N repos · N hand-offs` when the long `needs-you partial` note shows; `N other sessions, K active
+  in the last 2h` can read as K sessions working when they are idle now; the `enter shows all` wording (known from 6.1).
+
+**Earlier (2026-11-01): Step 6.2 is committed.** What 6.3 needed:
 - Data: `Session` and `SessionRow` (children and merged members too) carry `activity: Vec<multi_link_model::Activity>`
   (`{from, to}`, oldest first, already clipped to the window), `asked: Option<String>` (already normalized: whitespace
   collapsed, max 119 chars + `…`), `imported: bool` and `state_since: Option<Timestamp>`. Imported rows are still in
@@ -212,6 +229,107 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-01 — Step 6.3: TUI home to board 7c — Codex
+- Did: Replaced Phase 5 bars/axis and combined lanes with W3–W5 home cards, idle sentences and quiet repos.
+  Flattened children/merged members for attention and counts; excluded imports; added prompt/step fallbacks,
+  clock/date/relative times and evidence-based hand-off outcomes. Enter opens the repo view from every target.
+  Kept or rewrote refresh, scrolling, identity, navigation and fresh-open tests; added 120/100/80/60 widths,
+  NO_COLOR parity, yesterday's waiting session, import-only repos, all W5 phrases and no generated `?` cases.
+  Quiet selections highlight their own entry; narrow quiet entries wrap to keep every target reachable.
+  Review round 1: reserved the full status phrase before label space (minimum three cells for a quoted
+  ellipsis), retaining word boundaries/closing quotes and dropping branches below 80. Restored the red FR17
+  header count after stale and a single warning line under each affected card's session rows. Footer drops
+  the imports note before navigation keys and keeps the timezone until only move/quit remain. Added three
+  regression tests covering every attention row's status at 120/100/80/60, warning text/colour/position,
+  and all navigation keys plus timezone at 80. Updated the four sessions/hook home text/style snapshot pairs;
+  the Phase 6 goldens and Phase 4 snapshot pair are unchanged by this round.
+  Review round 2 (final): corrected header drop priorities to hand-offs/repos, done-or-unknown, idle,
+  shared checkouts, then working now. Calculated one status column per card from the largest phrase/branch
+  space requirement so labels shrink consistently. Added regressions for the home.txt fixture's 100-column
+  working count and every attention card's shared phrase column at 80/60 (also column 66 at 120).
+  Refreshed only `home.txt` / `home.styles.txt` and `home-full.txt` / `home-full.styles.txt` this round.
+- Changed: `PROGRESS.md`, `crates/tui/src/app.rs`, `crates/tui/src/home.rs`, `crates/tui/src/view.rs`, `crates/tui/tests/home.rs`, `crates/tui/tests/theme.rs`, `crates/tui/tests/view.rs`, `fixtures/expected/tui/home-full.styles.txt`, `fixtures/expected/tui/home-full.txt`, `fixtures/expected/tui/home-hook-full.styles.txt`, `fixtures/expected/tui/home-hook-full.txt`, `fixtures/expected/tui/home-hook.styles.txt`, `fixtures/expected/tui/home-hook.txt`, `fixtures/expected/tui/home-phase4.styles.txt`, `fixtures/expected/tui/home-phase4.txt`, `fixtures/expected/tui/home-phase5.styles.txt`, `fixtures/expected/tui/home-phase5.txt`, `fixtures/expected/tui/home.styles.txt`, `fixtures/expected/tui/home.txt`
+- Retired: `fixtures/expected/tui/home-phase5.txt`, `fixtures/expected/tui/home-phase5.styles.txt`, and
+  `crates/tui/tests/home.rs::phase5_matches_immutable_text_and_styles`. Replaced the render test with
+  `phase6_matches_immutable_text_and_styles` (no update path); retargeted the style-dumper test to Phase 6.
+  Refreshed earlier home snapshots; left every 6.1 golden unchanged.
+- Verify: Rust PATH set per AGENTS.md. Initial targeted home run: 15 passed, 2 failed because the old
+  home/home-full header style snapshots still expected the shared-checkout count. Refreshed those two pairs;
+  each exact snapshot test then passed (1 passed, 0 failed). No Phase 6 golden update was attempted.
+  `cargo test --workspace` (review round 2 rerun) → exit 0; 253 passed, 0 failed.
+  Actual result lines pasted below (all suites, in command order; routine per-test lines omitted):
+
+```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual completion output (build paths omitted for W10):
+
+```text
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.58s
+```
+
+  `cargo fmt --all -- --check`, `git diff --check`, and
+  `git diff --exit-code -- fixtures/expected/tui/home-phase6.txt fixtures/expected/tui/home-phase6.styles.txt`
+  → exit 0, no output. The immutable text/style render test also passed in the workspace run.
+- Review: Claude, 2 Codex fix rounds. Files: all inside Step 6.3's list; the 6.1 goldens are byte-identical to HEAD
+  (`git diff --quiet`). Round 1: (1) at 80 columns the status phrase was cut (`waiting on you · since…`) while the label kept
+  room, `home.rs` draw_session; (2) the V8 `⚠ N shared checkouts` header part and the card warning line were dropped (FR17
+  regression), draw_header; (3) at 80 the footer dropped `enter repo view` but kept the imports note, draw_footer. Round 2:
+  (1) the 100-column fixture header then lost `● 2 working now` to the shared-checkout part; (2) status phrases started at
+  different columns within one card at 80/60. All fixed with tests; re-rendered at 80/60 by Claude: phrases whole and aligned.
+  Checked against design.md (6.1 contract): busy duration from the last burst start and `codex state unknown` are the
+  contract's wording; `made` is newest first, so `made.first()` is the latest step (W3). W5 phrases, clock/date/relative
+  times, import-only repo, yesterday's waiting session and no generated `?` (all labels and steps blanked, 4 widths) are
+  tested. Behaviour tests: removed Phase 5 lane/split/combined tests went with the lanes; refresh, scroll, identity and
+  timeline-return tests were rewritten (`refresh_hides_and_reveals_imported_attention_rows_without_leaving_repo`,
+  `navigation_open_refresh_and_zoom_preserve_identity`, `enter_opens_cards_summaries_and_quiet_repos_and_escape_restores_identity`).
+  Verify re-run by Claude: `cargo test --workspace` → all `ok`, 253 passed, 0 failed (matches Codex's last paste);
+  clippy `-D warnings` clean. Real render (release build, real `~`, `home_html --size 120x40 --offset local`, scratch only,
+  compared with board 7c): same cards, sentence, quiet line, colours and footer; readability notes in "Current state".
+  W10: added prompts are the synthetic phase6 ones; ids in tests are synthetic fixture ids; no real prompts, personal paths
+  or secrets in the diff. Codex's own W10 check: added prompt text is
+  synthetic and comes from the existing Phase 6 fixtures; test ids and repo paths are synthetic. No real agent
+  data was read or written. No new dependencies, core/CLI implementation edits, staging or commits.
+- Gotchas: The target's `enter shows all` wording is retained, though 6.4's repo view will show only activity
+  in the window. The repo screen remains the old timeline until 6.4. No golden mismatch remains. Pre-existing
+  untracked `.claude/` was left untouched.
 
 ### 2026-11-01 — Step 6.2: Core: imports, activity, asked, state_since — Codex
 - Did: Added the file-order imported-turn state machine without changing legacy turn/state parsing; collected Claude main/subagent and Codex activity independently of legacy timestamps; normalized first prompts; built sorted/deduplicated 300-second bursts with window clipping; copied all four fields into overview rows. Added every edge case listed in Step 6.2 Verify, including second-pass cache invalidation, synthetic prompt filtering, multibyte truncation and winning state evidence.

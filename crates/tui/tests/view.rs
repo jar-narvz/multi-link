@@ -1,153 +1,149 @@
 use multi_link_model::{OverviewReport, Row, State};
 use multi_link_tui::view;
-use std::collections::HashSet;
 
-fn report() -> OverviewReport {
+fn phase6() -> OverviewReport {
     serde_json::from_str(include_str!(
-        "../../../fixtures/expected/phase5/overview.json"
+        "../../../fixtures/expected/phase6/overview.json"
     ))
     .unwrap()
 }
 #[test]
-fn waiting_yesterday_and_quiet_chain_are_visible_without_core_merges() {
-    let r = report();
-    let g = &r.repos[0];
-    let lanes = view::lanes(&r, g, &HashSet::new(), false);
+fn status_phrases_use_evidence_and_whole_minutes() {
+    let r = phase6();
+    let offset = time::UtcOffset::from_hms(-8, 0, 0).unwrap();
+    let rows: Vec<_> = r.repos.iter().flat_map(view::sessions).collect();
+    let row = |id: &str| *rows.iter().find(|r| r.id.ends_with(id)).unwrap();
     assert_eq!(
-        lanes
-            .visible
-            .iter()
-            .map(|l| &l.row.id[l.row.id.len() - 4..])
-            .collect::<Vec<_>>(),
-        [
-            "5001", "5002", "5011", "5012", "5013", "5014", "5025", "5015", "5016"
-        ]
-    );
-    assert_eq!(lanes.hidden, 1);
-    assert_eq!(lanes.visible[0].state(), State::Waiting);
-    assert_eq!(
-        view::clock(
-            lanes.visible[0].row.last_activity,
-            r.now,
-            time::UtcOffset::from_hms(-7, 0, 0).unwrap()
-        ),
-        "Oct 28 17:05"
+        view::status(row("6001"), r.now, offset),
+        "waiting on you · since Nov 1"
     );
     assert_eq!(
-        lanes.visible[2].child.unwrap().id,
-        "00000000-0000-4000-8000-000000005021"
+        view::status(row("6002"), r.now, offset),
+        "working now · for 5 min"
     );
-    assert_eq!(view::lanes(&r, g, &HashSet::new(), true).visible.len(), 10);
+    assert_eq!(view::status(row("6021"), r.now, offset), "done 21:31");
+    assert_eq!(
+        view::status(row("6011"), r.now, offset),
+        "idle · last active 1 min ago"
+    );
+    let mut s = row("6002").clone();
+    s.state = State::Stale;
+    s.state_since = Some("2026-11-03T06:00:00Z".parse().unwrap());
+    assert_eq!(view::status(&s, r.now, offset), "stale since 22:00");
+    s.state = State::Busy;
+    s.activity.clear();
+    assert_eq!(view::status(&s, r.now, offset), "working now");
+    s.state = State::Idle;
+    s.last_activity = "2026-11-03T05:24:00Z".parse().unwrap();
+    assert_eq!(view::status(&s, r.now, offset), "idle · last active 21:24");
+    s.state = State::Unknown;
+    assert_eq!(view::status(&s, r.now, offset), "state unknown");
+    s.state = State::Finished;
+    assert_eq!(view::status(&s, r.now, offset), "finished");
 }
 #[test]
-fn nine_quiet_rows_cap_at_eight_and_attention_is_outside_the_cap() {
-    let mut r = report();
-    let seed = view::sessions(&r.repos[0])
-        .find(|s| s.id.ends_with("5012"))
-        .unwrap()
-        .clone();
-    r.repos[0].rows = (0..9)
-        .map(|i| {
-            let mut s = seed.clone();
-            s.id = format!("quiet-{i}");
-            Row::Session(s)
+fn clocks_use_local_dates_and_fractional_offsets() {
+    let now = "2026-11-03T06:25:00Z".parse().unwrap();
+    assert_eq!(view::clock(now, now, time::UtcOffset::UTC), "06:25");
+    assert_eq!(
+        view::clock(now, now, time::UtcOffset::from_hms(5, 30, 0).unwrap()),
+        "11:55"
+    );
+    let yesterday = "2026-11-02T06:00:00Z".parse().unwrap();
+    assert_eq!(
+        view::clock(yesterday, now, time::UtcOffset::from_hms(-8, 0, 0).unwrap()),
+        "Nov 1"
+    );
+    assert_eq!(
+        view::offset_label(time::UtcOffset::from_hms(5, 30, 0).unwrap()),
+        "UTC+5:30"
+    );
+    assert_eq!(
+        view::last_active(
+            "2026-11-03T05:26:00Z".parse().unwrap(),
+            now,
+            time::UtcOffset::UTC
+        ),
+        "59 min ago"
+    );
+    assert_eq!(
+        view::last_active(
+            "2026-11-03T05:25:00Z".parse().unwrap(),
+            now,
+            time::UtcOffset::UTC
+        ),
+        "05:25"
+    );
+}
+#[test]
+fn labels_and_handoffs_never_invent_placeholders() {
+    let r = phase6();
+    let mut s = view::sessions(&r.repos[0]).next().unwrap().clone();
+    assert_eq!(
+        view::session_label(&s),
+        "“Draft the release notes, then wait for my review before you publish.”"
+    );
+    s.made = vec!["6.4".into()];
+    assert_eq!(view::session_label(&s), "step 6.4");
+    s.made.clear();
+    s.asked = Some(String::new());
+    assert_eq!(view::session_label(&s), "claude · no prompt");
+    s.harness = multi_link_model::Harness::Codex;
+    assert_eq!(view::session_label(&s), "codex · no prompt");
+    let mut link = r.repos[2].latest_handoff.clone().unwrap();
+    assert_eq!(view::handed(&link), "handed work to codex");
+    assert_eq!(view::outcome(&link, &r), "codex done");
+    link.step = Some("6.3".into());
+    assert_eq!(view::handed(&link), "handed step 6.3 to codex");
+    link.r#match = multi_link_model::Match::Unlinked;
+    assert_eq!(view::outcome(&link, &r), "no codex run found");
+    link.r#match = multi_link_model::Match::Ambiguous;
+    assert_eq!(view::outcome(&link, &r), "1 possible runs");
+    link.r#match = multi_link_model::Match::Exact;
+    link.child = Some("60310000-0000-4000-8000-000000006031".into());
+    assert_eq!(view::outcome(&link, &r), "codex running");
+    link.child = None;
+    assert_eq!(view::outcome(&link, &r), "codex state unknown");
+}
+
+#[test]
+fn home_attention_includes_children_and_merged_members_but_hides_imports() {
+    let mut r = phase6();
+    let g = &mut r.repos[0];
+    let Row::Session(parent) = &mut g.rows[1] else {
+        panic!("session")
+    };
+    parent.children[0].state = State::Stale;
+    let mut later = parent.children[0].handoffs[0].clone();
+    later.parent = "another-parent".into();
+    later.step = Some("9.9".into());
+    parent.children[0].handoffs.push(later);
+    assert_eq!(view::home_label(g, view::attention(g)[2]), "step 6.3");
+    assert_eq!(
+        view::attention(g)
+            .iter()
+            .map(|r| &r.id[r.id.len() - 4..])
+            .collect::<Vec<_>>(),
+        ["6001", "6002", "6021"]
+    );
+    let Row::Session(parent) = &mut g.rows[1] else {
+        panic!("session")
+    };
+    parent.children[0].imported = true;
+    assert_eq!(view::attention(g).len(), 2);
+    let members = g
+        .rows
+        .drain(2..4)
+        .map(|r| match r {
+            Row::Session(s) => s,
+            _ => panic!("session"),
         })
         .collect();
-    let mut waiting = seed.clone();
-    waiting.id = "waiting".into();
-    waiting.state = State::Waiting;
-    waiting.last_activity = "2026-10-28T00:00:00Z".parse().unwrap();
-    r.repos[0].rows.push(Row::Session(waiting));
-    let lanes = view::lanes(&r, &r.repos[0], &HashSet::new(), false);
-    assert_eq!(
-        lanes
-            .visible
-            .iter()
-            .map(|l| l.row.id.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "waiting", "quiet-0", "quiet-1", "quiet-2", "quiet-3", "quiet-4", "quiet-5", "quiet-6",
-            "quiet-7"
-        ]
-    );
-    assert_eq!(lanes.hidden, 1);
-}
-#[test]
-fn combined_child_has_its_own_span_and_window_membership() {
-    let mut r = report();
-    let mut parent = view::sessions(&r.repos[0])
-        .find(|s| s.id.ends_with("5015"))
-        .unwrap()
-        .clone();
-    parent.last_activity = "2026-10-29T20:00:00Z".parse().unwrap();
-    parent.started_at = "2026-10-29T19:00:00Z".parse().unwrap();
-    r.repos[0].rows = vec![Row::Session(parent)];
-    let lanes = view::lanes(&r, &r.repos[0], &HashSet::new(), false);
-    assert_eq!(lanes.visible.len(), 1);
-    let l = lanes.visible[0];
-    assert!(l.child.unwrap().last_activity > l.row.last_activity);
-    assert_eq!(lanes.hidden, 0);
-}
-#[test]
-fn different_steps_multiple_children_and_explicit_split_stay_separate() {
-    let mut r = report();
-    let mut parent = view::sessions(&r.repos[0])
-        .find(|s| s.id.ends_with("5015"))
-        .unwrap()
-        .clone();
-    parent.made = vec!["different".into()];
-    r.repos[0].rows = vec![Row::Session(parent.clone())];
-    let lanes = view::lanes(&r, &r.repos[0], &HashSet::new(), false);
-    assert_eq!(lanes.visible.len(), 2);
-    assert!(lanes.visible.iter().all(|l| l.child.is_none()));
-    assert_eq!(lanes.visible[0].step(), Some("different"));
-    assert_eq!(lanes.visible[1].step(), Some("4.5"));
-    parent.made.clear();
-    parent.children[0].handoffs[0].step = None;
-    r.repos[0].rows = vec![Row::Session(parent.clone())];
-    assert_eq!(
-        view::lanes(&r, &r.repos[0], &HashSet::new(), false)
-            .visible
-            .len(),
-        1
-    );
-    assert_eq!(
-        view::lanes(&r, &r.repos[0], &HashSet::from([parent.id.clone()]), false)
-            .visible
-            .len(),
-        2
-    );
-    let mut child = parent.children[0].clone();
-    child.id = "second-child".into();
-    parent.children.push(child);
-    r.repos[0].rows = vec![Row::Session(parent)];
-    assert_eq!(
-        view::lanes(&r, &r.repos[0], &HashSet::new(), false)
-            .visible
-            .len(),
-        3
-    );
-}
-#[test]
-fn child_attention_sets_lane_priority_and_shared_checkout_never_collapses() {
-    let mut r = report();
-    let mut parent = view::sessions(&r.repos[0])
-        .find(|s| s.id.ends_with("5015"))
-        .unwrap()
-        .clone();
-    parent.children[0].state = State::Waiting;
-    parent.children[0].last_activity = "2026-10-28T00:00:00Z".parse().unwrap();
-    parent.last_activity = parent.children[0].last_activity;
-    r.repos[0].rows = vec![Row::Session(parent)];
-    assert_eq!(
-        view::lanes(&r, &r.repos[0], &HashSet::new(), false).visible[0].state(),
-        State::Waiting
-    );
-    let g = &mut r.repos[1];
-    assert!(view::collapsed(g, &HashSet::new()));
-    g.concurrency.push(multi_link_model::ConcurrencyWarning {
-        cwd: g.repo.clone(),
-        sessions: vec!["a".into(), "b".into()],
-    });
-    assert!(!view::collapsed(g, &HashSet::new()));
+    g.rows.push(Row::Merged(multi_link_model::MergedRow {
+        harness: multi_link_model::Harness::Claude,
+        count: 2,
+        rows: members,
+    }));
+    assert_eq!(view::sessions(g).count(), 6);
+    assert_eq!(view::attention(g).len(), 2);
 }
