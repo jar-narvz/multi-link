@@ -89,6 +89,18 @@ pub(crate) fn assemble(
                 None => claude_state(options.now, None, Liveness::Unavailable),
             }
         };
+        let state_since = if hook_waiting {
+            hooks
+                .records
+                .iter()
+                .filter(|r| r.session_id == transcript.id)
+                .max_by_key(|r| (r.at, r.line))
+                .map(|r| r.at)
+        } else {
+            record
+                .as_ref()
+                .and_then(|(r, _)| record_state_since(state, state_evidence, r))
+        };
         let (record, host_session_id) = match record {
             Some((record, _)) => (Some(record.record), record.host_session_id),
             None => (None, None),
@@ -109,11 +121,19 @@ pub(crate) fn assemble(
             state_evidence,
             segments: segment(started_at, last_activity),
             subagents: transcript.subagents,
+            activity: activity(transcript.activity_timestamps, options.now, options.since),
+            asked: transcript.asked,
+            imported: false,
+            state_since,
         });
     }
     for (record, liveness) in records.into_values() {
         let (state, state_evidence) = claude_state(options.now, Some(&record), liveness);
         sessions.push(Session {
+            state_since: record_state_since(state, state_evidence, &record),
+            activity: Vec::new(),
+            asked: None,
+            imported: false,
             id: record.session_id,
             harness: Harness::Claude,
             transcript: None,
@@ -134,6 +154,16 @@ pub(crate) fn assemble(
     for rollout in codex.rollouts {
         let (state, state_evidence) = codex_state(options.now, &rollout);
         sessions.push(Session {
+            activity: activity(rollout.activity_timestamps, options.now, options.since),
+            asked: rollout.asked,
+            imported: rollout.imported,
+            state_since: if state == State::Unknown
+                && state_evidence == StateEvidence::TurnsComplete
+            {
+                rollout.last_real_complete
+            } else {
+                None
+            },
             id: rollout.id,
             harness: Harness::Codex,
             transcript: Some(rollout.transcript),
@@ -209,4 +239,106 @@ fn segment(from: Timestamp, to: Timestamp) -> Vec<Segment> {
         step: None,
         step_source: StepSource::Unknown,
     }]
+}
+
+fn record_state_since(
+    state: State,
+    evidence: StateEvidence,
+    record: &SessionRecord,
+) -> Option<Timestamp> {
+    (matches!(state, State::Waiting | State::Stale) && evidence == StateEvidence::SessionRecord)
+        .then_some(record.status_updated_at)
+}
+
+fn activity(
+    mut timestamps: Vec<Timestamp>,
+    now: Timestamp,
+    since: Option<Duration>,
+) -> Vec<multi_link_model::Activity> {
+    timestamps.sort();
+    timestamps.dedup();
+    let mut bursts: Vec<multi_link_model::Activity> = Vec::new();
+    for at in timestamps {
+        if let Some(last) = bursts.last_mut()
+            && at.epoch_ms() - last.to.epoch_ms() <= 300_000
+        {
+            last.to = at;
+        } else {
+            bursts.push(multi_link_model::Activity { from: at, to: at });
+        }
+    }
+    let start = since.and_then(|d| {
+        Timestamp::from_epoch_ms(
+            now.epoch_ms()
+                .saturating_sub(d.as_millis().min(i64::MAX as u128) as i64),
+        )
+        .ok()
+    });
+    bursts
+        .into_iter()
+        .filter_map(|mut burst| {
+            if burst.from > now || start.is_some_and(|start| burst.to < start) {
+                return None;
+            }
+            burst.to = burst.to.min(now);
+            if let Some(start) = start {
+                burst.from = burst.from.max(start);
+            }
+            Some(burst)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod phase6_tests {
+    use super::*;
+    use multi_link_model::Activity;
+
+    fn t(seconds: i64) -> Timestamp {
+        Timestamp::from_epoch_ms(seconds * 1000).unwrap()
+    }
+
+    #[test]
+    fn burst_boundaries_sort_deduplicate_and_keep_singletons() {
+        for gap in [299, 300, 301] {
+            let result = activity(vec![t(gap), t(0), t(gap)], t(1000), None);
+            let expected = if gap <= 300 {
+                vec![Activity {
+                    from: t(0),
+                    to: t(gap),
+                }]
+            } else {
+                vec![
+                    Activity {
+                        from: t(0),
+                        to: t(0),
+                    },
+                    Activity {
+                        from: t(gap),
+                        to: t(gap),
+                    },
+                ]
+            };
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn bursts_clip_both_edges_after_grouping_and_drop_outside() {
+        let stamps = vec![t(0), t(400), t(600), t(800), t(1000), t(1400)];
+        assert_eq!(
+            activity(stamps, t(900), Some(Duration::from_secs(400))),
+            vec![Activity {
+                from: t(500),
+                to: t(900)
+            }]
+        );
+        assert_eq!(
+            activity(vec![t(900), t(1000)], t(900), None),
+            vec![Activity {
+                from: t(900),
+                to: t(900)
+            }]
+        );
+    }
 }

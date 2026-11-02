@@ -16,6 +16,10 @@ impl Timestamp {
             .map(Self::from_instant)
     }
 
+    pub fn epoch_ms(self) -> i64 {
+        (self.0.unix_timestamp_nanos() / 1_000_000) as i64
+    }
+
     pub fn parse(input: &str) -> Result<Self, time::error::Parse> {
         OffsetDateTime::parse(input, &Rfc3339).map(Self::from_instant)
     }

@@ -93,6 +93,9 @@ fn older_keys_only_add_made_and_hook() {
     fn remove_added(value: &mut Value) {
         match value {
             Value::Object(object) => {
+                for field in ["activity", "asked", "imported", "state_since"] {
+                    object.remove(field);
+                }
                 object.remove("hook");
                 object.remove("made");
                 for child in object.values_mut() {

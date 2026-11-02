@@ -28,6 +28,10 @@ pub struct Rollout {
     pub last_activity: Timestamp,
     /// In task_started file order, regardless of timestamp ordering.
     pub turns: Vec<Turn>,
+    pub activity_timestamps: Vec<Timestamp>,
+    pub asked: Option<String>,
+    pub imported: bool,
+    pub last_real_complete: Option<Timestamp>,
 }
 
 impl Rollout {
@@ -123,6 +127,12 @@ fn parse<R: BufRead>(
     let mut first_timestamp = None;
     let mut last_activity = None;
     let mut turns = Vec::new();
+    let mut activity_timestamps = Vec::new();
+    let mut asked = None;
+    let mut imported_turn: Option<String> = None;
+    let mut starts = 0;
+    let mut real_starts = 0;
+    let mut last_real_complete = None;
     for record in reader {
         let (line, value) = match record? {
             Ok(record) => record,
@@ -135,6 +145,39 @@ fn parse<R: BufRead>(
         if let Some(at) = at {
             first_timestamp.get_or_insert(at);
             last_activity = Some(at);
+        }
+        let payload = &value["payload"];
+        let event = value["type"] == "event_msg";
+        if event && payload["type"] == "task_started" {
+            starts += 1;
+            imported_turn = payload["turn_id"]
+                .as_str()
+                .filter(|id| id.starts_with("external-import"))
+                .map(str::to_owned);
+            if imported_turn.is_none() {
+                real_starts += 1;
+            }
+        }
+        if imported_turn.is_none() {
+            if value["type"] != "session_meta" {
+                activity_timestamps.extend(at);
+            }
+            if event && payload["type"] == "user_message" && asked.is_none() {
+                asked = payload["message"]
+                    .as_str()
+                    .map(multi_link_model::normalize_prompt);
+            }
+            if event && payload["type"] == "task_complete" {
+                last_real_complete = at;
+            }
+        }
+        if event
+            && payload["type"] == "task_complete"
+            && imported_turn
+                .as_deref()
+                .is_some_and(|id| payload["turn_id"] == id)
+        {
+            imported_turn = None;
         }
         match value["type"].as_str() {
             Some("session_meta") => {
@@ -171,6 +214,22 @@ fn parse<R: BufRead>(
         started_at,
         last_activity,
         turns,
+        activity_timestamps: if starts > 0 && real_starts == 0 {
+            Vec::new()
+        } else {
+            activity_timestamps
+        },
+        asked: if starts > 0 && real_starts == 0 {
+            None
+        } else {
+            asked
+        },
+        imported: starts > 0 && real_starts == 0,
+        last_real_complete: if starts > 0 && real_starts == 0 {
+            None
+        } else {
+            last_real_complete
+        },
     }))
 }
 

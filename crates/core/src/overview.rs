@@ -99,6 +99,10 @@ pub fn build(
             last_activity: session.last_activity,
             handoffs,
             made: made(session, &links.links),
+            activity: session.activity.clone(),
+            asked: session.asked.clone(),
+            imported: session.imported,
+            state_since: session.state_since,
             children,
         }
     };
@@ -388,6 +392,10 @@ mod tests {
             state_evidence: StateEvidence::NoSignal,
             segments: Vec::new(),
             subagents: Vec::new(),
+            activity: Vec::new(),
+            asked: None,
+            imported: false,
+            state_since: None,
         }
     }
 

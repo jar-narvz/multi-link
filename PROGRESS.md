@@ -1,7 +1,22 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-01, latest): Step 6.1 is committed.** Next: Step 6.2 (Codex). What 6.2 needs:
+**Resume here (2026-11-01, latest): Step 6.2 is committed.** Next: Step 6.3 (Codex, TUI home to board 7c). What 6.3 needs:
+- Data: `Session` and `SessionRow` (children and merged members too) carry `activity: Vec<multi_link_model::Activity>`
+  (`{from, to}`, oldest first, already clipped to the window), `asked: Option<String>` (already normalized: whitespace
+  collapsed, max 119 chars + `…`), `imported: bool` and `state_since: Option<Timestamp>`. Imported rows are still in
+  every report: hiding and counting them (`N Codex Desktop imports hidden`, `repo-a (only Codex Desktop imports)`) is TUI work.
+- W5 inputs: `state_since` is set only for waiting/stale (record or hook) and Codex `unknown` + `turns_complete`
+  (= `done HH:MM`, last real `task_complete`); busy, idle, finished and Codex stale/open_turn are null, so `idle · last
+  active` uses the last burst's `to`, else `last_activity`. `working now · for N min` uses the burst containing `now`.
+- Core is frozen for 6.3: `crates/core/tests/phase6.rs` pins every key (old values via
+  `crates/core/tests/keys-before-phase6.json`); a TUI step must not need core changes. A blank Codex `user_message` gives
+  `asked` `""` (not null); treat an empty `asked` like null in the label fallback.
+- `multi_link_model::normalize_prompt` exists if the view needs it; `Timestamp::epoch_ms()` was added in the model.
+- Target: `fixtures/expected/tui/home-phase6.txt` + `.styles.txt` (from 6.1) cell for cell; see 6.1's notes below for the
+  column rules and the known `· enter shows all` wording issue.
+
+**Earlier (2026-11-01): Step 6.1 is committed.** What 6.2 needed (done):
 - Contract: `docs/output-schema.md` → Session → "Phase 6 fields" (exact rules for `activity`, `asked`,
   `imported`, `state_since`) and "Phase 6 fixture results". Rules added in 6.1 beyond PLAN's first wording (all in
   PLAN W1 / the Review log): the Codex `session_meta` record is not activity; Claude records whose `sessionId`
@@ -197,6 +212,17 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-01 — Step 6.2: Core: imports, activity, asked, state_since — Codex
+- Did: Added the file-order imported-turn state machine without changing legacy turn/state parsing; collected Claude main/subagent and Codex activity independently of legacy timestamps; normalized first prompts; built sorted/deduplicated 300-second bursts with window clipping; copied all four fields into overview rows. Added every edge case listed in Step 6.2 Verify, including second-pass cache invalidation, synthetic prompt filtering, multibyte truncation and winning state evidence.
+- Changed: `PROGRESS.md`, `crates/claude/src/lib.rs`, `crates/claude/tests/phase6.rs`, `crates/codex/src/lib.rs`, `crates/codex/tests/phase6.rs`, `crates/core/src/open.rs`, `crates/core/src/overview.rs`, `crates/core/src/scanner.rs`, `crates/core/src/sessions.rs`, `crates/core/tests/keys-before-phase6.json`, `crates/core/tests/overview.rs`, `crates/core/tests/phase6.rs`, `crates/core/tests/sessions.rs`, `crates/model/src/lib.rs`, `crates/model/src/time.rs`, `crates/model/tests/model.rs`, `fixtures/expected/hook/overview.json`, `fixtures/expected/hook/sessions-2h.json`, `fixtures/expected/hook/sessions.json`, `fixtures/expected/overview.json`, `fixtures/expected/phase4/overview.json`, `fixtures/expected/phase5/overview.json`, `fixtures/expected/sessions.json`
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0, 35 `test result: ok` lines, 255 passed,
+  0 failed (incl. `core/tests/phase6.rs`: phase6 sessions/overview equal their keys on cold and warm passes, every
+  existing key equals its committed value with the four fields removed); `cargo clippy --workspace --all-targets --
+  -D warnings` → `Finished`, no warnings. (Codex pasted the full ~470-line test output; Claude shortened it to these
+  result lines after re-running both commands and getting the same 35 result lines.)
+- Review: Claude, 0 fix rounds. Files: all inside Step 6.2's list (`keys-before-phase6.json` is under `crates/core/tests/`). W0: an independent script stripped the four fields from each of the 7 changed keys and compared them with `git show HEAD:` → all equal; phase6 keys and TUI goldens unchanged. W1: sort, dedup, split at > 300 000 ms, clip to `[now − since, now]`; `session_meta`, imported-turn and other-`sessionId` records excluded; subagent records are checked against the parent id from the path. W2: the turn state machine matches output-schema (inclusive matching complete, the next `task_started` closes, EOF closes, unmatched complete keeps it open); an all-import rollout gets `[]` / null / no completion. W3: Claude skips inherited, tool-result, blank and `<…>` records and uses the first text block; Codex takes the first `user_message` outside imports; 119 chars + `…`. W5: hook `state_since` uses the same winning record (max `(at, line)`) the scanner uses for `waiting`; record waiting/stale → `statusUpdatedAt`; Codex Unknown/TurnsComplete → last real `task_complete`. Every Verify-listed unit test is present and asserts real values. W10: new prompts are `Synthetic …` / `界`; key `asked` values are the scrubbed `CASE-…: <prompt>` placeholders; no new personal paths, secrets or real ids. Verify re-run by Claude matches Codex's paste. Accepted: the localized `large_enum_variant` allow on `Row`. Noted, not changed (contract is silent): a Codex `user_message` that is blank gives `asked` `""`, not null.
+- Gotchas: Kept `Row` inline with a localized, explained `large_enum_variant` allowance: the additive fields cross clippy's size threshold; boxing would change the public API and require edits outside this step. No dependency or TUI rendering changes. A silent tool over five minutes remains a gap by W1. Initial runs exposed expected stale answer-key/literal assertions and the enum lint; those were corrected before the successful Verify runs above.
 
 ### 2026-11-01 — Step 6.1: Contract and target screens — Claude
 - Did: Wrote W0–W10 into `docs/design.md` ("Phase 6 decisions", FR10 reworded to the swimlane repo view, target

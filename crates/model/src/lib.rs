@@ -98,6 +98,10 @@ pub struct Session {
     pub state_evidence: StateEvidence,
     pub segments: Vec<Segment>,
     pub subagents: Vec<String>,
+    pub activity: Vec<Activity>,
+    pub asked: Option<String>,
+    pub imported: bool,
+    pub state_since: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -229,6 +233,8 @@ pub struct ConcurrencyWarning {
 /// Each variant writes its own `"kind"` (a SessionRow carries `"kind": "session"`
 /// everywhere, including as a child or a merged member).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Keep rows inline: boxing would change the public row API for every consumer.
+#[allow(clippy::large_enum_variant)]
 #[serde(untagged)]
 pub enum Row {
     Session(SessionRow),
@@ -248,6 +254,10 @@ pub struct SessionRow {
     pub last_activity: Timestamp,
     pub handoffs: Vec<Link>,
     pub made: Vec<String>,
+    pub activity: Vec<Activity>,
+    pub asked: Option<String>,
+    pub imported: bool,
+    pub state_since: Option<Timestamp>,
     pub children: Vec<SessionRow>,
 }
 
@@ -258,4 +268,21 @@ pub struct MergedRow {
     pub harness: Harness,
     pub count: usize,
     pub rows: Vec<SessionRow>,
+}
+
+/// One stretch of recorded activity, clipped to the report window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Activity {
+    pub from: Timestamp,
+    pub to: Timestamp,
+}
+
+/// Collapse prompt whitespace and truncate on Unicode character boundaries.
+pub fn normalize_prompt(text: &str) -> String {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.chars().count() > 120 {
+        text.chars().take(119).chain(['…']).collect()
+    } else {
+        text
+    }
 }

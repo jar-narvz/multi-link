@@ -23,7 +23,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-28T10:03:11.004Z"
     },
     {
       "id": "6358ec7e-ab3b-40b4-a75d-87f6da09cedc",
@@ -40,7 +44,11 @@
       "state": "busy",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "1f47e9b3-3e6b-4c41-9bf6-c308a74c611a",
@@ -57,7 +65,11 @@
       "state": "idle",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "f8017fcd-640d-4429-9ee6-d370299711c6",
@@ -74,7 +86,11 @@
       "state": "idle",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "9d02a552-d23d-450d-900d-6d44c77a8c6b",
@@ -91,7 +107,11 @@
       "state": "idle",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "bed52539-43f3-4a1e-ab86-08e6ef2e67ef",
@@ -108,7 +128,11 @@
       "state": "idle",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "bb792d9c-7f69-410b-a571-b6d97d3aaffa",
@@ -132,7 +156,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:58:22.432Z", "to": "2026-10-29T22:58:42.511Z"}],
+      "asked": "CASE-exec: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "01a189e2-d57f-7a91-b74c-ae85abd1a6a1",
@@ -156,7 +184,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:58:27.430Z", "to": "2026-10-29T22:58:58.954Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T22:58:58.954Z"
     },
     {
       "id": "ef72378c-eb71-4b07-9790-f9ddd68b1171",
@@ -180,7 +212,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:58:47.061Z", "to": "2026-10-29T22:59:04.662Z"}],
+      "asked": "CASE-resume: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "9d9a0ed8-8e46-4e39-b121-30428e14d052",
@@ -206,7 +242,11 @@
       ],
       "subagents": [
         "aee8ad2d0134ca48a"
-      ]
+      ],
+      "activity": [{"from": "2026-10-29T22:59:08.725Z", "to": "2026-10-29T22:59:32.147Z"}],
+      "asked": "CASE-plugin: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "01a189e3-a439-7e72-8cea-1496af1d6d74",
@@ -230,7 +270,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:59:19.993Z", "to": "2026-10-29T22:59:25.940Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T22:59:25.940Z"
     },
     {
       "id": "07c80c2e-780f-462d-8e04-581cad43339f",
@@ -254,7 +298,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:59:36.313Z", "to": "2026-10-29T22:59:59.499Z"}],
+      "asked": "CASE-bg: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "01a189e3-f419-79a1-b801-38f3fecd7480",
@@ -278,7 +326,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T22:59:40.726Z", "to": "2026-10-29T22:59:47.841Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T22:59:47.841Z"
     },
     {
       "id": "df403bfa-454f-4993-b67c-e44c6e7a9f7e",
@@ -302,7 +354,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:03.496Z", "to": "2026-10-29T23:00:07.816Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "80cce3e4-bbbc-42cd-999b-856685f1b3f7",
@@ -326,7 +382,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:12.184Z", "to": "2026-10-29T23:00:28.757Z"}],
+      "asked": "CASE-par-main: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "c86d374f-cab2-4f76-9b58-e59d5a43b09f",
@@ -350,7 +410,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:12.201Z", "to": "2026-10-29T23:00:29.712Z"}],
+      "asked": "CASE-par-wt: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "01a189e4-7f31-7293-8ee6-516b81099fb5",
@@ -374,7 +438,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:16.626Z", "to": "2026-10-29T23:00:25.273Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T23:00:25.273Z"
     },
     {
       "id": "01a189e4-8084-7fc2-93b5-0b202360b109",
@@ -398,7 +466,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:16.670Z", "to": "2026-10-29T23:00:24.795Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T23:00:24.795Z"
     },
     {
       "id": "11bf1b58-17d9-48e6-988d-aa0cf951751d",
@@ -422,7 +494,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:33.781Z", "to": "2026-10-29T23:00:53.156Z"}],
+      "asked": "CASE-amb-1: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "f4d83303-be58-4964-b60a-64470e01f0c7",
@@ -446,7 +522,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:35.769Z", "to": "2026-10-29T23:00:52.046Z"}],
+      "asked": "CASE-amb-2: <prompt>",
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "01a189e4-d501-71d2-97d8-0192e844ec5d",
@@ -470,7 +550,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:38.200Z", "to": "2026-10-29T23:00:45.703Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T23:00:45.703Z"
     },
     {
       "id": "01a189e4-d953-7b63-b9b5-088a72542eb3",
@@ -494,7 +578,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:00:39.464Z", "to": "2026-10-29T23:00:46.985Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T23:00:46.985Z"
     },
     {
       "id": "01a189e5-5b32-7f13-b365-8737dca7a4fb",
@@ -518,7 +606,11 @@
           "step_source": "unknown"
         }
       ],
-      "subagents": []
+      "subagents": [],
+      "activity": [{"from": "2026-10-29T23:01:12.554Z", "to": "2026-10-29T23:01:21.437Z"}],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-29T23:01:21.437Z"
     },
     {
       "id": "00000000-0000-4000-8000-000000000010",
@@ -535,7 +627,11 @@
       "state": "busy",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": null
     },
     {
       "id": "d1f3b188-efd4-469b-8cce-7caec214cc3a",
@@ -552,7 +648,11 @@
       "state": "waiting",
       "state_evidence": "session_record",
       "segments": [],
-      "subagents": []
+      "subagents": [],
+      "activity": [],
+      "asked": null,
+      "imported": false,
+      "state_since": "2026-10-30T06:08:12.305Z"
     }
   ],
   "skipped": [

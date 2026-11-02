@@ -239,6 +239,10 @@ mod tests {
             state_evidence: StateEvidence::NoSignal,
             segments: vec![],
             subagents: vec![],
+            activity: Vec::new(),
+            asked: None,
+            imported: false,
+            state_since: None,
         }
     }
     fn reason(action: &OpenAction) -> Option<Reason> {

@@ -35,6 +35,8 @@ pub struct Transcript {
     pub last_activity: Option<Timestamp>,
     pub subagents: Vec<String>,
     pub subagent_files: Vec<SubagentFile>,
+    pub activity_timestamps: Vec<Timestamp>,
+    pub asked: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +106,9 @@ pub fn scan(root: &Path) -> io::Result<ClaudeScan> {
                     Err(error) => return Err(error),
                 };
                 scan.skipped.extend(parsed.skipped);
+                transcript
+                    .activity_timestamps
+                    .extend(parsed.transcript.activity_timestamps);
                 transcript.subagents.push(agent_id.to_owned());
                 transcript.subagent_files.push(SubagentFile {
                     id: agent_id.to_owned(),
@@ -245,6 +250,17 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         last_activity: None,
         subagents: Vec::new(),
         subagent_files: Vec::new(),
+        activity_timestamps: Vec::new(),
+        asked: None,
+    };
+    let activity_id = if subagent {
+        path.parent()
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+    } else {
+        id
     };
     let mut skipped = Vec::new();
     let mut latest_timestamp = None;
@@ -279,6 +295,19 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             .and_then(Value::as_str)
             .and_then(|s| Timestamp::parse(s).ok());
         latest_timestamp = latest_timestamp.max(at);
+        if value["sessionId"]
+            .as_str()
+            .is_none_or(|id| id == activity_id)
+        {
+            transcript.activity_timestamps.extend(at);
+        }
+        if !subagent
+            && transcript.asked.is_none()
+            && value["type"] == "user"
+            && value["sessionId"].as_str() == Some(id)
+        {
+            transcript.asked = prompt(&value["message"]["content"]);
+        }
         if !value
             .get("type")
             .and_then(Value::as_str)
@@ -323,4 +352,20 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         invocations: calls,
         latest_timestamp,
     })
+}
+
+fn prompt(content: &Value) -> Option<String> {
+    let text = if let Some(blocks) = content.as_array() {
+        if blocks.iter().any(|b| b["type"] == "tool_result") {
+            return None;
+        }
+        blocks.iter().find(|b| b["type"] == "text")?["text"].as_str()?
+    } else {
+        content.as_str()?
+    };
+    let text = text.trim_start();
+    if text.is_empty() || text.starts_with('<') {
+        return None;
+    }
+    Some(multi_link_model::normalize_prompt(text))
 }

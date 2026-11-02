@@ -139,6 +139,10 @@ fn latest_codex_turn_governs_and_open_turn_uses_last_activity() {
         started_at: stamp("2026-10-29T20:00:00Z"),
         last_activity: stamp("2026-10-29T23:10:00Z"),
         turns: vec![],
+        activity_timestamps: Vec::new(),
+        asked: None,
+        imported: false,
+        last_real_complete: None,
     };
     assert_eq!(
         codex_state(now(), &rollout),
@@ -215,6 +219,7 @@ fn merge_uses_transcript_fields_latest_record_and_bypasses_since() {
                 "repo":"/transcript-cwd", "checkout":"/transcript-cwd", "branch":"main",
                 "started_at":"2026-10-29T19:00:00.000Z", "last_activity":"2026-10-29T20:00:00.000Z",
                 "state":"busy", "state_evidence":"session_record", "subagents":[],
+                "activity":[], "asked":null, "imported":false, "state_since":null,
                 "segments":[{"from":"2026-10-29T19:00:00.000Z", "to":"2026-10-29T20:00:00.000Z", "step":null, "step_source":"unknown"}]
             }]
         })

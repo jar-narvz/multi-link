@@ -9,7 +9,7 @@ fn fixtures() -> PathBuf {
 }
 
 #[test]
-fn session_preserves_all_fifteen_keys_and_nulls() {
+fn session_preserves_all_nineteen_keys_and_nulls() {
     let instant = Timestamp::from_epoch_ms(0).unwrap();
     let session = Session {
         id: "session".into(),
@@ -27,9 +27,13 @@ fn session_preserves_all_fifteen_keys_and_nulls() {
         state_evidence: StateEvidence::NoSignal,
         segments: vec![],
         subagents: vec![],
+        activity: Vec::new(),
+        asked: None,
+        imported: false,
+        state_since: None,
     };
     let value = serde_json::to_value(session).unwrap();
-    assert_eq!(value.as_object().unwrap().len(), 15);
+    assert_eq!(value.as_object().unwrap().len(), 19);
     assert_eq!(
         value,
         json!({
@@ -39,7 +43,7 @@ fn session_preserves_all_fifteen_keys_and_nulls() {
             "started_at": "1970-01-01T00:00:00.000Z",
             "last_activity": "1970-01-01T00:00:00.000Z",
             "state": "unknown", "state_evidence": "no_signal",
-            "segments": [], "subagents": []
+            "segments": [], "subagents": [], "activity": [], "asked": null, "imported": false, "state_since": null
         })
     );
     assert_eq!(

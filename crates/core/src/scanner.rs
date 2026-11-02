@@ -216,6 +216,9 @@ impl Scanner {
                         Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
                         Err(error) => return Err(error),
                     };
+                    transcript
+                        .activity_timestamps
+                        .extend(parsed.transcript.activity_timestamps);
                     transcript.subagents.push(agent.to_owned());
                     transcript.subagent_files.push(SubagentFile {
                         id: agent.to_owned(),
