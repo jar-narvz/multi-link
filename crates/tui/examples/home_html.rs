@@ -1,4 +1,5 @@
-//! Renders the home screen with its colours to a standalone HTML page, for screenshots.
+//! Renders the home screen, or one repo view, with its colours to a standalone HTML page, for
+//! screenshots.
 //!
 //! The report comes from the CLI's JSON, so the same example covers a fixture and real `~`:
 //!
@@ -6,15 +7,23 @@
 //! multi-link overview --json [--root R] --now T --since 2h > overview.json
 //! multi-link links --json [--root R] --now T --since 2h > links.json
 //! cargo run -p multi-link-tui --example home_html -- overview.json links.json out.html \
-//!     [--size 120x40] [--offset -7 | --offset 5:30 | --offset local]
+//!     [--size 120x40] [--offset -7 | --offset 5:30 | --offset local] [--repo NAME]
+//!     [--since 2h]
 //! ```
 //!
 //! The theme is the truecolor palette (what `COLORTERM=truecolor` gives). `--offset` defaults to
-//! `local`, the offset at the report's `now`, as the TUI uses.
-use std::{env, fmt::Write, fs};
+//! `local`, the offset at the report's `now`, as the TUI uses. Home is drawn with nothing selected.
+//! `--repo` draws that repo's view instead (a full repo path, or a name that ends one): fitted range,
+//! folds on, imports hidden and the first lane selected, as the TUI opens it from the repo's title
+//! line. Pass the report's
+//! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so the repo view gets the window the TUI would give it.
+use std::{env, fmt::Write, fs, time::Duration};
 
 use multi_link_model::{LinksReport, OverviewReport};
-use multi_link_tui::{HomeOptions, render_home_with_options, view};
+use multi_link_tui::{
+    DEFAULT_WINDOW, HomeOptions, RepoOptions, TimeWindow, render_home_with_options, render_repo,
+    view,
+};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -117,16 +126,41 @@ fn parse_offset(value: &str) -> Result<UtcOffset, Box<dyn std::error::Error>> {
     Ok(UtcOffset::from_hms(hours, minutes, 0)?)
 }
 
+/// `30m`, `2h` or `1d`, by the CLI's `--since` rule (`all` is not supported here).
+fn parse_since(value: &str) -> Result<Duration, String> {
+    let invalid = || format!("--since {value}: expected a duration such as 30m, 2h, or 1d");
+    let multiplier = match value.as_bytes().last() {
+        Some(b's') => 1,
+        Some(b'm') => 60,
+        Some(b'h') => 3600,
+        Some(b'd') => 86_400,
+        _ => return Err(invalid()),
+    };
+    let number = &value[..value.len() - 1];
+    if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(invalid());
+    }
+    let seconds = number
+        .parse::<u64>()
+        .ok()
+        .and_then(|n| n.checked_mul(multiplier))
+        .ok_or_else(invalid)?;
+    Ok(Duration::from_secs(seconds))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
     let [overview, links, out] = match args.get(..3) {
         Some([a, b, c]) => [a, b, c],
         _ => return Err(
-            "usage: home_html OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local]"
+            "usage: home_html OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local] \
+             [--repo NAME] [--since 30m|2h|1d]"
                 .into(),
         ),
     };
     let (mut width, mut height, mut offset_arg) = (120, 40, "local".to_string());
+    let mut repo_arg: Option<String> = None;
+    let mut since = DEFAULT_WINDOW;
     let mut rest = args[3..].iter();
     while let Some(flag) = rest.next() {
         let value = rest.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -136,6 +170,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (width, height) = (w.parse()?, h.parse()?);
             }
             "--offset" => offset_arg = value.clone(),
+            "--repo" => repo_arg = Some(value.clone()),
+            "--since" => since = parse_since(value)?,
             _ => return Err(format!("unknown flag {flag}").into()),
         }
     }
@@ -146,14 +182,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         parse_offset(&offset_arg)?
     };
-    let options = HomeOptions {
-        links: Some(&links),
-        offset,
-        ..HomeOptions::default()
-    };
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
-    render_home_with_options(&report, None, &options, area, &mut buf);
-    fs::write(out, html(&buf, "multi-link home")?)?;
+    let title = if let Some(name) = repo_arg {
+        // An exact path wins; a bare name must end exactly one repo path.
+        let repos: Vec<&str> = report.repos.iter().map(|g| g.repo.as_str()).collect();
+        let suffix = format!("/{name}");
+        let repo = match repos.iter().find(|r| **r == name) {
+            Some(r) => *r,
+            None => match repos
+                .iter()
+                .filter(|r| r.ends_with(&suffix))
+                .collect::<Vec<_>>()[..]
+            {
+                [r] => *r,
+                [] => return Err(format!("no repo {name} in the overview").into()),
+                ref many => {
+                    let list: Vec<&str> = many.iter().map(|r| **r).collect();
+                    return Err(format!("{name} names several repos: {}", list.join(", ")).into());
+                }
+            },
+        };
+        let options = RepoOptions {
+            offset,
+            ..RepoOptions::default()
+        };
+        let window = TimeWindow::ending_at(report.now, since);
+        render_repo(
+            &report,
+            &links,
+            repo,
+            window,
+            Some(0),
+            &options,
+            area,
+            &mut buf,
+        );
+        "multi-link repo view"
+    } else {
+        let options = HomeOptions {
+            links: Some(&links),
+            offset,
+            ..HomeOptions::default()
+        };
+        render_home_with_options(&report, None, &options, area, &mut buf);
+        "multi-link home"
+    };
+    fs::write(out, html(&buf, title)?)?;
     Ok(())
 }

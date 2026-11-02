@@ -1101,6 +1101,19 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-11-02 — Step 6.5 review (adversarial Claude subagent, diff + Step 6.5 + W0–W10)
+The reviewer re-ran `cargo test` (35 ok) and clippy (clean), checked README claims against the code and the counts
+in docs/phase6-check.md against each other, and looked at both images (synthetic only). 0 P1, 2 P2, 5 P3; all accepted.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: example `parse_since` panics on `2ч` and on overflow, rejects `90s`, unlike the CLI it claims to follow | Accepted: the CLI's rule (ASCII digits, `s/m/h/d`, `checked_mul`, same message) |
+| 2 | P2: README and phase6-check say folds show their length; difference 5 says the real 13 h fold's label is not drawn | Accepted: "when there is room"; the real-data line says the band draws, the label does not |
+| 3 | P3: README fallback label written `no prompt`; the screen says `claude · no prompt` | Accepted |
+| 4 | P3: "first row selected, as the TUI opens it" is only true from the repo's title line | Accepted: wording in the example and the doc |
+| 5 | P3: `--repo NAME` silently takes the first of several matching repos | Accepted: exact path wins; several suffix matches is an error listing them |
+| 6 | P3: doc does not say the example's repo render needs `--since 16h` too | Accepted |
+| 7 | P3: "A card for each repo that needs you" also covers working/stale-only repos | Accepted: "with a waiting, working or stale session" |
+
 ### 2026-11-01 — Step 6.1 review (adversarial Claude subagent, diff + Step 6.1 + W0–W10 + board 7c/8c descriptions)
 Claude also clarified W1 while writing the keys: the Codex `session_meta` header is not activity (in an import it carries
 the copy time, so every import would draw a fake one-cell burst). The reviewer recomputed all 13 sessions' four fields

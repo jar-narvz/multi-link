@@ -1,7 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Step 6.4 is committed.** Next: Step 6.5 (Claude, visual check and README; ends with a
+**Resume here (2026-11-02, latest): Step 6.5 is committed; Phase 6 is NOT closed.** It waits on the owner's
+stop-and-ask: the owner looks at the real screen (`target/release/multi-link tui`, and `--since 16h` for last night's
+runs) and confirms. Record the answer in `docs/phase6-check.md` → "Owner check" and here. Real renders were shown from
+scratch only (W10). Open points found on real data (docs/phase6-check.md, "Differences from the boards"), each a
+candidate follow-up step, not fixed in 6.5 (outside its files):
+- Codex `asked` is null on every real run: 2026-11-02 `codex exec` rollouts have no `user_message`; the prompt is in a
+  `response_item` `message` with role `user` (crates/codex parser, W3). Lanes read `codex codex · no prompt`.
+- Sessions started by another session have a first user record starting `<system-reminder>`, so `claude · no prompt`.
+- Home says `last 2h` whatever `--since` is (home.rs:503/513/515/681); the repo view follows the window.
+- The two newest multi-link Codex runs (done 00:11, 00:17 on Nov 2) have no parent link.
+- Fold length label not drawn when it would touch `HH:MM now`; a tick equal to the `now` minute prints twice
+  (`14:07  14:07 now`); times before local midnight show only the date.
+- `home_html` now takes `--repo NAME` and `--since`; the repo view needs the same `--since` as the JSON.
+
+**Earlier (2026-11-02): Step 6.4 is committed.** Next: Step 6.5 (Claude, visual check and README; ends with a
 stop-and-ask to the owner). What 6.5 needs:
 - Repo view is board 8c in `crates/tui/src/timeline.rs`: `render_repo(report, links, repo, window, selection, &RepoOptions, area,
   buf)` (`RepoOptions { fitted, fold, imports, theme, offset }`, all `pub` from `multi_link_tui`); `render_timeline` is a fitted
@@ -242,6 +256,33 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 6.5: Visual check and README — Claude
+- Did: Extended `crates/tui/examples/home_html.rs` with `--repo NAME` (exact path, or a name that ends exactly one
+  repo path; several matches is an error) and `--since` (the CLI's rule, no `all`) so the repo view gets the TUI's
+  window, drawn with `render_repo` (fitted, folds on, imports hidden, first lane selected). Rendered the phase6 fixture
+  (home + repo-r) to `docs/img/{home,repo}-phase6-fixture.png` (headless Chrome, 2x). Rendered real `~` at
+  2026-11-02T22:07:21Z with `--since 2h` and `--since 16h` (home + multi-link repo view) to scratch only and looked
+  at them. Wrote `docs/phase6-check.md` (method, fixture images, boards 7c/8c in words with the canvas link, real-data
+  differences in words and counts, Verify, pending owner check). Recorded the owner's 2026-11-01 Phase 5 verdict in
+  `docs/phase5-check.md`. README: release status, home and repo-view sections with fixture images, keys, limitations
+  (W1 gaps, Codex done, `no prompt` on real Codex runs, `last 2h` wording, JSON exports prompt text).
+- Changed: crates/tui/examples/home_html.rs, docs/phase6-check.md, docs/phase5-check.md, README.md,
+  docs/img/home-phase6-fixture.png, docs/img/repo-phase6-fixture.png, PLAN.md (Review log), PROGRESS.md
+- Verify: `cargo test --workspace` → exit 0, 35 `test result: ok`, 0 failed (incl.
+  `phase6_matches_immutable_text_and_styles ... ok`, `phase6_repo_matches_immutable_text_and_styles ... ok`);
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, 0 warning/error lines; existing keys vs 1739a67
+  with the four fields removed → 7 of 7 equal (overview, sessions, hook/{overview,sessions,sessions-2h},
+  phase4/overview, phase5/overview); fixture HTML text vs `home-phase6.txt` / `repo-phase6.txt` → True / True;
+  `p6-overview.json` == `fixtures/expected/phase6/overview.json` → True. W10 scan of the changed files: no
+  `/Users/`, secrets or ids over 8 chars except the canvas id (recorded exception); the 10 real `asked` strings from
+  the scratch JSON checked against all 231 tracked files + new doc → 0 hits. Owner's answer: pending (stop-and-ask).
+- Review: adversarial Claude subagent (diff + Step 6.5 + W0–W10, re-ran Verify: same counts): 0 P1, 2 P2, 5 P3, all
+  accepted and fixed (PLAN.md → Review log); it also noted Phase 5's committed `docs/img/home-real.png` and
+  `board7-target.png`: checked, they show repo names, step titles, counts and times only, no prompts; kept because
+  docs/phase5-check.md uses them.
+- Gotchas: the example used to hard-code a 2 h repo window; with 16 h JSON that drew a fold labelled `1h58` and no
+  bars. Pass `--since` to both the CLI and the example. zsh: pass CLI flags as an array.
 
 ### 2026-11-02 — Step 6.4: TUI repo view to board 8c — Codex
 - Did: Replaced session-span timelines with recorded-activity swimlanes: W3 labels, W5 status phrases,

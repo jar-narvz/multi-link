@@ -2,8 +2,8 @@
 
 Step 5.5 compares the rebuilt home screen with **board 7** ("7 · Home target: real data, 30 Oct 16:19"),
 the picture the owner approved as the acceptance target for Phase 5. This page shows three images and
-lists every difference found. The owner still has to check the real screen
-(see [Owner check](#owner-check-stop-and-ask--pending)).
+lists every difference found. The owner checked the real screen on 2026-11-01 and rejected the bars
+(see [Owner check](#owner-check-stop-and-ask--answered-2026-11-01)).
 
 **Most important finding:** in a terminal the lane tracks touch, so the bar area of a card reads as one
 dark block with no space between lanes (difference 1). Board 7 separates every lane. This is the first
@@ -142,7 +142,7 @@ existing keys vs 7d399ba, `made`/`hook` removed       → overview.json, hook/ov
 
 The last two Verify items are the screenshots above and the owner's answer below.
 
-## Owner check (stop-and-ask) — pending
+## Owner check (stop-and-ask) — answered 2026-11-01
 
 Need: "from the home screen I can tell in a few seconds which repo needs me and what is running."
 The images above are HTML renders of the same buffer the terminal draws; the real terminal (font, colour
@@ -153,4 +153,10 @@ cargo build --release -p multi-link
 target/release/multi-link tui
 ```
 
-Owner's answer: _not yet recorded._ Phase 5 stays open until it is.
+Owner's answer (2026-11-01, after running Phase 5 on the real screen): the bars on home and the
+timeline screen were "really hard to read … random blocks and timestamps on top". **Phase 5 closes as not
+meeting the need for its bars.** Why they failed (PLAN.md, Phase 6): a bar ran from a session's start to
+its last activity, so a session open for two days filled the window; real work comes in 3–5 minute
+bursts, which a 2-hour axis turns into specks; 6 of the rows on the owner's screen were Codex Desktop
+imports, not runs. Phase 6 rebuilds home in words (board 7c) and the repo view as swimlanes of recorded
+activity (board 8c); see [phase6-check.md](phase6-check.md).
