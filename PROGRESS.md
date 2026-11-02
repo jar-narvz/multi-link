@@ -1,7 +1,19 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-10-30, latest).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
+**Resume here (2026-11-01, latest).** The owner ran Phase 5 on the real screen: the bars on home and the
+timeline screen are "really hard to read … random blocks and timestamps on top". Phase 5 closes as not
+meeting the need for its bars (6.5 records this in `docs/phase5-check.md`). The owner approved **board 7c**
+(home in words, no timeline) and **board 8c** (repo view: board 2's swimlanes on real data) on the mockup
+canvas. **Phase 6 is planned** in PLAN.md (W0–W10, Steps 6.1–6.5; Codex critique logged, 10/10 accepted).
+Next: Step 6.1, then 6.2 → 6.5 in order; 6.5 ends with a stop-and-ask. Facts measured 2026-11-01 for 6.1/6.2:
+140 of 260 local Codex rollouts are Codex Desktop imports (every `task_started` id starts `external-import`,
+originator `Codex Desktop`; one more rollout mixes imported and real turns); a 5-min burst gap splits 2 of
+117 closed turns in the 12 newest real Claude transcripts. Claude turn markers seen: `user` with string
+content opens, `assistant` with `stop_reason` `end_turn` closes. Privacy (W10): screens now show prompts;
+never commit real renders or the boards as images. The older notes below are history.
+
+**Earlier (2026-10-30).** Phase 4 is built (4.1–4.6 committed) but the owner judged the real
 screen still hard to read, nothing like the mockup, so Phase 4 closes as not meeting the need. **Phase 5**
 (home redesign to the owner-approved **board 7**; priority UX/UI, readability, colour): **5.1 is committed.
 5.2 is committed** (Claude-reviewed, 0 fix rounds). **5.3 is committed** (Claude-reviewed, 0 fix rounds).

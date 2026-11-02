@@ -932,10 +932,187 @@ target: real data, 30 Oct 16:19"), drawn only from real `overview` + `links` out
   `docs/img/**`
 - Verify: whole-phase Verify; screenshots in `docs/phase5-check.md`; the owner's answer recorded.
 
+### Phase 6 — Home in words, repo swimlanes (Release 1.3)
+Need: from the home screen I can tell in a few seconds which repo needs me and what is running; from a repo
+I can see which Codex run came from which Claude session, when each was active, and how sure the link is.
+Owner, 2026-11-01, after running Phase 5 on the real screen: the bars on home and the timeline screen are
+"really hard to read … random blocks and timestamps on top". Phase 5 closes as not meeting the need for its
+bars. The owner approved two targets on the mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C), both
+drawn on the 120×40 cell grid from real data at 1 Nov 22:25 PST: **board 7c** (home: no timeline, one sentence
+per session) and **board 8c** (repo view: board 2's swimlanes on real data). Boards 7b, 8 and 8b were
+rejected. These two boards are the acceptance pictures; they show real prompts, so they are never committed
+as images (W10).
+- **Why Phase 5's bars failed:** a bar ran from a session's start to its last activity, so a session open for
+  two days filled the window; real work comes in 3–5 minute bursts, which a 2-hour axis turns into specks;
+  6 of the rows on the owner's screen were Codex Desktop imports, not runs.
+- **W0 JSON stays stable; presentation stays in the TUI.** Every existing key keeps its value, including
+  `last_activity`, `state`, window membership, groups, row order and merges; imported sessions stay in every
+  report. Additive only: Session and SessionRow gain `activity` (`[{from, to}]`, W1), `asked` (string or
+  null, W3), `imported` (bool, W2) and `state_since` (timestamp or null, W5). Hiding imports, counting them
+  and every screen rule below live in the TUI view models.
+- **W1 Recorded activity = bursts.** Sources: every timestamped record of the session's own file and of its
+  subagent files (Claude), minus records inside imported turns (W2). Timestamps are sorted and deduplicated;
+  consecutive ones at most 5 min apart form one burst `[first, last]`; a single record is `[t, t]` and draws
+  as one cell; bursts are clipped to the report window (none after `now`). Measured 2026-11-01 on the 12 newest
+  real Claude transcripts: 2 of 117 closed turns have an inner gap over 5 min (the rule splits them); a
+  turn-based rule was rejected because one real turn left waiting stayed open for 52 h. Screens call it
+  "active", never "worked" or "busy time". Limitation (README): a tool call silent for over 5 min shows as a gap.
+- **W2 Codex Desktop imports.** Observed 2026-11-01: 140 of 260 local rollouts have only `task_started` turn
+  ids starting `external-import` (all originator `Codex Desktop`); they are Claude chats copied into Codex
+  Desktop, stamped at copy time. Rule, in file order: an imported turn opens at a `task_started` whose
+  `turn_id` starts `external-import` and closes at its matching `task_complete` (inclusive), the next
+  `task_started`, or end of file; every record from open to close is excluded from `activity` and `asked`.
+  A rollout is `imported` when it has at least one `task_started` and all of them are imported. State and
+  `last_activity` are unchanged (W0). Undocumented format: an assumption, tested on fixtures shaped like the
+  real files, including an unmatched complete, an import interrupted by a real turn, and real work appended
+  to a cached all-import rollout.
+- **W3 `asked`.** The session's first prompt. Claude: the first `user` record whose `sessionId` equals the
+  session id (inherited history is skipped), not a tool result, with string content or a first `text` block;
+  leading whitespace trimmed; skipped if blank or if it then starts with `<` (command and system wrappers).
+  Codex: the first `user_message` event outside an imported turn. Whitespace collapsed, cut at 120 characters
+  on a char boundary with `…`. Screen label order: latest made step (`step 4.3`) › `asked` in quotes ›
+  `claude · no prompt`. Ids stay in `o`, the selected line and JSON. JSON now exports prompt text (README).
+- **W4 Home is words (board 7c).** No bars, no axis. Header as Phase 5 V8 but `● N working now`. A repo with a
+  waiting, busy or stale session is a card: title (name, plan wording, `N working now` / `N waiting`), one
+  line per actionable session (glyph, harness, label, status phrase, branch at the right), a count line for
+  the rest (`6 older sessions, none active in the last 2h · enter shows all`), and the last hand-off in
+  words. A repo with other activity in the window is one bordered sentence (`idle · last active 1 min ago ·
+  claude handed work to codex at 22:23, codex done`). Repos the overview lists with no activity in the window
+  share one `quiet` line (`repo-a (only Codex Desktop imports)` when that is why). Imported rows are hidden;
+  the footer says `N Codex Desktop imports hidden`, then `times <zone>`.
+- **W5 Status phrases and times.** `state_since`: waiting/stale → the record's `statusUpdatedAt` or the winning
+  hook record's `at` (the same evidence `state` used); Codex `unknown`/`turns_complete` → the last non-imported
+  `task_complete`; otherwise null. Phrases: `working now · for N min` (from the current burst's start;
+  `working now` alone when there is no burst), `waiting on you · since HH:MM`, `stale since HH:MM`,
+  `idle · last active N min ago` (last burst end, else `last_activity`), Codex `done HH:MM` (defined as "last
+  turn complete"; no process-exit evidence, design.md says so). Relative under 60 min, `HH:MM` today,
+  `Oct 30` before. Hand-offs: `handed step 4.3 to codex` / `handed work to codex`; outcome `codex done` /
+  `codex running` / `no codex run found` / `N possible runs`. No generated `?` placeholder anywhere (user
+  prompts may contain `?`). `o` and `f` keep Phase 3's safety rules.
+- **W6 Repo view is swimlanes (board 8c); it replaces the timeline screen.** `enter` (and `t`) on a home repo
+  opens it. Rows: top-level non-imported sessions with activity in the window, newest first, each Codex child
+  nested under its parent (`└▸`, child background). Two text rows per lane: label + bar row, then a dim sub
+  line (branch · status, or for a child the link in words: `matched by time · 12 s after the call`). Bars are
+  W1 bursts as `█` (Claude orange, Codex blue); `✓` after a Codex run that is `done`, `◆` on a waiting
+  session. No rows: one line `no recorded activity in the last 2h`.
+- **W7 The axis fits the work.** Default (fitted) range: first burst in the window to `now`; the range never
+  leaves the report window (`--since` widens it). Idle stretches over 15 min with no burst on any row fold:
+  at most 3 folds (the longest), each a 5-column `≈` band with its length (`43m`) in the axis row; `z`
+  unfolds. Ticks from the ladder 1, 2, 5, 10, 15, 30 min, 1, 2, 6, 12 h, 1 d: the smallest leaving ≥ 8 columns
+  between labels; faint `│` grid lines. `+`/`-`/`←`/`→` switch to an explicit range (folds off, the last label
+  shows its time, `now` only when in range); `0` returns to fitted.
+- **W8 Link lines and the selected line.** At the hand-off column, a vertical line from the parent's bar row
+  to the child's: `│` confirmed, `╎` matched by time; an ambiguous child stays top-level with `N possible
+  runs`. `i` shows imported rows (dim, marked `import`). Bottom `selected` line: harness, 8-character id,
+  started, `active about N min in K stretches`, its hand-off; `o` opens, `f` forks.
+- **W9 Colour and widths.** Phase 5 theme and contrast tests unchanged; NO_COLOR keeps every glyph and word.
+  Repo view below 80 columns drops the bar column and shows the rows as a list (same labels and sub lines).
+  Home below 80 columns drops the branch, then shortens labels with `…` on a word boundary.
+- **W10 Privacy.** Fixtures use synthetic prompts only. Real renders, board screenshots and JSON with real
+  prompts stay in scratch storage, never committed or pasted into PROGRESS.md. Each step's Review checks every
+  committed file for real prompts, ids longer than 8 characters, secrets and personal paths.
+- Non-goals: hook-free needs-you detection; the step graph (board 3, backlog); live grid; changing `--since`.
+- Verify (whole phase, 6.5 runs it): `cargo test --workspace` and `cargo clippy --workspace --all-targets --
+  -D warnings` clean; existing JSON keys equal their committed versions once the four added fields are
+  removed; the phase6 fixture renders equal the hand-drawn styled goldens from 6.1 cell for cell (home and
+  repo view); fixture renders in `docs/phase6-check.md` with boards 7c/8c described (not pictured); real
+  renders shown to the owner from scratch; the owner looks at the real screen and confirms (stop-and-ask).
+
+### Step 6.1 — Contract and target screens (Claude)
+- Depends on: Phase 5 code (1739a67).
+- Write W0–W10 into `docs/design.md` ("Phase 6 decisions"; FR10 reworded to the swimlane repo view) and
+  `docs/output-schema.md` (the four added fields, the prompt-export note). New isolated fixture root
+  `fixtures/sessions-phase6/` with synthetic prompts, shaped like boards 7c/8c: two busy repos (one with a
+  PLAN.md), one idle repo with a Claude parent (two bursts, one subagent file) and a matched Codex child that
+  is done, a second Claude session with one burst, an idle gap over 15 min, one all-import rollout, one mixed
+  rollout, a repo with only an import, a repo listed with no activity in the window, one confirmed link, one
+  waiting session from yesterday, a prompt containing `?`. Hand-written `fixtures/expected/phase6/{sessions,
+  overview}.json` and styled goldens `fixtures/expected/tui/home-phase6.*` and `repo-phase6.*` (120×40, UTC−8,
+  truecolor, repo view on the idle repo with its parent selected). A shape test checks both goldens are
+  120×40 and their styles files cover every cell, and that both keys parse as JSON.
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase6/**`,
+  `fixtures/expected/phase6/**`, `fixtures/expected/tui/home-phase6*.txt`,
+  `fixtures/expected/tui/repo-phase6*.txt`, `crates/tui/tests/phase6_shape.rs`
+- Verify: `cargo test --workspace` → all `ok` including the shape test; the Review line traces every key value
+  to a fixture line, checks both goldens against boards 7c and 8c region by region (and names what differs
+  and why), and confirms W10 for every new file.
+
+### Step 6.2 — Core: imports, activity, asked, state_since (Codex)
+- Depends on: 6.1.
+- Codex parser: W2 turn state machine and `imported`; both parsers collect timestamps for W1 and the W3
+  prompt; Claude subagent timestamps join the parent's; scanner cache stores them; sessions and overview fill
+  the four fields; `state_since` per W5 from the evidence `state` already uses. No existing value changes.
+- Files: `crates/codex/src/**`, `crates/codex/tests/**`, `crates/claude/src/**`, `crates/claude/tests/**`,
+  `crates/model/src/**`, `crates/model/tests/**`, `crates/core/src/{scanner,sessions,overview,state,open}.rs`,
+  `crates/core/tests/**`, `fixtures/expected/**/*.json` (only the added fields)
+- Verify: `cargo test --workspace` → all `ok`; phase6 sessions and overview equal their keys; a test that every
+  existing key equals its committed version once the four fields are removed; unit tests: gaps of 299 / 300 /
+  301 s, a one-record burst, out-of-order and duplicate timestamps, subagent-only activity, clipping at the
+  window edges; all-import / mixed / no-import rollouts, an unmatched complete, an import interrupted by a
+  real turn, real work appended to a cached all-import rollout (second scanner pass); `asked` skipping
+  inherited, tool-result, blank and `<…>` records, a text-block prompt, multibyte truncation at 120;
+  `state_since` for waiting by record, waiting by hook, stale, Codex turns_complete, and null; clippy clean.
+
+### Step 6.3 — TUI home to board 7c (Codex)
+- Depends on: 6.2.
+- Home view model and render per W3–W5, W9: remove bars and the axis; cards, sentences, quiet line, hidden
+  imports, footer. `enter` on a repo opens the repo view (until 6.4, the current timeline). The Phase 5 home
+  goldens and their immutability test retire here (named in the PROGRESS entry); behaviour tests for
+  selection, scrolling and refresh are kept or rewritten, not dropped.
+- Files: `crates/tui/src/{view,home,app}.rs`, `crates/tui/tests/**`, `fixtures/expected/tui/home*.txt`
+  (except the 6.1 goldens), `crates/cli/tests/**` (only tests that read home text)
+- Verify: `cargo test --workspace` → all `ok`; the phase6 render equals `home-phase6.txt` and its styles from
+  6.1 exactly (a mismatch blamed on the golden is reported, not fixed); view tests for every W5 phrase,
+  relative/clock/date times, a repo with only imports, yesterday's waiting session shown, selection surviving
+  a refresh that hides or reveals rows; renders at 120 / 100 / 80 / 60 columns with no cut words; no generated
+  `?` placeholder in any render; clippy clean.
+
+### Step 6.4 — TUI repo view to board 8c (Codex)
+- Depends on: 6.3.
+- Replace `crates/tui/src/timeline.rs` with the W6–W8 swimlane view; App wiring for `enter`/`t`/`esc`/`o`/
+  `f`/`z`/`i`/zoom/pan/reset. Old timeline goldens retire with the screen.
+- Files: `crates/tui/src/**`, `crates/tui/tests/**`, `fixtures/expected/tui/timeline*.txt`,
+  `fixtures/expected/tui/repo*.txt` (except the 6.1 goldens), `crates/cli/src/tui.rs`, `crates/cli/tests/**`
+  (only tests that read timeline text)
+- Verify: `cargo test --workspace` → all `ok`; the phase6 repo render equals `repo-phase6.txt` and its styles
+  from 6.1 exactly; tests: fold on/off, gaps of 14 vs 16 min, more than 3 gaps, tick choice at 40 and 90 bar
+  columns and at a 7-day window, explicit range after pan and back with `0`, an empty window, `│` vs `╎`, an
+  ambiguous child top-level, a bar clipped at the window start, `i` on/off, selection and `o` after `i`,
+  nesting and refresh, below 80 columns the list form; clippy clean.
+
+### Step 6.5 — Visual check and README (Claude)
+- Depends on: 6.4.
+- Extend `crates/tui/examples/home_html.rs` to render the repo view too. Real home and real repo-view renders
+  are screenshotted for the owner in scratch only (W10). `docs/phase6-check.md`: the phase6 fixture renders as
+  images, boards 7c/8c described with a link to the private canvas, real-data differences in words and
+  counts. Record the owner's Phase 5 verdict in `docs/phase5-check.md`. README: home and repo-view sections,
+  fixture screenshots, the W1 limitation, prompt text in JSON. Then stop and ask the owner to run
+  `multi-link tui` and confirm.
+- Files: `crates/tui/examples/home_html.rs`, `docs/phase6-check.md`, `docs/phase5-check.md`, `README.md`,
+  `docs/img/**`
+- Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-01 — Phase 6 plan (Claude, Codex critique, read-only)
+Owner rejected Phase 5's bars on the real screen and approved boards 7c (home in words) and 8c (board 2's
+swimlanes on real data). Claude measured the burst rule (2 of 117 real turns split at 5 min) and the import
+marker (140 of 260 rollouts) before planning. Codex checked W0–W9 and 6.1–6.5 against the code. All 10 accepted.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P1: 6.2 cannot compile; `model/tests` and `core/src/open.rs` build `Session` literals | Accepted: both added to 6.2 Files |
+| 2 | P1: dropping imports in core leaves nothing for `i`; quiet line and zoom need data the window drops | Accepted: imports stay in every report with `imported`; the TUI hides them; quiet line lists only repos the overview lists; zoom stays inside the report window |
+| 3 | P1: changing `last_activity` and hiding rows breaks the JSON contract | Accepted: W0 keeps every existing value; the TUI filters; only four additive fields |
+| 4 | P1: W5 needs times the model drops; Codex "finished" overclaims | Accepted: `state_since` from the evidence `state` uses; Codex `done` defined as last turn complete; `working now` without a burst |
+| 5 | P2: imported-turn boundaries unspecified | Accepted: file-order state machine in W2 with close rules; malformed, interrupted and appended-to-cache tests |
+| 6 | P2: first-prompt rule fragile; "no `?`" fails on real prompts | Accepted: `sessionId` filter, text blocks, trimmed `<` check, blanks, char-boundary cut; rule is no generated `?` placeholder |
+| 7 | P2: privacy checks come too late; boards hold real prompts | Accepted: W10 from 6.1 on; synthetic fixture prompts; boards described, not pictured; every step reviews committed files |
+| 8 | P2: bursts underspecified; "worked" overclaims | Accepted: sources incl. subagents, sort/dedupe, `[t, t]`, clipping; screens say "active" |
+| 9 | P2: axis rules contradict pan/zoom and can overflow | Accepted: fitted vs explicit range, longer tick ladder, at most 3 five-column folds with the length in the axis row, empty-window line |
+| 10 | P2: acceptance checks not executable; old tests encode removed design | Accepted: 6.1 shape test; 6.3/6.4 retire Phase 5 home and timeline goldens by name and keep behaviour coverage; selection/refresh tests added |
 
 ### 2026-10-30 — Step 5.1 review (adversarial Claude subagent, diff + Step 5.1 + board 7 HTML)
 The reviewer checked by script: the styles file covers all 4800 cells; every bar cell agrees with the mapping;
