@@ -220,11 +220,14 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (sender, messages) = mpsc::channel();
     // Dropping the request sender stops the worker at its next boundary. Do not join a slow scan
     // on quit: the terminal must be restored immediately, even with an inaccessible filesystem.
+    let history_window = args.since.0;
     thread::Builder::new()
         .name("multi-link-refresh".into())
         .spawn(move || worker(args, root, receiver, sender))?;
     let mut app = App::default();
     app.theme = Some(theme);
+    app.history_window = history_window;
+    app.history_all = history_window.is_none();
     loop {
         match messages.try_recv() {
             Ok(Message::Refresh(result)) => {

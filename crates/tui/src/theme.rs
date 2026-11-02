@@ -1,4 +1,4 @@
-//! V4 palette. Environment access belongs to the CLI; selection here is deterministic.
+//! Phase 6 palette. Environment access belongs to the CLI; selection here is deterministic.
 use std::ffi::OsStr;
 
 use ratatui::{
@@ -30,6 +30,8 @@ pub struct Theme {
     pub warning: Color,
     pub track: Color,
     pub border: Color,
+    pub done: Color,
+    pub child: Color,
 }
 
 impl Theme {
@@ -63,6 +65,8 @@ impl Theme {
             warning: color(0xE8, 0x6F, 0x6F, 203),
             track: color(0x22, 0x26, 0x2F, 236),
             border: color(0x2A, 0x2F, 0x3A, 238),
+            done: color(0x7C, 0xCB, 0x8E, 114),
+            child: color(0x12, 0x15, 0x1B, 234),
         }
     }
 
@@ -71,8 +75,7 @@ impl Theme {
         Style::default().fg(foreground).bg(background)
     }
 
-    /// Legacy renders already use dotted tracks. Preserve their glyphs and selection,
-    /// removing colours and DIM when NO_COLOR is requested, until their 5.4 migration.
+    /// Preserve glyphs and selection while stripping colours and DIM for NO_COLOR.
     pub fn apply_no_color(self, buffer: &mut Buffer) {
         if self.mode == ColorMode::NoColor {
             for cell in &mut buffer.content {

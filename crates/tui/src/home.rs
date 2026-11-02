@@ -120,7 +120,7 @@ pub fn fit(text: &str, width: usize) -> String {
     }
     format!("{prefix}…")
 }
-fn plan(g: &RepoGroup) -> String {
+pub(crate) fn plan(g: &RepoGroup) -> String {
     match g.plan.convention {
         Convention::Missing => "no PLAN.md".into(),
         Convention::Unsupported => "PLAN.md not in the step format".into(),
@@ -624,17 +624,6 @@ fn rule(buf: &mut Buffer, y: u16, t: Theme) {
             "─".repeat(usize::from(w - 2)),
             t.text_style(t.border, t.screen),
         );
-    }
-}
-pub(crate) fn short_id(id: &str) -> String {
-    if id.chars().count() <= 13 {
-        id.into()
-    } else {
-        format!(
-            "{}…{}",
-            id.chars().take(8).collect::<String>(),
-            id.chars().skip(id.chars().count() - 4).collect::<String>()
-        )
     }
 }
 pub(crate) fn basename(path: &str) -> &str {

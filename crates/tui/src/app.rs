@@ -3,9 +3,12 @@ use std::collections::HashSet;
 
 use crossterm::event::KeyCode;
 use multi_link_model::{LinksReport, OverviewReport, Row, State};
-use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+use ratatui::{buffer::Buffer, layout::Rect};
 
-use crate::{Target, TimeWindow, selectable, timeline::render_timeline_selected};
+use crate::{
+    RepoOptions, Target, TimeWindow,
+    timeline::{lanes, render_repo},
+};
 
 pub struct Refresh {
     pub overview: OverviewReport,
@@ -38,6 +41,11 @@ pub struct App {
     offset: Option<time::UtcOffset>,
     timeline: Option<(String, TimeWindow)>,
     home_selection: Option<SelectionIdentity>,
+    explicit_range: bool,
+    unfold: bool,
+    imports: bool,
+    pub history_window: Option<std::time::Duration>,
+    pub history_all: bool,
     waiting: Option<HashSet<String>>,
     healthy: bool,
     opening: bool,
@@ -85,32 +93,45 @@ impl SelectionIdentity {
 }
 
 impl App {
-    /// A presentation copy expands merged rows without changing core's grouping or placement.
+    fn report_window(
+        report: &OverviewReport,
+        length: Option<std::time::Duration>,
+        all: bool,
+    ) -> TimeWindow {
+        if all {
+            let first = report
+                .repos
+                .iter()
+                .flat_map(crate::view::sessions)
+                .flat_map(|r| &r.activity)
+                .map(|b| b.from)
+                .min()
+                .unwrap_or(report.now);
+            TimeWindow::new(first, report.now)
+        } else {
+            TimeWindow::ending_at(report.now, length.unwrap_or(crate::DEFAULT_WINDOW))
+        }
+    }
+
+    /// Restrict the repo screen without changing core grouping or placement.
     fn view(&self) -> Option<OverviewReport> {
         let mut report = self.report.as_ref()?.overview.clone();
         if let Some((repo, _)) = &self.timeline {
             report.repos.retain(|group| &group.repo == repo);
-        }
-        for group in &mut report.repos {
-            if self.timeline.is_some() {
-                group.rows = group
-                    .rows
-                    .iter()
-                    .flat_map(|row| match row {
-                        Row::Session(row) => vec![Row::Session(row.clone())],
-                        Row::Merged(merged) => {
-                            merged.rows.iter().cloned().map(Row::Session).collect()
-                        }
-                    })
-                    .collect();
-            }
         }
         Some(report)
     }
 
     fn targets<'a>(&self, view: &'a OverviewReport) -> Vec<(&'a str, Target<'a>)> {
         if self.timeline.is_some() {
-            selectable(view)
+            view.repos
+                .iter()
+                .flat_map(|g| {
+                    lanes(g, self.imports)
+                        .into_iter()
+                        .map(|l| (g.repo.as_str(), Target::Session(l.session)))
+                })
+                .collect()
         } else {
             crate::home::home_targets(view, &self.home_options())
         }
@@ -175,6 +196,15 @@ impl App {
                 self.waiting = Some(waiting);
                 self.refresh_error = None;
                 self.offset = Some(crate::view::local_offset(report.overview.now));
+                if !self.explicit_range
+                    && let Some((_, window)) = &mut self.timeline
+                {
+                    *window = Self::report_window(
+                        &report.overview,
+                        self.history_window,
+                        self.history_all,
+                    );
+                }
                 self.report = Some(report);
                 self.healthy = true;
                 self.restore_selection(selected.as_ref(), self.selection);
@@ -204,12 +234,19 @@ impl App {
                         self.home_selection = self.selection_identity();
                         self.timeline = Some((
                             repo,
-                            TimeWindow::default_for(&self.report.as_ref().unwrap().overview),
+                            Self::report_window(
+                                &self.report.as_ref().unwrap().overview,
+                                self.history_window,
+                                self.history_all,
+                            ),
                         ));
+                        self.explicit_range = false;
+                        self.unfold = false;
+                        self.imports = false;
                         self.selection = 0;
                         if let Some(id) = id {
                             let view = self.view().unwrap();
-                            self.selection = selectable(&view).iter().position(|(_, target)| matches!(target, Target::Session(row) if row.id == id)).unwrap_or(0);
+                            self.selection = self.targets(&view).iter().position(|(_, target)| matches!(target, Target::Session(row) if row.id == id)).unwrap_or(0);
                         }
                     }
                 }
@@ -225,31 +262,24 @@ impl App {
                         self.footer = "enter opens the repo view; select a session there".into();
                     }
                 }
-                // +/- zoom around the right edge; left/right pan by half a window.
-                KeyCode::Char('+' | '-' | '0') | KeyCode::Left | KeyCode::Right => {
-                    if let Some((_, window)) = &mut self.timeline {
-                        let seconds = |stamp: multi_link_model::Timestamp| -> i64 {
-                            use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-                            OffsetDateTime::parse(&stamp.to_string(), &Rfc3339)
-                                .unwrap()
-                                .unix_timestamp()
-                        };
-                        let end = seconds(window.end);
-                        let length = (seconds(window.end) - seconds(window.start)).max(1);
-                        let (end, length) = match key {
-                            KeyCode::Char('+') => (end, (length / 2).max(1)),
-                            KeyCode::Char('-') => (end, (length * 2).min(31_536_000)),
-                            KeyCode::Left => (end - (length / 2).max(1), length),
-                            KeyCode::Right => (end + (length / 2).max(1), length),
-                            _ => (seconds(self.report.as_ref().unwrap().overview.now), 7200),
-                        };
-                        if let Ok(end) = multi_link_model::Timestamp::from_epoch_ms(end * 1000) {
-                            *window = TimeWindow::ending_at(
-                                end,
-                                std::time::Duration::from_secs(length as u64),
-                            );
-                        }
-                    }
+                KeyCode::Char('i') if self.timeline.is_some() => {
+                    let selected = self.selection_identity();
+                    self.imports = !self.imports;
+                    self.restore_selection(selected.as_ref(), self.selection);
+                }
+                KeyCode::Char('z') if self.timeline.is_some() => self.unfold = !self.unfold,
+                KeyCode::Char('0') if self.timeline.is_some() => {
+                    let window = Self::report_window(
+                        &self.report.as_ref().unwrap().overview,
+                        self.history_window,
+                        self.history_all,
+                    );
+                    self.timeline.as_mut().unwrap().1 = window;
+                    self.explicit_range = false;
+                }
+                // Zoom around the right edge; pan by half a window. First use the fitted range.
+                KeyCode::Char('+' | '-') | KeyCode::Left | KeyCode::Right => {
+                    self.adjust_window(key);
                 }
                 _ => {}
             },
@@ -257,21 +287,70 @@ impl App {
         Vec::new()
     }
 
+    fn adjust_window(&mut self, key: KeyCode) {
+        let Some(report) = self.report.as_ref() else {
+            return;
+        };
+        let bounds = Self::report_window(&report.overview, self.history_window, self.history_all);
+        let Some((repo, window)) = &mut self.timeline else {
+            return;
+        };
+        if !self.explicit_range
+            && let Some(group) = self
+                .report
+                .as_ref()
+                .unwrap()
+                .overview
+                .repos
+                .iter()
+                .find(|g| &g.repo == repo)
+            && let Some(first) = lanes(group, self.imports)
+                .iter()
+                .flat_map(|l| &l.session.activity)
+                .map(|b| b.from)
+                .min()
+        {
+            window.start = first.max(window.start);
+        }
+        let end = window.end.epoch_ms();
+        let length = (end - window.start.epoch_ms()).max(1000);
+        let (end, length) = match key {
+            KeyCode::Char('+') => (end, (length / 2).max(1000)),
+            KeyCode::Char('-') => (end, length.saturating_mul(2)),
+            KeyCode::Left => (end - length / 2, length),
+            KeyCode::Right => (end + length / 2, length),
+            _ => return,
+        };
+        let length = length.min((bounds.end.epoch_ms() - bounds.start.epoch_ms()).max(0));
+        let end = end.clamp(bounds.start.epoch_ms() + length, bounds.end.epoch_ms());
+        if let Ok(end) = multi_link_model::Timestamp::from_epoch_ms(end) {
+            *window = TimeWindow::ending_at(end, std::time::Duration::from_millis(length as u64));
+            self.explicit_range = true;
+        }
+    }
+
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         let area = area.intersection(buf.area);
         if area.is_empty() {
             return;
         }
-        let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
         if let (Some(view), Some(report)) = (self.view(), &self.report) {
             if let Some((repo, window)) = &self.timeline {
-                render_timeline_selected(
+                let options = RepoOptions {
+                    fitted: !self.explicit_range,
+                    fold: !self.unfold,
+                    imports: self.imports,
+                    theme: self.home_options().theme,
+                    offset: self.offset.unwrap_or(time::UtcOffset::UTC),
+                };
+                render_repo(
                     &view,
                     &report.links,
                     repo,
                     *window,
                     Some(self.selection),
-                    body,
+                    &options,
+                    area,
                     buf,
                 );
             } else {
@@ -279,8 +358,7 @@ impl App {
                 crate::render_home_with_options(&view, Some(self.selection), &options, area, buf);
             }
         }
-        if self.timeline.is_none()
-            && self.report.is_some()
+        if self.report.is_some()
             && self.footer.is_empty()
             && self.refresh_error.is_none()
             && self
@@ -294,7 +372,10 @@ impl App {
             let t = self.home_options().theme;
             t.text_style(t.text, t.screen)
         } else {
-            Style::default()
+            self.home_options().theme.text_style(
+                self.home_options().theme.text,
+                self.home_options().theme.screen,
+            )
         };
         buf.set_style(Rect::new(area.x, area.bottom() - 1, area.width, 1), style);
         for x in area.x..area.right() {
@@ -541,49 +622,6 @@ mod tests {
         assert!(!app.update(Event::Key(KeyCode::Char('f'))).is_empty());
     }
     #[test]
-    fn timeline_scroll_keeps_last_selected_lane_visible_even_in_one_body_row() {
-        let mut app = App::default();
-        app.update(Event::Refresh(Ok(report())));
-        app.update(Event::Key(KeyCode::Char('t')));
-        for _ in 0..100 {
-            app.update(Event::Key(KeyCode::Down));
-        }
-        let view = app.view().unwrap();
-        let targets = app.targets(&view);
-        let Target::Session(selected) = targets[app.selection].1 else {
-            panic!("session")
-        };
-        let (repo, window) = app.timeline.as_ref().unwrap();
-        for height in [3, 8, 16] {
-            let area = Rect::new(0, 0, 100, height);
-            let mut buffer = Buffer::empty(area);
-            render_timeline_selected(
-                &view,
-                &app.report.as_ref().unwrap().links,
-                repo,
-                *window,
-                Some(app.selection),
-                area,
-                &mut buffer,
-            );
-            let selected_lines = (0..height)
-                .filter(|y| {
-                    buffer[(0, *y)]
-                        .modifier
-                        .contains(ratatui::style::Modifier::REVERSED)
-                })
-                .map(|y| {
-                    (0..100)
-                        .map(|x| buffer[(x, y)].symbol())
-                        .collect::<String>()
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(selected_lines.len(), 1, "height {height}");
-            assert!(selected_lines[0].contains(&crate::home::short_id(&selected.id)));
-        }
-    }
-
-    #[test]
     fn refresh_preserves_selected_full_id_when_order_changes() {
         let mut app = App::default();
         app.update(Event::Refresh(Ok(report())));
@@ -698,10 +736,13 @@ mod phase6_tests {
         app.update(Event::Key(KeyCode::Char('+')));
         assert_eq!(
             app.timeline.as_ref().unwrap().1,
-            TimeWindow::ending_at(window.end, std::time::Duration::from_secs(3600))
+            TimeWindow::new(
+                multi_link_model::Timestamp::parse("2026-11-03T05:47:30Z").unwrap(),
+                window.end
+            )
         );
-        app.update(Event::Key(KeyCode::Right));
-        assert_ne!(app.timeline.as_ref().unwrap().1.end, window.end);
+        app.update(Event::Key(KeyCode::Left));
+        assert!(app.timeline.as_ref().unwrap().1.end < window.end);
         app.update(Event::Key(KeyCode::Char('0')));
         assert_eq!(app.timeline.as_ref().unwrap().1, window);
         let mut refresh = refresh();
@@ -710,5 +751,230 @@ mod phase6_tests {
         app.update(Event::Key(KeyCode::Esc));
         assert_eq!(app.selected().unwrap(), selected);
         assert_eq!(app.update(Event::Key(KeyCode::Char('q'))), [Effect::Quit]);
+    }
+}
+
+#[cfg(test)]
+mod repo_tests {
+    use super::*;
+    fn refresh() -> Box<Refresh> {
+        let overview: OverviewReport = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase6/overview.json"
+        ))
+        .unwrap();
+        let links = LinksReport {
+            links: overview
+                .repos
+                .iter()
+                .flat_map(crate::view::sessions)
+                .flat_map(|r| r.handoffs.clone())
+                .collect(),
+            unparented: vec![],
+        };
+        Box::new(Refresh {
+            overview,
+            links,
+            diagnostics: String::new(),
+        })
+    }
+    fn app() -> App {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh())));
+        let view = app.view().unwrap();
+        app.selection = app
+            .targets(&view)
+            .iter()
+            .position(|(repo, _)| repo.ends_with("repo-r"))
+            .unwrap();
+        app.update(Event::Key(KeyCode::Enter));
+        app.offset = Some(time::UtcOffset::from_hms(-8, 0, 0).unwrap());
+        app
+    }
+    fn text(app: &App) -> String {
+        let mut b = Buffer::empty(Rect::new(0, 0, 120, 40));
+        app.render(b.area, &mut b);
+        (0..40)
+            .map(|y| (0..120).map(|x| b[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+    #[test]
+    fn explicit_range_after_pan_and_back_with_zero() {
+        let mut app = app();
+        assert!(text(&app).contains("42m"));
+        app.update(Event::Key(KeyCode::Left));
+        assert!(app.explicit_range);
+        assert!(!text(&app).contains("42m"));
+        assert!(!text(&app).lines().nth(3).unwrap().contains("now"));
+        assert!(text(&app).lines().nth(3).unwrap().contains("21:54"));
+        app.update(Event::Key(KeyCode::Char('0')));
+        assert!(!app.explicit_range);
+        assert!(text(&app).contains("42m"));
+        assert!(text(&app).lines().nth(3).unwrap().contains("22:25 now"));
+        app.update(Event::Key(KeyCode::Right));
+        let axis = text(&app).lines().nth(3).unwrap().to_owned();
+        assert!(axis.contains("22:25 now"));
+        assert!(axis.trim_end().ends_with("22:25 now"));
+        let fitted = app.timeline.as_ref().unwrap().1;
+        let bounds = TimeWindow::default_for(&app.report.as_ref().unwrap().overview);
+        for _ in 0..10 {
+            app.update(Event::Key(KeyCode::Left));
+        }
+        let left = app.timeline.as_ref().unwrap().1;
+        assert_eq!(left.start, bounds.start);
+        assert_eq!(
+            left.end.epoch_ms() - left.start.epoch_ms(),
+            fitted.end.epoch_ms() - fitted.start.epoch_ms()
+        );
+        for _ in 0..10 {
+            app.update(Event::Key(KeyCode::Right));
+        }
+        assert_eq!(app.timeline.as_ref().unwrap().1, fitted);
+        for _ in 0..10 {
+            app.update(Event::Key(KeyCode::Char('-')));
+        }
+        assert_eq!(app.timeline.as_ref().unwrap().1, bounds);
+        for key in [KeyCode::Left, KeyCode::Right, KeyCode::Char('-')] {
+            app.update(Event::Key(key));
+            assert_eq!(app.timeline.as_ref().unwrap().1, bounds);
+        }
+    }
+    #[test]
+    fn selection_and_open_after_import_toggle() {
+        let mut app = app();
+        let selected = app.selected().unwrap();
+        app.update(Event::Key(KeyCode::Char('i')));
+        assert!(app.imports);
+        assert_eq!(app.selected().unwrap(), selected);
+        assert!(text(&app).contains("import ·"));
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen {
+                id: selected.1.unwrap(),
+                fork: false
+            }]
+        );
+        app.update(Event::Opened(String::new()));
+        app.selection = 0;
+        let imported = app.selected().unwrap().1.unwrap();
+        assert_eq!(imported, "60140000-0000-4000-8000-000000006014");
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('f'))),
+            [Effect::FreshOpen {
+                id: imported,
+                fork: true
+            }]
+        );
+        app.update(Event::Opened(String::new()));
+        app.update(Event::Key(KeyCode::Char('i')));
+        assert!(!app.imports);
+        assert!(!text(&app).contains("import ·"));
+        let id = app.selected().unwrap().1.unwrap();
+        assert_eq!(id, "60110000-0000-4000-8000-000000006011");
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen { id, fork: false }]
+        );
+    }
+    #[test]
+    fn nesting_and_refresh_keep_full_selected_id() {
+        let mut app = app();
+        app.update(Event::Key(KeyCode::Down));
+        let selected = app.selected().unwrap();
+        assert_eq!(
+            selected.1.as_deref(),
+            Some("60130000-0000-4000-8000-000000006013")
+        );
+        let mut r = refresh();
+        r.overview.repos.reverse();
+        let group = r
+            .overview
+            .repos
+            .iter_mut()
+            .find(|g| g.repo.ends_with("repo-r"))
+            .unwrap();
+        group.rows.reverse();
+        // Move the selected child beneath a different parent on refresh.
+        let Row::Session(old) = &mut group.rows[2] else {
+            panic!()
+        };
+        let child = old.children.pop().unwrap();
+        let Row::Session(new) = &mut group.rows[1] else {
+            panic!()
+        };
+        new.children.push(child);
+        app.update(Event::Refresh(Ok(r)));
+        assert_eq!(app.selected().unwrap(), selected);
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen {
+                id: selected.1.unwrap(),
+                fork: false
+            }]
+        );
+    }
+    #[test]
+    fn fold_toggle_and_reset_keep_explicit_range_rules() {
+        let mut app = app();
+        app.update(Event::Key(KeyCode::Char('z')));
+        assert!(app.unfold);
+        assert!(!text(&app).contains("42m"));
+        app.update(Event::Key(KeyCode::Char('z')));
+        assert!(text(&app).contains("42m"));
+        app.update(Event::Key(KeyCode::Char('+')));
+        assert!(app.explicit_range);
+        app.update(Event::Key(KeyCode::Char('z')));
+        assert!(!text(&app).contains("42m"));
+        app.update(Event::Key(KeyCode::Char('0')));
+        assert!(!app.explicit_range);
+        app.update(Event::Key(KeyCode::Char('z')));
+        assert!(text(&app).contains("42m"));
+    }
+    #[test]
+    fn refresh_advances_fitted_but_preserves_explicit_range() {
+        let mut app = app();
+        let mut r = refresh();
+        r.overview.now = multi_link_model::Timestamp::parse("2026-11-03T06:26:00Z").unwrap();
+        app.update(Event::Refresh(Ok(r)));
+        assert_eq!(
+            app.timeline.as_ref().unwrap().1.end,
+            app.report.as_ref().unwrap().overview.now
+        );
+        app.update(Event::Key(KeyCode::Left));
+        let window = app.timeline.as_ref().unwrap().1;
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(app.timeline.as_ref().unwrap().1, window);
+    }
+    #[test]
+    fn scroll_keeps_selected_lane_visible() {
+        let mut app = app();
+        app.update(Event::Key(KeyCode::Down));
+        app.update(Event::Key(KeyCode::Down));
+        let id = app.selected().unwrap().1.unwrap();
+        assert_eq!(id, "60120000-0000-4000-8000-000000006012");
+        for height in [3, 8, 16, 40] {
+            let mut b = Buffer::empty(Rect::new(0, 0, 120, height));
+            app.render(b.area, &mut b);
+            assert!(
+                b.content.iter().any(|c| c.symbol() == "▌"),
+                "height {height}"
+            );
+        }
+    }
+    #[test]
+    fn app_repo_matches_immutable_target() {
+        let app = app();
+        let mut b = Buffer::empty(Rect::new(0, 0, 120, 40));
+        app.render(b.area, &mut b);
+        let actual = (0..40)
+            .map(|y| {
+                let line = (0..120).map(|x| b[(x, y)].symbol()).collect::<String>();
+                format!("{}\n", line.trim_end())
+            })
+            .collect::<String>();
+        assert_eq!(
+            actual,
+            include_str!("../../../fixtures/expected/tui/repo-phase6.txt")
+        );
     }
 }

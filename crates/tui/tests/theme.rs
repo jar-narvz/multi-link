@@ -17,7 +17,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn colors(t: Theme) -> [Color; 14] {
+fn colors(t: Theme) -> [Color; 16] {
     [
         t.screen,
         t.waiting_card,
@@ -33,6 +33,8 @@ fn colors(t: Theme) -> [Color; 14] {
         t.warning,
         t.track,
         t.border,
+        t.done,
+        t.child,
     ]
 }
 
@@ -43,7 +45,7 @@ fn environment_selection_and_exact_palette_table() {
     assert_eq!(rgb, Theme::from_env(Some("24bit"), None));
     let expected = [
         0x0E1014, 0x17150E, 0x17130F, 0x262C3A, 0xD7DAE0, 0x9AA1AE, 0xF2A36B, 0x8A6448, 0x7DB3FF,
-        0x4F79B3, 0xE8C468, 0xE86F6F, 0x22262F, 0x2A2F3A,
+        0x4F79B3, 0xE8C468, 0xE86F6F, 0x22262F, 0x2A2F3A, 0x7CCB8E, 0x12151B,
     ];
     assert_eq!(
         colors(rgb),
@@ -54,7 +56,7 @@ fn environment_selection_and_exact_palette_table() {
     assert_eq!(
         colors(indexed),
         [
-            233, 234, 234, 235, 253, 248, 215, 137, 111, 67, 221, 203, 236, 238
+            233, 234, 234, 235, 253, 248, 215, 137, 111, 67, 221, 203, 236, 238, 114, 234
         ]
         .map(Color::Indexed)
     );
@@ -68,7 +70,7 @@ fn environment_selection_and_exact_palette_table() {
     for value in ["1", "0", "yes"] {
         let plain = Theme::from_env(Some("truecolor"), Some(OsStr::new(value)));
         assert_eq!(plain.mode, ColorMode::NoColor);
-        assert_eq!(colors(plain), [Color::Reset; 14]);
+        assert_eq!(colors(plain), [Color::Reset; 16]);
     }
 }
 
@@ -107,8 +109,9 @@ fn every_text_pair_has_wcag_aa_contrast_in_both_palettes() {
             t.codex,
             t.needs_you,
             t.warning,
+            t.done,
         ] {
-            for bg in [t.screen, t.waiting_card, t.busy_card, t.selected] {
+            for bg in [t.screen, t.waiting_card, t.busy_card, t.selected, t.child] {
                 let a = luminance(fg);
                 let b = luminance(bg);
                 let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);

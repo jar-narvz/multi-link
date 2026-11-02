@@ -1,7 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-01, latest): Step 6.3 is committed.** Next: Step 6.4 (Codex, repo view to board 8c). What 6.4 needs:
+**Resume here (2026-11-02, latest): Step 6.4 is committed.** Next: Step 6.5 (Claude, visual check and README; ends with a
+stop-and-ask to the owner). What 6.5 needs:
+- Repo view is board 8c in `crates/tui/src/timeline.rs`: `render_repo(report, links, repo, window, selection, &RepoOptions, area,
+  buf)` (`RepoOptions { fitted, fold, imports, theme, offset }`, all `pub` from `multi_link_tui`); `render_timeline` is a fitted
+  wrapper. The phase6 render equals the 6.1 `repo-phase6.txt` + `.styles.txt` (test `phase6_repo_matches_immutable_text_and_styles`).
+  6.5 extends `crates/tui/examples/home_html.rs` with a repo mode calling `render_repo` (a scratch copy that does this worked in 6.4:
+  same HTML function, `TimeWindow::default_for(&report)`, `Some(0)` selection, `offset = view::local_offset(report.now)`).
+- Keys: `enter`/`t` open, `esc` home, `z` folds, `i` imports, `+`/`-`/`←`/`→` explicit range clamped to the report window, `0` fitted.
+  Old timeline goldens are retired (listed in the 6.4 log).
+- Readability points to show the owner (from 6.4's real-data look, scratch only): Codex children read `codex codex · no prompt`
+  (W3 fallback repeats the harness; real `codex exec` rollouts get `asked` null — check whether core misses their prompt); W5 times
+  after local midnight show only the date (`started Nov 1`); today's real data had no folds; plus 6.3's home points below.
+
+**Earlier (2026-11-01): Step 6.3 is committed.** Next: Step 6.4 (Codex, repo view to board 8c). What 6.4 needs:
 - Home is board 7c (`crates/tui/src/home.rs`); the phase6 120x40 render equals the 6.1 `home-phase6.txt` + `.styles.txt`
   (test `phase6_matches_immutable_text_and_styles`, no update path). Phase 5 home goldens and their immutability test are gone.
 - `enter` and `t` on any home target (card, card row, idle sentence, quiet entry) still open the OLD timeline
@@ -229,6 +242,106 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 6.4: TUI repo view to board 8c — Codex
+- Did: Replaced session-span timelines with recorded-activity swimlanes: W3 labels, W5 status phrases,
+  newest-first roots and nested children, confirmed/time-matched link lines, ambiguous candidates at top
+  level, completion/waiting marks, selected-session details and hidden-import counts. Implemented the
+  fitted axis, largest-three idle-gap folding, integer segment allocation, local-midnight tick ladder,
+  explicit zoom/pan and reset, import toggle, full-id selection/refresh/open/fork, scrolling and list
+  form below 80 columns. Shared the existing home plan wording and retired its unused short-id helper.
+  Added done/child theme roles with exact RGB/indexed palette and contrast tests. Tick-step selection
+  stops on the first spacing failure rather than allocating minute ticks for years of history.
+  - Fix round 1: Use HH:MM for axis ticks/end/now and header ranges across local midnight; allow
+    date labels on multi-day midnight ticks without changing W5 phrases. Select the open hint by
+    harness. Clamp zoom-out to the report window and pan within both edges while preserving length.
+    Replace the vacuous empty-window assertion with a bar-area cell scan and axis-row assertion.
+    Add midnight/header and Codex-selection regressions; extend edge/zoom/reset assertions and
+    update the prior navigation test to pan left before now.
+- Changed: `crates/cli/src/tui.rs`, `crates/tui/src/app.rs`, `crates/tui/src/home.rs`, `crates/tui/src/lib.rs`, `crates/tui/src/theme.rs`, `crates/tui/src/timeline.rs`, `crates/tui/tests/theme.rs`, `crates/tui/tests/timeline.rs`, `fixtures/expected/tui/timeline-repo-a-zoom.styles.txt`, `fixtures/expected/tui/timeline-repo-a-zoom.txt`, `fixtures/expected/tui/timeline-repo-a.styles.txt`, `fixtures/expected/tui/timeline-repo-a.txt`, `fixtures/expected/tui/timeline-repo-b-amb-zoom.styles.txt`, `fixtures/expected/tui/timeline-repo-b-amb-zoom.txt`, `fixtures/expected/tui/timeline-repo-b-amb.styles.txt`, `fixtures/expected/tui/timeline-repo-b-amb.txt`, `PROGRESS.md`
+- Retired (screen replaced; no replacement generated snapshots):
+  - `fixtures/expected/tui/timeline-repo-a-zoom.styles.txt`
+  - `fixtures/expected/tui/timeline-repo-a-zoom.txt`
+  - `fixtures/expected/tui/timeline-repo-a.styles.txt`
+  - `fixtures/expected/tui/timeline-repo-a.txt`
+  - `fixtures/expected/tui/timeline-repo-b-amb-zoom.styles.txt`
+  - `fixtures/expected/tui/timeline-repo-b-amb-zoom.txt`
+  - `fixtures/expected/tui/timeline-repo-b-amb.styles.txt`
+  - `fixtures/expected/tui/timeline-repo-b-amb.txt`
+- Verify: Fix round 1; Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0;
+  253 passed, 0 failed. Actual result lines, in command order (routine per-test lines omitted):
+
+```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.24s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  Regression and immutable-golden test output from that run:
+
+```text
+test app::repo_tests::app_repo_matches_immutable_target ... ok
+test app::repo_tests::explicit_range_after_pan_and_back_with_zero ... ok
+test phase6_matches_immutable_text_and_styles ... ok
+test phase6_repo_matches_immutable_text_and_styles ... ok
+test fitted_range_crossing_local_midnight_uses_clock_labels ... ok
+test empty_window ... ok
+test selected_codex_opens_in_codex ... ok
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual output:
+
+```text
+    Blocking waiting for file lock on package cache
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
+```
+
+  `cargo fmt --all -- --check` → exit 0, no output. `git diff --check` → exit 0, no output.
+  `git diff -- fixtures/expected/tui/{home,repo}-phase6{,.styles}.txt` → no output:
+  all four 6.1 goldens untouched. `git diff --cached --stat` → no output; nothing staged.
+- Review: Claude, 1 Codex fix round. Files: all inside Step 6.4's list (`crates/tui/src/**`, `crates/tui/tests/**`, `crates/cli/src/tui.rs`, the eight retired `timeline-*` goldens); the four 6.1 goldens are byte-identical to HEAD. Claude re-ran Verify: `cargo test --workspace` → 253 passed, 0 failed (matches the pasted output); clippy `-D warnings` clean. W6–W8 checked in the code: fitted range = first burst..now inside the report window, explicit range turns folds off; at most 3 folds (longest, then earliest), 5-column bands; tick ladder with ≥ 13-column spacing, never at `now`; `│`/`╎` from the parent's bar row to the child's; ambiguous candidates stay top-level with `N possible runs`; `i` shows imports marked `import ·`; list form below 80. Every Verify test is present by name. Round-1 findings (all fixed): (1) P1 axis ticks and header range showed `Nov 1` for times before local midnight (seen on real data at 00:13: `Nov 1  Nov 1  Nov 1  00:13 now`) → HH:MM always, dates only at midnight ticks of multi-day axes; (2) `o open in Claude` hard-coded for Codex lanes → `open in Codex`; (3) zoom/pan could leave the report window (W7) → clamped; (4) a vacuous `empty_window` assertion → checks every bar cell. W10: the diff adds only synthetic 6.1 fixture ids/prompts, no real prompts, paths or secrets. Real data (scratch only): route-impact and multi-link repo views at 120 and 79 columns match board 8c's structure and colours (nested children, ╎ lines at the hand-off, ✓ green, selected line, legend). Readability points for 6.5 / the owner, not fixed here: (a) Codex children on real data mostly read `codex codex · no prompt` — the W3 fallback repeats the harness beside the harness column, and real `codex exec` rollouts get `asked` null (core, 6.2 — worth checking in 6.5); (b) W5 times after local midnight lose the clock (`started Nov 1`, `done Nov 1`), a W5 wording rule, left for the owner; (c) no fold appeared on today's real data (work was continuous), so folds are only seen on the fixture; (d) the legend lists `◆`/`≈` even when none is on screen, as board 8c does.
+  Own scope/privacy check:
+  only allowed files changed; no PLAN.md/core/schema/fixture-input changes, new dependencies, real prompts,
+  real session ids, secrets or personal paths added. All new prompt/id inputs come from the synthetic 6.1
+  keys. No stage/commit/push. The pre-existing untracked `.claude/` directory was left untouched.
+- Gotchas: Small-height testing found a three-row viewport could hide its selected lane; fixed by dropping
+  header space first and covered at heights 3/8/16/40. Development test failures from guessed fixture ids,
+  marker columns and trailing spaces were corrected against actual fixture/render values before the final
+  workspace gate. No real-data visual/owner check here; that remains Step 6.5. The 6.1 goldens were never
+  edited or regenerated, and their comparisons never call either snapshot updater.
+
 
 ### 2026-11-01 — Step 6.3: TUI home to board 7c — Codex
 - Did: Replaced Phase 5 bars/axis and combined lanes with W3–W5 home cards, idle sentences and quiet repos.
