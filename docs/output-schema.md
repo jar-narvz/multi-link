@@ -36,7 +36,9 @@ group or row order changes; imported sessions stay in every report. **The JSON n
 answer keys `fixtures/expected/phase6/sessions.json` and `overview.json` (Phase 6 fixture results). Step 6.2
 adds the four fields to every existing key and nothing else. `asked` there follows W3 as written: the
 `fixtures/sessions` Claude transcripts whose first own prompt is `CASE-<name>: <prompt>` get that string; the
-phase4/phase5 Claude prompts (`<prompt>`) and every older Codex fixture (no `user_message`) get `null`.
+phase4/phase5 Claude prompts (`<prompt>`) get `null`. Step 6.2 gave every older Codex fixture `null`
+when it had no `user_message`; Step 6.6 changed the older Codex fixtures' `asked` values where the X4
+response-item fallback finds an eligible prompt (the existing scrubbed `CASE-<name>: <prompt>` strings).
 
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
@@ -134,7 +136,12 @@ data on 2026-11-01 and are assumptions (design W2).
   equals the session id and whose `message.content` is a string, or an array holding a block of `type` `text`
   (the first such block's string `text` is used, whatever blocks come before it) (records whose content holds a `tool_result` are skipped); trim leading whitespace; skip it if
   that leaves nothing or starts with `<`, and keep looking. Codex: `payload.message` of the first `event_msg`
-  `user_message` outside an imported turn. Then every whitespace run becomes one space, trailing space is
+  `user_message` outside an imported turn. This event prompt keeps priority, even if blank or later in the
+  file. If no such event supplies a string prompt, X4 (Step 6.6) falls back to the first eligible
+  `response_item` outside an imported turn with `payload.type` `message` and `payload.role` `user`:
+  take the first `input_text` block's string `text` from `payload.content`, trim leading whitespace, and
+  skip the item if it is blank or starts with `# AGENTS.md instructions` or `<`; keep looking for an
+  eligible item. Then every whitespace run becomes one space, trailing space is
   trimmed, and text over 120 characters is cut to 119 characters (on a char boundary) plus `…`. None found or
   record-only: `null`.
 - **`state_since` (W5).** `waiting` or `stale` with `state_evidence` `session_record`: the record's

@@ -1126,7 +1126,8 @@ as images (W10).
 - Files: `crates/claude/src/invocation.rs`, `crates/claude/tests/**`, `crates/codex/src/lib.rs`,
   `crates/codex/tests/**`, `crates/core/tests/**`, `fixtures/sessions-phase6/**` (one added launch shape
   only if a fixture test needs it), `fixtures/expected/**/*.json` (only values the new launches or prompts
-  change), `docs/design.md` (X1–X4 under "Phase 6 decisions")
+  change), `docs/design.md` (X1–X4 under "Phase 6 decisions"), `docs/output-schema.md` (the `asked` rule and the
+  Step 6.2 note on older Codex fixtures; added in review)
 - Verify: `cargo test --workspace` → all `ok` and clippy clean; unit tests for each X1–X3 shape (incl. the
   exact route-impact command with a synthetic brief containing `'` and `"`, an unterminated heredoc, `$(…)`
   not a launch, `cd` in a group sets `dir_moved`), X4 with an AGENTS.md item then the prompt; the 6.1
@@ -1137,6 +1138,14 @@ as images (W10).
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-02 — Step 6.6 review (Claude, diff + Step 6.6)
+All X1–X4 shapes tested (incl. the route-impact launch with a synthetic brief); 6.1 goldens unchanged; W10 clean.
+Real data: launches 124 → 149; 2h Codex `asked` null 1 → 0; the route-impact 16:02 run nests under its parent.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: `docs/output-schema.md` still said older Codex fixtures get `asked` null and named only `user_message` | Accepted: file added to Step 6.6's Files; both passages describe X4 |
+| 2 | P3: `((a << 2))` reads as a heredoc; an unquoted `#` comment with `'` breaks quote tracking | Kept as known limits (outside X1–X4), noted in PROGRESS |
 
 ### 2026-11-02 — Step 6.5 review (adversarial Claude subagent, diff + Step 6.5 + W0–W10)
 The reviewer re-ran `cargo test` (35 ok) and clippy (clean), checked README claims against the code and the counts

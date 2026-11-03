@@ -89,3 +89,66 @@ fn no_import_or_no_turns_preserve_prompt_and_skip_metadata_activity() {
         assert_eq!(rollout.asked.as_deref(), Some("Synthetic prompt"));
     }
 }
+
+fn response(role: &str, texts: &[&str]) -> Value {
+    json!({"type":"response_item","timestamp":"2026-11-03T06:00:02Z",
+        "payload":{"type":"message","role":role,"content":texts.iter().map(|text|
+            json!({"type":"input_text","text":text})).collect::<Vec<_>>()}})
+}
+
+#[test]
+fn response_prompt_fallback_skips_instruction_wrappers_and_uses_first_input_text() {
+    let rollout = parse(vec![
+        response("user", &["  # AGENTS.md instructions for /synthetic"]),
+        response(
+            "user",
+            &[" <environment_context>synthetic</environment_context>"],
+        ),
+        response("user", &["  "]),
+        response("assistant", &["Synthetic assistant text"]),
+        response(
+            "user",
+            &["\n Build  a synthetic\nwidget. ", "Ignored second block"],
+        ),
+        response("user", &["Ignored later prompt"]),
+    ]);
+    assert_eq!(rollout.asked.as_deref(), Some("Build a synthetic widget."));
+    assert_eq!(
+        parse(vec![response(
+            "user",
+            &["<wrapper>", "Do not select this block"]
+        )])
+        .asked,
+        None
+    );
+}
+
+#[test]
+fn user_message_has_priority_even_when_later_or_blank() {
+    for prompt in ["Synthetic event prompt", ""] {
+        let mut message = event("user_message", "", 3);
+        message["payload"]["message"] = json!(prompt);
+        for records in [
+            vec![response("user", &["Synthetic fallback"]), message.clone()],
+            vec![message, response("user", &["Synthetic fallback"])],
+        ] {
+            assert_eq!(parse(records).asked.as_deref(), Some(prompt));
+        }
+    }
+}
+
+#[test]
+fn response_prompts_in_imports_stay_excluded() {
+    let records = vec![
+        event("task_started", "external-import-a", 1),
+        response("user", &["Synthetic imported prompt"]),
+        event("task_complete", "external-import-a", 3),
+    ];
+    assert_eq!(parse(records.clone()).asked, None);
+    let mut mixed = records;
+    mixed.extend([
+        event("task_started", "real", 4),
+        response("user", &["Synthetic real prompt"]),
+    ]);
+    assert_eq!(parse(mixed).asked.as_deref(), Some("Synthetic real prompt"));
+}

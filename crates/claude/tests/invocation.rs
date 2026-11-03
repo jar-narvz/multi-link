@@ -386,3 +386,93 @@ fn step_comes_from_raw_text_of_the_first_launch_segment_only() {
         );
     }
 }
+
+#[test]
+fn shell_groups_heredocs_and_wrappers() {
+    for (command, form, moved) in [
+        ("(codex exec 'Synthetic task' &)", Some(Exec), false),
+        ("( cd synthetic && codex exec x )", Some(Exec), true),
+        ("{ codex exec x; }", Some(Exec), false),
+        ("nohup codex exec x", Some(Exec), false),
+        (
+            "env TASK=synthetic OTHER='two words' codex exec x",
+            Some(Exec),
+            false,
+        ),
+        ("timeout 30s codex exec x", Some(Exec), false),
+        (
+            "gtimeout 1.5m node /p/codex-companion.mjs task x",
+            Some(Plugin),
+            false,
+        ),
+        (
+            "nohup env TASK=x timeout 1h codex exec -C other x",
+            Some(Exec),
+            true,
+        ),
+        (
+            "env TASK=x codex resume 01a189e2-d57f-7a91-b74c-ae85abd1a6a1",
+            Some(Resume),
+            false,
+        ),
+        ("env -i codex exec x", None, false),
+        ("env 1INVALID=x codex exec x", None, false),
+        ("timeout --signal=KILL 2s codex exec x", None, false),
+        ("timeout nonsense codex exec x", None, false),
+        ("sudo codex exec x", None, false),
+        ("'{' codex exec x", None, false),
+        (r"\{ codex exec x", None, false),
+        ("echo '(codex exec fake)'", None, false),
+        ("echo $(codex exec x)", None, false),
+        ("echo \"$(echo \"x\"; codex exec x)\"", None, false),
+        ("echo $(echo $(codex exec x))", None, false),
+        ("codex exec $(cat synthetic.txt)", Some(Exec), false),
+        (
+            "cat <<END\nDon't parse \"this\n(codex exec fake)\nEND\ncodex exec x",
+            Some(Exec),
+            false,
+        ),
+        (
+            "cat <<'END'\nSynthetic ' and \" quotes\nEND\n(codex exec x)",
+            Some(Exec),
+            false,
+        ),
+        (
+            "cat <<\"END\"\nSynthetic ' and \" quotes\nEND\n{ codex exec x; }",
+            Some(Exec),
+            false,
+        ),
+        (
+            "cat <<-END\n\tSynthetic ' and \"\n\tEND\ncodex exec x",
+            Some(Exec),
+            false,
+        ),
+        ("cat <<END\ncodex exec fake", None, false),
+        ("cat <<END\n END\ncodex exec fake", None, false),
+        (
+            "cat <<A <<'B'\n'\nA\n\"\nB\ncodex exec x",
+            Some(Exec),
+            false,
+        ),
+        ("echo '<<END'; codex exec x", Some(Exec), false),
+        (
+            "cat <<'END' > brief.txt\nSynthetic brief: don't forget the \"sample\".\nEND\n(codex exec --sandbox workspace-write \"$(cat brief.txt)\" < /dev/null > /dev/null 2>&1 &)",
+            Some(Exec),
+            false,
+        ),
+    ] {
+        let launch = recognise(command);
+        assert_eq!(launch.as_ref().map(|launch| launch.form), form, "{command}");
+        if let Some(launch) = launch {
+            assert_eq!(launch.dir_moved, moved, "{command}");
+            assert_eq!(launch.step, None, "{command}");
+        }
+    }
+    assert_eq!(
+        recognise("cat <<END\nStep 9\nEND\n(codex exec 'Step 6.6')")
+            .unwrap()
+            .step
+            .as_deref(),
+        Some("6.6")
+    );
+}

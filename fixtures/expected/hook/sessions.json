@@ -298,7 +298,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T22:58:27.430Z", "to": "2026-10-29T22:58:58.954Z"}],
-      "asked": null,
+      "asked": "CASE-exec: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T22:58:58.954Z"
     },
@@ -440,7 +440,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T22:59:40.726Z", "to": "2026-10-29T22:59:47.841Z"}],
-      "asked": null,
+      "asked": "CASE-bg: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T22:59:47.841Z"
     },
@@ -552,7 +552,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T23:00:16.626Z", "to": "2026-10-29T23:00:25.273Z"}],
-      "asked": null,
+      "asked": "CASE-par-main: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T23:00:25.273Z"
     },
@@ -580,7 +580,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T23:00:16.670Z", "to": "2026-10-29T23:00:24.795Z"}],
-      "asked": null,
+      "asked": "CASE-par-wt: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T23:00:24.795Z"
     },
@@ -664,7 +664,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T23:00:38.200Z", "to": "2026-10-29T23:00:45.703Z"}],
-      "asked": null,
+      "asked": "CASE-amb-1: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T23:00:45.703Z"
     },
@@ -692,7 +692,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T23:00:39.464Z", "to": "2026-10-29T23:00:46.985Z"}],
-      "asked": null,
+      "asked": "CASE-amb-2: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T23:00:46.985Z"
     },
@@ -720,7 +720,7 @@
       ],
       "subagents": [],
       "activity": [{"from": "2026-10-29T23:01:12.554Z", "to": "2026-10-29T23:01:21.437Z"}],
-      "asked": null,
+      "asked": "CASE-manual: <prompt>",
       "imported": false,
       "state_since": "2026-10-29T23:01:21.437Z"
     },

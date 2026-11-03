@@ -1,7 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Step 6.5 is committed; Phase 6 is NOT closed.** It waits on the owner's
+**Resume here (2026-11-02, latest): Step 6.6 is committed; Phase 6 is still NOT closed** (owner check below).
+- Recogniser (`crates/claude/src/invocation.rs`) now skips heredoc bodies (X1), splits on `(` `)` and drops bare
+  `{` `}` (X2), and skips `nohup` / `env NAME=v…` / `timeout|gtimeout DUR` (X3). Real launches 124 → 149
+  (unlinked 26 → 32: the newly recognised launches without a matching Codex run).
+- Codex `asked` falls back to the first eligible `response_item` user message (X4); real 2h Codex rows with `asked`
+  null 1 → 0. The route-impact 16:02 run is nested under its Claude parent with a link line (scratch render only).
+- Still open from 6.5's list: Claude `no prompt` when the first record starts `<system-reminder>` (41 of 175 real
+  main transcripts have no prompt: 37 wrapper-only, 4 no eligible text; rule unchanged by decision); home says
+  `last 2h` whatever `--since`; fold label / duplicate `now` tick; times before midnight show only the date.
+
+**Earlier (before Step 6.6):**
+**Step 6.5 is committed; Phase 6 is NOT closed.** It waits on the owner's
 stop-and-ask: the owner looks at the real screen (`target/release/multi-link tui`, and `--since 16h` for last night's
 runs) and confirms. Record the answer in `docs/phase6-check.md` → "Owner check" and here. Real renders were shown from
 scratch only (W10). Open points found on real data (docs/phase6-check.md, "Differences from the boards"), each a
@@ -256,6 +267,88 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 6.6: Linker: launches in subshells and after heredocs; prompt labels — Codex
+- Did: Skip queued heredoc bodies (quoted/plain delimiters, tab stripping, EOF); recognise shell groups and
+  the specified stacked wrappers; keep command substitutions opaque and directory moves conservative.
+  Add Codex response-item prompt fallback outside imports, retaining event prompt priority.
+  Add synthetic parser and end-to-end linker regressions. Document X1–X4. Update only seven `asked`
+  values per affected older JSON key, from existing scrubbed fixture placeholders; no real prompt text added.
+- Changed: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`, `crates/codex/src/lib.rs`, `crates/codex/tests/phase6.rs`, `crates/core/tests/links.rs`, `docs/design.md`, `docs/output-schema.md`, `fixtures/expected/hook/overview.json`, `fixtures/expected/hook/sessions-2h.json`, `fixtures/expected/hook/sessions.json`, `fixtures/expected/overview.json`, `fixtures/expected/sessions.json`, `PROGRESS.md`.
+- Verify:
+  - before (owner-supplied): links --since all: 124 launches; exact 12, heuristic 78, ambiguous 8, unlinked 26. sessions --since 2h: 1 Codex session, 1 with asked null.
+  - after (Claude, 2026-11-02 16:26 PST, release rebuilt from this diff): links --since all: 149 launches; exact 12,
+    heuristic 97, ambiguous 8, unlinked 32 (+25 recognised: +19 heuristic, +6 unlinked). sessions --since 2h:
+    2 Codex sessions, 0 with asked null (the before session plus the Codex run of this step).
+  - `cargo test --workspace` (Rust PATH set per AGENTS.md; exit 0), review-round-1 rerun, actual result lines:
+    ```text
+    test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+    test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+    test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+    test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+    test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+    test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+    test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+    test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+    test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+    test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+    test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+    test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+    test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+    test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+    test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    ```
+  - `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+    ```text
+        Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+    ```
+  - `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  - Read-only count over real Claude main transcripts in all project folders, applying unchanged W3
+    session-id / tool-result / first-text / wrapper filters; only aggregate output printed:
+    ```text
+    {'total': 175, 'no_prompt': 41, 'wrapper_only': 37, 'no_eligible_text': 4}
+    ```
+    Thus 41 main transcripts still have no prompt: 37 have only wrapper-prefixed candidate text and
+    4 lack eligible nonblank text. This counts transcripts, not record-only sessions or a time window.
+- Review: Claude, 1 Codex fix round. Files: all in Step 6.6's list; `docs/output-schema.md` was added to the list in
+  review (round-1 P2: its `asked` rule and the 6.2 note still said older Codex fixtures get `null`; fixed). Every
+  X1–X4 shape is tested, including the exact route-impact launch with a synthetic brief holding `'` and `"`, an
+  unterminated heredoc, `$(…)` not a launch, `cd` in a group, stacked wrappers and rejected `env -i` / `timeout
+  --signal` / `sudo`; core test links the heredoc + subshell launch by time and keeps the `cd` guard. The 6.1
+  goldens (`fixtures/expected/phase6`, `fixtures/expected/tui`) are byte-identical to HEAD. Claude re-ran Verify:
+  `cargo test --workspace` all ok, clippy `-D warnings` clean (matches the pasted output). The five older JSON
+  keys change only `asked` on Codex rows, to the existing scrubbed `CASE-<name>: <prompt>` strings. W10: added
+  lines hold no real prompts, paths or secrets; the one uuid is an existing committed fixture id. Real data
+  (scratch only, headless-Chrome render of `home_html --repo route-impact --since 2h`): the Codex run started
+  16:02 PST now sits nested under Claude `08ce1b62` with a `╎` matched-by-time line (link `heuristic`, 1 s after the
+  call) and its prompt as the label; the selected line reads `handed work to codex at 16:02`. Known limits kept
+  (not in X1–X4): `((a << 2))` arithmetic would read as a heredoc; an unquoted `#` comment with an apostrophe
+  still breaks quote tracking; the subshell launch's `background` stays `false` (it comes from the tool call).
+- Gotchas: Initial compile attempts caught an invalid slice field and a nonexistent test evidence variant;
+  corrected. Initial workspace run had 4 CLI key failures from newly populated older `asked` values;
+  updated those allowed JSON values only. Initial clippy found two style issues; fixed before final runs.
+  Step 6.1 phase6 JSON keys and all text/style goldens remain untouched. Unsupported shell grammar stays
+  unsupported; this is a recogniser, not a shell interpreter. Existing untracked `.claude/` left untouched.
 
 ### 2026-11-02 — Step 6.5: Visual check and README — Claude
 - Did: Extended `crates/tui/examples/home_html.rs` with `--repo NAME` (exact path, or a name that ends exactly one

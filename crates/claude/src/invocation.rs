@@ -36,15 +36,13 @@ pub struct Invocation {
 }
 
 /// Recognise the first launch segment using the Phase 1 grammar, not a shell
-/// interpreter. No expansion, environment prefixes, or wrapper commands.
+/// interpreter. Only the explicitly supported wrappers are removed; nothing expands.
 pub fn recognise(command: &str) -> Option<Launch> {
     let mut dir_moved = false;
     for segment in segments(command) {
-        let words: Vec<_> = segment
-            .tokens
-            .iter()
-            .map(|word| word.text.as_str())
-            .collect();
+        let offset = wrapper_offset(&segment.tokens);
+        let tokens = &segment.tokens[offset..];
+        let words: Vec<_> = tokens.iter().map(|word| word.text.as_str()).collect();
         let (form, resume_id) = match words.as_slice() {
             ["codex", "exec", "resume", id, ..] | ["codex", "resume", id, ..]
                 if uuid_shaped(id) =>
@@ -60,8 +58,7 @@ pub fn recognise(command: &str) -> Option<Launch> {
                 continue;
             }
         };
-        let changes_directory =
-            words.first() == Some(&"codex") && changes_directory(&segment.tokens);
+        let changes_directory = words.first() == Some(&"codex") && changes_directory(tokens);
         return Some(Launch {
             step: multi_link_plan::step_tag(&command[segment.span]),
             form,
@@ -70,6 +67,50 @@ pub fn recognise(command: &str) -> Option<Launch> {
         });
     }
     None
+}
+
+/// Skip only the narrow wrapper grammar, including stacked wrappers.
+fn wrapper_offset(words: &[Word]) -> usize {
+    let mut offset = 0;
+    loop {
+        match words.get(offset).map(|word| word.text.as_str()) {
+            Some("nohup") => offset += 1,
+            Some("env") => {
+                offset += 1;
+                while words.get(offset).is_some_and(|word| assignment(&word.text)) {
+                    offset += 1;
+                }
+            }
+            Some("timeout" | "gtimeout")
+                if words
+                    .get(offset + 1)
+                    .is_some_and(|word| duration(&word.text)) =>
+            {
+                offset += 2;
+            }
+            _ => return offset,
+        }
+    }
+}
+
+fn assignment(text: &str) -> bool {
+    let Some((name, _)) = text.split_once('=') else {
+        return false;
+    };
+    !name.is_empty()
+        && name
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| b == b'_' || b.is_ascii_alphabetic() || (i > 0 && b.is_ascii_digit()))
+}
+
+fn duration(text: &str) -> bool {
+    let number = text.strip_suffix(['s', 'm', 'h', 'd']).unwrap_or(text);
+    !number.is_empty()
+        && number
+            .parse::<f64>()
+            .is_ok_and(|n| n.is_finite() && n >= 0.0)
+        && number.bytes().all(|b| b.is_ascii_digit() || b == b'.')
 }
 
 fn changes_directory(words: &[Word]) -> bool {
@@ -124,6 +165,7 @@ struct Word {
     text: String,
     // Quoting/escaping is removed from text, but literal $PWD must stay distinct.
     expandable_dollar: bool,
+    quoted_or_escaped: bool,
 }
 
 fn segments(command: &str) -> Vec<Segment> {
@@ -134,13 +176,62 @@ fn segments(command: &str) -> Vec<Segment> {
     let mut quote = None;
     let mut chars = command.char_indices().peekable();
     let mut segment_start = 0;
+    let mut heredocs = Vec::new();
     while let Some((index, ch)) = chars.next() {
+        // Keep substitutions opaque even inside double quotes. Their quotes and
+        // separators belong to the nested shell, not this command's segments.
+        if ch == '$' && quote != Some('\'') && chars.peek().is_some_and(|(_, c)| *c == '(') {
+            let end = substitution_end(&mut chars);
+            word.text.push_str(&command[index..end]);
+            word.expandable_dollar = true;
+            started = true;
+            continue;
+        }
+        if quote.is_none() && ch == '<' && chars.peek().is_some_and(|(_, c)| *c == '<') {
+            chars.next();
+            // Here-strings are not heredocs.
+            if chars.peek().is_some_and(|(_, c)| *c == '<') {
+                chars.next();
+                continue;
+            }
+            let tabs = chars.peek().is_some_and(|(_, c)| *c == '-');
+            if tabs {
+                chars.next();
+            }
+            while chars.peek().is_some_and(|(_, c)| matches!(c, ' ' | '\t')) {
+                chars.next();
+            }
+            let mut delimiter = String::new();
+            let mut delimiter_quote = None;
+            while let Some(&(_, c)) = chars.peek() {
+                if delimiter_quote.is_none()
+                    && (c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')' | '<' | '>'))
+                {
+                    break;
+                }
+                chars.next();
+                if delimiter_quote == Some(c) {
+                    delimiter_quote = None;
+                } else if delimiter_quote.is_none() && matches!(c, '\'' | '"') {
+                    delimiter_quote = Some(c);
+                } else if c == '\\' && delimiter_quote != Some('\'') {
+                    if let Some((_, escaped)) = chars.next() {
+                        delimiter.push(escaped);
+                    }
+                } else {
+                    delimiter.push(c);
+                }
+            }
+            heredocs.push((delimiter, tabs));
+            continue;
+        }
         if ch == '\\'
             && quote != Some('\'')
             && let Some(&(_, next)) = chars.peek()
             && (quote.is_none() || matches!(next, '$' | '`' | '"' | '\\' | '\n'))
         {
             chars.next();
+            word.quoted_or_escaped = true;
             if next != '\n' {
                 word.text.push(next);
                 started = true;
@@ -156,17 +247,22 @@ fn segments(command: &str) -> Vec<Segment> {
             }
         } else if matches!(ch, '\'' | '"') {
             quote = Some(ch);
+            word.quoted_or_escaped = true;
             started = true;
-        } else if ch.is_whitespace() || matches!(ch, ';' | '|' | '&') {
+        } else if ch.is_whitespace() || matches!(ch, ';' | '|' | '&' | '(' | ')') {
             if started {
-                words.push(std::mem::take(&mut word));
+                if word.quoted_or_escaped || !matches!(word.text.as_str(), "{" | "}") {
+                    words.push(std::mem::take(&mut word));
+                } else {
+                    word = Word::default();
+                }
                 started = false;
             }
             // A single & is not a segment separator in the supported grammar.
             if ch == '&' && chars.peek().map(|(_, ch)| *ch) != Some('&') {
                 word.text.push(ch);
                 started = true;
-            } else if matches!(ch, ';' | '|' | '&' | '\n') {
+            } else if matches!(ch, ';' | '|' | '&' | '(' | ')' | '\n') {
                 if matches!(ch, '|' | '&') && chars.peek().map(|(_, next)| *next) == Some(ch) {
                     chars.next();
                 }
@@ -176,6 +272,29 @@ fn segments(command: &str) -> Vec<Segment> {
                     span: segment_start..index,
                 });
                 segment_start = segment_end;
+                if ch == '\n' {
+                    for (delimiter, tabs) in heredocs.drain(..) {
+                        while let Some((start, _)) = chars.peek().copied() {
+                            let mut end = command.len();
+                            for (i, c) in chars.by_ref() {
+                                if c == '\n' {
+                                    end = i;
+                                    break;
+                                }
+                            }
+                            let line = &command[start..end];
+                            if (if tabs {
+                                line.trim_start_matches('\t')
+                            } else {
+                                line
+                            }) == delimiter
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    segment_start = chars.peek().map_or(command.len(), |(i, _)| *i);
+                }
             }
         } else {
             word.text.push(ch);
@@ -184,7 +303,7 @@ fn segments(command: &str) -> Vec<Segment> {
         }
     }
     if quote.is_none() {
-        if started {
+        if started && (word.quoted_or_escaped || !matches!(word.text.as_str(), "{" | "}")) {
             words.push(word);
         }
         segments.push(Segment {
@@ -193,6 +312,34 @@ fn segments(command: &str) -> Vec<Segment> {
         });
     }
     segments
+}
+
+// The opening '(' is still in the iterator. Return the exclusive byte end.
+fn substitution_end(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>) -> usize {
+    chars.next();
+    let mut depth = 1;
+    let mut quote = None;
+    let mut end = 0;
+    while let Some((index, ch)) = chars.next() {
+        end = index + ch.len_utf8();
+        if ch == '\\' && quote != Some('\'') {
+            if let Some((i, c)) = chars.next() {
+                end = i + c.len_utf8();
+            }
+        } else if quote == Some(ch) {
+            quote = None;
+        } else if quote.is_none() && matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        } else if quote.is_none() && ch == '(' {
+            depth += 1;
+        } else if quote.is_none() && ch == ')' {
+            depth -= 1;
+            if depth == 0 {
+                break;
+            }
+        }
+    }
+    end
 }
 
 /// Re-read discovered main and subagent files. Missing files are omitted; other

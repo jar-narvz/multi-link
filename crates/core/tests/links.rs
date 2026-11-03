@@ -672,3 +672,38 @@ fn hook_join_requires_both_parent_and_tool_use_id() {
         vec![link(A, RECENT, InvocationForm::Exec, None, None, vec![])]
     );
 }
+
+#[test]
+fn heredoc_subshell_handoff_links_by_time_and_keeps_directory_guard() {
+    for (prefix, matched) in [("", true), ("cd other && ", false)] {
+        let temp = tempfile::tempdir().unwrap();
+        call(
+            temp.path(),
+            "parent",
+            RECENT,
+            &format!(
+                "cat <<'BRIEF' > brief.txt\nSynthetic brief: don't lose the \"sample\".\nBRIEF\n({prefix}nohup codex exec --sandbox workspace-write \"$(cat brief.txt)\" < /dev/null > /dev/null 2>&1 &)"
+            ),
+            "",
+        );
+        child(temp.path(), A, RECENT, "/repo");
+        assert_eq!(
+            report(temp.path()),
+            LinksReport {
+                links: vec![link(
+                    "parent",
+                    RECENT,
+                    InvocationForm::Exec,
+                    matched.then_some(A),
+                    None,
+                    if matched {
+                        vec![candidate(A, 0)]
+                    } else {
+                        vec![]
+                    }
+                )],
+                unparented: if matched { vec![] } else { vec![A.into()] },
+            }
+        );
+    }
+}

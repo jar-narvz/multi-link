@@ -380,6 +380,22 @@ Claude transcripts.
 | W9 | Colour and widths: Phase 5 roles keep their values and contrast tests; two roles are added (done green, child row background) and pass the same ≥ 4.5:1 test. NO_COLOR keeps every glyph and word. Repo view below 80 columns drops the bars and shows the lanes as a list (same labels and sub lines). Home below 80 columns drops the branch, then shortens labels with `…` on a word boundary | Board 8c needs a done mark and a nested-row tint the Phase 5 palette lacked |
 | W10 | Privacy: fixtures use synthetic prompts only. Real renders, board screenshots and JSON with real prompts stay in scratch storage. Each step's Review checks every committed file for real prompts, real ids, secrets and personal paths | Screens and JSON now carry prompt text; the repo is public |
 
+Step 6.6 extends recognition and W3 (2026-11-02):
+- **X1 Heredocs:** outside quotes, `<<WORD`, `<<'WORD'`, `<<"WORD"` and `<<-WORD`
+  queue bodies to skip after the current line. End delimiters match the whole line; `<<-`
+  permits leading tabs. Unterminated bodies consume through EOF; body prose is never tokenised.
+- **X2 Grouping:** unquoted parentheses split segments; whole-word unquoted braces are dropped.
+  A `cd` within a group still disables directory-based matching. Command substitutions remain opaque
+  words, including their quoted contents; their text cannot create a launch.
+- **X3 Wrappers:** skip leading `nohup`, `env` with optional `NAME=value` assignments and no options,
+  and `timeout` / `gtimeout` with one nonnegative numeric duration (optional `s/m/h/d` suffix).
+  These wrappers can stack; other prefixes remain unsupported.
+- **X4 Prompt fallback:** when no non-imported `user_message` supplies a prompt, use the first
+  non-imported `response_item` user message whose first `input_text`, after leading whitespace,
+  is nonblank and starts with neither `# AGENTS.md instructions` nor `<`. Apply W3 normalization.
+  Event prompts retain priority, even when blank or later in the file. Claude's wrapper rule is
+  unchanged: a prompt inside a command tag is skipped, without unwrapping.
+
 Non-goals for Phase 6: hook-free needs-you detection; the step graph (board 3, backlog); live grid; changing
 `--since`.
 

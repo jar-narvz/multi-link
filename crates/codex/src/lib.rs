@@ -129,6 +129,7 @@ fn parse<R: BufRead>(
     let mut turns = Vec::new();
     let mut activity_timestamps = Vec::new();
     let mut asked = None;
+    let mut response_prompt = None;
     let mut imported_turn: Option<String> = None;
     let mut starts = 0;
     let mut real_starts = 0;
@@ -165,6 +166,27 @@ fn parse<R: BufRead>(
             if event && payload["type"] == "user_message" && asked.is_none() {
                 asked = payload["message"]
                     .as_str()
+                    .map(multi_link_model::normalize_prompt);
+            }
+            if response_prompt.is_none()
+                && value["type"] == "response_item"
+                && payload["type"] == "message"
+                && payload["role"] == "user"
+            {
+                response_prompt = payload["content"]
+                    .as_array()
+                    .and_then(|blocks| {
+                        blocks
+                            .iter()
+                            .find(|block| block["type"] == "input_text")
+                            .and_then(|block| block["text"].as_str())
+                    })
+                    .map(str::trim_start)
+                    .filter(|text| {
+                        !text.is_empty()
+                            && !text.starts_with("# AGENTS.md instructions")
+                            && !text.starts_with('<')
+                    })
                     .map(multi_link_model::normalize_prompt);
             }
             if event && payload["type"] == "task_complete" {
@@ -222,7 +244,7 @@ fn parse<R: BufRead>(
         asked: if starts > 0 && real_starts == 0 {
             None
         } else {
-            asked
+            asked.or(response_prompt)
         },
         imported: starts > 0 && real_starts == 0,
         last_real_complete: if starts > 0 && real_starts == 0 {
