@@ -405,7 +405,7 @@ impl Paint<'_> {
     }
 }
 
-fn period(window: TimeWindow) -> String {
+pub(crate) fn period(window: TimeWindow) -> String {
     let ms = window.end.epoch_ms() - window.start.epoch_ms();
     if ms == 7_200_000 {
         "2h".into()

@@ -140,6 +140,10 @@ impl App {
     fn home_options(&self) -> crate::HomeOptions<'_> {
         crate::HomeOptions {
             links: self.report.as_ref().map(|r| &r.links),
+            window: self
+                .report
+                .as_ref()
+                .map(|r| Self::report_window(&r.overview, self.history_window, self.history_all)),
             theme: self
                 .theme
                 .unwrap_or_else(|| crate::theme::Theme::from_env(Some("truecolor"), None)),
@@ -661,6 +665,53 @@ mod phase6_tests {
             .iter()
             .position(|(repo, _)| repo.ends_with(suffix))
             .unwrap();
+    }
+    #[test]
+    fn home_window_follows_history_settings_after_refresh() {
+        for (length, all, start, refreshed_start, period, refreshed_period) in [
+            (
+                Some(std::time::Duration::from_secs(16 * 3600)),
+                false,
+                "2026-11-02T14:25:00Z",
+                "2026-11-02T15:25:00Z",
+                "16h",
+                "16h",
+            ),
+            (
+                None,
+                true,
+                "2026-11-03T05:05:00Z",
+                "2026-11-03T05:05:00Z",
+                "1h20",
+                "2h20",
+            ),
+        ] {
+            let mut app = App {
+                history_window: length,
+                history_all: all,
+                ..App::default()
+            };
+            app.update(Event::Refresh(Ok(refresh())));
+            for (expected_start, expected_period) in
+                [(start, period), (refreshed_start, refreshed_period)]
+            {
+                let report = &app.report.as_ref().unwrap().overview;
+                assert_eq!(
+                    app.home_options().window,
+                    Some(TimeWindow::new(expected_start.parse().unwrap(), report.now))
+                );
+                let mut buf = Buffer::empty(Rect::new(0, 0, 160, 80));
+                app.render(buf.area, &mut buf);
+                let header: String = (0..160).map(|x| buf[(x, 0)].symbol()).collect();
+                assert!(
+                    header.contains(&format!("All repos · last {expected_period}")),
+                    "{header}"
+                );
+                let mut next = refresh();
+                next.overview.now = "2026-11-03T07:25:00Z".parse().unwrap();
+                app.update(Event::Refresh(Ok(next)));
+            }
+        }
     }
     #[test]
     fn enter_opens_cards_summaries_and_quiet_repos_and_escape_restores_identity() {

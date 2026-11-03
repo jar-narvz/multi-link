@@ -44,6 +44,8 @@ pub struct HomeOptions<'a> {
     pub hide_footer: bool,
     pub theme: Theme,
     pub offset: UtcOffset,
+    /// Report window; omitted options retain the default two hours.
+    pub window: Option<crate::TimeWindow>,
 }
 impl Default for HomeOptions<'_> {
     fn default() -> Self {
@@ -52,6 +54,7 @@ impl Default for HomeOptions<'_> {
             hide_footer: false,
             theme: Theme::from_env(Some("truecolor"), None),
             offset: UtcOffset::UTC,
+            window: None,
         }
     }
 }
@@ -396,7 +399,7 @@ fn draw_group(
         if !rest.is_empty() {
             cursor.mark(y);
         }
-        let mut summary = activity_summary(&rows, &rest);
+        let mut summary = activity_summary(&rows, &rest, period(report, o));
         if g.latest_handoff.is_none() {
             summary.push_str(" · no hand-offs");
         }
@@ -492,7 +495,14 @@ fn draw_counts_and_plan(
         draw_spans(body, rx, y, counts, rw);
     }
 }
-fn activity_summary(rows: &[&SessionRow], rest: &[&SessionRow]) -> String {
+fn period(report: &OverviewReport, o: &HomeOptions<'_>) -> String {
+    crate::timeline::period(
+        o.window
+            .unwrap_or_else(|| crate::TimeWindow::default_for(report)),
+    )
+}
+
+fn activity_summary(rows: &[&SessionRow], rest: &[&SessionRow], period: String) -> String {
     if rest.is_empty() {
         let bursts: Vec<_> = rows.iter().flat_map(|r| &r.activity).collect();
         let ms = bursts
@@ -500,7 +510,7 @@ fn activity_summary(rows: &[&SessionRow], rest: &[&SessionRow]) -> String {
             .map(|b| b.to.epoch_ms() - b.from.epoch_ms())
             .sum();
         format!(
-            "active about {} min in the last 2h, in {} stretch{}",
+            "active about {} min in the last {period}, in {} stretch{}",
             view::minutes(ms),
             bursts.len(),
             if bursts.len() == 1 { "" } else { "es" }
@@ -510,9 +520,11 @@ fn activity_summary(rows: &[&SessionRow], rest: &[&SessionRow]) -> String {
         let n = rest.len();
         let plural = if n == 1 { "" } else { "s" };
         if active == 0 {
-            format!("{n} older session{plural}, none active in the last 2h · enter shows all")
+            format!("{n} older session{plural}, none active in the last {period} · enter shows all")
         } else {
-            format!("{n} other session{plural}, {active} active in the last 2h · enter shows all")
+            format!(
+                "{n} other session{plural}, {active} active in the last {period} · enter shows all"
+            )
         }
     }
 }
@@ -678,7 +690,13 @@ fn draw_header(screen: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>
             drop_priority,
         })
     };
-    add("All repos · last 2h".into(), t.text, true, 0, 6);
+    add(
+        format!("All repos · last {}", period(report, o)),
+        t.text,
+        true,
+        0,
+        6,
+    );
     add(
         format!("● {} working now", n(State::Busy)),
         t.claude,

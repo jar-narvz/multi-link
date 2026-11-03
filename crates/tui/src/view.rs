@@ -14,7 +14,10 @@ pub fn clock(at: Timestamp, now: Timestamp, offset: UtcOffset) -> String {
     let at = datetime(at).to_offset(offset);
     let now = datetime(now).to_offset(offset);
     let time = format!("{:02}:{:02}", at.hour(), at.minute());
-    if at.date() == now.date() {
+    let age = now - at;
+    if (age >= time::Duration::ZERO && age < time::Duration::hours(24))
+        || (age < time::Duration::ZERO && at.date() == now.date())
+    {
         time
     } else {
         let month = [

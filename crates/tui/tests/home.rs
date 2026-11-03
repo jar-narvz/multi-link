@@ -418,3 +418,62 @@ fn attention_status_columns_align_within_each_card() {
         }
     }
 }
+
+#[test]
+fn home_names_the_window_in_header_counts_and_activity_summary() {
+    let mut report = phase6();
+    for hours in [2, 16] {
+        let options = HomeOptions {
+            window: Some(multi_link_tui::TimeWindow::ending_at(
+                report.now,
+                std::time::Duration::from_secs(hours * 3600),
+            )),
+            ..options()
+        };
+        let area = Rect::new(0, 0, 160, 80);
+        let mut buf = Buffer::empty(area);
+        render_home_with_options(&report, None, &options, area, &mut buf);
+        let screen = text(&buf);
+        assert!(screen.contains(&format!("All repos · last {hours}h")));
+        assert!(
+            screen.contains(&format!(
+                "4 other sessions, 2 active in the last {hours}h · enter shows all"
+            )),
+            "{screen}"
+        );
+        assert!(
+            screen.contains(&format!(
+                "active about 13 min in the last {hours}h, in 3 stretches"
+            )),
+            "{screen}"
+        );
+        if hours == 16 {
+            assert!(!screen.contains("last 2h"));
+        }
+    }
+    // The count line also names the window when none of the hidden rows was active.
+    for row in &mut report.repos[0].rows {
+        if let multi_link_model::Row::Session(row) = row {
+            row.activity.clear();
+            for child in &mut row.children {
+                child.activity.clear();
+            }
+        }
+    }
+    let area = Rect::new(0, 0, 160, 80);
+    let mut buf = Buffer::empty(area);
+    render_home_with_options(
+        &report,
+        None,
+        &HomeOptions {
+            window: Some(multi_link_tui::TimeWindow::ending_at(
+                report.now,
+                std::time::Duration::from_secs(16 * 3600),
+            )),
+            ..options()
+        },
+        area,
+        &mut buf,
+    );
+    assert!(text(&buf).contains("4 older sessions, none active in the last 16h · enter shows all"));
+}

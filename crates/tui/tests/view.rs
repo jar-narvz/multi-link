@@ -42,7 +42,7 @@ fn status_phrases_use_evidence_and_whole_minutes() {
     assert_eq!(view::status(&s, r.now, offset), "finished");
 }
 #[test]
-fn clocks_use_local_dates_and_fractional_offsets() {
+fn clocks_use_elapsed_days_and_fractional_offsets() {
     let now = "2026-11-03T06:25:00Z".parse().unwrap();
     assert_eq!(view::clock(now, now, time::UtcOffset::UTC), "06:25");
     assert_eq!(
@@ -146,4 +146,45 @@ fn home_attention_includes_children_and_merged_members_but_hides_imports() {
     }));
     assert_eq!(view::sessions(g).count(), 6);
     assert_eq!(view::attention(g).len(), 2);
+}
+
+#[test]
+fn clock_keeps_previous_day_until_exactly_24_hours_old() {
+    let now = "2026-11-03T06:25:00Z".parse().unwrap();
+    let recent = "2026-11-02T06:26:00Z".parse().unwrap();
+    let boundary = "2026-11-02T06:25:00Z".parse().unwrap();
+    for (offset, expected_clock, expected_date) in [
+        (time::UtcOffset::UTC, "06:26", "Nov 2"),
+        (
+            time::UtcOffset::from_hms(-8, 0, 0).unwrap(),
+            "22:26",
+            "Nov 1",
+        ),
+        (
+            time::UtcOffset::from_hms(5, 30, 0).unwrap(),
+            "11:56",
+            "Nov 2",
+        ),
+    ] {
+        assert_eq!(view::clock(recent, now, offset), expected_clock);
+        assert_eq!(view::clock(boundary, now, offset), expected_date);
+    }
+    // Local midnight has passed, but this timestamp is only 90 minutes old.
+    let offset = time::UtcOffset::from_hms(-8, 0, 0).unwrap();
+    let now = "2026-11-03T08:30:00Z".parse().unwrap();
+    assert_eq!(
+        view::clock("2026-11-03T07:00:00Z".parse().unwrap(), now, offset),
+        "23:00"
+    );
+}
+
+#[test]
+fn future_clocks_keep_the_local_date_rule() {
+    let now = "2026-10-29T23:15:00Z".parse().unwrap();
+    let future = "2026-10-30T06:08:00Z".parse().unwrap();
+    assert_eq!(view::clock(future, now, time::UtcOffset::UTC), "Oct 30");
+    assert_eq!(
+        view::clock(future, now, time::UtcOffset::from_hms(-8, 0, 0).unwrap()),
+        "22:08"
+    );
 }

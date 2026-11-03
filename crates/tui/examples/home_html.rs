@@ -16,7 +16,7 @@
 //! `--repo` draws that repo's view instead (a full repo path, or a name that ends one): fitted range,
 //! folds on, imports hidden and the first lane selected, as the TUI opens it from the repo's title
 //! line. Pass the report's
-//! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so the repo view gets the window the TUI would give it.
+//! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would give it.
 use std::{env, fmt::Write, fs, time::Duration};
 
 use multi_link_model::{LinksReport, OverviewReport};
@@ -184,6 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
+    let window = TimeWindow::ending_at(report.now, since);
     let title = if let Some(name) = repo_arg {
         // An exact path wins; a bare name must end exactly one repo path.
         let repos: Vec<&str> = report.repos.iter().map(|g| g.repo.as_str()).collect();
@@ -207,7 +208,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             offset,
             ..RepoOptions::default()
         };
-        let window = TimeWindow::ending_at(report.now, since);
         render_repo(
             &report,
             &links,
@@ -222,6 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let options = HomeOptions {
             links: Some(&links),
+            window: Some(window),
             offset,
             ..HomeOptions::default()
         };

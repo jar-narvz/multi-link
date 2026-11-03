@@ -1,14 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.1 is committed.** Next: Step 7.2 (Codex, P2 home
-names its window + P3 clock for the last 24 h). What 7.2 needs:
-- P1 lives in `crates/claude/src/lib.rs` `fn prompt` (leading exact `<system-reminder>` blocks stripped before W3);
-  tests in `crates/claude/tests/phase7.rs`. No fixture JSON changed. Real Claude count `[182,44]` → `[182,11]`
-  (baseline `[181,43]`: one new live session, one more old-rule null; the same 11 non-reminder nulls remain).
-- `docs/design.md` now has a "Phase 7 decisions" section with P1–P4 (P2–P4 are documented, not implemented).
-- The four 6.1 `*-phase6*` goldens are unchanged vs 26af6f2; 7.2 must keep them so (`git diff --exit-code 26af6f2 -- …`).
-- Home still hard-codes `last 2h` (home.rs window phrases); `view::clock` still uses the local-date rule (W5).
+**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.2 is committed.** Next: Step 7.3 (Codex, P4 axis
+labels never hide each other). What 7.3 needs:
+- `timeline::period` is now `pub(crate)` (home.rs uses it for its three `last …` phrases); keep its output stable,
+  home's wording depends on it. `HomeOptions.window: Option<TimeWindow>` (None → 2h); App passes
+  `report_window(...)` on every render.
+- `view::clock`: `HH:MM` when 0 ≤ now−at < 24 h; ≥ 24 h → `Mon D`; future times keep the old local-date rule
+  (the hook fixture has a `state_since` after `now`). Axis tick labels in timeline.rs do not use `clock`'s date rule.
+- No TUI golden changed in 7.2 (all match 6a5282a); the four 6.1 `*-phase6*` goldens are unchanged vs 26af6f2,
+  and 7.3 must keep `repo-phase6` so.
 
 **Before Phase 7:**
 **Resume here (2026-11-02, latest).** **Phase 6 is closed: the need is met.** The owner checked the real
@@ -292,6 +293,90 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 7.2: TUI: home names its window; clock for the last 24 h — Codex
+- Did: Passed the existing report window into home on every render, including after refresh; reused the repo
+  period formatter for all three home phrases. Passed the HTML example's window to home. Changed the shared
+  clock to use elapsed ages from 0 up to (excluding) 24h, retaining the old local-date rule for future times. Added exact-value tests for 2h/16h
+  phrases (including no hidden activity), app 16h/all windows before/after refresh, previous-day 23h59m vs
+  exactly 24h in UTC/UTC-8/UTC+5:30, clock times across local midnight, and future timestamps on the same
+  and next local dates. Restored all four hook golden files after the review fix.
+- Changed: `crates/tui/src/{home.rs,view.rs,app.rs,timeline.rs}` (timeline only exposes `period` within the crate),
+  `crates/tui/tests/{home.rs,view.rs}`, `crates/tui/examples/home_html.rs`,
+  `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` (review round 1 rerun) → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; final output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.80s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+- Verify: `cargo run -q -p multi-link-tui --example home_html -- fixtures/expected/phase6/overview.json
+  fixtures/expected/links.json /tmp/multi-link-7.2-r1-home.html --since 16h --offset -8 --size 160x80` → no output,
+  exit 0. Python HTMLParser extracted text and asserted the three phrases and absence of `last 2h`; output:
+  ```text
+All repos · last 16h
+4 other sessions, 2 active in the last 16h
+active about 13 min in the last 16h, in 3 stretches
+  ```
+- Verify: `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt
+  fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt
+  fixtures/expected/tui/repo-phase6.styles.txt` → no output, exit 0.
+- Verify: `git diff --exit-code 6a5282a -- fixtures/expected/tui/` → no output, exit 0; all TUI goldens
+  match the requested pre-step commit, including the four restored hook files.
+- Review: Claude, 2026-11-02 — 1 Codex fix round. Round 1: `view.rs` `now - at < 24h` also held for future
+  times (negative age), so the hook fixture's waiting `state_since` (~7 h after its `now`) read `since 06:08`;
+  fixed with a 0 ≤ age guard, future times keep the old local-date rule, hook goldens restored, two tests added.
+  Re-review clean. Diff stays within the step's files; no personal paths or real data (W10). Claude re-ran
+  Verify: `cargo test --workspace` → every `test result: ok`, 0 failed, exit 0; clippy `-D warnings` → exit 0;
+  pinned 6.1-golden `git diff --exit-code 26af6f2` → exit 0; `git diff --exit-code 6a5282a --
+  fixtures/expected/tui/` → exit 0; `home_html … --since 16h` → `All repos · last 16h` ×1, `in the last 16h`
+  ×2, `last 2h` ×0. Matches what Codex pasted.
+- Gotchas: The hook fixture's waiting `state_since` is after its `now`; the initial negative-age comparison
+  changed its date incorrectly. Those snapshot updates were a regression, not required P3 changes; all
+  four hook files are now restored and the entire TUI golden directory matches 6a5282a. Initial new test
+  expectations were also corrected against fixture values (first burst 05:05Z, 2 active hidden sessions,
+  13 whole activity minutes) and existing period syntax (`1h20`, not `1h20m`). The example still accepts
+  durations only; `--since all` is tested through App. Existing untracked `.claude/` is untouched. Nothing
+  staged, committed or pushed.
+
 
 ### 2026-11-02 — Step 7.1: Core: Claude prompt after a system reminder — Codex
 - Did: Strip repeated exact leading `<system-reminder>` blocks through the first closing tag, trimming
