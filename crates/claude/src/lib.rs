@@ -363,7 +363,11 @@ fn prompt(content: &Value) -> Option<String> {
     } else {
         content.as_str()?
     };
-    let text = text.trim_start();
+    let mut text = text.trim_start();
+    while let Some(reminder) = text.strip_prefix("<system-reminder>") {
+        let (_, rest) = reminder.split_once("</system-reminder>")?;
+        text = rest.trim_start();
+    }
     if text.is_empty() || text.starts_with('<') {
         return None;
     }

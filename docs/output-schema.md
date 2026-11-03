@@ -132,10 +132,13 @@ data on 2026-11-01 and are assumptions (design W2).
   the next turn), end of file. `imported` is `true` when the rollout has at least one `task_started` and every
   `task_started` opens an imported turn. Imported records still count for `state`, `started_at` and
   `last_activity` (unchanged).
-- **`asked` (W3).** Claude, main transcript only: the first record with `type` `user` whose `sessionId`
+- **`asked` (W3, P1).** Claude, main transcript only: the first record with `type` `user` whose `sessionId`
   equals the session id and whose `message.content` is a string, or an array holding a block of `type` `text`
-  (the first such block's string `text` is used, whatever blocks come before it) (records whose content holds a `tool_result` are skipped); trim leading whitespace; skip it if
-  that leaves nothing or starts with `<`, and keep looking. Codex: `payload.message` of the first `event_msg`
+  (the first such block's string `text` is used, whatever blocks come before it) (records whose content holds a `tool_result` are skipped); trim leading whitespace. P1 (Step 7.1): while the text starts with exactly
+  `<system-reminder>` (no attributes), remove through the first following `</system-reminder>` and trim
+  leading whitespace again. No nesting is parsed; an unclosed reminder skips the record. No other tag
+  is stripped (`<system-reminder-extra>` does not match). Skip the record if the remaining text is blank
+  or starts with `<`, and keep looking. Codex: `payload.message` of the first `event_msg`
   `user_message` outside an imported turn. This event prompt keeps priority, even if blank or later in the
   file. If no such event supplies a string prompt, X4 (Step 6.6) falls back to the first eligible
   `response_item` outside an imported turn with `payload.type` `message` and `payload.role` `user`:

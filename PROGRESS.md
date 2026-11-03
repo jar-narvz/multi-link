@@ -1,6 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.1 is committed.** Next: Step 7.2 (Codex, P2 home
+names its window + P3 clock for the last 24 h). What 7.2 needs:
+- P1 lives in `crates/claude/src/lib.rs` `fn prompt` (leading exact `<system-reminder>` blocks stripped before W3);
+  tests in `crates/claude/tests/phase7.rs`. No fixture JSON changed. Real Claude count `[182,44]` → `[182,11]`
+  (baseline `[181,43]`: one new live session, one more old-rule null; the same 11 non-reminder nulls remain).
+- `docs/design.md` now has a "Phase 7 decisions" section with P1–P4 (P2–P4 are documented, not implemented).
+- The four 6.1 `*-phase6*` goldens are unchanged vs 26af6f2; 7.2 must keep them so (`git diff --exit-code 26af6f2 -- …`).
+- Home still hard-codes `last 2h` (home.rs window phrases); `view::clock` still uses the local-date rule (W5).
+
+**Before Phase 7:**
 **Resume here (2026-11-02, latest).** **Phase 6 is closed: the need is met.** The owner checked the real
 screen and approved it with one change (Step 6.6 linked launches in subshells / after heredocs and fixed Codex
 prompt labels; Step 6.7 added the `✓ done` label). Verdict recorded in `docs/phase6-check.md`. Phase 6 commits:
@@ -282,6 +292,79 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 7.1: Core: Claude prompt after a system reminder — Codex
+- Did: Strip repeated exact leading `<system-reminder>` blocks through the first closing tag, trimming
+  whitespace after each, before W3 filtering/normalization. Added synthetic regression cases for both
+  string and text-block content: single/repeated reminders, reminder-only fallback, other wrappers,
+  missing close, extra tag suffix, attributes, plain text, inline tags and first-close (no nesting) behavior.
+  Documented Phase 7 P1–P4 and updated the binding Claude `asked` rule.
+- Changed: `crates/claude/src/lib.rs`, `crates/claude/tests/phase7.rs`, `docs/design.md`,
+  `docs/output-schema.md`, `PROGRESS.md`. No expected JSON changes were needed: existing fixture tests pass.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.89s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test leading_system_reminders_preserve_prompt_selection_and_normalization ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, final output:
+  ```text
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.58s
+  ```
+  `cargo build --release -p multi-link` → exit 0, final output:
+  ```text
+Finished `release` profile [optimized] target(s) in 4.95s
+  ```
+  `cargo fmt --all -- --check` → no output, exit 0 (after formatting the new test).
+  `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt fixtures/expected/tui/repo-phase6.styles.txt`
+  → no output, exit 0.
+  `target/release/multi-link sessions --since all --json | jq -c '[.sessions[]|select(.harness=="claude")] | [length, (map(select(.asked==null))|length)]'`
+  → before rebuild `[182,44]`, after rebuild `[182,11]` (both exit 0). Compared with the phase baseline
+  `[181,43]`, live data has one additional Claude session and one additional old-rule null; P1 recovers
+  33 prompts on this run, leaving the same 11 nulls. Only counts were emitted; no real prompt data saved.
+- Review: Claude, 2026-11-02 — clean, no findings, no Codex rounds. Diff stays within the step's files (no
+  fixture JSON needed). `strip_prefix("<system-reminder>")` cannot match attributes or `<system-reminder-extra>`;
+  `split_once(...)?` skips an unclosed reminder; first closing tag ends the block (no nesting), as P1 says. Tests
+  cover all seven Verify cases for string and text-block content. W10: only synthetic text added. Re-ran Verify:
+  `cargo test --workspace` all `ok` (same 36 result lines), clippy `-D warnings` clean, pinned 6.1 goldens
+  exit 0, real count `[182,11]` — matches Codex's paste.
+- Gotchas: Other leading tags still skip the record; no nested-tag parsing. P2–P4 are documented for later
+  steps, not implemented here. Existing untracked `.claude/` left untouched.
+
 
 ### 2026-11-02 — Step 6.7: Repo view: `✓ done` label after a finished Codex run — Codex
 - Did: Draw completion labels after the lanes, checking the seven cells after the final bar for the
