@@ -151,7 +151,12 @@ fn session_label_for(row: &SessionRow, parent: Option<&str>) -> String {
     };
     if let Some(step) = step {
         format!("step {step}")
-    } else if let Some(prompt) = row.asked.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if let Some(prompt) = row
+        .last_asked
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| row.asked.as_deref().filter(|s| !s.trim().is_empty()))
+    {
         format!("“{prompt}”")
     } else {
         format!(

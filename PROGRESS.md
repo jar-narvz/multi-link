@@ -1,6 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Resume here (2026-11-03, latest): Step 7.5 is committed; Phase 7 is still NOT closed.** It waits on the
+owner's stop-and-ask, which now covers Steps 7.1–7.5: the owner runs `target/release/multi-link tui` (and
+`--since 16h`) and confirms, including that labels now quote each session's latest prompt. The coordinator
+records the answer in `docs/phase7-check.md` → "Owner check" and here. What 7.5 changed:
+- Session/SessionRow carry additive `last_asked` (P5); `asked` is unchanged. Labels: latest step › `last_asked`
+  › `asked` › `· no prompt`. The selected line and `o` are unchanged.
+- Real counts (counts only): Claude 186 sessions, `asked` null 11, `last_asked` null 14 (3 extra: only `isMeta`
+  eligible text, so they fall back to `asked`), 89 differ; Codex 295, both null 154, 6 differ.
+- 276 tests pass, clippy clean, the four 6.1 goldens unchanged vs 26af6f2, JSON equals 081cdcc minus `last_asked`.
+- `docs/phase7-check.md` does not mention P5 yet (7.4 wrote it before 7.5); add a line when recording the answer.
+
+**Before Step 7.5:**
 **Resume here (2026-11-02, latest): Step 7.4 is committed except its last Verify item (the owner's answer);
 Phase 7 is NOT closed.** It waits on the owner's
 stop-and-ask: the owner runs `target/release/multi-link tui` (and `--since 16h`) and confirms the Phase 7 need.
@@ -305,6 +317,98 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-03 — Step 7.5: Label quotes the latest prompt, not the first — Codex
+- Did: Added `last_asked` to Session/SessionRow, both parsers, report construction and TUI labels while
+  preserving `asked`. Claude excludes meta, compact-summary, interruption, inherited, tool-result and
+  wrapper-only records. Codex keeps event priority and imported-turn exclusions for latest prompts.
+  Added synthetic tests for resumed prompts, response-item fallback, skipped trailing records, labels,
+  cold/changed/warm scanner passes and overview propagation; updated schema, P5 and the README label sentence.
+- Changed: `README.md`, `crates/claude/src/lib.rs`, `crates/claude/tests/phase7.rs`, `crates/codex/src/lib.rs`, `crates/codex/tests/phase6.rs`, `crates/core/src/open.rs`, `crates/core/src/overview.rs`, `crates/core/src/sessions.rs`, `crates/core/tests/overview.rs`, `crates/core/tests/phase6.rs`, `crates/core/tests/sessions.rs`, `crates/model/src/lib.rs`, `crates/model/tests/model.rs`, `crates/tui/src/view.rs`, `crates/tui/tests/home.rs`, `crates/tui/tests/phase6_shape.rs`, `crates/tui/tests/view.rs`, `docs/design.md`, `docs/output-schema.md`, `fixtures/expected/hook/overview.json`, `fixtures/expected/hook/sessions-2h.json`, `fixtures/expected/hook/sessions.json`, `fixtures/expected/overview.json`, `fixtures/expected/phase4/overview.json`, `fixtures/expected/phase5/overview.json`, `fixtures/expected/phase6/overview.json`, `fixtures/expected/phase6/sessions.json`, `fixtures/expected/sessions.json`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace > /tmp/step75-tests.log 2>&1` → exit 0;
+  all 36 actual result lines (276 passed, 0 failed):
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings > /tmp/step75-clippy.log 2>&1` → exit 0:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.72s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `python3 /tmp/step75-verify.py` (loads every tracked JSON from 081cdcc, recursively removes only
+  `last_asked` from current JSON, compares parsed values) → exit 0, actual output:
+  ```text
+PASS: 42 committed JSON files equal 081cdcc after removing last_asked.
+  ```
+  `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt fixtures/expected/tui/repo-phase6.styles.txt`
+  → no output, exit 0.
+  `cargo build --release -p multi-link > /tmp/step75-release.log 2>&1` → exit 0:
+  ```text
+    Finished `release` profile [optimized] target(s) in 5.42s
+  ```
+  `python3 /tmp/step75-counts.py` (runs `target/release/multi-link sessions --since all --json`,
+  retains JSON only in memory, prints counts) → exit 0:
+  ```text
+claude: {"sessions": 186, "asked_null": 11, "last_asked_null": 14, "different": 89, "first_only": 3, "last_only": 0}
+codex: {"sessions": 294, "asked_null": 154, "last_asked_null": 154, "different": 6, "first_only": 0, "last_only": 0}
+  ```
+  `python3 /tmp/step75-exclusions.py` (read-only inspection of first-only Claude records; counts only)
+  → exit 0:
+  ```text
+Claude first-only sessions: 3; excluded eligible-record categories by session: {"isMeta": 3}
+  ```
+- Review: Claude, 2026-11-03 — clean, no rounds needed. Round 0: Codex correctly stopped because
+  `crates/model/tests/model.rs` was outside the file list; Claude added `crates/model/tests/**` to the step
+  and re-ran. Diff read against P5: Claude keeps `asked` first-eligible and sets `last_asked` only past the
+  `isMeta` / `isCompactSummary` / `[Request interrupted by user` filter; Codex keeps user_message over
+  response-item fallback, both inside the existing imported-turn gate; label order last made step ›
+  `last_asked` › `asked` › no prompt. All files are in the step's list (`open.rs` is a constructor field only).
+  W10: added lines carry synthetic prompts only; no home paths or secrets; PROGRESS holds counts only.
+  Claude re-ran Verify: 276 passed / 0 failed, clippy clean, pinned 6.1-golden diff exit 0, 42 tracked JSON
+  files equal 081cdcc without `last_asked`, real counts Claude 186 / 11 / 14 / 89, Codex 295 / 154 / 154 / 6
+  (Codex 295 vs 294 pasted: one new live rollout between runs). Note, not a defect: the 3 Claude
+  `last_asked`-null sessions keep their old label, because `asked` (W3, unchanged) is their `isMeta` text.
+- Gotchas: Initial verification exposed old exact-key assertions in model/core and additive-field
+  stripping in historical compatibility tests; updated these within the allowed tests. Clippy's
+  collapsible-if warnings were fixed. Final workspace run is green. The three Claude first-only
+  sessions have only `isMeta` eligible text, so P5 correctly leaves `last_asked` null and labels fall
+  back to `asked`; Codex null counts match. Phase 7 owner confirmation remains pending.
+
 
 ### 2026-11-02 — Step 7.4: Real check and owner confirm — Claude
 - Did: Ran the whole-phase Verify. Rendered real `~` at `--now 2026-11-03T05:19:00Z` (UTC−8) with

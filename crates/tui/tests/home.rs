@@ -281,10 +281,12 @@ fn unknown_labels_and_untagged_handoffs_do_not_generate_question_marks() {
             };
             for row in rows {
                 row.asked = None;
+                row.last_asked = None;
                 row.made.clear();
                 row.handoffs.clear();
                 for child in &mut row.children {
                     child.asked = None;
+                    child.last_asked = None;
                     child.handoffs.clear();
                 }
             }

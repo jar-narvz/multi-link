@@ -118,9 +118,9 @@ fn phase6_keys_parse_as_json() {
 }
 
 #[test]
-fn phase6_keys_carry_the_four_added_fields_on_every_session() {
+fn phase6_keys_carry_the_added_fields_on_every_session() {
     fn check(row: &serde_json::Value, path: &str) {
-        for field in ["activity", "asked", "imported", "state_since"] {
+        for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
             assert!(
                 row.get(field).is_some(),
                 "{path}: {} lacks {field}",

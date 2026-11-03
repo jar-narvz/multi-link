@@ -36,6 +36,7 @@ fn all_import_even_with_records_outside_turns_has_no_activity_prompt_or_completi
     assert!(rollout.imported);
     assert_eq!(rollout.activity_timestamps, vec![]);
     assert_eq!(rollout.asked, None);
+    assert_eq!(rollout.last_asked, None);
     assert_eq!(rollout.last_real_complete, None);
     assert_eq!(rollout.last_activity, t(5));
     assert_eq!(rollout.last_turn_complete(), Some(true));
@@ -132,7 +133,9 @@ fn user_message_has_priority_even_when_later_or_blank() {
             vec![response("user", &["Synthetic fallback"]), message.clone()],
             vec![message, response("user", &["Synthetic fallback"])],
         ] {
-            assert_eq!(parse(records).asked.as_deref(), Some(prompt));
+            let rollout = parse(records);
+            assert_eq!(rollout.asked.as_deref(), Some(prompt));
+            assert_eq!(rollout.last_asked.as_deref(), Some(prompt));
         }
     }
 }
@@ -151,4 +154,56 @@ fn response_prompts_in_imports_stay_excluded() {
         response("user", &["Synthetic real prompt"]),
     ]);
     assert_eq!(parse(mixed).asked.as_deref(), Some("Synthetic real prompt"));
+}
+
+#[test]
+fn latest_event_prompt_wins_over_response_fallback_and_imports() {
+    let mut first = event("user_message", "", 2);
+    first["payload"]["message"] = json!("Synthetic first prompt");
+    let mut second = event("user_message", "", 5);
+    second["payload"]["message"] = json!("Synthetic\n resumed prompt");
+    let rollout = parse(vec![
+        event("task_started", "real-a", 1),
+        first,
+        event("task_complete", "real-a", 3),
+        event("task_started", "real-b", 4),
+        second,
+        event("task_complete", "real-b", 6),
+        response("user", &["Synthetic later fallback"]),
+        event("task_started", "external-import-a", 7),
+        event("user_message", "", 8),
+        response("user", &["Synthetic imported fallback"]),
+    ]);
+    assert_eq!(rollout.asked.as_deref(), Some("Synthetic first prompt"));
+    assert_eq!(
+        rollout.last_asked.as_deref(),
+        Some("Synthetic resumed prompt")
+    );
+}
+
+#[test]
+fn latest_response_fallback_skips_ineligible_and_imported_messages() {
+    let rollout = parse(vec![
+        response("user", &["Synthetic first fallback"]),
+        response(
+            "user",
+            &["Synthetic\n latest fallback", "Ignored second block"],
+        ),
+        response("user", &["# AGENTS.md instructions for /synthetic"]),
+        response(
+            "user",
+            &["<environment_context>synthetic</environment_context>"],
+        ),
+        response("user", &[" "]),
+        response("assistant", &["Synthetic assistant text"]),
+        event("task_started", "real", 1),
+        event("task_complete", "real", 2),
+        event("task_started", "external-import-a", 3),
+        response("user", &["Synthetic imported fallback"]),
+    ]);
+    assert_eq!(rollout.asked.as_deref(), Some("Synthetic first fallback"));
+    assert_eq!(
+        rollout.last_asked.as_deref(),
+        Some("Synthetic latest fallback")
+    );
 }

@@ -101,6 +101,7 @@ pub fn build(
             made: made(session, &links.links),
             activity: session.activity.clone(),
             asked: session.asked.clone(),
+            last_asked: session.last_asked.clone(),
             imported: session.imported,
             state_since: session.state_since,
             children,
@@ -394,6 +395,7 @@ mod tests {
             subagents: Vec::new(),
             activity: Vec::new(),
             asked: None,
+            last_asked: None,
             imported: false,
             state_since: None,
         }

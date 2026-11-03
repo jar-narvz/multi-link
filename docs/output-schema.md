@@ -32,7 +32,7 @@ keys (`overview.json`, `hook/overview.json`, `phase4/overview.json`) and nothing
 **Phase 6 changes (Step 6.1, all additive, design W0–W3, W5):** Session and SessionRow gain `activity`,
 `asked`, `imported` and `state_since` (Session → Phase 6 fields). No existing value, key, window membership,
 group or row order changes; imported sessions stay in every report. **The JSON now exports prompt text**
-(`asked`). New isolated fixture root `fixtures/sessions-phase6/` (boards 7c/8c's shape, synthetic prompts) with
+(`asked` and, since Step 7.5, `last_asked`). New isolated fixture root `fixtures/sessions-phase6/` (boards 7c/8c's shape, synthetic prompts) with
 answer keys `fixtures/expected/phase6/sessions.json` and `overview.json` (Phase 6 fixture results). Step 6.2
 adds the four fields to every existing key and nothing else. `asked` there follows W3 as written: the
 `fixtures/sessions` Claude transcripts whose first own prompt is `CASE-<name>: <prompt>` get that string; the
@@ -111,6 +111,7 @@ must equal `fixtures/expected/overview.json` (parsed); the Hook variant has its 
 | `subagents` | string[] | Claude: `agentId`s of `<id>/subagents/agent-<agentId>.jsonl` files. A subagent is part of its parent session, never a session of its own. Codex: `[]`. |
 | `activity` | `{"from": timestamp, "to": timestamp}`[] | Phase 6, design W1: recorded activity as bursts, oldest first. See Phase 6 fields. |
 | `asked` | string \| null | Phase 6, design W3: the session's first prompt. See Phase 6 fields. |
+| `last_asked` | string \| null | Step 7.5, design P5: the latest eligible prompt. |
 | `imported` | bool | Phase 6, design W2: a Codex Desktop import. Always `false` for Claude. |
 | `state_since` | timestamp \| null | Phase 6, design W5: when the current `state` began, from the evidence `state` used. |
 
@@ -147,11 +148,18 @@ data on 2026-11-01 and are assumptions (design W2).
   eligible item. Then every whitespace run becomes one space, trailing space is
   trimmed, and text over 120 characters is cut to 119 characters (on a char boundary) plus `…`. None found or
   record-only: `null`.
+- **`last_asked` (P5).** The latest eligible prompt, with the same normalization and 120-character
+  limit as `asked`. Claude uses the last own main-transcript user record accepted by W3 + P1, also
+  excluding `isMeta: true`, `isCompactSummary: true` and text starting `[Request interrupted by user`.
+  Codex uses the last non-imported `user_message` string; if none supplies a string, the last eligible
+  X4 response-item user message. All-import rollouts and record-only sessions yield `null`.
+  `asked` retains its existing value and meaning. Labels prefer the latest step, then `last_asked`,
+  then `asked`, then the harness's no-prompt fallback. Cache refresh re-parses changed transcripts.
 - **`state_since` (W5).** `waiting` or `stale` with `state_evidence` `session_record`: the record's
   `statusUpdatedAt`; `waiting` by `hook`: the `at` of the hook record that made it waiting; Codex `unknown` /
   `turns_complete`: the `timestamp` of the last `task_complete` outside an imported turn (`null` if every turn
   was imported); every other case `null` (busy, idle, finished, `no_signal`, Codex `stale` / `open_turn`).
-- SessionRow copies the four fields from its Session (children and merged members too), placed after `made`.
+- SessionRow copies these fields from its Session (children and merged members too), placed after `made`.
 
 
 ### State
@@ -560,8 +568,8 @@ ascending.
 A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
 
 SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
-"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "imported",
-"state_since", "children": SessionRow[]}` (the four Phase 6 fields: Session → Phase 6 fields). The plain fields are copied
+"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "last_asked", "imported",
+"state_since", "children": SessionRow[]}` (Phase 6 fields and P5: Session → Phase 6 fields). The plain fields are copied
 from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
 (`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
 under this Claude row (below); always `[]` on a Codex row.

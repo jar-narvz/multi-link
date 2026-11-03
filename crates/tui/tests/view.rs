@@ -83,9 +83,16 @@ fn labels_and_handoffs_never_invent_placeholders() {
         view::session_label(&s),
         "“Draft the release notes, then wait for my review before you publish.”"
     );
+    s.last_asked = Some("Synthetic latest prompt".into());
+    assert_eq!(view::session_label(&s), "“Synthetic latest prompt”");
     s.made = vec!["6.4".into()];
     assert_eq!(view::session_label(&s), "step 6.4");
     s.made.clear();
+    s.last_asked = None;
+    assert_eq!(
+        view::session_label(&s),
+        "“Draft the release notes, then wait for my review before you publish.”"
+    );
     s.asked = Some(String::new());
     assert_eq!(view::session_label(&s), "claude · no prompt");
     s.harness = multi_link_model::Harness::Codex;

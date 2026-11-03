@@ -37,6 +37,7 @@ pub struct Transcript {
     pub subagent_files: Vec<SubagentFile>,
     pub activity_timestamps: Vec<Timestamp>,
     pub asked: Option<String>,
+    pub last_asked: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -252,6 +253,7 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         subagent_files: Vec::new(),
         activity_timestamps: Vec::new(),
         asked: None,
+        last_asked: None,
     };
     let activity_id = if subagent {
         path.parent()
@@ -302,11 +304,17 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             transcript.activity_timestamps.extend(at);
         }
         if !subagent
-            && transcript.asked.is_none()
             && value["type"] == "user"
             && value["sessionId"].as_str() == Some(id)
+            && let Some(prompt) = prompt(&value["message"]["content"])
         {
-            transcript.asked = prompt(&value["message"]["content"]);
+            transcript.asked.get_or_insert_with(|| prompt.clone());
+            if value["isMeta"] != true
+                && value["isCompactSummary"] != true
+                && !prompt.starts_with("[Request interrupted by user")
+            {
+                transcript.last_asked = Some(prompt);
+            }
         }
         if !value
             .get("type")

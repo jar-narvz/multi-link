@@ -241,6 +241,7 @@ mod tests {
             subagents: vec![],
             activity: Vec::new(),
             asked: None,
+            last_asked: None,
             imported: false,
             state_since: None,
         }

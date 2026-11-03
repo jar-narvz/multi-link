@@ -100,6 +100,7 @@ pub struct Session {
     pub subagents: Vec<String>,
     pub activity: Vec<Activity>,
     pub asked: Option<String>,
+    pub last_asked: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
 }
@@ -256,6 +257,7 @@ pub struct SessionRow {
     pub made: Vec<String>,
     pub activity: Vec<Activity>,
     pub asked: Option<String>,
+    pub last_asked: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
     pub children: Vec<SessionRow>,

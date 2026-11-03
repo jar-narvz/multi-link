@@ -1245,7 +1245,8 @@ screens, no new JSON keys; W0–W10 stay in force except where a P rule below re
   order (W3) uses `last_asked` where it used `asked`: latest made step › `last_asked` › `asked` › `… · no
   prompt`. The selected line and `o` are unchanged. The cache re-parses a changed file, so the label follows
   new prompts on the next refresh.
-- Files: `crates/model/src/lib.rs`, `crates/claude/src/lib.rs`, `crates/claude/tests/**`,
+- Files: `crates/model/src/lib.rs`, `crates/model/tests/**` (added 2026-11-03: Codex stopped because the
+  model test builds a `Session` and counts its JSON keys), `crates/claude/src/lib.rs`, `crates/claude/tests/**`,
   `crates/codex/src/lib.rs`, `crates/codex/tests/**`, `crates/core/src/sessions.rs`,
   `crates/core/src/overview.rs`, `crates/core/src/open.rs` (constructors only), `crates/core/tests/**`,
   `crates/tui/src/view.rs`, `crates/tui/tests/**`, `fixtures/expected/**/*.json` (only the added key),

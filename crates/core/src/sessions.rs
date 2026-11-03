@@ -123,6 +123,7 @@ pub(crate) fn assemble(
             subagents: transcript.subagents,
             activity: activity(transcript.activity_timestamps, options.now, options.since),
             asked: transcript.asked,
+            last_asked: transcript.last_asked,
             imported: false,
             state_since,
         });
@@ -133,6 +134,7 @@ pub(crate) fn assemble(
             state_since: record_state_since(state, state_evidence, &record),
             activity: Vec::new(),
             asked: None,
+            last_asked: None,
             imported: false,
             id: record.session_id,
             harness: Harness::Claude,
@@ -156,6 +158,7 @@ pub(crate) fn assemble(
         sessions.push(Session {
             activity: activity(rollout.activity_timestamps, options.now, options.since),
             asked: rollout.asked,
+            last_asked: rollout.last_asked,
             imported: rollout.imported,
             state_since: if state == State::Unknown
                 && state_evidence == StateEvidence::TurnsComplete

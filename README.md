@@ -30,7 +30,7 @@ The real terminal uses your own font.*
   says `◆ needs-you partial: no hook records seen` instead of claiming zero.
 - **A card for each repo with a waiting, working or stale session:** a rounded
   card (yellow when waiting, orange when working) titled with its latest PLAN.md step. Each such session is
-  one line: harness, a label (its latest step, else its first prompt in quotes, else `claude · no prompt`), a status
+  one line: harness, a label (its latest step, else its latest prompt in quotes, falling back to its first prompt, else `claude · no prompt`), a status
   phrase (`waiting on you · since 21:40`, `working now · for 5 min`, `stale since …`) and its branch.
   **Claude prompt:** the first user message that is not blank and does not start with `<`, after dropping
   any leading `<system-reminder>…</system-reminder>` blocks (what a session started by another session

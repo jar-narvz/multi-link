@@ -660,7 +660,7 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
 ### Phase 7 decisions
 
 Planned 2026-11-02 to polish the approved Phase 6 screens. P1 partially replaces W3's Claude rule;
-P2–P4 are presentation rules for the following steps. Codex prompt selection stays unchanged.
+P2–P4 are presentation rules for the following steps. P5 adds latest-prompt labels.
 
 - **P1 Claude prompt after a system reminder:** after trimming leading whitespace, repeatedly remove an
   exact leading `<system-reminder>` through its first following `</system-reminder>`, then trim leading
@@ -679,7 +679,15 @@ P2–P4 are presentation rules for the following steps. Codex prompt selection s
   Suppress ticks whose clock equals the end or `now` label's clock. A range ending before now uses a clock
   end label or nothing. Keeping a fold length may shorten the current clock to `now`.
 
-No new JSON keys or screens. The four pinned Phase 6 text/style goldens remain unchanged. Other Claude
+- **P5 Latest prompt labels:** Session and SessionRow gain additive `last_asked` (string or null).
+  `asked` keeps its first-prompt meaning and value. Claude takes the last W3 + P1 eligible own user
+  record, also skipping `isMeta: true`, `isCompactSummary: true` and text starting
+  `[Request interrupted by user`. Codex takes the last non-imported `user_message` string, or, if none,
+  the last X4-eligible response-item user message. Normalize and truncate as W3. Screen labels use
+  latest made/placing step › `last_asked` › `asked` › harness `· no prompt`. Changed transcripts are
+  re-parsed by the cache on refresh. The selected line and session opening stay unchanged.
+
+No new screens. The four pinned Phase 6 text/style goldens remain unchanged. Other Claude
 wrappers and the backlog remain outside this phase.
 
 ### User flow: one PLAN.md step

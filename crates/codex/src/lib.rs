@@ -30,6 +30,7 @@ pub struct Rollout {
     pub turns: Vec<Turn>,
     pub activity_timestamps: Vec<Timestamp>,
     pub asked: Option<String>,
+    pub last_asked: Option<String>,
     pub imported: bool,
     pub last_real_complete: Option<Timestamp>,
 }
@@ -130,6 +131,8 @@ fn parse<R: BufRead>(
     let mut activity_timestamps = Vec::new();
     let mut asked = None;
     let mut response_prompt = None;
+    let mut last_asked = None;
+    let mut last_response_prompt = None;
     let mut imported_turn: Option<String> = None;
     let mut starts = 0;
     let mut real_starts = 0;
@@ -163,17 +166,20 @@ fn parse<R: BufRead>(
             if value["type"] != "session_meta" {
                 activity_timestamps.extend(at);
             }
-            if event && payload["type"] == "user_message" && asked.is_none() {
-                asked = payload["message"]
+            if event
+                && payload["type"] == "user_message"
+                && let Some(prompt) = payload["message"]
                     .as_str()
-                    .map(multi_link_model::normalize_prompt);
+                    .map(multi_link_model::normalize_prompt)
+            {
+                asked.get_or_insert_with(|| prompt.clone());
+                last_asked = Some(prompt);
             }
-            if response_prompt.is_none()
-                && value["type"] == "response_item"
+            if value["type"] == "response_item"
                 && payload["type"] == "message"
                 && payload["role"] == "user"
             {
-                response_prompt = payload["content"]
+                let prompt = payload["content"]
                     .as_array()
                     .and_then(|blocks| {
                         blocks
@@ -188,6 +194,10 @@ fn parse<R: BufRead>(
                             && !text.starts_with('<')
                     })
                     .map(multi_link_model::normalize_prompt);
+                if let Some(prompt) = prompt {
+                    response_prompt.get_or_insert_with(|| prompt.clone());
+                    last_response_prompt = Some(prompt);
+                }
             }
             if event && payload["type"] == "task_complete" {
                 last_real_complete = at;
@@ -245,6 +255,11 @@ fn parse<R: BufRead>(
             None
         } else {
             asked.or(response_prompt)
+        },
+        last_asked: if starts > 0 && real_starts == 0 {
+            None
+        } else {
+            last_asked.or(last_response_prompt)
         },
         imported: starts > 0 && real_starts == 0,
         last_real_complete: if starts > 0 && real_starts == 0 {

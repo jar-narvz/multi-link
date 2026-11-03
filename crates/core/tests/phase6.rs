@@ -18,7 +18,7 @@ fn options(root: &Path) -> Options<'static> {
 fn strip(value: &mut Value) {
     match value {
         Value::Object(map) => {
-            for field in ["activity", "asked", "imported", "state_since"] {
+            for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
                 map.remove(field);
             }
             map.values_mut().for_each(strip);
@@ -217,4 +217,51 @@ fn state_since_follows_winning_record_hook_and_codex_evidence() {
             Some(stamp("2026-11-03T06:10:00Z"))
         )
     );
+}
+
+#[test]
+fn latest_prompt_reaches_overview_after_cached_transcript_changes() {
+    for harness in ["claude", "codex"] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let path = root.join(if harness == "claude" {
+            ".claude/projects/test/synthetic.jsonl"
+        } else {
+            ".codex/sessions/rollout-synthetic.jsonl"
+        });
+        let mut lines = if harness == "claude" {
+            Vec::new()
+        } else {
+            vec![
+                json!({"type":"session_meta","timestamp":"2026-11-03T06:00:00Z","payload":{"id":"synthetic","cwd":"/synthetic","timestamp":"2026-11-03T06:00:00Z"}}),
+            ]
+        };
+        let mut scanner = Scanner::default();
+        for text in ["Synthetic first prompt", "Synthetic second prompt"] {
+            lines.push(if harness == "claude" {
+                json!({"type":"user","sessionId":"synthetic","cwd":"/synthetic","timestamp":"2026-11-03T06:01:00Z","message":{"content":text}})
+            } else {
+                json!({"type":"event_msg","timestamp":"2026-11-03T06:01:00Z","payload":{"type":"user_message","message":text}})
+            });
+            write_lines(&path, &lines);
+            let mut plans = |folder: &Path| {
+                multi_link_plan::steps_report(root, &[folder.to_string_lossy().into_owned()])
+                    .repos
+                    .remove(0)
+            };
+            // Both a changed-file refresh and a warm cache pass retain the latest prompt.
+            for _ in 0..2 {
+                let output = scanner.overview(root, &options(root), &mut plans).unwrap();
+                let session = &output.sessions.report.sessions[0];
+                assert_eq!(session.asked.as_deref(), Some("Synthetic first prompt"));
+                assert_eq!(session.last_asked.as_deref(), Some(text));
+                let row = match &output.report.repos[0].rows[0] {
+                    multi_link_model::Row::Session(row) => row,
+                    _ => panic!("expected one session"),
+                };
+                assert_eq!(row.asked, session.asked);
+                assert_eq!(row.last_asked.as_deref(), Some(text));
+            }
+        }
+    }
 }

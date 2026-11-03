@@ -19,6 +19,7 @@
       "subagents": [],
       "activity": [],
       "asked": null,
+      "last_asked": null,
       "imported": false,
       "state_since": null
     },
@@ -40,6 +41,7 @@
       "subagents": [],
       "activity": [],
       "asked": null,
+      "last_asked": null,
       "imported": false,
       "state_since": null
     },
@@ -61,6 +63,7 @@
       "subagents": [],
       "activity": [],
       "asked": null,
+      "last_asked": null,
       "imported": false,
       "state_since": null
     },
@@ -89,6 +92,7 @@
       "subagents": [],
       "activity": [],
       "asked": "Draft the release notes, then wait for my review before you publish.",
+      "last_asked": "Draft the release notes, then wait for my review before you publish.",
       "imported": false,
       "state_since": "2026-11-02T00:41:00.000Z"
     },
@@ -122,6 +126,7 @@
         }
       ],
       "asked": "Summarise the failing tests in the CI log.",
+      "last_asked": "Summarise the failing tests in the CI log.",
       "imported": false,
       "state_since": "2026-11-03T05:44:00.000Z"
     },
@@ -163,6 +168,7 @@
         }
       ],
       "asked": "Where do we stand now, and what is left?",
+      "last_asked": "Where do we stand now, and what is left?",
       "imported": false,
       "state_since": null
     },
@@ -208,6 +214,7 @@
         }
       ],
       "asked": "Plan the home screen sentences and hand the next step to codex.",
+      "last_asked": "Plan the home screen sentences and hand the next step to codex.",
       "imported": false,
       "state_since": null
     },
@@ -241,6 +248,7 @@
         }
       ],
       "asked": "Can we recheck the export at 9?",
+      "last_asked": "Can we recheck the export at 9?",
       "imported": false,
       "state_since": null
     },
@@ -274,6 +282,7 @@
         }
       ],
       "asked": "Read AGENTS.md, then do Step 6.3 in PLAN.md.",
+      "last_asked": "Read AGENTS.md, then do Step 6.3 in PLAN.md.",
       "imported": false,
       "state_since": "2026-11-03T05:31:00.000Z"
     },
@@ -313,6 +322,7 @@
         }
       ],
       "asked": "Let's pick back up. Where do we stand after the scheduled runs?",
+      "last_asked": "Let's pick back up. Where do we stand after the scheduled runs?",
       "imported": false,
       "state_since": null
     },
@@ -341,6 +351,7 @@
       "subagents": [],
       "activity": [],
       "asked": null,
+      "last_asked": null,
       "imported": true,
       "state_since": null
     },
@@ -369,6 +380,7 @@
       "subagents": [],
       "activity": [],
       "asked": null,
+      "last_asked": null,
       "imported": true,
       "state_since": null
     },
@@ -402,6 +414,7 @@
         }
       ],
       "asked": "Run the unit tests and fix the date parser.",
+      "last_asked": "Run the unit tests and fix the date parser.",
       "imported": false,
       "state_since": "2026-11-03T06:24:40.000Z"
     }
