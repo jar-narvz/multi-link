@@ -4,8 +4,10 @@ A local terminal dashboard for Claude Code and Codex sessions across your repos.
 Release 1 is complete (see [check results](docs/phase3-check.md)). Release 1.1 (home screen
 cleanup) did not meet the need ([owner verdict](docs/phase4-check.md#owner-check-stop-and-ask)), and
 neither did Release 1.2's bars ([owner verdict](docs/phase5-check.md#owner-check-stop-and-ask--answered-2026-11-01)).
-Release 1.3 rebuilds home in plain words and the repo view as swimlanes, to two approved mockups; it is
-built and awaits the owner's check of the real screen ([visual check](docs/phase6-check.md)).
+Release 1.3 rebuilt home in plain words and the repo view as swimlanes, to two approved mockups; the
+owner approved the real screen ([visual check](docs/phase6-check.md)). Release 1.4 polishes those screens
+on real data (prompts after a system reminder, window words, clock times, axis labels); it is built and
+awaits the owner's check ([real check](docs/phase7-check.md)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -29,9 +31,17 @@ The real terminal uses your own font.*
 - **A card for each repo with a waiting, working or stale session:** a rounded
   card (yellow when waiting, orange when working) titled with its latest PLAN.md step. Each such session is
   one line: harness, a label (its latest step, else its first prompt in quotes, else `claude · no prompt`), a status
-  phrase (`waiting on you · since 21:40`, `working now · for 5 min`, `stale since …`) and its branch. A grey
-  line counts the other sessions, and the last line names the latest hand-off in words (`claude handed
+  phrase (`waiting on you · since 21:40`, `working now · for 5 min`, `stale since …`) and its branch.
+  **Claude prompt:** the first user message that is not blank and does not start with `<`, after dropping
+  any leading `<system-reminder>…</system-reminder>` blocks (what a session started by another session
+  begins with), so the real text after them counts; an unclosed reminder or any other leading tag still
+  skips the message. Codex uses its first user message (or, in `codex exec` rollouts, the first user input
+  that is not AGENTS.md instructions or a tag). **Times** less than 24 h old are a clock time (`HH:MM`,
+  even if that was yesterday: 23:53 seen at 14:07 the next day); older ones are a date (`Nov 1`); `last active` says `N min ago` within the
+  hour. A grey line counts the other sessions, and the last line names the latest hand-off in words (`claude handed
   step 6.3 to codex · codex done`).
+- **The window is named:** the header and the card's lines say `last 2h`, or the `--since` window
+  (`last 16h`).
 - **Idle repos are one sentence:** `idle · last active 1 min ago · claude handed work to codex at 22:23,
   codex done`. Repos with no activity in the window share one `quiet` line.
 - **Codex Desktop imports are hidden** (they are Claude chats copied into Codex Desktop, not runs); the
@@ -52,8 +62,11 @@ The real terminal uses your own font.*
 - **Links:** a line from the hand-off point to the child, solid `│` when confirmed, dashed `╎` when matched
   by time, and the sub line says how (`matched by time · 12 s after the call`).
 - **The axis fits the work:** it starts at the first activity; idle stretches over 15 minutes with no
-  activity on any lane fold to a `≈` band with their length when there is room (at most 3). `z` unfolds, `+`/`-` zoom, ←/→ pan,
-  `0` returns to the fitted range, `i` shows hidden imports.
+  activity on any lane fold to a `≈` band (at most 3), labelled with its length when there is room
+  among the fold labels. Fold lengths win over the end label, which shortens from `HH:MM now` to `now` (or
+  disappears) when it would cover one, and over ticks; a tick never repeats the end minute (or, in an explicit range, the
+  `now` minute). `z` unfolds,
+  `+`/`-` zoom, ←/→ pan, `0` returns to the fitted range, `i` shows hidden imports.
 - The `selected` line gives the session's short id, start, how long it was active and its hand-off; `o`
   opens it and `f` forks it. Below 80 columns the bars drop and the lanes become a list.
 
@@ -104,18 +117,20 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
 - Activity is inferred from record timestamps: a tool call that writes nothing for over 5 minutes
   shows as a gap, and screens say "active", never "worked".
 - Codex "done" means its last turn completed; there is no process-exit evidence.
-- Real `codex exec` rollouts seen on 2026-11-02 keep the prompt in a record the parser does not read, so
-  Codex lanes show `no prompt`; sessions started by another session can show `no prompt` too.
-- With `--since` other than `2h`, the home screen still says `last 2h` (the repo view follows the window).
+- Some sessions still show `no prompt`. On 2026-11-02 (PST): 11 of 185 Claude sessions (in the Phase 7
+  plan's count these were other wrappers such as `local-command-caveat`, `bash-input`, `scheduled-task`, a
+  reminder with nothing after it, or no eligible record) and 3 older non-imported Codex runs
+  ([counts](docs/phase7-check.md#real-prompt-count-p1)).
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
 
-Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5 and 6.5 runs. Real-home
+Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5 and 7.4 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
 the Phase 4 home check is in [docs/phase4-check.md](docs/phase4-check.md), the Phase 5 visual check in
-[docs/phase5-check.md](docs/phase5-check.md) and the Phase 6 visual check in
-[docs/phase6-check.md](docs/phase6-check.md).
+[docs/phase5-check.md](docs/phase5-check.md), the Phase 6 visual check in
+[docs/phase6-check.md](docs/phase6-check.md) and the Phase 7 real check in
+[docs/phase7-check.md](docs/phase7-check.md).
 
 ## Docs
 

@@ -1,7 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.3 is committed.** Next: Step 7.4 (Claude, real
+**Resume here (2026-11-02, latest): Step 7.4 is committed except its last Verify item (the owner's answer);
+Phase 7 is NOT closed.** It waits on the owner's
+stop-and-ask: the owner runs `target/release/multi-link tui` (and `--since 16h`) and confirms the Phase 7 need.
+The coordinator records the answer in `docs/phase7-check.md` → "Owner check" and here. What 7.4 found:
+- Whole-phase Verify passes; real Claude count `[185,11]` (baseline `[181,43]`); the 11 are the plan's non-goal.
+- Real 16 h multi-link repo view: three folds all show their length (`1h05`, `54m`, `2h56`) beside `21:19 now`.
+  The two adjacent folds read `54m 2h56`; left as is (possible owner point).
+- P3 is not visible on that day's real screens (every shown time was on the same local date); tests cover it.
+- Real renders stayed in scratch (W10).
+
+**Before Step 7.4: Phase 7 in progress; Step 7.3 is committed.** Next: Step 7.4 (Claude, real
 check and owner confirm; ends with a stop-and-ask). What 7.4 needs:
 - Repo axis (`draw_axis`, `crates/tui/src/timeline.rs`) reserves label cells in P4 order: fold lengths, end label
   (`HH:MM now` → `now` → nothing; plain `HH:MM` → nothing when the range ends before now), explicit-range interior
@@ -295,6 +305,35 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 7.4: Real check and owner confirm — Claude
+- Did: Ran the whole-phase Verify. Rendered real `~` at `--now 2026-11-03T05:19:00Z` (UTC−8) with
+  `crates/tui/examples/home_html.rs`: home at `--since 2h` and `16h`, multi-link repo view at both (the 16 h
+  view has three folds, so the fixture was not needed); screenshots by headless Chrome, scratch only, shown to
+  the owner. Wrote `docs/phase7-check.md` (counts before/after, P1–P4 on screen in words, Verify, pending
+  owner check). README: release status, the Claude prompt rule (P1), clock times (P3), the named window (P2),
+  the axis label order (P4), and the stale `no prompt` / `last 2h` limitations replaced by the 11 remaining.
+- Changed: docs/phase7-check.md, README.md, PROGRESS.md
+- Verify: `cargo test --workspace` → exit 0, 36 `test result: ok`, 0 failed; `cargo clippy --workspace
+  --all-targets -- -D warnings` → exit 0; `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt
+  fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt
+  fixtures/expected/tui/repo-phase6.styles.txt` → no output, exit 0; real count jq (Phase 7 Verify) →
+  `[185,11]` at 2026-11-03T05:18:57Z (baseline `[181,43]`; 7.1 `[182,11]`; the five newest Claude sessions
+  all have a prompt). Renders: `no prompt` 0 times in all four; home 16h has `last 16h` in header and card,
+  `last 2h` 0 times. W10 over the three committed files: no `/Users/`, no hex id over 8 chars, no secrets;
+  207 distinct 40-char prefixes of real `asked` (length ≥ 20) grepped over all 235 tracked files plus the
+  new doc → hits only for the project's own `Read AGENTS.md, then do Step…` prompt template in older
+  fixtures/docs, none in this step's files. Codex count for README: `[292,154,3]` (total, null, non-imported
+  null). Owner's answer: pending (stop-and-ask).
+- Review: adversarial Claude subagent (diff + Step 7.4 + P1–P4 + W10; re-ran Verify: same 36 ok, clippy clean,
+  goldens exit 0, `[185,11]`; checked every doc number against the scratch renders): 0 P1, 3 P2, 7 P3, all
+  accepted and fixed in one round: README kept a Codex `no prompt` limitation (3 older non-imported runs);
+  W10 result written into Verify; README's Codex prompt rule names the 6.6 fallback; phase7-check splits the
+  two Phase 6 renders, says only 2 of P2's 3 phrases were on screen, and says the 11 were not re-classified;
+  README wording for yesterday's clock, unclosed reminders, interior-now ticks and the PST date.
+- Gotchas: `--now` in the past does not hide sessions that started after it, so a back-dated render to show P3
+  printed future times; dropped, P3 rests on the 7.2 tests. zsh: `rm` on `$S/*` is blocked by the harness;
+  use `"${S:?}"`.
 
 ### 2026-11-02 — Step 7.3: Repo view: axis labels never hide each other — Codex
 - Did: Reserve occupied axis cells in P4 order, keep fold lengths visible, shorten or drop current-time
