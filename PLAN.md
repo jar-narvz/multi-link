@@ -1096,6 +1096,43 @@ as images (W10).
   `docs/img/**`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
+### Step 6.6 — Linker: launches in subshells and after heredocs; prompt labels (Codex)
+- Depends on: 6.5. Owner, 2026-11-02, on the real route-impact repo view: "make it look like 2, the
+  connections between the timelines to show the hand-offs". The view already draws board 2's connection
+  (`╎` / `│` from the parent's bar to the nested child) whenever a link exists; here the link was missing.
+  The Claude session launched Codex with `(codex exec --sandbox workspace-write "$(cat brief.txt)" <
+  /dev/null > /dev/null 2>&1 &)` in a Bash call that first wrote the brief with a quoted heredoc. The
+  recogniser reads `(codex` as one word, and the heredoc body (free text with apostrophes) breaks its quote
+  tracking, so no invocation is found and the Codex run shows top-level as `codex · no prompt`. Counted
+  2026-11-02 over all real Claude transcripts: 221 Bash calls mention `codex exec` / `codex-companion`
+  (this includes checks such as `pgrep`), 55 have a heredoc before the launch, 11 launch inside `( … )`,
+  17 use a `nohup` / `env` / `timeout` prefix; `links --since all` finds 124 launches.
+- **X1 Heredocs.** Outside quotes, `<<WORD`, `<<'WORD'`, `<<"WORD"` and `<<-WORD` start a heredoc: its body
+  (the lines after the current line, up to a line that is exactly WORD, leading tabs allowed for `<<-`) is
+  skipped by the tokeniser; an unterminated heredoc ends at the end of the command.
+- **X2 Grouping.** Outside quotes, `(` and `)` separate segments, and `{` / `}` as whole words are dropped,
+  so `(codex exec … &)`, `( cd x && codex exec … )` and `{ codex exec …; }` are recognised. A `cd` inside a
+  group still sets `dir_moved` (conservative). `$(…)` command substitution stays one word (its text is not
+  a launch).
+- **X3 Wrappers.** Leading `nohup`, `env` (with any `NAME=value` words and no other options), and
+  `timeout` / `gtimeout` with one duration argument are skipped before matching `codex exec` /
+  `codex resume` / the companion. Other prefixes stay unsupported (as Phase 1 decided).
+- **X4 Codex `asked`.** Newer `codex exec` rollouts carry no `user_message` event; the prompt is a
+  `response_item` `message` with role `user` whose first `input_text` does not start with
+  `# AGENTS.md instructions` or `<` (environment and instruction wrappers). W3 falls back to the first such
+  item outside an imported turn when no `user_message` exists. Claude: a first prompt wrapped in a single
+  known command tag is not unwrapped (unchanged); report how many real Claude sessions still show
+  `no prompt` and why, without changing the rule.
+- Files: `crates/claude/src/invocation.rs`, `crates/claude/tests/**`, `crates/codex/src/lib.rs`,
+  `crates/codex/tests/**`, `crates/core/tests/**`, `fixtures/sessions-phase6/**` (one added launch shape
+  only if a fixture test needs it), `fixtures/expected/**/*.json` (only values the new launches or prompts
+  change), `docs/design.md` (X1–X4 under "Phase 6 decisions")
+- Verify: `cargo test --workspace` → all `ok` and clippy clean; unit tests for each X1–X3 shape (incl. the
+  exact route-impact command with a synthetic brief containing `'` and `"`, an unterminated heredoc, `$(…)`
+  not a launch, `cd` in a group sets `dir_moved`), X4 with an AGENTS.md item then the prompt; the 6.1
+  goldens unchanged; before/after real counts (in PROGRESS, counts only, no prompts): `links --since all`
+  launches by match kind, and Codex sessions in `sessions --since 2h` with `asked` null.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
