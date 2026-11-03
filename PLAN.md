@@ -1232,6 +1232,33 @@ screens, no new JSON keys; W0–W10 stay in force except where a P rule below re
 - Files: `docs/phase7-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
+### Step 7.5 — Label quotes the latest prompt, not the first (Codex)
+- Depends on: 7.4. Owner, 2026-11-03, while checking Phase 7: "make it so that the quote for the session is
+  the most recent message not the first message of that session". Phase 7 stays open until the owner
+  confirms after this step.
+- **P5 `last_asked`.** Additive JSON key on Session and SessionRow (W0: `asked` keeps its value and meaning):
+  the session's latest prompt, string or null, same normalization as W3. Claude: the last `user` record that
+  W3 + P1 accept, also skipping records with `isMeta: true` (harness-injected text) or `isCompactSummary:
+  true`, and text starting `[Request interrupted by user` (counted 2026-11-03 on real data: if these were
+  not skipped, 24 sessions would end on an `isMeta` record and 6 on an interruption). Codex: the last `user_message`
+  outside an imported turn; if there is none, the last X4-eligible `response_item` user message. Screen label
+  order (W3) uses `last_asked` where it used `asked`: latest made step › `last_asked` › `asked` › `… · no
+  prompt`. The selected line and `o` are unchanged. The cache re-parses a changed file, so the label follows
+  new prompts on the next refresh.
+- Files: `crates/model/src/lib.rs`, `crates/claude/src/lib.rs`, `crates/claude/tests/**`,
+  `crates/codex/src/lib.rs`, `crates/codex/tests/**`, `crates/core/src/sessions.rs`,
+  `crates/core/src/overview.rs`, `crates/core/src/open.rs` (constructors only), `crates/core/tests/**`,
+  `crates/tui/src/view.rs`, `crates/tui/tests/**`, `fixtures/expected/**/*.json` (only the added key),
+  `docs/design.md` (P5), `docs/output-schema.md`, `README.md` (label sentence), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok`, clippy clean; tests: two Claude prompts → `last_asked` is the
+  second, `asked` the first; a trailing `isMeta`, compact-summary, interruption, tool result or
+  `<system-reminder>`-only record does not replace it; a second Codex `user_message` (resume) → it; Codex with
+  only response items → the last eligible one; imported turns ignored; the label shows `last_asked`; every
+  committed JSON equals its 081cdcc version once `last_asked` is removed (Python check); the pinned 6.1-golden
+  `git diff` → exit 0 (every phase6 fixture session has one prompt); real counts (counts only): Claude and
+  Codex sessions in `sessions --since all`, those with `last_asked` null (must equal `asked` null except
+  for explained cases), and those where `last_asked` ≠ `asked`.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
