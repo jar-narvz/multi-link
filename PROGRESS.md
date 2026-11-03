@@ -1,7 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Step 6.6 is committed; Phase 6 is still NOT closed** (owner check below).
+**Resume here (2026-11-02, latest): Step 6.7 is committed; Phase 6 is still NOT closed** (the coordinator records
+the owner's verdict).
+- Repo view: a finished Codex bar gets green `✓ done` after one blank cell when all seven cells (blank + label) fit
+  inside the bar area without covering a bar, a link line or a fold band; otherwise the adjacent `✓`, as before.
+  The label may cover a grid tick. Drawn in `draw_done` (`crates/tui/src/timeline.rs`) after all lanes.
+- Real route-impact view (scratch only): `✓ done` shows after the 16:02 PST Codex run.
+- The 6.1 `repo-phase6` pair is unchanged (its Codex bar ends at the right edge, so it keeps `✓`).
+
+**Before Step 6.7:**
+**Step 6.6 is committed; Phase 6 is still NOT closed** (owner check below).
 - Recogniser (`crates/claude/src/invocation.rs`) now skips heredoc bodies (X1), splits on `(` `)` and drops bare
   `{` `}` (X2), and skips `nohup` / `env NAME=v…` / `timeout|gtimeout DUR` (X3). Real launches 124 → 149
   (unlinked 26 → 32: the newly recognised launches without a matching Codex run).
@@ -267,6 +276,85 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 6.7: Repo view: `✓ done` label after a finished Codex run — Codex
+- Did: Draw completion labels after the lanes, checking the seven cells after the final bar for the
+  area edge, bars, link geometry and fold bands. With room, draw a blank plus green `✓ done`;
+  otherwise retain the adjacent green `✓`. Link clearance uses geometry so NO_COLOR works too.
+  Added exactly three tests: room (including exact fit, done colour and NO_COLOR), edge fallback,
+  and a following bar or confirmed/heuristic link fallback (including NO_COLOR).
+  Claude review round 1: fixed the off-by-one clearance range to `x+1..=x+7`, including bars, folds
+  and link columns; reject `x + 7 >= axis.cells`. Corrected the six-cell-label comment. Exact fit
+  now uses end=66 (final `e` at screen column 117); end=67 is covered by the edge fallback test.
+- Changed: `crates/tui/src/timeline.rs`, `crates/tui/tests/timeline.rs`, `PROGRESS.md`.
+- Verify: Review round 1 rerun; Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.19s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Actual new-test output:
+  ```text
+test done_label_without_room_at_edge_keeps_adjacent_check ... ok
+test done_label_with_room_uses_done_colour_and_survives_no_color ... ok
+test done_label_with_following_bar_or_link_within_six_cells_keeps_check ... ok
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, no warnings; actual final output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.63s
+  ```
+  `cargo fmt --all -- --check` → no output, exit 0.
+  Python byte comparison against `git show HEAD:<path>` → exit 0, actual output:
+  ```text
+repo-phase6.txt: byte-for-byte unchanged from HEAD
+repo-phase6.styles.txt: byte-for-byte unchanged from HEAD
+  ```
+  `git diff --check` → no output, exit 0. Existing immutable text/style test passes.
+- Review: Claude, 1 Codex fix round. Round 1 P2: the label `" ✓ done"` is 7 cells but the check covered 6, so a bar
+  ending at axis col 67 (width 120) drew `e` at screen col 118, outside the bar area; fixed to x+1..=x+7, exact fit
+  is now end=66 and end=67 falls back to `✓`. Files: only the step's list (no `repo*.txt` golden changed; the
+  phase6 pair is byte-identical to HEAD). The three Verify tests are present. Claude re-ran Verify: `cargo test
+  --workspace` all ok (the three new tests ok), clippy `-D warnings` clean, fmt clean (matches the pasted output).
+  Real data (scratch only, release build, `home_html --repo route-impact --since 2h --offset local` at
+  2026-11-03T00:43Z, headless-Chrome screenshot): green `✓ done` one blank cell after the 16:02 PST Codex bar.
+- Gotchas: Review round 1 found the prior check omitted the final `e`: the six-cell label needs
+  seven cells of clearance including its leading blank. Full Verify rerun passes after the fix.
+  Initial targeted run: 16 passed, 1 failed because the new link test expected a blank where
+  an existing grid tick is drawn. Corrected the expected cells; targeted rerun: 17 passed, 0 failed.
+  Real-data screenshot part of Verify skipped at the owner's request; Claude handles it.
+  No golden files changed; no staging or commits.
 
 ### 2026-11-02 — Step 6.6: Linker: launches in subshells and after heredocs; prompt labels — Codex
 - Did: Skip queued heredoc bodies (quoted/plain delimiters, tab stripping, EOF); recognise shell groups and

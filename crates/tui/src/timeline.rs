@@ -519,6 +519,11 @@ fn draw_repo(
     for &(i, y, bg) in &positions {
         scene.draw_lane(&mut p, i, y, bg, body_end);
     }
+    if bars {
+        for &(i, y, bg) in &positions {
+            scene.draw_done(&mut p, scene.lanes[i].session, y, bg, &positions);
+        }
+    }
     if scene.lanes.is_empty() {
         p.put(
             2,
@@ -825,12 +830,56 @@ impl RepoScene<'_> {
         if let Some(b) = r.activity.last()
             && let Some(x) = axis.col(b.to.epoch_ms())
             && x + 1 < axis.cells
+            && r.state == State::Waiting
         {
-            if done(r) {
-                p.put(45 + x, y, "✓", t.done, bg);
-            } else if r.state == State::Waiting {
-                p.put(45 + x, y, "◆", t.needs_you, bg);
-            }
+            p.put(45 + x, y, "◆", t.needs_you, bg);
+        }
+    }
+    fn draw_done(
+        &self,
+        p: &mut Paint<'_>,
+        r: &SessionRow,
+        y: u16,
+        bg: Color,
+        positions: &[(usize, u16, Color)],
+    ) {
+        let axis = &self.axis;
+        let Some(x) = r
+            .activity
+            .last()
+            .filter(|_| done(r))
+            .and_then(|b| axis.col(b.to.epoch_ms()))
+            .filter(|x| x + 1 < axis.cells)
+        else {
+            return;
+        };
+        // Include the blank before the six-cell label in the clearance check.
+        let space = x + 1..=x + 7;
+        let blocked = x + 7 >= axis.cells
+            || space
+                .clone()
+                .any(|col| p.buf[(44 + col, y)].symbol() == "█")
+            || axis
+                .folds
+                .iter()
+                .any(|f| space.start() < &(f.x + 5) && space.end() >= &f.x)
+            || positions.iter().any(|&(i, cy, _)| {
+                let lane = &self.lanes[i];
+                lane.parent
+                    .and_then(|parent| {
+                        let link = view::placing(lane.session, Some(parent))?;
+                        let (_, py, _) = positions
+                            .iter()
+                            .find(|&&(j, _, _)| self.lanes[j].session.id == parent)?;
+                        let col = axis.col(link.at.epoch_ms())?;
+                        Some(*py < y && y < cy && space.contains(&col))
+                    })
+                    .unwrap_or(false)
+            });
+        if blocked {
+            p.put(45 + x, y, "✓", self.options.theme.done, bg);
+        } else {
+            p.put(45 + x, y, " ✓ done", self.options.theme.done, bg);
         }
     }
     fn draw_imports(&self, p: &mut Paint<'_>, y: u16, body_end: u16) {

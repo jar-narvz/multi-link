@@ -370,3 +370,167 @@ fn fitted_range_crossing_local_midnight_uses_clock_labels() {
         ["session", "23:40", "23:50", "00:00", "00:13", "now"]
     );
 }
+
+fn completion_time(minute: i64) -> Timestamp {
+    Timestamp::from_epoch_ms(
+        Timestamp::parse("2026-11-03T05:00:00Z").unwrap().epoch_ms() + minute * 60_000,
+    )
+    .unwrap()
+}
+fn completion_report(end: i64) -> OverviewReport {
+    let mut r = report();
+    r.now = completion_time(74);
+    let group = r
+        .repos
+        .iter_mut()
+        .find(|g| g.repo.ends_with("repo-r"))
+        .unwrap();
+    let Row::Session(parent) = &group.rows[0] else {
+        panic!()
+    };
+    let mut row = parent.children[0].clone();
+    row.handoffs.clear();
+    row.activity = vec![multi_link_model::Activity {
+        from: completion_time(0),
+        to: completion_time(end),
+    }];
+    group.rows = vec![Row::Session(row)];
+    r
+}
+fn completion_render(r: &OverviewReport, mut o: RepoOptions) -> Buffer {
+    o.fitted = false;
+    render(
+        r,
+        o,
+        TimeWindow::new(completion_time(0), completion_time(74)),
+        120,
+    )
+}
+fn cells(b: &Buffer, y: u16, from: u16, to: u16) -> String {
+    (from..to).map(|x| b[(x, y)].symbol()).collect()
+}
+
+#[test]
+fn done_label_with_room_uses_done_colour_and_survives_no_color() {
+    // The 74-minute window has exactly 74 bar cells, including an exact-fit case.
+    for end in [10, 66] {
+        let r = completion_report(end);
+        let x = 44 + end as u16;
+        let b = completion_render(&r, options());
+        assert_eq!(cells(&b, 6, x, x + 8), "█ ✓ done");
+        for col in x + 2..x + 8 {
+            assert_eq!(b[(col, 6)].fg, options().theme.done);
+        }
+        let plain = completion_render(
+            &r,
+            RepoOptions {
+                theme: multi_link_tui::theme::Theme::from_env(
+                    None,
+                    Some(std::ffi::OsStr::new("1")),
+                ),
+                ..options()
+            },
+        );
+        assert_eq!(text(&plain), text(&b));
+        assert!(
+            plain
+                .content
+                .iter()
+                .all(|c| c.fg == ratatui::style::Color::Reset)
+        );
+    }
+}
+
+#[test]
+fn done_label_without_room_at_edge_keeps_adjacent_check() {
+    for end in [67, 68, 72] {
+        let r = completion_report(end);
+        let b = completion_render(&r, options());
+        let x = 44 + end as u16;
+        assert_eq!(cells(&b, 6, x, x + 2), "█✓");
+        assert_eq!(b[(x + 1, 6)].fg, options().theme.done);
+        assert!(!cells(&b, 6, 44, 118).contains("done"));
+    }
+}
+
+#[test]
+fn done_label_with_following_bar_or_link_within_six_cells_keeps_check() {
+    let mut r = completion_report(10);
+    let group = r
+        .repos
+        .iter_mut()
+        .find(|g| g.repo.ends_with("repo-r"))
+        .unwrap();
+    let Row::Session(row) = &mut group.rows[0] else {
+        panic!()
+    };
+    // Preserve a later bar even if the bursts arrive out of order.
+    row.activity.insert(
+        0,
+        multi_link_model::Activity {
+            from: completion_time(14),
+            to: completion_time(15),
+        },
+    );
+    let b = completion_render(&r, options());
+    assert_eq!(cells(&b, 6, 54, 60), "█✓  ██");
+
+    // A link to a second child crosses the first child's completion label.
+    for kind in [
+        multi_link_model::Match::Exact,
+        multi_link_model::Match::Heuristic,
+    ] {
+        let mut r = completion_report(10);
+        let group = r
+            .repos
+            .iter_mut()
+            .find(|g| g.repo.ends_with("repo-r"))
+            .unwrap();
+        let Row::Session(mut parent) = group.rows[0].clone() else {
+            panic!()
+        };
+        let mut first = parent.clone();
+        first.id = "first-child".into();
+        first.started_at = completion_time(20);
+        let mut second = first.clone();
+        second.id = "second-child".into();
+        second.started_at = completion_time(19);
+        second.activity[0].from = completion_time(20);
+        second.activity[0].to = completion_time(25);
+        let template = report();
+        let link = links(&template)
+            .links
+            .into_iter()
+            .find(|l| l.child.is_some())
+            .unwrap();
+        let mut link = link;
+        link.parent = parent.id.clone();
+        link.child = Some(second.id.clone());
+        link.at = completion_time(14);
+        link.r#match = kind;
+        second.handoffs = vec![link];
+        parent.activity[0].to = completion_time(2);
+        parent.children = vec![first, second];
+        group.rows = vec![Row::Session(parent)];
+        for o in [
+            options(),
+            RepoOptions {
+                theme: multi_link_tui::theme::Theme::from_env(
+                    None,
+                    Some(std::ffi::OsStr::new("1")),
+                ),
+                ..options()
+            },
+        ] {
+            let b = completion_render(&r, o);
+            assert_eq!(
+                cells(&b, 9, 54, 60),
+                if kind == multi_link_model::Match::Exact {
+                    "█✓  ││"
+                } else {
+                    "█✓  ╎│"
+                }
+            );
+        }
+    }
+}

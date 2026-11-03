@@ -1154,6 +1154,12 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-11-02 — Step 6.7 review (Claude, diff + Step 6.7)
+Phase6 pair unchanged; three tests present; real route-impact view shows `✓ done` after the 16:02 Codex run.
+| # | Finding | Decision |
+| --- | --- | --- |
+| 1 | P2: clearance checked 6 cells for the 7-cell `" ✓ done"`; at width 120 the `e` could land at col 118, outside the bar area | Accepted: check x+1..=x+7; tests moved (fit end=66, fallback end=67) |
+
 ### 2026-11-02 — Step 6.6 review (Claude, diff + Step 6.6)
 All X1–X4 shapes tested (incl. the route-impact launch with a synthetic brief); 6.1 goldens unchanged; W10 clean.
 Real data: launches 124 → 149; 2h Codex `asked` null 1 → 0; the route-impact 16:02 run nests under its parent.
