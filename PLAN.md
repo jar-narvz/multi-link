@@ -1152,7 +1152,7 @@ as images (W10).
 ### Phase 7 — Polish the Phase 6 screens (Release 1.4)
 Need: the screens the owner approved in Phase 6 say true, readable things on real data. Owner, 2026-11-02:
 "Polish leftovers first" (the four open points from `docs/phase6-check.md` that 6.6/6.7 did not fix). No new
-screens, no new JSON keys; W0–W10 stay in force except where a P rule below replaces one.
+screens; one additive JSON key (`last_asked`, Step 7.5); W0–W10 stay in force except where a P rule below replaces one.
 - **P1 Claude prompt after a system reminder (replaces W3's Claude rule in part).** Counted 2026-11-02 over
   181 real main transcripts: 43 have `asked` null; in 32 of them every candidate record starts with one
   `<system-reminder>…</system-reminder>` block followed by real text (sessions started by another session);
