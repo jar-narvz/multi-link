@@ -635,50 +635,64 @@ impl RepoScene<'_> {
         let clock = |ms| self.clock(ms);
         let end = self.axis.end;
         p.put(2, 3, "session", t.secondary, t.screen);
-        let end_label = format!(
-            "{}{}",
-            clock(end),
-            if end == report.now.epoch_ms() {
-                " now"
-            } else {
-                ""
+        if !bars {
+            return;
+        }
+        // Reserve actual label cells in priority order. Every later label must fit
+        // entirely in the axis, with a blank cell between labels to keep words distinct.
+        let mut occupied = Vec::new();
+        let mut place = |x: u16, label: &str| {
+            let right = x.saturating_add(label.chars().count() as u16);
+            if right > axis.cells || occupied.iter().any(|&(a, b)| x <= b && a <= right) {
+                return false;
             }
-        );
-        let end_x = axis.cells.saturating_sub(end_label.chars().count() as u16);
-        let now_label = format!("{} now", clock(report.now.epoch_ms()));
-        let now_x = (!self.options.fitted && report.now.epoch_ms() != end)
-            .then(|| axis.col(report.now.epoch_ms()))
-            .flatten()
-            .filter(|&x| x + (now_label.len() as u16) < end_x);
-        if bars {
-            for &(i, x, at) in ticks {
-                let label = self.tick_label(at);
-                let s = &axis.segments[i];
-                if x + label.len() as u16 <= s.x + s.width
-                    && x + (label.len() as u16) < end_x
-                    && now_x.is_none_or(|now| {
-                        x + (label.len() as u16) < now || x > now + now_label.len() as u16
-                    })
-                {
-                    p.put(44 + x, 3, &label, t.secondary, t.screen);
+            occupied.push((x, right));
+            p.put(44 + x, 3, label, t.secondary, t.screen);
+            true
+        };
+        for f in &axis.folds {
+            let label = fold_label(f.to - f.from);
+            place(f.x + (5u16.saturating_sub(label.len() as u16)) / 2, &label);
+        }
+        let end_clock = clock(end);
+        let now = report.now.epoch_ms();
+        let end_label = if end == now {
+            format!("{end_clock} now")
+        } else {
+            end_clock.clone()
+        };
+        for label in [end_label.as_str(), if end == now { "now" } else { "" }] {
+            if !label.is_empty()
+                && let Some(x) = axis.cells.checked_sub(label.len() as u16)
+                && place(x, label)
+            {
+                break;
+            }
+        }
+        let now_clock = clock(now);
+        let interior_now = !self.options.fitted && axis.start <= now && now < end;
+        if interior_now && let Some(x) = axis.col(now) {
+            for label in [format!("{now_clock} now"), "now".into()] {
+                if place(x, &label) {
+                    break;
                 }
             }
-            for f in &axis.folds {
-                let label = fold_label(f.to - f.from);
-                p.put(
-                    44 + f.x + (5u16.saturating_sub(label.len() as u16)) / 2,
-                    3,
-                    &label,
-                    t.secondary,
-                    t.screen,
-                );
+        }
+        for &(i, x, at) in ticks {
+            // Compare clock strings, including when the priority label shortened
+            // to `now` or had to be dropped altogether.
+            let tick_clock = clock(at);
+            if tick_clock == end_clock || (interior_now && tick_clock == now_clock) {
+                continue;
             }
-            if let Some(x) = now_x {
-                p.put(44 + x, 3, &now_label, t.secondary, t.screen);
+            let label = self.tick_label(at);
+            let s = &axis.segments[i];
+            if x + label.len() as u16 <= s.x + s.width {
+                place(x, &label);
             }
-            p.put(44 + end_x, 3, &end_label, t.secondary, t.screen);
         }
     }
+
     fn draw_links(&self, p: &mut Paint<'_>, positions: &[(usize, u16, Color)]) {
         let lanes = &self.lanes;
         let axis = &self.axis;

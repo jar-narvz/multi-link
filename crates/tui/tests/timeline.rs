@@ -534,3 +534,119 @@ fn done_label_with_following_bar_or_link_within_six_cells_keeps_check() {
         }
     }
 }
+
+fn axis_report(now: i64, bursts: &[(i64, i64)]) -> OverviewReport {
+    let mut r = completion_report(0);
+    r.now = completion_time(now);
+    let group = r
+        .repos
+        .iter_mut()
+        .find(|g| g.repo.ends_with("repo-r"))
+        .unwrap();
+    let Row::Session(row) = &mut group.rows[0] else {
+        panic!()
+    };
+    row.activity = bursts
+        .iter()
+        .map(|&(from, to)| multi_link_model::Activity {
+            from: completion_time(from),
+            to: completion_time(to),
+        })
+        .collect();
+    r
+}
+fn axis_words(b: &Buffer) -> Vec<String> {
+    cells(b, 3, 44, b.area.width - 2)
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn fold_near_end_keeps_length_and_shortens_end_to_now() {
+    let r = axis_report(104, &[(0, 60), (100, 104)]);
+    let b = render(&r, options(), TimeWindow::default_for(&r), 120);
+    assert_eq!(cells(&b, 3, 110, 118), "40m  now");
+    assert_eq!(
+        axis_words(&b),
+        ["21:00", "21:15", "21:30", "21:45", "40m", "now"]
+    );
+}
+
+#[test]
+fn fold_at_end_keeps_length_when_even_now_does_not_fit() {
+    let r = axis_report(102, &[(0, 60)]);
+    let b = render(&r, options(), TimeWindow::default_for(&r), 120);
+    assert_eq!(cells(&b, 3, 113, 118), " 42m ");
+    assert_eq!(axis_words(&b), ["21:00", "21:15", "21:30", "21:45", "42m"]);
+}
+
+#[test]
+fn ticks_in_end_minute_are_suppressed_in_fitted_and_explicit_ranges() {
+    let mut r = axis_report(0, &[(0, 0)]);
+    r.now = Timestamp::from_epoch_ms(completion_time(0).epoch_ms() + 30_000).unwrap();
+    let w = TimeWindow::new(completion_time(0), r.now);
+    for fitted in [true, false] {
+        let b = render(
+            &r,
+            RepoOptions {
+                fitted,
+                ..options()
+            },
+            w,
+            120,
+        );
+        assert_eq!(axis_words(&b), ["21:00", "now"]);
+    }
+}
+
+#[test]
+fn explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it() {
+    // Explicit axes are unfolded; the current-time label wins over the tick
+    // at the same column or the following minute. The end label wins on overlap.
+    for (now, expected) in [
+        (
+            29,
+            vec!["21:00", "21:15", "21:29", "now", "21:45", "22:00", "22:14"],
+        ),
+        (
+            30,
+            vec!["21:00", "21:15", "21:30", "now", "21:45", "22:00", "22:14"],
+        ),
+        (65, vec!["21:00", "21:15", "21:30", "21:45", "now", "22:14"]),
+        (
+            68,
+            vec!["21:00", "21:15", "21:30", "21:45", "22:00", "22:14"],
+        ),
+    ] {
+        let r = axis_report(now, &[(0, 74)]);
+        let b = render(
+            &r,
+            RepoOptions {
+                fitted: false,
+                ..options()
+            },
+            TimeWindow::new(completion_time(0), completion_time(74)),
+            120,
+        );
+        assert_eq!(axis_words(&b), expected, "now at minute {now}");
+    }
+}
+
+#[test]
+fn explicit_range_before_now_uses_plain_end_clock() {
+    let r = axis_report(90, &[(0, 74)]);
+    let b = render(
+        &r,
+        RepoOptions {
+            fitted: false,
+            ..options()
+        },
+        TimeWindow::new(completion_time(0), completion_time(74)),
+        120,
+    );
+    assert_eq!(
+        axis_words(&b),
+        ["21:00", "21:15", "21:30", "21:45", "22:00", "22:14"]
+    );
+}

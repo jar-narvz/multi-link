@@ -1,15 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.2 is committed.** Next: Step 7.3 (Codex, P4 axis
-labels never hide each other). What 7.3 needs:
-- `timeline::period` is now `pub(crate)` (home.rs uses it for its three `last …` phrases); keep its output stable,
-  home's wording depends on it. `HomeOptions.window: Option<TimeWindow>` (None → 2h); App passes
-  `report_window(...)` on every render.
-- `view::clock`: `HH:MM` when 0 ≤ now−at < 24 h; ≥ 24 h → `Mon D`; future times keep the old local-date rule
-  (the hook fixture has a `state_since` after `now`). Axis tick labels in timeline.rs do not use `clock`'s date rule.
-- No TUI golden changed in 7.2 (all match 6a5282a); the four 6.1 `*-phase6*` goldens are unchanged vs 26af6f2,
-  and 7.3 must keep `repo-phase6` so.
+**Resume here (2026-11-02, latest): Phase 7 in progress; Step 7.3 is committed.** Next: Step 7.4 (Claude, real
+check and owner confirm; ends with a stop-and-ask). What 7.4 needs:
+- Repo axis (`draw_axis`, `crates/tui/src/timeline.rs`) reserves label cells in P4 order: fold lengths, end label
+  (`HH:MM now` → `now` → nothing; plain `HH:MM` → nothing when the range ends before now), explicit-range interior
+  now (`HH:MM now` → `now` → nothing), then ticks. Labels keep one blank cell between them (stricter than
+  "covers nothing"; it stops words joining). Ticks whose clock equals the end or interior-now clock are skipped
+  even when that label was shortened or dropped.
+- Explicit ranges never fold, so on screen the fold/end collision appears only in fitted mode.
+- No TUI golden changed in 7.3; the four 6.1 `*-phase6*` goldens are unchanged vs 26af6f2.
+- For 7.4's write-up: P1 real count baseline `[181,43]` (7.1 has the after count), P2 home `last 16h`, P3 clock
+  for the last 24 h, P4 as above. Real renders from scratch only (W10).
 
 **Before Phase 7:**
 **Resume here (2026-11-02, latest).** **Phase 6 is closed: the need is met.** The owner checked the real
@@ -293,6 +295,73 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-02 — Step 7.3: Repo view: axis labels never hide each other — Codex
+- Did: Reserve occupied axis cells in P4 order, keep fold lengths visible, shorten or drop current-time
+  labels on collision, and suppress ticks matching the end/interior-now clock. Keep a blank cell between
+  labels for readability. Added five exact-output rendering tests, including interior now overlapping a
+  different-minute tick and full/short/dropped label forms.
+- Changed: `crates/tui/src/timeline.rs`, `crates/tui/tests/timeline.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.98s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+    Checking multi-link-tui v0.1.0 (workspace crate)
+    Checking multi-link v0.1.0 (workspace crate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.70s
+  ```
+  (Only the local workspace paths on the Checking lines are omitted.)
+  `cargo fmt --all -- --check` → no output, exit 0.
+  `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt fixtures/expected/tui/repo-phase6.styles.txt`
+  → no output, exit 0. `git diff --check` → no output, exit 0.
+- Review: Claude, 2026-11-02 (diff + Step 7.3): clean, no rework round. Only the step's files changed; tests use
+  synthetic fixtures (W10 ok). Re-ran Verify: `cargo test --workspace` → same 36 result lines, all ok (22
+  timeline tests); clippy `-D warnings` exit 0; fmt check exit 0; pinned 6.1-golden diff vs 26af6f2 exit 0.
+  Notes, not fixed: the blank-cell gap is stricter than P4's wording (kept, readability); tick suppression
+  compares `clock(at)`, so a multi-day midnight tick (`Nov 2`) is skipped when the end is exactly 00:00
+  (harmless); no test for a tick at the minute of a plain end label in a range ending before now (same code path
+  as the tested `HH:MM now` case).
+- Gotchas: Explicit ranges do not fold, so their collision tests exercise interior now against ticks and
+  the end label. Initial targeted run: 20 passed, 2 failed (adjacent labels joined words); adding blank
+  separation and correcting the near-fold test geometry resolved both. Final workspace run includes
+  all 22 passing timeline tests. Pre-existing untracked `.claude/` left untouched.
 
 ### 2026-11-02 — Step 7.2: TUI: home names its window; clock for the last 24 h — Codex
 - Did: Passed the existing report window into home on every render, including after refresh; reused the repo
