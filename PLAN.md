@@ -1149,10 +1149,110 @@ as images (W10).
   `✓`, a following bar or link line within 6 cells → `✓`; `repo-phase6.txt` and its styles unchanged;
   the real route-impact view shows `✓ done` after the 16:02 Codex run (scratch screenshot only).
 
+### Phase 7 — Polish the Phase 6 screens (Release 1.4)
+Need: the screens the owner approved in Phase 6 say true, readable things on real data. Owner, 2026-11-02:
+"Polish leftovers first" (the four open points from `docs/phase6-check.md` that 6.6/6.7 did not fix). No new
+screens, no new JSON keys; W0–W10 stay in force except where a P rule below replaces one.
+- **P1 Claude prompt after a system reminder (replaces W3's Claude rule in part).** Counted 2026-11-02 over
+  181 real main transcripts: 43 have `asked` null; in 32 of them every candidate record starts with one
+  `<system-reminder>…</system-reminder>` block followed by real text (sessions started by another session);
+  the other 11 are other wrappers (`local-command-caveat`, `bash-input`, `scheduled-task`), a reminder with no
+  text after it, or no eligible record. Rule: after trimming, while the text starts with exactly `<system-reminder>`
+  (no attributes; `<system-reminder-extra>` does not match), drop everything up to and including the first
+  `</system-reminder>` after it (no nesting is parsed), then leading whitespace; then apply W3 unchanged
+  (blank or starting with `<` → skip this record, try the next). No other tag is stripped; a reminder with no
+  closing tag is skipped as today. Codex is unchanged.
+- **P2 Home names its window (fixes the fixed `last 2h`).** Home's three window phrases (header `All repos ·
+  last 2h`, the card count line, `active about N min in the last 2h`) use the same period words as the repo
+  view title (`period(window)`: `2h`, else the fold-length form such as `16h`), from the window the TUI already
+  computes for the report (`--since`; `--since all` → first burst to now). `HomeOptions` gains the window;
+  its default stays 2h, so every existing home golden is unchanged.
+- **P3 Times in the last 24 h keep the clock (replaces W5's date rule).** A clock time less than 24 h before
+  `now` is `HH:MM` even when its local date is the day before (a time later than now's clock can only be
+  yesterday); 24 h or older → `Mon D` as before. `N min ago` is unchanged. Applies wherever `view::clock`
+  is used (status phrases, `last hand-off`, `started`, the selected line). The phase6 fixture's only date
+  (`since Nov 1`) is 29.7 h old, so the 6.1 goldens stay unchanged.
+- **P4 Axis labels never hide each other.** On the repo view's axis row, labels are placed in this order and a
+  later one is drawn only where it covers nothing already placed: (1) fold lengths; (2) the end label, in its
+  first form that fits: `HH:MM now` (or `HH:MM` when the range ends before now), then `now` (or nothing);
+  (3) an interior `HH:MM now` in an explicit range, then `now`, then nothing; (4) ticks. Shortening to `now`
+  removes the current clock from the screen in fitted mode (the header shows the activity range, not now);
+  accepted, because `now` is the current time by definition and the old screen hid the fold length instead.
+  No tick prints a label equal to the end label's or the `now` label's clock (`14:07  14:07 now` → `14:07
+  now`).
+- Non-goals: the 11 remaining Claude `no prompt` sessions (other wrappers stay skipped); hook install for
+  needs-you; anything in the Backlog.
+- Verify (whole phase, 7.4 runs it): `cargo test --workspace` and `cargo clippy --workspace --all-targets --
+  -D warnings` clean; `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt
+  fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt
+  fixtures/expected/tui/repo-phase6.styles.txt` → exit 0 (pinned to the pre-phase commit; every step runs it);
+  real count (counts only): `target/release/multi-link sessions --since all --json | jq -c
+  '[.sessions[]|select(.harness=="claude")] | [length, (map(select(.asked==null))|length)]'` — baseline
+  2026-11-02 at 26af6f2: `[181,43]`; live transcripts grow, so later runs explain any change in the first
+  number; the owner looks at the real screen and confirms (stop-and-ask).
+
+### Step 7.1 — Core: Claude prompt after a system reminder (Codex)
+- Depends on: nothing. Rule P1.
+- Files: `crates/claude/src/lib.rs`, `crates/claude/tests/**`, `docs/design.md` (P1–P4 under a new
+  "Phase 7 decisions" section), `docs/output-schema.md` (the `asked` rule), `fixtures/expected/**/*.json` (only
+  `asked` values P1 changes), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok`, clippy clean; unit tests: reminder then text → that text;
+  two reminders then text → the text; reminder only → next record's prompt; reminder then
+  `<local-command-caveat>` → skipped; unterminated reminder → skipped; `<system-reminder-extra>…` → skipped
+  (not stripped); plain prompt unchanged; the pinned 6.1-golden `git diff` → exit 0; the phase's real count
+  (PROGRESS, counts only): `[181,43]` → `[N,11]` with N ≥ 181, or explain each difference.
+
+### Step 7.2 — TUI: home names its window; clock for the last 24 h (Codex)
+- Depends on: 7.1. Rules P2, P3.
+- Files: `crates/tui/src/home.rs`, `crates/tui/src/view.rs`, `crates/tui/src/app.rs`,
+  `crates/tui/src/timeline.rs` (only to share `period`), `crates/tui/tests/**`, `crates/tui/examples/home_html.rs`
+  (pass the window), `fixtures/expected/tui/*.txt` (only cells P3 changes; never the four 6.1 `*-phase6*`
+  files), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok`, clippy clean; tests: home at 16h says `last 16h` in all three
+  phrases, default stays `last 2h`; App-level: the window passed to home follows `--since 16h`, `--since all`
+  and survives a refresh; `home_html --since 16h` (no `--repo`) renders `last 16h`; `clock` at now−23h59m on
+  the previous local date → `HH:MM`, at now−24h → `Mon D`, across a UTC offset; the pinned 6.1-golden
+  `git diff` → exit 0.
+
+### Step 7.3 — Repo view: axis labels never hide each other (Codex)
+- Depends on: 7.2. Rule P4.
+- Files: `crates/tui/src/timeline.rs`, `crates/tui/tests/timeline.rs`, `fixtures/expected/tui/repo*.txt`
+  (only cells P4 changes; `repo-phase6` must stay unchanged), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok`, clippy clean; tests: a fold just left of `now` shows its
+  length and the end label `now`; a fold with no room even for `now` keeps its length and drops the end
+  label; a tick at the end label's minute is not printed (fitted and explicit); explicit range with `now`
+  inside: an interior `HH:MM now` next to a fold or tick obeys the order; explicit range ending before now:
+  plain `HH:MM` end label, no `now`; the pinned 6.1-golden `git diff` → exit 0.
+
+### Step 7.4 — Real check and owner confirm (Claude)
+- Depends on: 7.3. Run the whole-phase Verify. Real renders (home at 2h and 16h, a repo view with a fold if
+  real data has one, else the fixture) shown to the owner from scratch only (W10). `docs/phase7-check.md`:
+  counts before/after, what each P rule changed on screen, in words. README: the P1 prompt rule and P3 times.
+  Then stop and ask the owner to run `multi-link tui` and confirm.
+- Files: `docs/phase7-check.md`, `README.md`, `PROGRESS.md`
+- Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-02 — Phase 7 plan (Claude, Codex critique, read-only)
+Owner chose "Polish leftovers first". Codex (`codex exec -s read-only`) gave 7 points:
+1. P4 priorities contradicted themselves (end label first, then dropped for a fold length). **Accepted:** P4
+   is now a placement order (fold lengths, end label in shrinking forms, interior now, ticks).
+2. "The header still gives the time" is false in fitted mode (header shows the activity range). **Accepted
+   the fact, kept the rule:** P4 says the clock can disappear and why that is acceptable; a header change is
+   out of scope.
+3. `<system-reminder` prefix also matches other tags; "matching" undefined for nesting. **Accepted:** exact
+   tag, first closing tag, no nesting, plus a negative test.
+4. 7.2 render tests cannot prove the app passes the window. **Accepted:** App-level and `home_html --since`
+   tests added.
+5. P4 Verify missed explicit-range cases. **Accepted:** tests for end-minute ticks, interior now, range
+   ending before now.
+6. Real count had no command or baseline. **Accepted in part:** jq command and baseline `[181,43]` at 26af6f2
+   added; a frozen scratch copy of the transcripts is rejected (overkill; changes are explained instead).
+7. "Byte-identical to HEAD" moves with each commit. **Accepted:** pinned `git diff --exit-code 26af6f2`.
 
 ### 2026-11-02 — Step 6.7 review (Claude, diff + Step 6.7)
 Phase6 pair unchanged; three tests present; real route-impact view shows `✓ done` after the 16:02 Codex run.
