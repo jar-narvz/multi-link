@@ -1,6 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Resume here (2026-11-02, latest).** **Phase 6 is closed: the need is met.** The owner checked the real
+screen and approved it with one change (Step 6.6 linked launches in subshells / after heredocs and fixed Codex
+prompt labels; Step 6.7 added the `✓ done` label). Verdict recorded in `docs/phase6-check.md`. Phase 6 commits:
+d4d862a (plan) through 0190090 (6.7), all local; the owner pushes. No next phase is planned; candidates are in
+PLAN.md's Backlog (hook install for needs-you, step graph from board 3, live grid).
+
 **Resume here (2026-11-02, latest): Step 6.7 is committed; Phase 6 is still NOT closed** (the coordinator records
 the owner's verdict).
 - Repo view: a finished Codex bar gets green `✓ done` after one blank cell when all seven cells (blank + label) fit

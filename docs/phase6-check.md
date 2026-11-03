@@ -4,7 +4,7 @@ Step 6.5 compares the rebuilt home screen and the new repo view with the two pic
 on 2026-11-01: **board 7c** (home in words) and **board 8c** (repo view as swimlanes). Both boards are on
 the owner's private mockup canvas, <https://claude.ai/artifact/R5Bh9iX6bsn3jSu8F8D58C>. They were drawn
 from real data and show real prompts, so they are described here, not pictured (W10). The owner still has
-to check the real screen (see [Owner check](#owner-check-stop-and-ask--pending)).
+to check the real screen (see [Owner check](#owner-check-stop-and-ask--met)).
 
 **Most important findings on real data (2026-11-02 14:07 PST):**
 1. Every real Codex run reads `codex · no prompt` (14 of 14 non-imported Codex rows in a 16 h window).
@@ -137,7 +137,7 @@ fixture HTML text vs goldens                          → home True, repo True
 The remaining Verify items are the real screenshots shown to the owner from scratch storage and the
 owner's answer below.
 
-## Owner check (stop-and-ask) — pending
+## Owner check (stop-and-ask) — met
 
 Need: "from the home screen I can tell in a few seconds which repo needs me and what is running; from a
 repo I can see which Codex run came from which Claude session, when each was active, and how sure the link
@@ -149,4 +149,12 @@ target/release/multi-link tui
 target/release/multi-link tui --since 16h   # to see last night's Phase 6 runs in the repo view
 ```
 
-Owner's answer: _not yet recorded._ Phase 6 stays open until it is.
+Owner's answers (2026-11-02), after running `multi-link tui` on the real screen:
+1. On the route-impact repo view: "make it look like 2, the connections between the timelines to show the
+   hand-offs". The view already drew the connection; the link itself was missing (a launch inside `( … )`
+   after a heredoc). Step 6.6 fixed the recogniser (real launches found across all history: 124 → 149) and
+   the Codex prompt labels.
+2. After 6.6: "add the label wording done like in the design; other than that it looks good". Step 6.7
+   draws `✓ done` after a finished Codex bar when it fits.
+
+**Result: Phase 6 meets the need** (owner approved the real screen with 6.7's label as the only change).
