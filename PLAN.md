@@ -1134,6 +1134,21 @@ as images (W10).
   goldens unchanged; before/after real counts (in PROGRESS, counts only, no prompts): `links --since all`
   launches by match kind, and Codex sessions in `sessions --since 2h` with `asked` null.
 
+### Step 6.7 — Repo view: `✓ done` label after a finished Codex run (Codex)
+- Depends on: 6.6. Owner, 2026-11-02, after checking the real repo view: "add the label wording done like
+  in the design; other than that it looks good". Board 2 writes `✓ done` (green) right after a finished Codex
+  bar; 6.4 draws only `✓`.
+- After a `done` Codex bar, draw `✓ done` in the done colour, one blank cell after the bar's end
+  (`█ ✓ done`) when the 6 cells fit inside the bar area without covering another bar, a link line or the fold
+  band; otherwise `✓` alone right after the bar, as today. Same in the list form below 80 columns? No: the
+  list form already says `done HH:MM` in the sub line. NO_COLOR keeps the text.
+- Files: `crates/tui/src/timeline.rs`, `crates/tui/tests/timeline.rs`, `fixtures/expected/tui/repo*.txt`
+  (only cells this rule changes; the 6.1 `repo-phase6` pair must stay unchanged because its Codex bar ends at
+  the right edge), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` and clippy clean; tests: room → `✓ done`, no room at the edge →
+  `✓`, a following bar or link line within 6 cells → `✓`; `repo-phase6.txt` and its styles unchanged;
+  the real route-impact view shows `✓ done` after the 16:02 Codex run (scratch screenshot only).
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · step graph · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
