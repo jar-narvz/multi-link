@@ -3,8 +3,7 @@
 ## Current state
 **Resume here (2026-11-06, latest).** **Phase 8 (step graph) is planned; Step 8.1 is next.** The owner approved board 9
 on the mockup canvas. Plan in PLAN.md (G0–G11, Steps 8.1–8.6; Codex critique logged, 9 accepted, 1 in part). The owner
-did not answer what the view must answer, where it lives, or replay, so PLAN.md marks Claude's defaults (the need
-line; `s` from the repo view; no replay): change them before 8.4 if the owner says so. Facts measured 2026-11-06 are
+kept the defaults: the need line, `s` from the repo view, no replay. Facts measured 2026-11-06 are
 in the phase. Watch out: Codex rollouts on disk fell to 159 (295 sessions counted 2026-11-03), and unlinked hand-offs
 rose 32 → 108; cause not investigated. Phase 8 is the number: the planning session's "Phase 7" went to the polish phase.
 

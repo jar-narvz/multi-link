@@ -1266,9 +1266,8 @@ and how it ended, across Claude and Codex, without opening transcripts. The owne
 mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C) on 2026-11-06: board 3's step graph drawn on the
 120×40 cell grid from real multi-link step 6.7. It is the acceptance picture; it shows real prompts, so it is
 described, never committed as an image (W10). The planning session called this Phase 7; that number went to the
-polish phase. **Owner's approval covered the board only.** Three questions got no answer, so these are Claude's
-defaults (G1, G9, non-goals), cheap to change before 8.4: what the view answers (the need above), where it
-lives (`s` from the repo view), replay (not in this phase).
+polish phase. Owner, 2026-11-06, kept Claude's defaults: the view answers
+the need above; it lives on `s` from the repo view (G9); replay is not in this phase.
 Measured 2026-11-06 on real data (`links`/`sessions --since all`, at e5f6c78):
 - 176 hand-offs: 108 unlinked, 54 matched by time, 13 exact, 1 ambiguous. 76 carry a step tag, in 48 repo+step
   pairs (39 of multi-link's 57 PLAN.md steps). Hand-offs per step: 1 (24 steps), 2 (22), 3 (1), 5 (1). Claude
