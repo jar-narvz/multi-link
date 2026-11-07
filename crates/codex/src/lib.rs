@@ -179,21 +179,7 @@ fn parse<R: BufRead>(
                 && payload["type"] == "message"
                 && payload["role"] == "user"
             {
-                let prompt = payload["content"]
-                    .as_array()
-                    .and_then(|blocks| {
-                        blocks
-                            .iter()
-                            .find(|block| block["type"] == "input_text")
-                            .and_then(|block| block["text"].as_str())
-                    })
-                    .map(str::trim_start)
-                    .filter(|text| {
-                        !text.is_empty()
-                            && !text.starts_with("# AGENTS.md instructions")
-                            && !text.starts_with('<')
-                    })
-                    .map(multi_link_model::normalize_prompt);
+                let prompt = response_user_prompt(payload);
                 if let Some(prompt) = prompt {
                     response_prompt.get_or_insert_with(|| prompt.clone());
                     last_response_prompt = Some(prompt);
@@ -305,4 +291,294 @@ pub fn parse_file(
         &transcript,
         skipped,
     )
+}
+
+/// Read calls on demand. Undocumented payloads are assumptions, never required
+/// for the scanner to work. Missing files remain I/O errors for graph availability.
+pub fn calls(path: &Path) -> io::Result<multi_link_model::Calls> {
+    Ok(read_details(path)?.0)
+}
+
+pub fn codex_turns(path: &Path) -> io::Result<Vec<multi_link_model::Turn>> {
+    Ok(read_details(path)?.1)
+}
+
+fn response_user_prompt(payload: &Value) -> Option<String> {
+    if payload["type"] != "message" || payload["role"] != "user" {
+        return None;
+    }
+    payload["content"]
+        .as_array()?
+        .iter()
+        .find(|block| block["type"] == "input_text")?["text"]
+        .as_str()
+        .map(str::trim_start)
+        .filter(|text| {
+            !text.is_empty()
+                && !text.starts_with("# AGENTS.md instructions")
+                && !text.starts_with('<')
+        })
+        .map(multi_link_model::normalize_prompt)
+}
+
+/// Combined form avoids opening a rollout twice when both are needed.
+pub fn read_details(
+    path: &Path,
+) -> io::Result<(multi_link_model::Calls, Vec<multi_link_model::Turn>)> {
+    use multi_link_model::{Call, Calls, Turn as GraphTurn};
+    let file = path.to_string_lossy();
+    let mut report = Calls::default();
+    let mut turns: Vec<GraphTurn> = Vec::new();
+    let mut active: Option<(String, usize)> = None;
+    let mut imported: Option<String> = None;
+    let mut event_prompts = std::collections::HashSet::new();
+    let mut outputs = std::collections::HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for record in JsonlReader::from_path(path, file.as_ref())? {
+        let (line, value) = match record? {
+            Ok(record) => record,
+            Err(skip) => {
+                report.skipped.push(skip);
+                continue;
+            }
+        };
+        let payload = &value["payload"];
+        let at = timestamp(&value["timestamp"]);
+        let event = value["type"] == "event_msg";
+        let subtype = payload["type"].as_str().unwrap_or_default();
+        let mut unknown = false;
+        if event && subtype == "task_started" {
+            active = None;
+            imported = None;
+            if let (Some(id), Some(at)) = (payload["turn_id"].as_str(), at) {
+                if id.starts_with("external-import") {
+                    imported = Some(id.to_owned());
+                } else {
+                    active = Some((id.to_owned(), turns.len()));
+                    turns.push(GraphTurn {
+                        start: at,
+                        completed_at: None,
+                        last_record_at: at,
+                        prompt: None,
+                        last_agent_message: None,
+                    });
+                }
+            } else {
+                unknown = true;
+            }
+        }
+        if let Some(id) = imported.as_deref() {
+            if event && subtype == "task_complete" && payload["turn_id"] == id {
+                imported = None;
+            }
+            continue;
+        }
+        if let Some((id, index)) = &active {
+            let turn = &mut turns[*index];
+            if let Some(at) = at {
+                turn.last_record_at = turn.last_record_at.max(at);
+            }
+            if event && subtype == "user_message" {
+                if let Some(prompt) = payload["message"].as_str()
+                    && event_prompts.insert(*index)
+                {
+                    turn.prompt = Some(multi_link_model::normalize_prompt(prompt));
+                }
+            } else if value["type"] == "response_item" && turn.prompt.is_none() {
+                turn.prompt = response_user_prompt(payload);
+            }
+            if event && subtype == "task_complete" && payload["turn_id"] == id.as_str() {
+                turn.completed_at = at;
+                turn.last_agent_message = payload["last_agent_message"]
+                    .as_str()
+                    .map(multi_link_model::normalize_prompt);
+                active = None;
+            }
+        }
+        match value["type"].as_str() {
+            Some("response_item") => match subtype {
+                "custom_tool_call" | "function_call" => {
+                    if let (Some(id), Some(at)) = (payload["call_id"].as_str(), at) {
+                        if seen.insert(id.to_owned()) {
+                            let (kind, label) = classify_call(payload);
+                            report.calls.push(Call {
+                                id: id.to_owned(),
+                                at,
+                                kind,
+                                label,
+                                ok: None,
+                            });
+                        }
+                    } else {
+                        unknown = true;
+                    }
+                }
+                "custom_tool_call_output" | "function_call_output" => {
+                    if let Some(id) = payload["call_id"].as_str() {
+                        outputs
+                            .entry(id.to_owned())
+                            .or_insert_with(|| output_exit(&payload["output"]));
+                    } else {
+                        unknown = true;
+                    }
+                }
+                "message" | "reasoning" | "web_search_call" | "compaction" | "additional_tools" => {
+                }
+                _ => unknown = true,
+            },
+            Some(
+                "event_msg" | "session_meta" | "turn_context" | "token_usage_record"
+                | "world_state",
+            ) => {}
+            _ => unknown = true,
+        }
+        if unknown {
+            report.skipped.push(Skipped {
+                file: file.to_string(),
+                line,
+                reason: SkipReason::UnknownType,
+            });
+        }
+    }
+    for call in &mut report.calls {
+        call.ok = outputs.get(&call.id).copied().flatten();
+    }
+    Ok((report, turns))
+}
+
+fn classify_call(payload: &Value) -> (multi_link_model::CallKind, Option<String>) {
+    use multi_link_model::{CallKind, classify_bash, quoted_string};
+    let name = payload["name"].as_str().unwrap_or_default();
+    let input = payload["input"]
+        .as_str()
+        .or_else(|| payload["arguments"].as_str())
+        .unwrap_or_default();
+    if name == "apply_patch" {
+        return (CallKind::Edit, patch_label(input));
+    }
+    if name == "exec_command" {
+        return serde_json::from_str::<Value>(input)
+            .ok()
+            .and_then(|v| v["cmd"].as_str().map(classify_bash))
+            .unwrap_or((CallKind::Run, None));
+    }
+    if name == "write_stdin" {
+        return (CallKind::Run, None);
+    }
+    // Look only outside string literals. A command mentioning tools.apply_patch
+    // must not become an edit; the first nested tool defines this record's call.
+    let mut rest = input;
+    while !rest.is_empty() {
+        let c = rest.chars().next().unwrap();
+        if matches!(c, '"' | '\'' | '`') {
+            let mut escaped = false;
+            let end = rest.char_indices().skip(1).find_map(|(i, ch)| {
+                if !escaped && ch == c {
+                    Some(i + ch.len_utf8())
+                } else {
+                    escaped = !escaped && ch == '\\';
+                    None
+                }
+            });
+            rest = end.map(|i| &rest[i..]).unwrap_or_default();
+            continue;
+        }
+        if let Some(tail) = rest.strip_prefix("tools.apply_patch(") {
+            return (
+                CallKind::Edit,
+                quoted_string(tail).and_then(|patch| patch_label(&patch)),
+            );
+        }
+        if rest.starts_with("tools.write_stdin(") {
+            return (CallKind::Run, None);
+        }
+        if let Some(tail) = rest.strip_prefix("tools.exec_command(") {
+            let cmd = command_input(tail);
+            return cmd
+                .as_deref()
+                .map(classify_bash)
+                .unwrap_or((CallKind::Run, None));
+        }
+        rest = &rest[c.len_utf8()..];
+    }
+    (CallKind::Run, None)
+}
+
+/// Inspect property names outside string values, without evaluating JavaScript.
+fn command_input(mut text: &str) -> Option<String> {
+    while !text.is_empty() {
+        text = text.trim_start();
+        let c = text.chars().next()?;
+        if matches!(c, ')' | '}') {
+            return None;
+        }
+        if matches!(c, '\'' | '"') {
+            let mut escaped = false;
+            let end = text.char_indices().skip(1).find_map(|(i, ch)| {
+                if !escaped && ch == c {
+                    Some(i + ch.len_utf8())
+                } else {
+                    escaped = !escaped && ch == '\\';
+                    None
+                }
+            })?;
+            let key = multi_link_model::quoted_string(&text[..end]);
+            text = &text[end..];
+            if key.as_deref() == Some("cmd")
+                && let Some(value) = text.trim_start().strip_prefix(':')
+            {
+                return multi_link_model::quoted_string(value);
+            }
+        } else if c.is_ascii_alphabetic() || c == '_' {
+            let end = text
+                .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .unwrap_or(text.len());
+            let key = &text[..end];
+            text = &text[end..];
+            if key == "cmd"
+                && let Some(value) = text.trim_start().strip_prefix(':')
+            {
+                return multi_link_model::quoted_string(value);
+            }
+        } else {
+            text = &text[c.len_utf8()..];
+        }
+    }
+    None
+}
+
+fn patch_label(patch: &str) -> Option<String> {
+    patch
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("*** Update File:")
+                .or_else(|| line.strip_prefix("*** Add File:"))
+        })
+        .and_then(multi_link_model::edit_label)
+}
+
+/// First exit_code, in output block order. Do not infer success from prose.
+fn output_exit(value: &Value) -> Option<bool> {
+    match value {
+        Value::Array(blocks) => blocks.iter().find_map(output_exit),
+        Value::Object(object) => {
+            if let Some(code) = object.get("exit_code").and_then(Value::as_i64) {
+                return Some(code == 0);
+            }
+            object.get("text").and_then(output_exit)
+        }
+        Value::String(text) => {
+            if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                return output_exit(&parsed);
+            }
+            let (_, tail) = text.split_once("\"exit_code\"")?;
+            let tail = tail.trim_start().strip_prefix(':')?.trim_start();
+            let number: String = tail
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '-')
+                .collect();
+            number.parse::<i64>().ok().map(|code| code == 0)
+        }
+        _ => None,
+    }
 }

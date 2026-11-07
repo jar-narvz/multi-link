@@ -381,3 +381,114 @@ fn prompt(content: &Value) -> Option<String> {
     }
     Some(multi_link_model::normalize_prompt(text))
 }
+
+/// Owned, deduplicated calls from a main transcript and its subagent files.
+/// Ownership follows W1: absent sessionId is accepted, a different id is not.
+/// No call content is retained beyond G6's fixed labels and edit basenames.
+pub fn calls(root: &Path, transcript: &Transcript) -> io::Result<multi_link_model::Calls> {
+    use multi_link_model::{Call, CallKind, Calls, classify_bash, edit_label};
+    let mut report = Calls::default();
+    let mut seen = std::collections::HashSet::new();
+    let mut results = std::collections::HashMap::new();
+    let files = std::iter::once(transcript.transcript.as_str()).chain(
+        transcript
+            .subagent_files
+            .iter()
+            .map(|s| s.transcript.as_str()),
+    );
+    for (index, file) in files.enumerate() {
+        let reader = match JsonlReader::from_path(root.join(file), file) {
+            Ok(reader) => reader,
+            Err(error) if index > 0 && error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
+        for record in reader {
+            let (line, value) = match record? {
+                Ok(record) => record,
+                Err(skip) => {
+                    report.skipped.push(skip);
+                    continue;
+                }
+            };
+            if value["sessionId"]
+                .as_str()
+                .is_some_and(|id| id != transcript.id)
+            {
+                continue;
+            }
+            let Some(record_type) = value["type"].as_str().filter(|kind| known_type(kind)) else {
+                report.skipped.push(Skipped {
+                    file: file.to_owned(),
+                    line,
+                    reason: SkipReason::UnknownType,
+                });
+                continue;
+            };
+            let Some(blocks) = value["message"]["content"].as_array() else {
+                continue;
+            };
+            for block in blocks {
+                if record_type == "user"
+                    && block["type"] == "tool_result"
+                    && let Some(id) = block["tool_use_id"].as_str()
+                {
+                    results
+                        .entry(id.to_owned())
+                        .or_insert_with(|| block["is_error"].as_bool().map(|error| !error));
+                }
+                if record_type != "assistant" || block["type"] != "tool_use" {
+                    continue;
+                }
+                let (Some(id), Some(name), Some(at)) = (
+                    block["id"].as_str(),
+                    block["name"].as_str(),
+                    value["timestamp"]
+                        .as_str()
+                        .and_then(|s| Timestamp::parse(s).ok()),
+                ) else {
+                    report.skipped.push(Skipped {
+                        file: file.to_owned(),
+                        line,
+                        reason: SkipReason::UnknownType,
+                    });
+                    continue;
+                };
+                if name.starts_with("mcp__ccd_") || !seen.insert(id.to_owned()) {
+                    continue;
+                }
+                let input = &block["input"];
+                let (kind, label) = match name {
+                    "Read" | "Grep" | "Glob" => (CallKind::Read, None),
+                    "Edit" | "Write" | "NotebookEdit" => (
+                        CallKind::Edit,
+                        input["file_path"]
+                            .as_str()
+                            .or_else(|| input["notebook_path"].as_str())
+                            .and_then(edit_label),
+                    ),
+                    "Bash" => {
+                        let command = input["command"].as_str().unwrap_or_default();
+                        if recognise(command).is_some() {
+                            (CallKind::Handoff, Some("▸ codex exec".to_owned()))
+                        } else {
+                            classify_bash(command)
+                        }
+                    }
+                    _ => (CallKind::Run, None),
+                };
+                report.calls.push(Call {
+                    id: id.to_owned(),
+                    at,
+                    kind,
+                    label,
+                    ok: None,
+                });
+            }
+        }
+    }
+    for call in &mut report.calls {
+        call.ok = results.get(&call.id).copied().flatten();
+    }
+    report.calls.sort_by_key(|call| call.at);
+    Ok(report)
+}

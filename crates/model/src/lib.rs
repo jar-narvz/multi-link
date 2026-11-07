@@ -288,3 +288,205 @@ pub fn normalize_prompt(text: &str) -> String {
         text
     }
 }
+
+string_enum!(CallKind {
+    Read,
+    Edit,
+    Run,
+    Handoff
+});
+
+/// On-demand transcript data; never embedded in a Session or scanner cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Call {
+    pub id: String,
+    pub at: Timestamp,
+    pub kind: CallKind,
+    pub label: Option<String>,
+    pub ok: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Turn {
+    pub start: Timestamp,
+    pub completed_at: Option<Timestamp>,
+    pub last_record_at: Timestamp,
+    pub prompt: Option<String>,
+    pub last_agent_message: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Calls {
+    pub calls: Vec<Call>,
+    pub skipped: Vec<Skipped>,
+}
+
+/// A deliberately small shell lexer, used for category labels only. No shell is run.
+/// Quotes keep separators inside arguments; unsupported syntax remains a run.
+pub fn shell_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+    for c in text.chars() {
+        if escaped {
+            word.push(c);
+            escaped = false;
+        } else if c == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if quote == Some(c) {
+            quote = None;
+        } else if quote.is_none() && matches!(c, '\'' | '"') {
+            quote = Some(c);
+        } else if quote.is_none() && (c.is_whitespace() || matches!(c, ';' | '&' | '|' | '\n')) {
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
+            }
+            if matches!(c, ';' | '&' | '|' | '\n') {
+                words.push(if c == '\n' {
+                    ";".to_owned()
+                } else {
+                    c.to_string()
+                });
+            }
+        } else {
+            word.push(c);
+        }
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    words
+}
+
+/// Fixed G5/G6 labels only: arguments and arbitrary command text never escape.
+/// Launch recognition belongs to the Claude reader, which has the full grammar.
+pub fn classify_bash(command: &str) -> (CallKind, Option<String>) {
+    let words = shell_words(command);
+    let head = skip_bash_prefixes(&words);
+    let first = head.first().map(String::as_str).unwrap_or_default();
+    let second = head.get(1).map(String::as_str).unwrap_or_default();
+    let kind = if matches!(
+        first,
+        "cat" | "sed" | "grep" | "rg" | "head" | "tail" | "ls" | "awk" | "wc" | "find"
+    ) || first == "git" && matches!(second, "diff" | "status" | "log" | "show")
+    {
+        CallKind::Read
+    } else {
+        CallKind::Run
+    };
+    let label_words = shell_words(&without_heredoc_bodies(command));
+    let mut label = None;
+    for segment in label_words.split(|word| matches!(word.as_str(), ";" | "&" | "|")) {
+        let head = skip_bash_prefixes(segment);
+        let first = head.first().map(String::as_str).unwrap_or_default();
+        let second = head.get(1).map(String::as_str).unwrap_or_default();
+        let next = match (first, second) {
+            ("git", "diff" | "commit")
+            | ("cargo", "test" | "clippy" | "fmt" | "build")
+            | ("npm", "test") => Some(format!("$ {first} {second}")),
+            ("pytest", _) => Some("$ pytest".to_owned()),
+            _ => None,
+        };
+        if next.as_deref() == Some("$ git commit") {
+            return (kind, next);
+        }
+        if label.is_none() {
+            label = next;
+        }
+    }
+    (kind, label)
+}
+
+fn skip_bash_prefixes(words: &[String]) -> &[String] {
+    let mut i = 0;
+    while i < words.len() {
+        if matches!(words[i].as_str(), "export" | "cd") {
+            let Some(end) = words[i..]
+                .iter()
+                .position(|w| matches!(w.as_str(), ";" | "&"))
+            else {
+                return &[];
+            };
+            i += end + 1;
+        } else if matches!(words[i].as_str(), ";" | "&")
+            || words[i].split_once('=').is_some_and(|(key, _)| {
+                !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+        {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    &words[i..]
+}
+
+/// Keep the introducing line, but never classify text inside a heredoc body.
+fn without_heredoc_bodies(command: &str) -> String {
+    let mut output = String::new();
+    let mut tags = std::collections::VecDeque::new();
+    for line in command.lines() {
+        if let Some(tag) = tags.front() {
+            if line.trim() == tag {
+                tags.pop_front();
+            }
+            continue;
+        }
+        output.push_str(line);
+        output.push('\n');
+        let mut rest = line;
+        while let Some(index) = rest.find("<<") {
+            rest = &rest[index + 2..];
+            if rest.starts_with('<') {
+                rest = rest.trim_start_matches('<');
+                continue;
+            }
+            rest = rest.strip_prefix('-').unwrap_or(rest).trim_start();
+            let tag = if let Some(quote) = rest.chars().next().filter(|c| matches!(c, '\'' | '"')) {
+                rest[1..].find(quote).map(|end| &rest[1..end + 1])
+            } else {
+                let end = rest
+                    .find(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | ')' | '('))
+                    .unwrap_or(rest.len());
+                Some(&rest[..end])
+            };
+            if let Some(tag) = tag.filter(|tag| !tag.is_empty()) {
+                tags.push_back(tag.to_owned());
+            }
+        }
+    }
+    output
+}
+
+pub fn edit_label(path: &str) -> Option<String> {
+    let basename = std::path::Path::new(path.trim()).file_name()?.to_str()?;
+    (!basename.is_empty()).then(|| format!("edit {basename}"))
+}
+
+/// Decode a quoted JS string without evaluating code. JSON double quotes and
+/// simple single-quoted strings are assumptions of the undocumented exec format.
+pub fn quoted_string(text: &str) -> Option<String> {
+    let text = text.trim_start();
+    let quote = text.chars().next()?;
+    if !matches!(quote, '"' | '\'') {
+        return None;
+    }
+    let mut escaped = false;
+    for (i, c) in text.char_indices().skip(1) {
+        if !escaped && c == quote {
+            if quote == '"' {
+                return serde_json::from_str(&text[..=i]).ok();
+            }
+            let inner = &text[1..i];
+            return Some(
+                inner
+                    .replace("\\'", "'")
+                    .replace("\\n", "\n")
+                    .replace("\\\\", "\\"),
+            );
+        }
+        escaped = !escaped && c == '\\';
+    }
+    None
+}

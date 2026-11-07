@@ -1,22 +1,27 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-06, latest).** **Step 8.1 is committed; Step 8.2 is next** (normal Codex loop; record the trial's
-baseline measures in its entry: wall-clock, tests added, implementer and reviewer runs, findings, fix rounds, tokens only if
-a real output shows them, else "not measured"). What 8.2 needs:
-- Contract: `docs/design.md` → Phase 8 decisions, G5 and "Pinned while writing the keys"; `docs/output-schema.md` → `graph`
-  → Calls and turns. **Two additions to PLAN.md's wording:** `Call` also has `id` (Claude tool id, Codex `call_id`) for the G1
-  ownership join, and `Turn` is `{start, completed_at, last_record_at, prompt, last_agent_message}`.
-- Fixture root `fixtures/sessions-phase8/` already holds every record shape 8.2's calls readers meet: `exec_command`,
-  `apply_patch`, `write_stdin`, `function_call` `js`, no `exit_code`, a subagent file, a fork's copied calls (8113),
-  Claude `Agent` (other tools run). Its tests may add temp fixtures for shapes it lacks: two calls in one record, unreadable
-  input, an unknown record, imported turns, a tool id seen twice.
-- `links` lists the fork's copied hand-off twice (same `invocation`, parent 8112 and 8113). That stays as it is (G0);
-  8.3 drops it by the pinned G1 rule.
+**Resume here (2026-11-06, latest).** **Step 8.2 is committed; Step 8.3 is next** (Superpowers trial, rules in CLAUDE.md;
+stop and ask if Superpowers is not installed). Its baseline measures are in the 8.2 entry. What 8.3 needs:
+- Readers, on demand only: `claude::calls(root, transcript)`, `codex::calls(path)`, `codex::codex_turns(path)`, and
+  `codex::read_details(path)` for both in one read. Types `model::{Call, CallKind, Calls, Turn}`; `Calls.skipped` holds
+  skipped records. A missing Codex or main Claude file is an I/O error, which is how G4's `run unavailable` is seen; a
+  missing subagent file is skipped.
+- `Call.label` is the fixed category only. `▸ codex exec` is the bare hand-off label; 8.3 adds `· step` / `· continue`.
+- **Reading added in 8.2's review (not in PLAN.md's or design.md's wording; those files were outside the step):** `kind`
+  is by the first command word, but `label` looks at every simple command, `$ git commit` wins, else the first labelled
+  one, and heredoc bodies are ignored. Real commits are all `git add … && git commit`, so G3's `verify + commit` needs this.
+  A planner should copy this into G5 at the next PLAN.md edit.
+- **`Turn.prompt`** is the first `user_message` event, else the first filtered `response_item` user message. Real turns
+  use only the second; the phase 8 fixture uses only the first.
+- `ok` on non-Bash Claude calls is usually null: those tools omit `is_error` on success (real counts in the entry).
+- `links` lists the fork's copied hand-off twice (same `invocation`, parent 8112 and 8113). 8.3 drops it by the pinned G1
+  rule, joining `link.invocation` to the parent's `Call.id`. On real data 1 of 180 invocations is such a copy.
 - Keys: `fixtures/expected/phase8/graph-<id>.json`, 13 ids, 59 parts. Golden `step-phase8.txt` / `.styles.txt` are 8.4's
   target; do not edit them. A mismatch blamed on a key or the golden is reported, not fixed.
-- Two PLAN.md readings were pinned in design.md rather than PLAN.md (the step's Files exclude it): G2's "runs through it" and
-  the part that holds a hand-off. If the planner disagrees, the keys for 1.2, 1.5 and 1.11 change.
+- Two PLAN.md readings were pinned in design.md rather than PLAN.md: G2's "runs through it" and the part that holds a
+  hand-off. If the planner disagrees, the keys for 1.2, 1.5 and 1.11 change.
+- 296 tests pass, 1 ignored (`real_counts`, opt-in), clippy clean, pinned `git diff` exit 0.
 
 **Workflow trial (2026-11-06).** The owner wants to try Superpowers: Step 8.3 only, rules in CLAUDE.md. Steps 8.1 and
 8.2 use the normal loop, and 8.2 records the trial's measures as the baseline. Superpowers was not installed when
@@ -351,6 +356,119 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-06 — Step 8.2: Calls from both transcripts — Codex (review: Claude)
+- Did: Added on-demand owned calls for Claude main/subagent transcripts, deduplication and result joins; Codex calls
+  and per-turn details with imported turns excluded, open turns retained, and unknown records counted. Added shared
+  fixed-label classification without executing transcript input. Scanner parsing and existing report contracts are unchanged.
+  Review fixes: shared the scanner's response-user filter for per-turn prompt fallback, with first-event precedence;
+  labels inspect all simple commands, prefer commit, and omit heredoc bodies while preserving first-command kind.
+  Ignored `additional_tools`; missing subagent files are skipped while missing main files still error. Added synthetic
+  tests for these cases and absent `is_error` (unknown result). All five requested findings addressed in one fix round.
+  Trial baseline, measured by the step session: wall-clock 53 min 01 s (21:48:06–22:41:07 PST, start of the step session to
+  writing this entry; commit follows). Of that, Codex 42 min 34 s (implement) + 3 min 17 s (fix). Tests added: 15 run by
+  default (281 → 296) plus 1 opt-in. Implementer runs: 2 (1 implement, 1 fix). Reviewer runs: 2, both Claude in the step
+  session (diff, then the fix); no separate reviewer agent. Independent review findings: 5 (2 high, 3 low), 1 of them a test
+  gap; 5 fixed. Fix rounds: 1. Tokens: Codex 87,991 + 64,476 as printed by `codex exec`; Claude tokens not measured.
+- Changed: `crates/model/src/lib.rs`, `crates/model/tests/calls.rs`, `crates/claude/src/lib.rs`,
+  `crates/claude/tests/calls.rs`, `crates/codex/src/lib.rs`, `crates/codex/tests/calls.rs`, `PROGRESS.md`.
+- Verify: With `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"`, `cargo test --workspace`
+  → exit 0; actual result lines (296 passed in total, one opt-in test ignored):
+
+```text
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual output (repo path replaced with `<repo>`):
+
+```text
+    Blocking waiting for file lock on build directory
+    Checking multi-link-model v0.1.0 (<repo>/crates/model)
+    Checking multi-link-plan v0.1.0 (<repo>/crates/plan)
+    Checking multi-link-codex v0.1.0 (<repo>/crates/codex)
+    Checking multi-link-tui v0.1.0 (<repo>/crates/tui)
+    Checking multi-link-claude v0.1.0 (<repo>/crates/claude)
+    Checking multi-link-core v0.1.0 (<repo>/crates/core)
+    Checking multi-link-hook v0.1.0 (<repo>/crates/hook)
+    Checking multi-link v0.1.0 (<repo>/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.00s
+```
+
+  `git diff --exit-code --diff-filter=MD e5f6c78 -- fixtures/expected/` → exit 0, no output.
+  `git diff --check` → exit 0, no output.
+  `cargo fmt --all -- --check` → exit 0, no output.
+  `MULTI_LINK_COUNTS_ROOT="$HOME" cargo test -p multi-link-codex --test calls real_counts -- --ignored --exact --nocapture`
+  → exit 0; actual counts-only output from read-only access to all non-imported rollouts under the real home root:
+
+```text
+rollouts=67 reads=505 edits=14 runs=535 handoffs=0 total=1054 ok_null=154 ok_null_share=0.146110 records_skipped=0 unreadable=0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 2.44s
+```
+
+- Review: Claude read the diff against Step 8.2, G4, G5 and the pinned rules, and also checked real data, because the
+  fixtures could not show two of the bugs. Round 1, 5 findings, all fixed: (1) high: `Turn.prompt` was null on every real
+  turn; real turns have 0 `user_message` events and hold the prompt in a `response_item` message. (2) high: `$ git commit`
+  was never produced, as real commits follow `git add`; label now reads every simple command and skips heredoc bodies.
+  (3) low: `additional_tools` counted as skipped (all 68). (4) low: a missing subagent file failed the parent. (5) test gap:
+  absent `is_error`. Round 2: clean. Claude re-ran Verify: `cargo test --workspace` → exit 0, 296 passed, 0 failed,
+  1 ignored; clippy exit 0; `cargo fmt --check` exit 0; pinned `git diff` exit 0; real counts →
+  `rollouts=67 reads=507 edits=14 runs=537 handoffs=0 total=1058 ok_null=154 ok_null_share=0.145558 records_skipped=0
+  unreadable=0`. Codex's pasted line says 1054 total: the difference is 4 calls added to the rollouts on disk between
+  the two runs, most likely Codex's own fix run finishing (same 67 rollouts, same null count; not traced call by call).
+  Real cross-checks from a scratch program, counts only, nothing kept in the repo: 70 turns, 70 completed, 0 null
+  prompts, 0 rollouts differ from the scanner's turns; Claude 207 transcripts, 12,982 calls (ok null 6,732), 0 read errors;
+  180 invocations, 179 owned hand-offs, the 1 other owned by another session (a fork copy); of 152 unique Bash commands
+  mentioning `git commit`, 112 have it as a command and all 112 get the label, the other 40 only mention it in text. 1,955
+  Claude records skipped, equal to the scanner's own count. Bash results always carry `is_error` (6,998 false, 192
+  true in raw records); other tools omit it on success, so `ok` null there means "no error flag", as G5 words it.
+  No files outside the step's list changed. The `real_counts` ignored test reads the home folder only when asked; kept
+  because Verify needs the counts. PLAN.md and design.md do not yet state the label reading (see Current state).
+- Gotchas: Transcript fields and exec JavaScript wrappers are undocumented assumptions. Unreadable tool input becomes
+  a run with no label; absent `exit_code` gives unknown `ok`, with no success inferred from prose. Imported/foreign-owned
+  records are intentionally excluded, separately from malformed/unsupported records counted as skipped. The real-data
+  counter is explicitly opt-in; normal tests use synthetic records and committed fixtures only. No real transcript text
+  was copied into the repo or printed. This fix round initially tried serializing the internal `Calls` type in a test;
+  it has no serialization API, so the test now asserts the exact `None` values directly. Initial implementation checks caught a recogniser API mismatch, two incorrect
+  fixture expectations, and two clippy style issues; all corrected before the final successful commands above.
 
 ### 2026-11-06 — Step 8.1: Contract and target screen — Claude
 - Did: Wrote G0–G11 into `docs/design.md` (Phase 8 decisions, rules pinned while writing the keys, Target screen, palette
