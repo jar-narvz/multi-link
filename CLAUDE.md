@@ -26,6 +26,27 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
+**Superpowers trial (owner, 2026-11-06) — Step 8.3 only, TEMPORARY.** Every other step uses the normal loop above.
+It tests whether Superpowers' test-first, subagent-per-task loop beats the Codex loop. Superpowers says CLAUDE.md and
+AGENTS.md outrank its skills, so these rules win wherever they differ:
+- Before starting: Superpowers (v7.x) must be installed and Step 8.2 committed. If not, stop and ask the owner. Nothing
+  else may run in this repo during the trial.
+- Spec: PLAN.md Step 8.3 and Phase 8 G0–G11 stay the source of truth. Skip `brainstorming`; the design is decided.
+  Superpowers needs a task file: write it with `writing-plans` to the session scratchpad, never into the repo
+  (not `docs/superpowers/`). Tasks may touch only the step's files; if another must change, stop and say why.
+- Code: `subagent-driven-development` with `test-driven-development`.
+- Branch: its task review reads commits, so implementers commit, which is the one exception to "implementers never
+  commit". They commit only on branch `trial/step-8.3` in a worktree from `main`, never on `main`. Stage specific
+  files; subject ends `(Step 8.3)`; no AI attribution. Use the committed fixtures: `fixtures/raw/` is not in a worktree.
+- Stops: the "Stop and ask" list above still applies, despite Superpowers' continuous execution.
+- Review: after Superpowers' own reviews, Codex reviews `git diff main...trial/step-8.3` against the step, at most 2
+  rounds; fixes are new commits on the branch. Whoever didn't write the code reviews it.
+- Finish: the step session re-runs Verify, writes the PROGRESS.md entry (agent `Claude (Superpowers trial)`), then
+  merges with `git merge --ff-only`. Skip `finishing-a-development-branch`. Leave the branch and worktree for the owner.
+- Measure, for Steps 8.2 and 8.3, in their PROGRESS.md entries: wall-clock time, tests added, implementer and reviewer
+  runs, findings from the independent review, fix rounds, and tokens only if a real output shows them. Real numbers
+  only; say "not measured" otherwise. The steps differ in size, so this is a rough comparison, not a benchmark.
+
 **Codex-off mode is OFF (owner, 2026-10-30, from Step 3.7 on): use the normal Codex loop above.**
 The rules below are kept for the next time the owner turns it on; they do not apply now.
 

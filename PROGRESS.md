@@ -1,6 +1,10 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Workflow trial (2026-11-06).** The owner wants to try Superpowers: Step 8.3 only, rules in CLAUDE.md. Steps 8.1 and
+8.2 use the normal loop, and 8.2 records the trial's measures as the baseline. Superpowers was not installed when
+this was written; the owner installs it before 8.3. Implementers commit on `trial/step-8.3`, never on `main`.
+
 **Resume here (2026-11-06, latest).** **Phase 8 (step graph) is planned; Step 8.1 is next.** The owner approved board 9
 on the mockup canvas. Plan in PLAN.md (G0–G11, Steps 8.1–8.6; Codex critique logged, 9 accepted, 1 in part). The owner
 kept the defaults: the need line, `s` from the repo view, no replay. Facts measured 2026-11-06 are

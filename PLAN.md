@@ -1407,8 +1407,10 @@ Measured 2026-11-06 on real data (`links`/`sessions --since all`, at e5f6c78):
   a tool id seen twice counted once; turns with no `task_complete`; pinned `git diff` above → exit 0; real counts in PROGRESS (counts only): calls
   by kind over all non-imported rollouts, share with `ok` null, records skipped.
 
-### Step 8.3 — Core: graph report, CLI `graph` (Codex)
+### Step 8.3 — Core: graph report, CLI `graph` (Superpowers trial)
 - Depends on: 8.2.
+- Workflow: owner's Superpowers trial, rules in CLAUDE.md; Codex reviews instead of implementing. Files and Verify
+  are unchanged. Steps 8.2 and 8.3 record the trial's measures in PROGRESS.md.
 - Report types in `crates/model` (the TUI does not depend on core); computation in `crates/core/src/graph.rs` per
   G1–G4, G6, G7; `multi-link graph --repo R --step ID [--json]`; `git log` lookup behind the existing
   no-git-in-fixture rule.
