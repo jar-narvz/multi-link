@@ -2,8 +2,8 @@
 
 Step 7.4 checks the four Phase 7 polish rules (P1–P4, `PLAN.md` → Phase 7, `docs/design.md` → "Phase 7
 decisions") on real data and asks the owner to confirm the screen. The real renders show prompts, so they
-stayed in scratch storage and are described here in words and counts only (W10). The owner still has to
-check the real screen (see [Owner check](#owner-check-stop-and-ask--pending)).
+stayed in scratch storage and are described here in words and counts only (W10). The owner confirmed the
+need is met (see [Owner check](#owner-check-stop-and-ask--met)).
 
 **Most important findings on real data (2026-11-02 21:19 PST):**
 1. Claude sessions with no prompt: 43 of 181 before Phase 7, 11 of 185 now. Sessions started by another
@@ -89,7 +89,7 @@ git diff --exit-code 26af6f2 -- fixtures/expected/tui/{home,repo}-phase6{,.style
 real count (jq command above)                         → [185,11]  (baseline [181,43])
 ```
 
-## Owner check (stop-and-ask) — pending
+## Owner check (stop-and-ask) — met
 
 Need: "the screens the owner approved in Phase 6 say true, readable things on real data." To check:
 
@@ -99,4 +99,9 @@ target/release/multi-link tui
 target/release/multi-link tui --since 16h
 ```
 
-Owner's answer: pending. The coordinator records the verdict here.
+Owner's answers:
+1. 2026-11-03, while checking: "make it so that the quote for the session is the most recent message not the
+   first message of that session". Step 7.5 added `last_asked` (P5) and labels now quote it. Real counts at
+   9d58365: Claude 186 sessions, 89 with a latest prompt different from the first; Codex 295, 6 different.
+2. 2026-11-06, after seeing real renders of home at 2h and 16h and the multi-link repo view at 4d (shown from
+   scratch): "Yes, close Phase 7". The need is met; Phase 7 is closed.

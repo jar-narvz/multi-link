@@ -1,6 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Resume here (2026-11-06, latest).** **Phase 7 is closed: the need is met.** The owner saw real renders of home
+at 2h and 16h and the repo view at 4d and answered "Yes, close Phase 7". Verdict recorded in
+`docs/phase7-check.md`. Phase 7 commits: ed043e0 (plan) through 9d58365 (7.5), all local; the owner pushes. No
+next phase is planned. Board 9 (step graph target, mockup canvas) was reported as waiting on the owner's approval
+in the plan-step-graph session; nothing from it is in PLAN.md, and if approved it becomes Phase 8 (that session
+calls it Phase 7, a number now taken).
+
 **Resume here (2026-11-03, latest): Step 7.5 is committed; Phase 7 is still NOT closed.** It waits on the
 owner's stop-and-ask, which now covers Steps 7.1–7.5: the owner runs `target/release/multi-link tui` (and
 `--since 16h`) and confirms, including that labels now quote each session's latest prompt. The coordinator
