@@ -1,0 +1,12 @@
+{
+  "now": "2026-11-06T18:00:00.000Z",
+  "repo": "/home/dev/repo-g",
+  "step": {
+    "id": "1.13",
+    "title": "Readme",
+    "verify": "cargo test --workspace"
+  },
+  "commit": null,
+  "parts": [],
+  "empty": "no hand-offs tagged step 1.13 (a Claude-only step, or its prompt did not name it)"
+}

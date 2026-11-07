@@ -1,0 +1,154 @@
+{
+  "now": "2026-11-06T18:00:00.000Z",
+  "repo": "/home/dev/repo-g",
+  "step": {
+    "id": "1.2",
+    "title": "Time zones",
+    "verify": "cargo test --workspace"
+  },
+  "commit": null,
+  "parts": [
+    {
+      "chain": 0,
+      "kind": "plan",
+      "harness": "claude",
+      "session": "81020000-0000-4000-8000-000000008102",
+      "from": "2026-11-06T15:00:00.000Z",
+      "to": "2026-11-06T15:00:20.000Z",
+      "status": null,
+      "run_available": null,
+      "active_ms": 20000,
+      "stretches": 1,
+      "asked": null,
+      "said": null,
+      "counts": {
+        "reads": 1,
+        "edits": 0,
+        "runs": 0
+      },
+      "notable": [
+        {
+          "label": "▸ codex exec · step 1.2",
+          "ok": null
+        }
+      ],
+      "waiting_reads": 0,
+      "untagged_handoffs": 0,
+      "edge_in": null
+    },
+    {
+      "chain": 0,
+      "kind": "implement",
+      "harness": "codex",
+      "session": null,
+      "from": null,
+      "to": null,
+      "status": "unlinked",
+      "run_available": false,
+      "active_ms": 0,
+      "stretches": 0,
+      "asked": null,
+      "said": null,
+      "counts": {
+        "reads": 0,
+        "edits": 0,
+        "runs": 0
+      },
+      "notable": [],
+      "waiting_reads": 0,
+      "untagged_handoffs": 0,
+      "edge_in": {
+        "kind": "handoff",
+        "at": "2026-11-06T15:00:20.000Z",
+        "match": "unlinked",
+        "parent": "81020000-0000-4000-8000-000000008102",
+        "parent_part": 0,
+        "gap_ms": null,
+        "candidates": 0
+      }
+    },
+    {
+      "chain": 0,
+      "kind": "review",
+      "harness": "claude",
+      "session": "81020000-0000-4000-8000-000000008102",
+      "from": "2026-11-06T15:00:20.000Z",
+      "to": "2026-11-06T15:03:00.000Z",
+      "status": null,
+      "run_available": null,
+      "active_ms": 160000,
+      "stretches": 1,
+      "asked": null,
+      "said": null,
+      "counts": {
+        "reads": 1,
+        "edits": 0,
+        "runs": 0
+      },
+      "notable": [
+        {
+          "label": "▸ codex exec · continue 1.2",
+          "ok": null
+        }
+      ],
+      "waiting_reads": 0,
+      "untagged_handoffs": 0,
+      "edge_in": null
+    },
+    {
+      "chain": 0,
+      "kind": "fix round 1",
+      "harness": "codex",
+      "session": null,
+      "from": null,
+      "to": null,
+      "status": "ambiguous",
+      "run_available": false,
+      "active_ms": 0,
+      "stretches": 0,
+      "asked": null,
+      "said": null,
+      "counts": {
+        "reads": 0,
+        "edits": 0,
+        "runs": 0
+      },
+      "notable": [],
+      "waiting_reads": 0,
+      "untagged_handoffs": 0,
+      "edge_in": {
+        "kind": "handoff",
+        "at": "2026-11-06T15:03:00.000Z",
+        "match": "ambiguous",
+        "parent": "81020000-0000-4000-8000-000000008102",
+        "parent_part": 2,
+        "gap_ms": null,
+        "candidates": 2
+      }
+    },
+    {
+      "chain": 0,
+      "kind": "review",
+      "harness": "claude",
+      "session": "81020000-0000-4000-8000-000000008102",
+      "from": "2026-11-06T15:03:00.000Z",
+      "to": "2026-11-06T15:04:00.000Z",
+      "status": null,
+      "run_available": null,
+      "active_ms": 60000,
+      "stretches": 1,
+      "asked": null,
+      "said": null,
+      "counts": {
+        "reads": 0,
+        "edits": 0,
+        "runs": 1
+      },
+      "notable": [],
+      "waiting_reads": 0,
+      "untagged_handoffs": 0,
+      "edge_in": null
+    }
+  ],
+  "empty": null
+}

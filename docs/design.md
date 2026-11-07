@@ -11,6 +11,9 @@ Oct 29, 2026 · Status: draft
 > and decisions" under Solution design. Sections changed: Glossary, Major decisions (Reuse), Linking
 > algorithm, Repo and step assignment, Session state, Edge cases, Proposed plan, Open questions.
 >
+> Revised in Step 8.1 (2026-11-06): "Phase 8 decisions" (G0–G11, target screen) under Solution design;
+> FR11 reworded to the step graph and mapped to need 4; Glossary, screen table, user flow and plan updated.
+>
 > Revised in Step 6.1 (2026-11-01): "Phase 6 decisions" (W0–W10, target screens) under Solution design;
 > FR10 reworded to the swimlane repo view.
 >
@@ -43,6 +46,9 @@ One Rust core reads both transcript formats, assigns each session to a repo and 
 | Worktree | A second checkout of the same git repo on its own branch, used so parallel sessions don't edit the same files. |
 | Session record | Claude Code's `~/.claude/sessions/<pid>.json` for a running session: `pid`, `procStart`, `status`, `statusUpdatedAt`, `cwd`. |
 | Task output file | The temp file a background Bash call writes to; its path appears in the tool result. It can vanish. |
+| Part | One box in the step graph: a stretch of a Claude session, or one Codex run, cut at hand-offs. |
+| Chain | One parent's hand-offs for a step with no hand-off for another step between them. |
+| Run | The Codex turns one hand-off started; one session can hold several runs. |
 | Fixture mode | Running with `--root <dir>`: reads a saved home-shaped folder; no process probing and no git lookups. |
 
 ## Problem statement
@@ -87,7 +93,7 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 | FR8 | `multi-link` CLI prints sessions, segments, links and steps as JSON or plain text. | 2, 3 |
 | FR9 | TUI home screen (`multi-link tui`): every active repo, sorted needs-you first. Per repo: steps in progress with their Verify, one mini lane per session with its step and checkout, Codex lanes nested under their parent. Over 4 sessions, lanes merge into "claude ×N". | 1, 3, 5 |
 | FR10 | Repo view (Phase 6, replaces the repo timeline): one swimlane per session active in the window, Codex rows nested under their Claude parent, bars only where transcripts show activity, an axis fitted to the work with long idle gaps folded, a link line per hand-off (solid confirmed, dashed matched by time), ambiguous links shown as such. | 2, 5 |
-| FR11 | Backlog: step graph, Claude plan → Codex work → Claude review for one step, scrubbable. | 4, 5 |
+| FR11 | Step graph (Phase 8): for one PLAN.md step, its Claude parts and Codex runs in order, each with what it did, how it ended, its link confidence and where the time went, from tagged hand-offs only; an untagged or missing run is marked, never guessed. Replay is out of scope. | 4, 5, 6 |
 | FR12 | Backlog: live grid, one card per active session under a feed of hand-offs. | 1, 2, 5 |
 | FR13 | Optional hook records exact links when the child id is observable, and explicit step tags. | 2, 3, 6 |
 | FR14 | Optional alert, fired only on a supported "waiting on me" signal: terminal bell or macOS notification. | 1, 5 |
@@ -594,7 +600,8 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 | FR4, FR5 | Linker |
 | FR8 | `cli/` serialises the core's model |
 | FR9, FR10 | `tui/`: home overview and repo timeline |
-| FR11, FR12, FR15, FR16 | Backlog |
+| FR11 (need 4) | `core::graph` builds the report from tagged hand-offs, Codex turns and on-demand calls (G0–G6); `multi-link graph` prints it; the TUI draws it (G8–G10) |
+| FR12, FR15, FR16 | Backlog |
 | FR13 | `multi-link hook install` prints the hook entry for the owner to paste; the hook writes to `~/.multi-link/` (H2, H4, H10); step tags from hand-off commands (H6) |
 | FR17 | Core compares the working folders of busy sessions |
 | FR18 | See "Opening a session" below; Phase 3 |
@@ -653,7 +660,7 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
 | 6 · `multi-link tui` home | 3 (Release 1) | Every active repo, needs-you first. Per repo: steps in progress with Verify, one mini lane per session (Codex nested under its parent, checkout labelled), a concurrent-activity warning, the latest hand-off. |
 | 2 · Repo timeline | 3 (Release 1) | Swimlanes for one repo, Codex rows under their Claude parent; solid = exact link, dashed = heuristic; ambiguous and unlinked runs shown as such. |
 | 4 · CLI (plumbing) | 1 (MVP) | Not a daily view. Prints the core's output as a table or JSON for tests and other front ends. |
-| 3 · Step graph | Backlog | One step as Claude plan → Codex implement → Claude review, scrubbable. |
+| 3 · Step graph | 8 (Release 1.5) | One step as Claude plan → Codex implement → Claude review. Board 9 is its approved form; the scrubber is dropped (Phase 8 non-goals). |
 | 5 · Live grid | Backlog | One card per session under a feed of hand-offs. |
 | 1 · Mod strip | Backlog | A strip above the Claude Code prompt. |
 
@@ -690,6 +697,163 @@ P2–P4 are presentation rules for the following steps. P5 adds latest-prompt la
 No new screens. The four pinned Phase 6 text/style goldens remain unchanged. Other Claude
 wrappers and the backlog remain outside this phase.
 
+### Phase 8 decisions (step graph)
+
+Planned 2026-11-06 (PLAN.md → Phase 8, which holds the measurements these rules rest on). Need 4: for one PLAN.md
+step I can follow who did what, in what order, how many fix rounds it took and how it ended, across Claude and
+Codex, without opening transcripts. The owner approved **board 9** on the mockup canvas (claude.ai artifact
+R5Bh9iX6bsn3jSu8F8D58C) on 2026-11-06: board 3's step graph drawn on the 120×40 cell grid from a real step. It is the
+acceptance picture; it shows real prompts, so it is described here, never committed as an image (W10). Binding JSON
+rules: `docs/output-schema.md` → `graph`. Binding keys: `fixtures/expected/phase8/graph-<id>.json`. Binding
+picture: the styled golden `fixtures/expected/tui/step-phase8.txt` / `.styles.txt` (Step 8.1, drawn from the rules
+below; Step 8.4 must match it cell for cell). Every Codex field named here (`custom_tool_call`, `exit_code`,
+`last_agent_message`, the `exec` input text) was observed on local rollouts on 2026-11-06 and is undocumented: an
+assumption, and the readers fail soft on anything else.
+
+| # | Decision | Why |
+| --- | --- | --- |
+| G0 | New report; nothing existing moves. A new `core::graph` report and CLI `multi-link graph --repo R --step ID --json`. No Session, SessionRow, link or overview key changes; every committed JSON key stays equal. The TUI draws the report and holds no linking or cutting logic (T2) | Answer-keyed like every other view, and the desktop app can reuse it |
+| G1 | Which sessions belong to a step: exactly the hand-offs with `link.step == id` in that repo, their parent Claude sessions and their children. Steps are never guessed from time or files. No tagged hand-off means no graph: `no hand-offs tagged step 3.5 (a Claude-only step, or its prompt did not name it)`. An untagged hand-off inside a chain is not drawn and does not split it; its Claude part counts it (`N untagged hand-offs here`) | `link.step` is the only step evidence (0 of 362 session segments have a step) |
+| G2 | Chains and Claude parts. Per parent, the step's hand-offs in time order form chains; a hand-off tagged with another step between two of them splits the chain (A → B → A is two chains of A). Chains are ordered by first hand-off, across parents. Inside a chain, **a Codex run's interval belongs to Codex and no Claude part covers it**: Claude parts are the time left. `plan` = chain start → first hand-off. Between parts = a run's end → the next hand-off, kept only when no tagged run of the chain is still going, so a hand-off during a run makes two Codex parts neighbours. Last part = the last run's end → chain end. An unlinked or unavailable run has no interval, so Claude's part runs through it. Chain start = start of the parent's W1 burst holding the first hand-off, not before the end of the previous differently tagged run in that session. Chain end = end of the parent's last burst that overlaps the time after the last hand-off, not after the next differently tagged hand-off; if that burst ended before the last return, there is no last part. Report windows are `--since all`, so bursts are unclipped | Hand-offs are the only events both harnesses record |
+| G3 | Names by position. A Claude part before the chain's first hand-off is `plan`, whatever it holds; first Codex `implement`, later Codex `fix round N`; a Claude part with a later hand-off is `review`; a last Claude part is `verify + commit` if it holds a `git commit` call, else `review`. A positional name is a reading, not evidence (a second run could be new work); README says so | No transcript says "this is a fix round" |
+| G4 | Codex parts come from turns. A hand-off's window runs to the next hand-off of the same child (else unbounded). `codex_turns(path)` gives each turn's start, end, prompt and `last_agent_message`; a run is the turns that start in its window, so two resumes inside one W1 burst stay two parts, and a later resume tagged to another step stays out. `from`/`to`, `asked`, `said`, status and activity come from those turns (activity = bursts intersected with them), never from the whole session. `✓ done HH:MM` (W5 meaning: last turn complete), `working now` on an open turn. **Link confidence and run availability are separate fields.** Unlinked: dim `no codex run found`, no return arrow, `(the rollout may be gone)` in the panel. Ambiguous: dim `N possible runs`, no id, `o` off. Linked but the child has no session, or its file vanishes before reading: the edge keeps its `│` or `╎`, the part is dim `run unavailable`, `o` off | Session-level times merge resumed runs. Rollouts do disappear, and the graph must say so |
+| G5 | Calls. New `calls` readers in the `claude` and `codex` crates, read on demand for the step's own sessions only: never in Session or the scanner's parse. Each call: `at`, `kind` (`read` / `edit` / `run` / `handoff`), `label` or null, `ok` (true / false / null). Claude: a session's owned calls are those in its main file and subagent files, by the same ownership rule as W1 (records with another `sessionId` are inherited and skipped), deduplicated by tool id, results joined by tool id; a subagent's calls count for the parent. `Read`/`Grep`/`Glob` read; `Edit`/`Write`/`NotebookEdit` edit (file basename); `Bash` by its first command word after `export`/`cd`/`VAR=` prefixes: `cat sed grep rg head tail ls awk wc find` and `git diff\|status\|log\|show` read, else run; a recognised launch is `handoff`; other tools run; `mcp__ccd_*` not counted (app bookkeeping). `ok` from `is_error`. Codex: one `custom_tool_call`/`function_call` record = one call, outside imported turns; `tools.apply_patch` edit (basename of its first `*** Update\|Add File:`), first `cmd:"…"` classified as Bash, `write_stdin` run; unreadable input run with null label; `ok` from the first `exit_code` in the output, else null. Unknown shapes fail soft (skipped and counted). **Shell commands that write files count as runs** | The largest real transcript is 15 MB and a report needs 2–3 sessions. Telling writes from shell text would be a guess, so real boxes show fewer `edit` lines than board 9, which counted `python3 … write` and `cat >>` as edits |
+| G6 | What a box shows. Line 1: `N reads · N edits · N runs`, zero parts left out, hand-offs not counted. Then at most 3 notable calls, newest last, each a **fixed label chosen by category, with no text copied from the command**: `▸ codex exec · step 6.7` (`· continue 6.7` when the hand-off is not the chain's first), `$ git diff`, `$ git commit`, `$ cargo test\|clippy\|fmt\|build`, `$ pytest`, `$ npm test`, and `edit <basename>` (repeats merged). No other command text reaches the report. `✓`/`✗` mean the call exited 0 / non-zero, not "tests passed" (a pipe to `grep` hides a failure); legend and README say so. Claude calls during a run add one grey line, `N reads while codex ran`. `asked` and `said` are prompt text: real reports stay in scratch (W10) | Commands hold paths and tokens. A fixed list cannot leak them |
+| G7 | Header. Repo › step id, PLAN.md title; right `✓ committed <hash> · HH:MM`, from `git log` with the exact `(Step <id>)` in the subject, newest first, nothing when absent (fixture mode runs no git; a core test uses a temp repo). Line 2: date, range, length, `N claude session(s) · N codex runs · N fix rounds`; right `Verify <command> (reported)`, the PLAN.md text cut to fit. Never a pass or fail mark | 55 of 57 real Verify results parse as `unknown`, and reported is not observed |
+| G8 | Screen: board 9, rules under Target screen below. Claude lane rows 4–12, edges 13–15, Codex lane rows 16–24, 30-wide boxes, x = 1 + 22 × slot; next slot is +1 when the harness differs, +2 when the same. Up to 5 slots show; more parts scroll with the selection. Colours are Phase 5's theme plus the board's selection; NO_COLOR keeps every glyph and word | The picture the owner approved |
+| G9 | `s` on a repo-view lane opens that lane's latest tagged step (a lane with none: footer `no step on this session`). `←→` moves along parts; `[` `]` previous/next step with tagged hand-offs in the repo, in PLAN.md order; `o`/`f` keep FR18's rules for the selected part; `esc` returns to the repo view with its selection; a refresh rebuilds the report and keeps the selected part by session and position | You reach a step from the session you are looking at, and home stays the 7c answer |
+| G10 | Narrow and short. Below 120 columns: the same parts as a list, two rows each (`claude · plan`, then sub line and counts), edges as indented lines; `←→` becomes `↑↓`. Below 40 rows: drop the strip, then the legend, then the panel down to its first line. Same order for fixture and real data | The grid needs 120×40; a smaller terminal still answers the need |
+| G11 | Speed. The derived report is rebuilt on every refresh, so stale state, new rollouts, hook records, commits and PLAN.md edits show as everywhere else (Incremental reads). Parsed calls and turns may be cached by file key, as the scanner does. The whole refresh with the graph open stays inside the 2 s threshold on the largest real step (8.5 measures) | Clock-driven state changes with no file change |
+
+**Pinned while writing the keys (Step 8.1).** PLAN.md's G rules left these open; the keys depend on them.
+- **G1 Owned hand-offs:** a link counts only when its `invocation` is one of its `parent`'s owned calls (G5). `links`
+  reports a hand-off copied into a fork a second time, under the fork's id and with the same `invocation`; that copy
+  is not the fork's hand-off, and it opens no chain and ends no window.
+- **G4/G5 Interfaces:** to make the next rules computable, a call also carries its `id` (Claude tool id, Codex `call_id`),
+  and a turn gives `completed_at` (null while open) and `last_record_at` in place of a single end
+  (`docs/output-schema.md` → Calls and turns).
+- **G2 No interval:** an unlinked, ambiguous or unavailable run has no interval. Its hand-off still ends the Claude
+  part before it, and the next Claude part starts at that same hand-off, so Claude's time is unbroken across it and
+  the part after it has no return edge. A Claude part exists only when `from < to`; a chain whose first hand-off opens
+  its burst, or follows a run of another step that was still going, has no `plan`.
+- **G2 Previous and next:** "differently tagged" means tagged with another step; an untagged hand-off never starts,
+  ends or splits anything. The previous run is the one launched by the latest such hand-off before the chain's first,
+  in the same parent, and its end caps the chain start only when that run has an interval.
+- **G2 Open run:** an open run's `to` is its last record. While the chain's last run is open there is no last part.
+- **G3/G6 Per chain:** `implement`, `fix round N` and `step`/`continue` restart in each chain.
+- **G4 Status:** a run whose last turn has `task_complete` is `done`; otherwise `working`, or `stale` when its last
+  record is over 300 s before `now` (the State rule).
+- **G5 Hand-off words:** every recognised form, `plugin` included, gets the fixed `▸ codex exec` label.
+- **G6 Which part holds a call:** an owned call belongs to the Claude part with `from ≤ at ≤ to`; a hand-off belongs to
+  the part it ends (`from < at ≤ to`). Inside the chain, a read in no part is added to `waiting_reads` of the last
+  Claude part before it, and a tagged hand-off in no part is a notable call of that same part; other kinds in no part
+  appear nowhere. Only the chain's own tagged hand-offs are notable. Codex calls belong to the run whose turn holds
+  them.
+- **G6 Merge:** a label seen twice in a part keeps one entry, at its latest position, with the latest `ok`; then the
+  last 3 are kept.
+- **G6 Marks:** the report gives `ok` for every notable call. The screen draws `✗` on any `ok: false`, `✓` only on
+  `$ cargo …`, `$ pytest` and `$ npm test` with `ok: true`, and nothing else. A box has 3 rows under its counts: with
+  `waiting_reads` the grey line takes the last row and only the 2 newest notable calls show.
+- **Stretches:** one per burst that meets the part (Claude) or per burst ∩ turn (Codex), single records included;
+  `active_ms` sums their lengths. Screens use W5 minutes: `active about N min in K stretch(es)`.
+- **Dim** in G4 means the grey role, never DIM (V4 allows BOLD only).
+
+Non-goals for Phase 8: replay and the scrubber (board 3: needs event-level history, and the strip answers where time
+went); inferring steps for untagged hand-offs; fixing `verify` parsing or `unknown` results; explaining or recovering
+missing rollouts; per-call detail view; Codex subagents; changes to home or the repo view except the `s` key and
+footer; the live grid.
+
+#### Target screen (Step 8.1): layout rules the golden is drawn from
+Fixture `fixtures/sessions-phase8`, `--now 2026-11-06T18:00:00Z`, step 1.1 (key `graph-1.1.json`), the `implement` part
+selected, fixed offset UTC−8, truecolor palette, 120 × 40 cells. Columns are 0-based, inclusive; `w` = 120. Every cell
+paints its background (screen unless stated). Text styles are BOLD or nothing (V4). Times are `HH:MM`, except edges and
+the panel range (`HH:MM:SS`). A length is `N s` under 60 s, else `N min`, rounded down, at least 1.
+
+- **Row 0:** repo name (last path component) bold at 1, grey `›`, `step <id>` bold, 2 blanks, PLAN.md title in text
+  colour. Right-aligned to `w−2`, green: `✓ committed <hash> · HH:MM`, nothing when `commit` is null.
+- **Row 1, grey:** from 1: `<Mon D of the first from> · HH:MM–HH:MM · <length> · N claude session(s) · N codex run(s) · N
+  fix round(s)`. The range runs from the earliest `from` to the latest `to`. Sessions = distinct Claude `session`s,
+  runs = parts with `run_available` true, fix rounds = parts named `fix round N`; zero counts stay. Right-aligned to
+  `w−2`: `Verify  <verify> (reported)`, cut with `…` to keep 2 blanks after the left text; left out when `verify` is
+  null. **Row 2:** rule `─` at 1..`w−2` (border colour), as rows 26 and 38.
+- **Row 3:** scroll hints, grey: `‹ N earlier` at 1, `N later ›` right-aligned to `w−2`; N = hidden parts.
+- **Slots:** the first part is slot 0; each next part is +1 when its harness differs, +2 when the same, chain
+  boundaries included. Five slots show, the first visible one moving only as far as the selection needs; a part at
+  visible slot v has x = 1 + 22 v.
+- **Box** (9 rows × 30 cells; Claude top row 4, Codex top row 16): rounded border in the harness colour. Fill: Claude
+  none; Codex `#121A26`; selected part (either harness) `#1B2130`, border included. Inside, from the top: `●` harness
+  colour at x+2, harness bold in that colour at x+4, ` · <kind>` in text colour (BOLD on the selected part only);
+  sub line at x+2; `┄` at x+1..x+28 (border colour); counts at x+2 (order reads, edits, runs; singular for 1); up to 3
+  lines at x+2 in text colour, cut with `…` to 27 cells (`▸` orange, `✓` green and `✗` red one blank after the label).
+- **Sub line:** Claude grey `HH:MM · <length>`, or nothing. Codex `✓ done HH:MM` green + grey ` · <length>`; `working now`
+  orange + grey ` · <length>`; `stale since HH:MM` red. No interval: grey `no codex run found`, `N possible runs` or
+  `run unavailable`, border and text grey, no fill unless selected, no counts.
+- **Hand-off edge,** x = Codex box x + 4: rows 13–15 `╎ ╎ ▼` (`│ │ ▼` when `match` is `exact`) in text colour; at x+2, row
+  13 `handed step <id>` (`implement`) or `handed fix` in text colour, row 14 the clock grey, row 15 grey `confirmed`,
+  `matched by time`, `N possible runs` or `no run found` (`╎` for the last two).
+- **Return edge,** on a Claude part with `edge_in.kind` `return`, x = previous Codex box x + 26, all grey: rows 13–15 `▲ │
+  │`; at x+2, row 13 `back to claude`, row 14 the clock.
+- **Panel, row 27:** `selected` grey at 2; at 12 the harness bold in its colour, then in text colour ` · <kind> · <id[0..8]>
+  · HH:MM:SS–HH:MM:SS · active about N min in K stretch(es)`. A part with no run ends after the kind with its sub line
+  words. **Row 28** (Codex with a run): `asked` grey at 12, the prompt quoted `“…”` at 19. **Row 29:** `from` grey at 12, at
+  19: Codex `claude <id[0..8]> · <parent part kind> · handed at HH:MM:SS · <confirmed|matched by time|N possible runs|no
+  run found> · started N s after the call` (the last phrase only with `gap_ms`; `N min` from 60 s); Claude `handed step X
+  to codex at T`, `handed fix to codex at T` or `no hand-offs`, for the part's last hand-off. **Row 30:** Codex `said`
+  grey at 12, quoted at 19, left out when null; Claude grey at 19 `N untagged hand-off(s) here` when N > 0; unlinked
+  grey at 19 `(the rollout may be gone)`. Quoted text is cut on a word boundary with `…` inside the closing quote so it
+  ends by column 108. **Row 31** at 12, with a session to open: `o open in Claude|Codex`, 3 blanks, `f fork` (keys in
+  text colour, words grey); blank when `o` is off.
+- **Strip, row 33:** `where the time went` grey at 2. Columns 23..116, one blank between parts, in part order, every
+  part of the report. Part length = `to − from` in ms, 0 with no interval. Label = the kind, `fix round N` → `fix`, at
+  the part's first column + 1, in the harness colour. A part's minimum is label + 2 cells; the columns left over are
+  shared by length: `floor` each share, then hand the rest to the largest fractional parts (ties to the earlier part).
+  Fill: Claude `#3A2A1F`, Codex `#1E2A3D`, selected `#1B2130`. When the minimums do not fit, every part gets 1 cell plus
+  its share and no label. Overlapping parts each count in full, so the strip is shares, not a clock. **Row 34:** first
+  `from` at 23, last `to` right-aligned to 116, grey.
+- **Row 36, legend** from 1, 3 blanks apart, words grey: `▭ claude part` (orange), `▭ codex run` (blue), `╎ matched by
+  time`, `│ confirmed link` (text colour), `✓ done, or exit 0` (green), `✗ exit non-zero` (red).
+- **Row 39, footer** like the repo view: `←→ move along the step`, `[ ] prev / next step`, `o open`, `f fork`, `esc repo
+  view`, `q quit`; right `times UTC-8`.
+- **Empty step:** rows 0–2 as above with row 1 holding only `Verify`, `empty` grey at 2 on row 4, rows 38–39 as above.
+
+**Palette additions** (G8; every other role is the Phase 5 and W9 tables). Ratios as in Phase 5 (WCAG 2.x); only the
+pairs the screen draws are listed. In 256 colours the two strips share an index and differ by their label colours.
+
+| Role | Truecolor | 256 |
+| --- | --- | --- |
+| Graph selection background | `#1B2130` | 235 |
+| Codex box background | `#121A26` | 234 |
+| Claude strip background | `#3A2A1F` | 236 |
+| Codex strip background | `#1E2A3D` | 236 |
+
+| Text colour | on selection | on Codex box | on Claude strip | on Codex strip | 256: selection | 256: box | 256: strip |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Text | 11.47 | 12.48 | | | 10.83 | 12.19 | |
+| Grey | 6.19 | 6.73 | | | 6.36 | 7.17 | |
+| Orange | 7.83 | | 6.68 | | 8.32 | | 7.26 |
+| Blue | 7.47 | 8.13 | | 6.72 | 6.92 | 7.80 | 6.04 |
+| Green | 8.26 | 8.98 | | | 8.72 | 9.82 | |
+| Red | 5.31 | 5.77 | | | 5.08 | 5.72 | |
+
+The border colour on `┄` and the rules is decoration, not text.
+
+**What the target differs from board 9 in, and why** (PLAN.md wins over the board). The data is synthetic, so repo,
+step, title, ids, times, prompts and file names differ throughout; the regions below name everything else.
+- **Header:** no `✓ committed <hash> · HH:MM`, because fixture mode runs no git (G7); a core test covers it.
+- **Claude boxes:** counts read reads, edits, runs (G6; the board's last box says `4 reads · 3 runs · 1 edit`); `1½ min` is
+  `1 min`, whole minutes as W5; `$ cargo test, clippy, fmt ✓` is one label per line, and with at most 3 lines `$ cargo
+  test ✓` shows (G6); `$ git commit → <hash>` is `$ git commit` (G6: nothing is copied from a call's result).
+- **Edges:** the second hand-off is `│` and `confirmed`, where the board shows two `╎`, because the fixture has one link
+  of each kind on purpose.
+- **Codex boxes:** `6 reads · 3 edits · 6 runs` where the board has 5 edits and 4 runs: the fixture's two `python3 … write`
+  commands are runs (G5), and the board counted them as edits. `edit timeline.rs + tests` is `edit parser.rs`, `$ cargo
+  test --workspace ✓` is `$ cargo test ✓`, `$ cargo clippy, test ✓` is two lines (G6).
+- **Panel:** the quoted text ends on a word boundary where the board cut mid-word at the same column.
+- **Strip:** widths come from the rule above (8, 32, 13, 10, 27 against the board's 8, 32, 14, 10, 26).
+- **Legend:** `matched by time` and `confirmed link` as W8 (any exact evidence, not only the hook), and `✓`/`✗` say what
+  they mean (G6).
+- **Footer:** `times UTC-8`, not `times PST`: only the offset is known (as Phase 6).
+
 ### User flow: one PLAN.md step
 
 1. I keep `multi-link tui` open in a terminal pane started from `~`. It lists route-impact and posting-triage as busy, physaflow idle.
@@ -697,7 +861,7 @@ wrappers and the backlog remain outside this phase.
 3. Claude hands the step to Codex. The hook records the pair and the step id; the route-impact row shows a Codex lane and the hand-off.
 4. Meanwhile posting-triage's Verify fails and its Claude session asks for permission. The terminal bells; that repo jumps to the top with ◆.
 5. I press `l` on route-impact to see the live grid, or `t` for its timeline, then go back.
-6. After Claude's review passes, PROGRESS.md logs step 4 and the overview shows "Verify ✓ step 4". Later, `g` replays the whole step across both agents for my Review notes.
+6. After Claude's review passes, PROGRESS.md logs step 4 and the overview shows "Verify ✓ step 4". Later, `s` on that session's lane shows the whole step across both agents for my Review notes.
 
 ## Proposed plan / timeline
 
@@ -715,7 +879,10 @@ wrappers and the backlog remain outside this phase.
 5. **Phase 4: Home screen cleanup (Release 1.1).** `codex ×N`, collapsed quiet repos, header counts, mini time bars (U1–U5). Built, but the owner judged the real screen still hard to read, so it closed as not meeting the need.
 6. **Phase 5: Home redesign to the approved target (Release 1.2).** Board 7 as the acceptance picture: step-named rows, combined lanes, tested colour, mockup-like bars, plain words, local time (V0–V10).
    - Verify: the board-7 fixture's styled render equals the hand-drawn target golden cell for cell; a real-`~` render sits next to board 7 in `docs/phase5-check.md`; the owner confirms.
-7. **Backlog (ordered, uncommitted):** step graph (screen 3), live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
+7. **Phases 6 and 7:** home in words, repo swimlanes (W0–W10), then polish (P1–P5). See their decisions above.
+8. **Phase 8: Step graph (Release 1.5).** Board 9 as the acceptance picture (G0–G11).
+   - Verify: the fixture render equals the Step 8.1 golden cell for cell; a real step's render is compared with board 9 region by region; the owner confirms.
+9. **Backlog (ordered, uncommitted):** live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
 
 ### Open questions
 

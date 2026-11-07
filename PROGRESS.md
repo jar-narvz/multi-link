@@ -1,11 +1,28 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Resume here (2026-11-06, latest).** **Step 8.1 is committed; Step 8.2 is next** (normal Codex loop; record the trial's
+baseline measures in its entry: wall-clock, tests added, implementer and reviewer runs, findings, fix rounds, tokens only if
+a real output shows them, else "not measured"). What 8.2 needs:
+- Contract: `docs/design.md` → Phase 8 decisions, G5 and "Pinned while writing the keys"; `docs/output-schema.md` → `graph`
+  → Calls and turns. **Two additions to PLAN.md's wording:** `Call` also has `id` (Claude tool id, Codex `call_id`) for the G1
+  ownership join, and `Turn` is `{start, completed_at, last_record_at, prompt, last_agent_message}`.
+- Fixture root `fixtures/sessions-phase8/` already holds every record shape 8.2's calls readers meet: `exec_command`,
+  `apply_patch`, `write_stdin`, `function_call` `js`, no `exit_code`, a subagent file, a fork's copied calls (8113),
+  Claude `Agent` (other tools run). Its tests may add temp fixtures for shapes it lacks: two calls in one record, unreadable
+  input, an unknown record, imported turns, a tool id seen twice.
+- `links` lists the fork's copied hand-off twice (same `invocation`, parent 8112 and 8113). That stays as it is (G0);
+  8.3 drops it by the pinned G1 rule.
+- Keys: `fixtures/expected/phase8/graph-<id>.json`, 13 ids, 59 parts. Golden `step-phase8.txt` / `.styles.txt` are 8.4's
+  target; do not edit them. A mismatch blamed on a key or the golden is reported, not fixed.
+- Two PLAN.md readings were pinned in design.md rather than PLAN.md (the step's Files exclude it): G2's "runs through it" and
+  the part that holds a hand-off. If the planner disagrees, the keys for 1.2, 1.5 and 1.11 change.
+
 **Workflow trial (2026-11-06).** The owner wants to try Superpowers: Step 8.3 only, rules in CLAUDE.md. Steps 8.1 and
 8.2 use the normal loop, and 8.2 records the trial's measures as the baseline. Superpowers was not installed when
 this was written; the owner installs it before 8.3. Implementers commit on `trial/step-8.3`, never on `main`.
 
-**Resume here (2026-11-06, latest).** **Phase 8 (step graph) is planned; Step 8.1 is next.** The owner approved board 9
+**Before Step 8.1 (2026-11-06).** **Phase 8 (step graph) is planned.** The owner approved board 9
 on the mockup canvas. Plan in PLAN.md (G0–G11, Steps 8.1–8.6; Codex critique logged, 9 accepted, 1 in part). The owner
 kept the defaults: the need line, `s` from the repo view, no replay. Facts measured 2026-11-06 are
 in the phase. Watch out: Codex rollouts on disk fell to 159 (295 sessions counted 2026-11-03), and unlinked hand-offs
@@ -334,6 +351,129 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-06 — Step 8.1: Contract and target screen — Claude
+- Did: Wrote G0–G11 into `docs/design.md` (Phase 8 decisions, rules pinned while writing the keys, Target screen, palette
+  additions with contrast ratios, differences from board 9); FR11 reworded and mapped to need 4; Glossary, screen table,
+  user flow and plan updated. Added the `graph` report, Calls and turns, and Phase 8 fixture results to
+  `docs/output-schema.md`. Built the synthetic root `fixtures/sessions-phase8/` (28 sessions, 13 PLAN.md steps) with a scratch
+  generator, typed 13 answer keys by hand, drew the 120×40 styled golden, and added the shape test (5 tests). No project
+  code changed. Scratch tools (generator, recompute, painter) stayed out of the repo.
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase8/**`, `fixtures/expected/phase8/**`,
+  `fixtures/expected/tui/step-phase8.txt`, `fixtures/expected/tui/step-phase8.styles.txt`, `crates/tui/tests/phase8_shape.rs`,
+  `PROGRESS.md`
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → 37 test binaries, 281 passed, 0 failed (276 before + 5). Shape
+  test lines:
+  ```text
+test every_step_in_the_fixture_plan_has_a_key_and_no_extra_keys_exist ... ok
+test golden_boxes_sit_on_the_slot_grid_with_the_selection_on_implement ... ok
+test golden_is_120_by_40_and_every_cell_is_styled_once ... ok
+test keys_have_every_field_and_consistent_parts ... ok
+test keys_hold_only_fixed_labels ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → clean. `git diff --exit-code --diff-filter=MD e5f6c78 --
+  fixtures/expected/` → exit 0. `multi-link sessions` on the root → 28 sessions, `skipped` `[]`; `links` → 26.
+- Review: Codex (`codex exec -s read-only`), 2 rounds. Round 1: 2 P2, both accepted and fixed in the docs. (1) `Call` had no id
+  for the G1 ownership join; (2) `Turn` conflated completion with an open turn's last record. Round 2: both resolved. Codex could
+  not run cargo in its sandbox (build lock); it ran the built shape-test binary, 5 passed.
+  **Keys:** Codex recomputed all 59 parts of all 13 keys from the JSONL and `links`: no mismatch. My own scratch recompute also
+  gives 0 mismatches; on first run it caught two hand-count slips of mine in the 119-character cut (`asked`, `said` in 1.1), fixed.
+  Trace below: per part, the line of `from`, of `to`, the call lines it covers, and the hand-off line, in that session's file (`s` =
+  its subagent file). Derived values follow from these lines: `active_ms` from bursts, `gap_ms` = `from − at`, `edge_in` return
+  `at` = `from`, `asked`/`said` from the turn's `user_message` and `task_complete` lines. A hand-off on a part's first line belongs
+  to the part before it. `waiting_reads`: 1.1 plan = 8101 lines 8, 10, 12, 14, 16, 18; 1.5 plan = 8105 lines 6, 10, 12. Titles and
+  Verify: `repos/repo-g/PLAN.md`.
+  ```text
+1.1 (PLAN.md heading + Verify; 5 parts)
+  0 plan 8101: from 1, to 6, calls 2,4,6
+  1 implement 8201: from 2, to 35, calls 4,6,8,10,12,14,16,18,20,22,24,26,28,30,32; hand-off 8101:6
+  2 review 8101: from 20, to 33, calls 21,23,25,27,29,31,33
+  3 fix round 1 8201: from 36, to 53, calls 38,40,42,44,46,48,50; hand-off 8101:33
+  4 verify + commit 8101: from 34, to 51, calls 35,37,39,41,43,45,47,49
+1.2 (PLAN.md heading + Verify; 5 parts)
+  0 plan 8102: from 1, to 4, calls 2,4
+  1 implement -: no run; hand-off 8102:4 (unlinked, links)
+  2 review 8102: from 4, to 8, calls 4,6,8
+  3 fix round 1 -: no run; hand-off 8102:8 (ambiguous, links)
+  4 review 8102: from 8, to 12, calls 8,10
+1.3 (PLAN.md heading + Verify; 7 parts)
+  0 plan 8103: from 1, to 4, calls 2,4
+  1 implement 8203: from 2, to 17, calls 4,6,8,10,12,14; hand-off 8103:4
+  2 review 8103: from 5, to 10, calls 6,8,10
+  3 fix round 1 8203: from 18, to 25, calls 20,22; hand-off 8103:10
+  4 review 8103: from 11, to 14, calls 12,14
+  5 fix round 2 8203: from 26, to 33, calls 28,30; hand-off 8103:14
+  6 verify + commit 8103: from 15, to 20, calls 16,18
+1.4 (PLAN.md heading + Verify; 6 parts)
+  0 plan 8141: from 1, to 4, calls 2,4
+  1 implement 8241: from 2, to 7, calls 4; hand-off 8141:4
+  2 review 8141: from 5, to 8, calls 6
+  3 plan 8142: from 1, to 4, calls 2,4
+  4 implement 8242: from 2, to 7, calls 4; hand-off 8142:4
+  5 verify + commit 8142: from 5, to 10, calls 6,8
+1.5 (PLAN.md heading + Verify; 3 parts)
+  0 plan 8105: from 1, to 4, calls 2,4
+  1 implement 8251: from 2, to 9, calls 4,6; hand-off 8105:4
+  2 fix round 1 8252: from 2, to 9, calls 4,6,8; hand-off 8105:8
+1.6 (PLAN.md heading + Verify; 6 parts)
+  0 plan 8106: from 1, to 4, calls 2,4
+  1 implement 8261: from 2, to 7, calls 4; hand-off 8106:4
+  2 review 8106: from 5, to 8, calls 6,8
+  3 plan 8106: from 9, to 12, calls 10,12
+  4 implement 8261: from 8, to 13, calls 10; hand-off 8106:12
+  5 verify + commit 8106: from 13, to 16, calls 14
+1.7 (PLAN.md heading + Verify; 3 parts)
+  0 plan 8106: from 5, to 8, calls 6,8
+  1 implement 8271: from 2, to 7, calls 4; hand-off 8106:8
+  2 review 8106: from 9, to 12, calls 10,12
+1.8 (PLAN.md heading + Verify; 5 parts)
+  0 plan 8108: from 1, to 4, calls 2,4
+  1 implement 8281: from 2, to 7, calls 4; hand-off 8108:4
+  2 review 8108: from 5, to 12, calls 6,8,10,12
+  3 fix round 1 8281: from 8, to 13, calls 10; hand-off 8108:12
+  4 review 8108: from 13, to 16, calls 14
+1.9 (PLAN.md heading + Verify; 5 parts)
+  0 plan 8109: from 1, to 4, calls 2,4
+  1 implement 8291: from 2, to 7, calls 4; hand-off 8109:4
+  2 review 8109: from 5, to 8, calls 6,8
+  3 fix round 1 8291: from 8, to 13, calls 10; hand-off 8109:8
+  4 review 8109: from 9, to 12, calls 10,12
+1.10 (PLAN.md heading + Verify; 3 parts)
+  0 plan 8109: from 9, to 12, calls 10,12
+  1 implement 8291: from 14, to 19, calls 16; hand-off 8109:12
+  2 review 8109: from 13, to 14, calls -
+1.11 (PLAN.md heading + Verify; 3 parts)
+  0 plan 8111: from 1, to 4, calls 2,4
+  1 implement 82a1: no run; hand-off 8111:4 (exact, links)
+  2 review 8111: from 4, to 8, calls 4,6
+1.12 (PLAN.md heading + Verify; 8 parts)
+  0 plan 8112: from 1, to s4, calls 2,4,s2,s4
+  1 implement 82c1: from 2, to 7, calls 4; hand-off 8112:s4
+  2 review 8112: from s5, to 6, calls 6
+  3 fix round 1 82c1: from 8, to 13, calls 10; hand-off 8112:6
+  4 review 8112: from 7, to 10, calls 8
+  5 plan 8113: from 10, to 13, calls 11,13
+  6 implement 82c1: from 14, to 19, calls 16; hand-off 8113:13
+  7 review 8113: from 14, to 15, calls -
+1.13 (PLAN.md heading + Verify; empty: no link has step 1.13)
+  ```
+  **Golden against board 9:** rendered both with colour side by side (scratch image only) and compared region by region; Codex
+  compared the board source too and reconstructed all 4,800 golden cells with no mismatch and no unnamed difference. Layout, box
+  columns, edge columns, panel columns, strip columns and every colour match. Differences, all named in design.md with reasons:
+  header has no `✓ committed` (no git in fixture mode, G7); counts in reads, edits, runs order (G6); `1½ min` → `1 min` (W5); one
+  fixed label per line, so `$ cargo test, clippy, fmt ✓` and `$ cargo clippy, test ✓` split and `--workspace` goes (G6); `$ git
+  commit → hash` → `$ git commit` (G6); second hand-off `│ confirmed` on purpose (the step asks for one of each); **edit counts:
+  `6 reads · 3 edits · 6 runs` against the board's 5 edits and 4 runs, because the two `python3 … write` commands count as runs
+  (G5)**; quoted text ends on a word boundary; strip widths 8, 32, 13, 10, 27 against 8, 32, 14, 10, 26 by the written rule;
+  legend wording and `✓`/`✗` meaning (W8, G6); `times UTC-8` for `times PST`.
+  **W10, all 47 new files:** prompts and agent messages listed and read, all invented; every UUID matches the synthetic `8[12]…`
+  scheme; no board 9 id, hash, time or prompt text; `grep` for personal paths and secret words finds nothing; fixture rule 5 `rg`
+  prints nothing. Design.md names `timeline.rs` from the board's box; it is this public repo's own file. Board 9 itself is not
+  committed. Scope: only the step's files; `.claude/` stays untracked.
+- Gotchas: `links` reports a hand-off copied into a fork a second time, so G1 needed an ownership rule. PLAN.md's G2 left the Claude
+  part after a no-interval run open; design.md pins it, see Current state. A run of `--repo` in `multi-link graph` takes the session
+  `repo` (`/home/dev/repo-g`), unlike `steps`, which takes `repos/repo-g`. `.claude/launch.json` is local and must stay out of commits.
 
 ### 2026-11-03 — Step 7.5: Label quotes the latest prompt, not the first — Codex
 - Did: Added `last_asked` to Session/SessionRow, both parsers, report construction and TUI labels while

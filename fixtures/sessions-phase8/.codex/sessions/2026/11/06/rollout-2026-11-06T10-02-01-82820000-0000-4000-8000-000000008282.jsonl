@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-06T10:02:01.000Z", "payload": {"id": "82820000-0000-4000-8000-000000008282", "timestamp": "2026-11-06T10:02:01.000Z", "cwd": "/home/dev/repo-g", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-06T10:02:01.000Z", "payload": {"type": "task_started", "turn_id": "82820001-0000-4000-8000-000000018282"}}
+{"type": "event_msg", "timestamp": "2026-11-06T10:02:01.000Z", "payload": {"type": "user_message", "message": "Format the docs folder.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-06T10:02:40.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-06T10:02:40.000Z", "payload": {"type": "task_complete", "turn_id": "82820001-0000-4000-8000-000000018282", "last_agent_message": "Formatted."}}

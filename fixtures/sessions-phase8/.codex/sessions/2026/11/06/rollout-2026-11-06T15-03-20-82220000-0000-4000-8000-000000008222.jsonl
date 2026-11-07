@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-06T15:03:20.000Z", "payload": {"id": "82220000-0000-4000-8000-000000008222", "timestamp": "2026-11-06T15:03:20.000Z", "cwd": "/home/dev/repo-g", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-06T15:03:20.000Z", "payload": {"type": "task_started", "turn_id": "82220001-0000-4000-8000-000000018222"}}
+{"type": "event_msg", "timestamp": "2026-11-06T15:03:20.000Z", "payload": {"type": "user_message", "message": "Look at the zone table.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-06T15:03:50.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-06T15:03:50.000Z", "payload": {"type": "task_complete", "turn_id": "82220001-0000-4000-8000-000000018222", "last_agent_message": "Done."}}

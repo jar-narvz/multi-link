@@ -1,6 +1,6 @@
-# Output schema — `multi-link sessions | links | steps | overview --json`, `open`
+# Output schema — `multi-link sessions | links | steps | overview | graph --json`, `open`
 
-Binding contract for Phases 1–6. `docs/design.md` → Data model is illustrative only; this file wins.
+Binding contract for Phases 1–8. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
 `fixtures/expected/links-amb-hidden.json` (Links → Ambiguous variant) and
 `fixtures/expected/links-tagged.json` (Links → Tagged variant); Phase 2 hook answer keys in
@@ -8,7 +8,7 @@ Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` a
 `fixtures/expected/hook/overview.json` (Overview); Phase 4 `fixtures/expected/phase4/overview.json`
 (Overview → Phase 4 fixture results); Phase 5 `fixtures/expected/phase5/{overview,links}.json` (Overview →
 Phase 5 fixture results); Phase 6 `fixtures/expected/phase6/{sessions,overview}.json` (Phase 6 fixture
-results).
+results); Phase 8 `fixtures/expected/phase8/graph-<id>.json` (`graph` → Phase 8 fixture results).
 
 **Phase 2 changes (Step 2.2):** Link gains `step` (Step tags); Link `evidence` gains `"hook"`;
 `state_evidence` gains `"hook"` (its State row is defined in Step 2.4); Segment `step_source` loses `"hook"`.
@@ -40,6 +40,10 @@ phase4/phase5 Claude prompts (`<prompt>`) get `null`. Step 6.2 gave every older 
 when it had no `user_message`; Step 6.6 changed the older Codex fixtures' `asked` values where the X4
 response-item fallback finds an eligible prompt (the existing scrubbed `CASE-<name>: <prompt>` strings).
 
+**Phase 8 changes (Step 8.1, design G0):** new report `graph` and its section below. No Session, SessionRow, link or
+overview key changes; every committed key stays equal. New isolated fixture root `fixtures/sessions-phase8/` (board 9's
+shape, synthetic prompts, the Codex `exec` record shape) with answer keys `fixtures/expected/phase8/graph-<id>.json`.
+
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
 synthetic busy record `.claude/sessions/70001.json` (a second busy session in `/home/dev/repo-c`, for the
@@ -58,6 +62,7 @@ Transcript formats are undocumented. Every field path below was observed in the 
 | `--since <duration>\|all` | History window, default `2h`: a transcript session is listed if its `last_activity` ≥ now − window. Session-record sessions and `waiting` sessions are always listed (active discovery, FR1; State → Visibility). `all` disables the window. The window filters **output only**: Phase 1 parses every transcript under the root, so exact evidence from old files still excludes heuristic candidates. A link is listed when its `parent` or `child` is a listed session; `unparented` lists only listed sessions. |
 | `--json` | Print the JSON below (pretty-printed; tests compare parsed JSON, not bytes). |
 | `--repo <dir>` (`steps` only, repeatable) | Repos to read. Relative paths resolve against `--root`. Default: the `repo` of every listed session. |
+| `--repo <repo>`, `--step <id>` (`graph`, both required) | The session `repo` (real or fixture path, as `sessions` prints it) and the PLAN.md step id. `graph` takes no `--since`. |
 
 **Phase 1 Verify commands** (each must equal its expected file as parsed JSON):
 ```
@@ -760,6 +765,102 @@ per session). Times are UTC; local (UTC−8) in brackets. No hook folder. 13 ses
 - Header counts for the home golden (design W4, imports not counted): 2 working now (`6002`, `6031`), 1
   waiting, 5 idle (`6003`, `6004`, `6011`, `6012`, `6041`), 3 done or unknown (`6021`, `6022`, `6013`), 5
   repos, 2 hand-offs; 2 imports hidden (`6014`, `6051`).
+
+## `graph`
+
+One PLAN.md step across both harnesses (design G0–G7, board 9). Step 8.3 builds it; `multi-link graph` without
+`--json` prints a plain text version of the same report. **Like `sessions`, the JSON exports prompt text** (`asked`,
+`said`): real reports stay in scratch (W10).
+
+```json
+{
+  "now": "2026-11-06T18:00:00.000Z",
+  "repo": "/home/dev/repo-g",
+  "step": { "id": "1.1", "title": "Date parser: reject empty input", "verify": "cargo test --workspace" },
+  "commit": null,
+  "parts": [ Part, ... ],
+  "empty": null
+}
+```
+| Field | Type | Rule |
+| --- | --- | --- |
+| `now` | timestamp | The report's clock (`--now`). |
+| `repo` | string | The session `repo` given to `--repo`. |
+| `step.id` | string | As given to `--step`. Never a number: `1.10` ≠ `1.1`. |
+| `step.title` | string \| null | PLAN.md heading text; `null` when the plan has no such step. |
+| `step.verify` | string \| null | `steps` → Step `verify_command`. Always reported text, never a result (G7). |
+| `commit` | `{"hash": string, "at": timestamp}` \| null | Newest `git log` commit whose subject holds exactly `(Step <id>)`: `hash` the 7-character short hash, `at` the commit time. `null` when none, and always in fixture mode (no git). |
+| `parts` | Part[] | Chains by first hand-off, each chain in time order. `[]` when `empty` is set. |
+| `empty` | string \| null | `no hand-offs tagged step <id> (a Claude-only step, or its prompt did not name it)` when no owned hand-off has this step; else `null`. |
+
+The report reads every session with `--since all`, whatever the TUI's window, so bursts are unclipped (G2).
+
+### Part
+Every field is present on every part.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `chain` | int | 0-based chain index (G2). |
+| `kind` | string | `plan`, `implement`, `fix round N`, `review` or `verify + commit` (G3); numbering restarts per chain. |
+| `harness` | `"claude"` \| `"codex"` | |
+| `session` | string \| null | Claude: the parent. Codex: the child; `null` for `unlinked` and `ambiguous`. |
+| `from`, `to` | timestamp \| null | Claude: the cut times (G2). Codex: first turn's `task_started`; last turn's `task_complete`, or its last record when open. `null` with no run. |
+| `status` | string \| null | Codex: `done`, `working`, `stale`, `unlinked`, `ambiguous` or `unavailable` (design, pinned G4). Claude: `null`. |
+| `run_available` | bool \| null | Codex: `true` when the run's turns were read. `false` for the last three statuses. Claude: `null`. Independent of `edge_in.match`: an `exact` link can have `false`. |
+| `active_ms` | int | Sum of burst ∩ part (Claude) or burst ∩ turn (Codex), in ms. 0 with no run. |
+| `stretches` | int | Number of those pieces. 0 with no run. |
+| `asked` | string \| null | Codex: the first turn's first `user_message`, normalized like W3 (119 characters and `…` above 120). Claude: `null`. |
+| `said` | string \| null | Codex: the last turn's `task_complete` `last_agent_message`, normalized the same way; `null` if absent or open. Claude: `null`. |
+| `counts` | `{"reads": int, "edits": int, "runs": int}` | G5 kinds of the calls the part holds (design, pinned G6). Hand-offs are not counted. |
+| `notable` | `{"label": string, "ok": bool \| null}`[] | At most 3, newest last (G6). `ok` null on hand-offs and on calls with no exit evidence. |
+| `waiting_reads` | int | Claude: reads of this chain made after this part and before the next Claude part (G6). Codex: 0. |
+| `untagged_handoffs` | int | Claude: owned hand-offs with `step: null` and `from < at ≤ to`. Codex: 0. |
+| `edge_in` | Edge \| null | What arrives at this part. `null` on a `plan` and on a Claude part after a run with no interval. |
+
+Edge is one of:
+- `{"kind": "handoff", "at": timestamp, "match": "exact"|"heuristic"|"ambiguous"|"unlinked", "parent": string, "parent_part":
+  int|null, "gap_ms": int|null, "candidates": int}` on every Codex part. `at`, `match`, `parent` are the link's; `parent_part`
+  is the index in `parts` of the Claude part that holds or precedes the hand-off (`null` when the chain has none yet);
+  `gap_ms` = `from − at`, `null` with no run; `candidates` = the link's `candidates` length.
+- `{"kind": "return", "at": timestamp}` on a Claude part that starts at a run's end; `at` = that part's `from`.
+
+### Calls and turns (internal, Step 8.2)
+Not in any report, per G4 and G5. `Call {id, at, kind, label, ok}`: `id` is the Claude tool id or the Codex `call_id`, so
+`graph` can test a link's `invocation` against the parent's owned calls (design, pinned G1). `Turn {start, completed_at,
+last_record_at, prompt, last_agent_message}`: `completed_at` is the `task_complete` time, null while open; `last_record_at`
+is the turn's last record, always set, and gives an open run's `to`; `prompt` and `last_agent_message` may each be null, and
+a completed turn with a null message is still `done`. Observed on
+2026-11-06 and undocumented, the Codex shapes the fixture copies are: a `response_item` `custom_tool_call` with `name: "exec"`,
+`call_id`, and `input` holding JavaScript text such as `text(await tools.exec_command({cmd:"…",max_output_tokens:3000}));` or
+`text(await tools.apply_patch("*** Begin Patch\n*** Update File: …"));`, then a `custom_tool_call_output` with the same
+`call_id` whose `output` blocks hold `{"chunk_id":…,"exit_code":N,…}` as text; and a `function_call` with `name: "js"` and a
+`function_call_output`.
+
+### Phase 8 fixture results (`phase8/graph-<id>.json`)
+Verify command, once per key (Step 8.3 adds the test): `multi-link graph --root fixtures/sessions-phase8 --now
+2026-11-06T18:00:00Z --repo /home/dev/repo-g --step <id> --json` must equal `fixtures/expected/phase8/graph-<id>.json`
+(parsed). The keys were typed by hand from the fixture's timelines and cross-checked by an independent scratch script that
+recomputes every part from the fixture lines and `links`. The root is synthetic: invented prompts, one repo
+(`/home/dev/repo-g`, plan at `repos/repo-g/`), no session records, no hook folder, no task output. Ids are
+`<tag>0000-0000-4000-8000-00000000<tag>` with a 4-character hex tag, named by tag below. Times are UTC on 2026-11-06.
+`sessions --since all`: 28 sessions, 0 skipped lines. `links`: 26, one of them the fork's copy; `unparented`: `8221`, `8222`.
+
+| Step | Sessions | What it pins |
+| --- | --- | --- |
+| 1.1 | `8101` → `8201` | Board 9's shape: `plan`, `implement`, `review`, `fix round 1`, `verify + commit`. Background `exec` matched by time (`heuristic`), six reads during the run, then a foreground `resume` (`exact`, `resume_arg`). Two `python3 … write` commands count as runs. Sentinels below. The golden |
+| 1.2 | `8102`; `8221`, `8222` | `unlinked`, then `ambiguous` (2 candidates): no interval, Claude's time unbroken, no return edge |
+| 1.3 | `8103` → `8203` | Seven parts (scroll), every link `exact`. A turn with a 5 min 19 s silence: `active_ms` 60000 in 2 stretches. `$ cargo test` `ok: false`, `write_stdin`, `function_call` `js` with `ok` null. Parent silent during the run: two Claude bursts |
+| 1.4 | `8141` → `8241`, `8142` → `8242` | Two parents, two chains, `plan` again in the second |
+| 1.5 | `8105` → `8251`, `8252` | A hand-off during a run: two neighbouring Codex parts, the second hand-off a notable of `plan`, `waiting_reads` 3. `8252`'s turn is open: `working` at the fixed `--now` (`stale` once `now` is past 18:03:30), no last part |
+| 1.6, 1.7 | `8106` → `8261`, `8271` | A → B → A. 1.6 has two chains; the first ends at B's hand-off 11:03:00, the second starts at B's run end 11:04:00. 1.7's chain starts at A's run end 11:02:00 and ends at A's hand-off 11:05:00. A resume opening a chain is `implement` with `· step` |
+| 1.8 | `8108` → `8281`, `8282` | A → untagged → A: one chain, `untagged_handoffs` 1 on the `review` holding it, `8282` drawn nowhere |
+| 1.9, 1.10 | `8109` → `8291` | One rollout, three turns in one burst, three hand-offs, the last tagged 1.10. 1.9 stops at turn 2; 1.10 holds only turn 3 |
+| 1.11 | `8111` → `82a1` | `exact` by stdout, no rollout: `unavailable`, `run_available` false, `session` set, `gap_ms` null |
+| 1.12 | `8112` (+ subagent `a8112sub0000001`), `8113` → `82c1` | A hand-off from a subagent file: the subagent's read counts for the parent. `8113` is a fork: its file copies `8112`'s main records with `sessionId` `8112`, including the 07:02:40 hand-off, which `links` lists again under `8113`. That link is not owned, so it opens no chain; the copied records are no activity, so `8113`'s chain starts 07:05:00, not 07:00:00 |
+| 1.13 | `8114` → `82d1` | Only an untagged hand-off: `empty`, `parts` `[]` |
+
+**Sentinels:** `sentinel-path-81`, `sentinel-token-81` (Claude commands in 1.1) and `sentinel-path-82`, `sentinel-token-82`
+(a Codex command in 1.1) must never appear in a report (Step 8.3 tests this).
 
 ## Open
 

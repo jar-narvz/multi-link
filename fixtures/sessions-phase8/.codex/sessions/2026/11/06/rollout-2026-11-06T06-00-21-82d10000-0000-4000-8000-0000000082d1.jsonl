@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-06T06:00:21.000Z", "payload": {"id": "82d10000-0000-4000-8000-0000000082d1", "timestamp": "2026-11-06T06:00:21.000Z", "cwd": "/home/dev/repo-g", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-06T06:00:21.000Z", "payload": {"type": "task_started", "turn_id": "82d10001-0000-4000-8000-0000000182d1"}}
+{"type": "event_msg", "timestamp": "2026-11-06T06:00:21.000Z", "payload": {"type": "user_message", "message": "Summarise the open issues.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-06T06:01:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-06T06:01:00.000Z", "payload": {"type": "task_complete", "turn_id": "82d10001-0000-4000-8000-0000000182d1", "last_agent_message": "Summary written."}}
