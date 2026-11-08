@@ -1,4 +1,4 @@
- All repos · last 2h   ● 2 working now   ⚠ 1 shared checkouts   ○ 4 idle               ◆ 2 need you
+ All repos · last 2h   ● 2 working now   ⚠ 1 shared checkouts   ○ 4 idle               ◆ 1 need you
  ──────────────────────────────────────────────────────────────────────────────────────────────────
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -10,13 +10,12 @@
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ◆ repo-c  no PLAN.md                                                1 waiting · 2 working now  │
+ │ ● repo-c  no PLAN.md                                                            2 working now  │
  │                                                                                                │
- │ ◆ claude    <name>                                   waiting on you · since Oct 28       main  │
  │ ● claude    claude · no prompt                       working now                               │
  │ ● claude    claude · no prompt                       working now                               │
  │   ⚠ shared checkout: repo-c                                                                    │
- │   1 other session, 1 active in the last 2h · enter shows all                                   │
+ │   2 other sessions, 2 active in the last 2h · enter shows all                                  │
  │   last hand-off  Oct 28 · claude handed work to codex · no codex run found                     │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -37,6 +36,7 @@
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
    quiet project (last active 11:12pm) · scratch-2026-10-29-338fd3 (last active 9:35pm)
+
 
 
 

@@ -1,6 +1,65 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 9.0 (2026-11-08, Claude step) is committed: Phase 9's rules, synthetic fixtures and answer keys exist before
+any code. Step 9.1 is next** (then 9.2 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7). Mode: run
+`python3 -I tools/codex-quota.py` before every `codex exec` (at 9.0's end: 20% / 22%, `CODEX: OK`). What later steps need:
+- **Fixed clock and root:** `--root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z` (`--since all`; lanes use the
+  TUI's 2 h window). Keys: `fixtures/expected/phase9/{sessions,links,open,graph-1.1,lanes}.json`. They are the *final*
+  Phase 9 output. Every id's first two hex digits name its step (`91…`–`95…`).
+- **How each step checks its keys:** `fixtures/expected/phase9/check.sh <N>` (from the repo root) compares the cases of
+  steps 9.1–9.N with `cargo run -q -p multi-link --` and the fixed `--now`: sessions and links filtered by id prefix
+  `^9[1-N]` (links by `parent`), `graph-1.1.json` whole, stderr exactly `unreadable: 1`, and from N=2 every `open` /
+  `--fork` dry-run in `open.json` (exit code and action). From N=4 it also compares the whole sessions and links keys.
+  `lanes.json` is for 9.5's worker-to-App test. At 9.0 (no code) every Phase 9 case fails and every unchanged case
+  passes (`check.sh 5`: links and open for the unchanged ids `ok`). Keys are Claude's: never edit them.
+- **Fixture files** (`fixtures/sessions-phase9/`, all generated synthetic): Claude transcripts in
+  `.claude/projects/-home-dev-{repo-p9a,repo-p9c,repo-p9e,repo-p9l,repo-p9m,repo-r1…repo-r14}/<id>.jsonl`; records
+  `.claude/sessions/{92009,92010,94003,94006}.json`; Codex rollouts in `.codex/sessions/2026/11/09/` (`91c00001` only
+  as `.jsonl.zst`; `91c00002` as both; `91c00003` a corrupt `.jsonl.zst`); hook files `.multi-link/hook/{9300000b,
+  92000011,92000012,94000001,94000002,94000004,94000006,94000007}-….jsonl`; app records under `Library/Application Support/
+  Claude/claude-code-sessions/00000000-…94a0/` (`local_92f00002`, `local_92f00004`, `local_92f000a4`); redirect logs
+  under `tmp/dev/p9/`, `home/dev/elsewhere/`, `home/dev/repo-r6/`, `home/dev/repo-r8/logs/`; plans
+  `repos/{repo-p9a,repo-p9l,repo-p9m}/PLAN.md`. The case table is in `docs/output-schema.md` → Phase 9 fixture results.
+- **Contract choices 9.0 made (now binding):** open reasons `app_session` (desktop, no/two mappings, or fork) and
+  `unknown_entrypoint`; `process_exit` keeps resume regardless of entrypoint; `state_since` `null` for both new
+  `finished` rows; a *turn* = `assistant`, or non-meta `user` that is not a local-command echo (`tool_result` counts);
+  `cost-state` position is file order; hook `waiting` comes after `transcript_exit` and `session_end`; `ended` has
+  a `reason` key that other kinds do not; fixture-mode redirect reads are root-relative with containment in
+  `<root>/<cwd>`, `<root>/tmp`, `<root>/private/tmp` (`$TMPDIR` ignored).
+- **Existing keys changed under R2 (12 `fixtures/sessions` transcripts end with a `cost-state` after their last turn;
+  all `claude-desktop`, none with a record):** 07c80c2e, 0d7faed4, 11bf1b58, 11c1f13c, 80cce3e4, 85a715ba, 9d9a0ed8,
+  bb792d9c, c86d374f, df403bfa, ef72378c, f4d83303. Values (each `unknown`/`no_signal` → `finished`/`transcript_exit`
+  unless noted): `sessions.json` 12; `overview.json` 12; `hook/sessions.json` 12 (11c1f13c was `waiting`/`hook`,
+  `state_since` 2026-10-28T10:03:11.004Z → `null`); `hook/sessions-2h.json` 9 changed and 11c1f13c removed (no longer
+  `waiting`, last line before the window); `hook/overview.json` 12, repo-c `tier` `waiting` → `busy`, repo-c rows now
+  `…0010`, 6358ec7e, 11c1f13c, 85a715ba. TUI goldens `home-hook{,-full}{,.styles}.txt` follow (`◆ 1 need you`, repo-c
+  `2 working now`, no waiting card row; render of the key, deterministic). `home-full` is unchanged.
+- **Tests that fail until 9.2 (45, all from those key values; 476 pass, 1 ignored):** 42 only because `transcript_exit`
+  is not yet a `StateEvidence` value or the state differs from the code (they pass once 9.2 implements R2 and R3):
+  cli `overview_json_matches_answer_key_and_text_has_one_line_per_repo`, `duration_units_and_offsets_use_the_same_options`,
+  `phase_one_json_matches_answer_keys`, `hook_conflicts_are_stderr_only_for_sessions_links_and_overview`; claude
+  `fixtures::transcript_fields_and_skips_match_answer_key`; codex `fixtures::fixture_sessions_turns_and_skips_match_answer_key`;
+  core `scanner::tests::warm_refresh_caches_every_file_kind_and_recomputes_state`, `hook::hook_variant_equals_all_three_answer_keys`,
+  `overview::every_overview_matches_its_key`, `sessions::since_two_hours_filters_only_transcript_history`,
+  `sessions::fixture_report_equals_every_expected_field`; model `model::every_expected_report_round_trips`; tui lib
+  `app::graph_tests::*` (16) and `app::tests::*` (7: bell_only_on_entry…, checking_message…, each_new_waiting_id…,
+  failed_refresh…, footer_prioritizes…, open_results_survive…, refresh_preserves_selected_full_id…); tui
+  `home::{header_at_100_keeps_working_now_before_shared_checkouts, home_full_snapshot_100x80, home_hook_full_snapshot_100x80,
+  home_snapshot_100x30, home_hook_snapshot_100x30, shared_checkout_warnings_have_a_red_header_and_card_row}`, `theme::no_color_preserves_home_and_timeline_glyphs_and_visible_tracks`.
+  **5 need a test edit in 9.2 (all inside 9.2's Files; found by a scratch oracle, see the 9.0 log):** 3 of the 45,
+  cli `text_has_one_row_per_item_and_a_footer` (the `STATE` column widens to `finished`) and the two key-snapshot
+  guards below, plus 2 that pass today and 9.2's code will break unless edited: cli
+  `open_dry_run_transcript_only_claude_and_codex_are_unavailable_exit_three` (0d7faed4 → `app_session`, same command and
+  cwd, exit 3) and core `open::tests::fixture_table_never_resumes_and_matches_schema_coverage` (the 12 are `finished`
+  and `app_session`; the root still never resumes). The guards in `crates/core/tests/`:
+  `overview::older_keys_only_add_made_and_hook` (`overview-before-phase5.json`) and
+  `phase6::every_existing_json_key_preserves_committed_values` (`keys-before-phase6.json`). Those snapshots copy old
+  key values; 9.2 may change in them **only the values listed above** (Claude reviews that the diff equals this list),
+  because 9.0's Files did not include them. `cli::open_lookup_no_match_ambiguous_and_old_ids` keeps passing under R3.
+- **9.1's "tests clean"** therefore means: every test outside the 45 passes. The hook variant no longer has a
+  `waiting`/`hook` row; the Phase 9 root carries it (92000012) plus the precedence case (92000011).
+
 **Phase 8 is closed (2026-11-08): the owner confirmed the step graph on real data** ("it looks good", then "Yes, close
 Phase 8"), after reinstalling with Step 8.7. Nothing after Phase 8 is planned in PLAN.md yet. Candidates, in the
 coordinator's recommended order (owner to choose): fixes (clean-exit resume from `.claude/handoff/backlog-findings.md`,
@@ -533,6 +592,55 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.0: Rules, fixtures and answer keys — Claude
+- Did: Wrote R0–R6 into `docs/design.md` ("Phase 9 decisions", decision 2's Exact sources gain the redirect file, the
+  Finished state row, Opening, the open question on finding a finished desktop session's `local_` id, the timeline)
+  and the contract into `docs/output-schema.md` (Phase 9 changes; State rows and the Turn definition; Exact evidence
+  4b; hook `ended` / `reason` / `redirect_file`; Ended reader rules; Open rows and reasons; hook and overview variant
+  notes; "Phase 9 fixture results" with the R1 rule and a case table). Built the synthetic root
+  `fixtures/sessions-phase9/` (82 files; a scratch generator, not committed; `.zst` made with
+  `/opt/homebrew/bin/zstd --no-check`, one frame like the real ones, whose structure only was read). Wrote the keys
+  in `fixtures/expected/phase9/` and `check.sh`. Updated the five existing keys and four hook goldens R2 changes.
+  How the keys were made: fields R1–R6 do not touch come from the current build run on a decompressed copy of the
+  root; every Phase 9 value is set by hand in a scratch script, one line per value with its rule (sessions: 9 R2
+  values, 2 R5 values, `skipped: []`; links: 6 `redirect_file`, 1 `hook`; open: written out per case). For the
+  existing keys, which sessions flip was decided by an independent Python R2 checker (12 of the `fixtures/sessions`
+  transcripts, 0 elsewhere); the mechanical consequences (row order by state rank, repo-c's tier, 11c1f13c leaving the
+  2 h window, golden renders) came from a throwaway scratch "oracle" (the 12 ids forced to `transcript_exit` in a
+  copy of the code; never committed), and every resulting diff was checked to be only `state`, `state_evidence`,
+  `state_since`, `tier`, row order and that one removal. Edits keep each key's hand layout (text-level, minimal diff).
+  The oracle run also found the 5 tests that need edits in 9.2 (Current state).
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase9/**` (new),
+  `fixtures/expected/phase9/{sessions,links,open,graph-1.1,lanes}.json`, `fixtures/expected/phase9/check.sh` (new),
+  `fixtures/expected/{sessions,overview}.json`, `fixtures/expected/hook/{sessions,sessions-2h,overview}.json`,
+  `fixtures/expected/tui/home-hook{,-full}{,.styles}.txt`, `PROGRESS.md`
+- Verify: `cargo test --workspace --no-fail-fast` → `passed 476 failed 45 ignored 1`; the 45 failing tests are exactly
+  the list in Current state (compared by name, before and after adding the Phase 9 root: "same failing set"); 3 of them
+  fail with ``unknown variant `transcript_exit` `` directly, the rest on an assertion or an untagged `Row` that no
+  longer deserialises. W10: `rg -l "/Users/|\bsk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` → prints
+  nothing (exit 1); no scratch path, user name or email in the new files. Every later Verify names a key that exists:
+  9.1 `sessions.json` + `graph-1.1.json`, 9.2 `sessions.json` + `open.json`, 9.3 `links.json`, 9.4 `sessions.json`,
+  9.5 `lanes.json` (all present). `fixtures/expected/phase9/check.sh 5` on today's code → `ok` for every unchanged
+  case (`links` at 9.1, the `open` rows of 92000007/09/10/12/13/14 and 94000003/04/06/07), `FAIL` for every Phase 9 case, as
+  expected before any code.
+- Review: Codex read-only review (`codex exec -s read-only`, quota `CODEX: OK` 20%/22%): it confirmed the existing-key
+  changes are exactly the 12 qualifying transcripts and that the `.zst` fixtures decode (corrupt one fails). 3 findings,
+  all accepted and fixed: (1) `check.sh` ignored the CLI's exit status (process substitution / `|| true`) → each
+  command's output now goes to a temp file and a non-zero exit is a FAIL, the stderr check too; (2) both resumed cases
+  had a later `assistant`, so an assistant-only turn test would pass → added `92000013` (user prompt only) and
+  `92000014` (`tool_result` only) after the `cost-state`, both `unknown` / `no_signal` / `not_known_finished`;
+  (3) no case had a hook record after `ended` → added `94000007` (`ended` then `waiting`, no `cost-state`):
+  `waiting` / `hook` / `running_without_app_link`. Re-ran Verify after the fixes: unchanged (476 / 45 / 1, same failing
+  set; W10 clean); `check.sh 5` → `ok` for the unchanged cases (incl. the three new ones), FAIL for every Phase 9 case.
+- Gotchas: (1) The plan's literal Verify (`diff <(jq -S . key) …`) cannot hold for a single shared root until the
+  last step, so keys are final-state and each step compares its own and earlier id prefixes (`check.sh`); the full
+  diff holds from 9.4. (2) The `keys-before-phase6.json` / `overview-before-phase5.json` snapshot guards in
+  `crates/core/tests/` were outside 9.0's Files; 9.2 updates only the listed values there. (3) 11c1f13c was the hook
+  variant's only `waiting`/`hook` row; R2 makes it `transcript_exit` (correct under R5's order), so the Phase 9 root
+  adds 92000012 (still waiting) and 92000011 (exit beats waiting). (4) While 9.0 ran, the coordinator committed R7 /
+  Step 9.6 (580eb3f, PLAN.md only) and renumbered the real check to 9.7; 9.0's docs point to them and add nothing for
+  R7. (5) Fixture `92000010`'s id ends `…9200000a` (hex), so its file name differs from its case number.
 
 ### 2026-11-08 — Phase 8 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 8.6 answer and closed Phase 8.

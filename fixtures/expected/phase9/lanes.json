@@ -1,0 +1,26 @@
+{
+  "root": "fixtures/sessions-phase9",
+  "now": "2026-11-09T12:00:00.000Z",
+  "since": "2h",
+  "lanes": [
+    {
+      "codex": "95c00001-0000-4000-8000-000095c00001",
+      "repo": "/home/dev/repo-p9l",
+      "opens_step": "2.1",
+      "why": "only tagged incoming hand-off is from same-repo parent 95000001, outside the 2 h window"
+    },
+    {
+      "codex": "95c00002-0000-4000-8000-000095c00002",
+      "repo": "/home/dev/repo-p9l",
+      "opens_step": "2.2",
+      "why": "older same-repo parent 95000002 (2.2) beats newer cross-repo parent 95000003 in repo-p9m (7.1)"
+    },
+    {
+      "codex": "95c00004-0000-4000-8000-000095c00004",
+      "repo": "/home/dev/repo-p9l",
+      "opens_step": null,
+      "footer": "no step on this session",
+      "why": "its only incoming hand-off is untagged"
+    }
+  ]
+}

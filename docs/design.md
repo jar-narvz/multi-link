@@ -537,7 +537,7 @@ Grid lines use the track colour and fold bands the border colour; neither is tex
 ### Linking algorithm
 
 1. **Recognised invocations only.** A hand-off is a Bash `tool_use` in an `assistant` record whose command has a segment (split on `&&`, `||`, `;`, `|`, newlines outside quotes) of the form `codex exec …`, `codex [exec] resume <uuid>`, or `node …/codex-companion.mjs task …` (the plugin, called from a subagent). Other commands that merely mention `codex` are ignored. Exact grammar: `docs/output-schema.md`.
-2. **Exact.** A link is exact only when the child Codex session id is explicitly observed, checked in this order: the `resume` argument; a `session id: <uuid>` line in the tool result; `[codex] Thread ready (<uuid>)` in the result (plugin); a `session id:` line in the task output file the result names (background). The hook records the same evidence; it does not make a guess exact.
+2. **Exact.** A link is exact only when the child Codex session id is explicitly observed, checked in this order: the `resume` argument; a `session id: <uuid>` line in the tool result; `[codex] Thread ready (<uuid>)` in the result (plugin); a `session id:` line in the task output file the result names (background); *(Phase 9, R4)* exactly one `session id:` line in the file the launch segment's stdout is redirected to (a literal path under the session's `cwd` or the temp dir, read safely). The hook records the same evidence; it does not make a guess exact.
 3. **Heuristic.** Without an observed id: candidates are Codex sessions whose working folder equals the invocation's exact checkout (not the merged repo) and whose start falls within 60 s after the call, excluding children created by another invocation's exact link (a `resume` link doesn't claim its child, so a resume can't hide the run that created it). If a `cd` or `-C` / `--cd` in the command moves the launch elsewhere (`-C .` and `-C "$PWD"` do not move it, U1), no heuristic runs (unlinked), since the checkout is then unknown. One candidate → `heuristic` with a ranking value (`gap_ms`); several → `ambiguous`, listing them; none → unlinked. The ranking value is not a probability.
 4. **Resume.** `codex resume` adds a hand-off to an existing Codex session instead of creating one, so a Codex session can have several hand-offs over time.
 
@@ -561,11 +561,11 @@ Confirmed in Phase 0 (b) on real data; rule order and exact conditions are in `d
 | Busy | Claude: session record `status=busy`, updated ≤ 300 s ago. Codex: last `task_started` turn has no `task_complete`, last activity ≤ 300 s ago. |
 | Waiting on me | Claude: the live session record's `status: "waiting"` + `waitingFor` (H11, found in Step 2.1); Phase 2 hook `waiting` as fallback when no record exists (H3, H8). Codex: unsupported. |
 | Idle | Claude: session record `status=idle`, at any age (P4). |
-| Finished | Claude: the record's process is gone, or its pid now has a different start time than `procStart` (P5). |
+| Finished | Claude: the record's process is gone, or its pid now has a different start time than `procStart` (P5). *Phase 9:* with no record, an uncleared `SessionEnd` hook record (R5), or a transcript `cost-state` after the last turn (R2). |
 | Stale | `busy` evidence older than 300 s (record or open Codex turn). |
 | Unknown | No usable signal: transcript-only sessions, Codex sessions whose turns all completed (P6). |
 
-Silence alone never means busy or waiting. Alerts (FR14) fire only on a supported waiting signal (session record or hook).
+Silence alone never means busy or waiting, and Phase 9's `finished` rows rest on positive markers only (R2, R5). Alerts (FR14) fire only on a supported waiting signal (session record or hook).
 
 ### Data model (CLI output)
 
@@ -623,6 +623,7 @@ Phase 3 rules (decision T7; exact table in `docs/output-schema.md` → Open). "R
 - **Fork:** `claude --resume <id> --fork-session` or `codex fork` starts a side conversation without touching the original.
 - **Unreachable running session:** no app link → "unavailable" with the command for me to run. Resume only once the session is finished; a record-only finished session with no transcript is unavailable too.
 - **Fresh decision:** the action is recomputed from a fresh pass for the full id right before it runs, so a session resumed elsewhere since the last draw is not resumed twice.
+- **Phase 9 (R3):** a session `finished` from its transcript or a `SessionEnd` record reopens by where it ran: `cli` / `sdk-cli` → resume in a terminal; `claude-desktop` → the app link when exactly one app record maps it to a `local_` id, else unavailable with the command; unknown entrypoint → unavailable.
 - **Phase 3 scope:** resume for finished Claude sessions and the app link for running app sessions. Jumping to tmux / Herdr panes and `codex://` links are backlog.
 
 ### Edge cases
@@ -888,7 +889,9 @@ step, title, ids, times, prompts and file names differ throughout; the regions b
 7. **Phases 6 and 7:** home in words, repo swimlanes (W0–W10), then polish (P1–P5). See their decisions above.
 8. **Phase 8: Step graph (Release 1.5).** Board 9 as the acceptance picture (G0–G11).
    - Verify: the fixture render equals the Step 8.1 golden cell for cell; a real step's render is compared with board 9 region by region; the owner confirms.
-9. **Backlog (ordered, uncommitted):** live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
+9. **Phase 9: Truthful states and links (Release 1.6).** `.zst` rollouts, clean exit from the transcript and `SessionEnd`, reopening by entrypoint, exact links from a redirect file, a Codex lane's step all-time (R0–R6).
+   - Verify: `cargo test`, clippy, every key in `fixtures/expected/phase9/` matches (`check.sh`), real counts before/after, the owner confirms.
+10. **Backlog (ordered, uncommitted):** live grid (screen 5), tmux / Herdr jump, desktop app with notifications, mod.
 
 ### Open questions
 
@@ -896,7 +899,7 @@ step, title, ids, times, prompts and file names differ throughout; the regions b
 - [x] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap. Answered in `docs/phase0.md`; decisions P1–P12 above.
 - [x] May step ids carry a letter suffix (`0.2a`)? Yes, one lowercase letter (P11).
 - [ ] Do `PermissionRequest` / `Notification` fire for every permission prompt and question, so they can drive "waiting"? Planned answer: Step 2.1 (h).
-- [ ] How to find the `local_` app id of a finished desktop-app session.
+- [x] How to find the `local_` app id of a finished desktop-app session. Phase 9 (R3): the app record whose `cliSessionId` is the transcript id (Step 8.4c reader); used only when exactly one record maps it.
 - [ ] Does `codex://threads/<id>` open a Codex desktop thread?
 - [x] Should hand-off prompts carry a step tag? Yes: the first `Step <id>` in the launch command (H6).
 - [x] Final project name: multi-link.
@@ -958,3 +961,33 @@ undocumented app behaviour: every field is an assumption confirmed only by the f
   children read in the opposite direction there; this is deliberate. A parent's own order and state are unchanged; quiet-merge eligibility looks at
   all descendants. Why: the owner's coordinator sessions start step sessions, and the hierarchy is the one thing
   the flat list hid. Home stays flat (non-goal).
+
+### Phase 9 decisions (truthful states and links, Step 9.0)
+Planned 2026-11-08 (PLAN.md → Phase 9 holds the real-data counts these rules rest on). Need 1 and 2: the screens
+exist, but much of what they say is "unknown". A session that ended should say so and be reopenable; a hand-off whose
+Codex run is still on disk should find it. No new screen. Every transcript and app field below is undocumented and
+observed (Claude Code 2.1.319, Codex 0.164.0); only the `SessionEnd` hook event is documented. Binding rules and
+fixture tables: `docs/output-schema.md` (Phase 9 changes, State, Exact evidence 4b, Hook records → Ended, Open,
+Phase 9 fixture results).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| R0 | **Contract, additive only.** `state_evidence` gains `transcript_exit`, `session_end`; link `evidence` and hook `child_evidence` gain `redirect_file`; hook records gain `kind: "ended"` with `reason`; open `reason` gains `app_session`, `unknown_entrypoint`. Session gains no key. Every committed value stays equal except the R2 changes 9.0 lists in PROGRESS.md. Answer keys are Claude's: 9.0 writes every new key and every changed existing key; later steps never edit a key (one that looks wrong stops the step for Claude). Each Verify compares parsed JSON from `cargo run -q -p multi-link --` with `--now 2026-11-09T12:00:00Z`, never the installed binary. | The JSON is the contract (W0); keys written before code cannot be fitted to the code. |
+| R1 | **Compressed rollouts.** `rollout-*.jsonl.zst` is decoded (pure-Rust `ruzstd`, no C build step) and parsed exactly like `.jsonl`. One opener in the codex crate serves discovery (codex crate and core scanner), `scan` and `read_details`. Same id in both forms → the plain file. Decoded size capped at 64 MiB for `.zst` only; over the cap or undecodable → `unreadable`, never an error exit. Cached by file key. | 202 of the real rollouts are `.zst` (folders 2026-10-16 to 10-30), each one zstd frame of the same JSONL; most "lost" Codex runs were these. Who compresses them is a non-goal. |
+| R2 | **Clean exit from the transcript.** No live session record, and the last `cost-state` of the main transcript (own `sessionId` or none) comes after its last turn → `finished` / `transcript_exit`. A *turn* is an `assistant` record or a non-meta `user` record that is not a local-command echo (`<command-name>`, `<local-command-stdout>`, …); a `tool_result` record is a turn. Position is file order (`cost-state` has no timestamp). A turn after it → today's rule. A live record always wins. `state_since` stays `null`. | Positive evidence (P1): every clean exit mode tested (`/exit`, Ctrl-C, SIGTERM, SIGHUP) wrote it after the last turn and deleted the record; 0 of 10 live transcripts had one; SIGKILL writes none and keeps the record (`process_exit`). If the format changes, sessions fall back to `unknown`, never to a wrong `finished`. The `/exit` echo after it depends on the version, hence the echo rule. |
+| R3 | **Reopening by where it ran.** `finished` from `transcript_exit` or `session_end` uses the transcript's last `entrypoint`: `cli` / `sdk-cli` → `claude --resume <id>` in its `cwd` (fork allowed); `claude-desktop` → `claude://code/continue?session=local_<id>` when exactly one app record (8.4c reader) maps the transcript id to a safe `local_` id and no fork, else `unavailable` / `app_session` with the command; missing or other entrypoint → `unavailable` / `unknown_entrypoint`. `process_exit` keeps its rule (resume). The entrypoint and mapping reach `open` through an internal core resolver. | Resuming a desktop session in a terminal makes two writers if the app reopens it; the app link cannot fork. Unknown launchers are refused rather than guessed. |
+| R4 | **Hand-off child from the redirect file.** When a recognised launch segment redirects stdout (`>`, `>>`, `1>`, `&>`, `&>>`, `>|`, with or without `2>&1`) to a literal path, that file is read like the task output file (64 KiB; the hook polls it 25 s; the core reads it while it exists). Relative paths resolve against `cwd` only with no earlier `cd` / subshell; exactly one stdout redirect on the segment. Safe read: non-blocking open, `fstat` must say regular file (a FIFO never blocks a refresh), the opened file's canonical path must be under `cwd` or a temp dir, else no read; `$VAR` / quoted expansions are never read. Exact (`redirect_file`) only when the file holds exactly one `session id:` line. Order: stdout → thread_ready → task_output → redirect_file → hook. Fixture mode reads root-relative. **Amends decision 2 (Exact):** this file is an explicitly observed Codex output, so it is a fifth exact source. | 32 of 37 hook-era hand-offs redirect Codex's stdout to a file, so the `session id:` line never reaches the hook. Paths come from a command, hence the containment and file-type checks. With `>>` an older run's id can share the file, hence "exactly one". Full shell semantics are not modelled; anything unclear just gives no exact link. |
+| R5 | **`SessionEnd` hook record.** The hook writes `{"kind":"ended","event":"SessionEnd","reason":…}`. Precedence for a Claude session: live record → `process_exit` → `session_end` → `transcript_exit` → hook `waiting` → `no_signal`. An `ended` record counts only when no turn has a later `timestamp` and no later hook record exists (a resume clears it, even if its async record lands late). `reason: "clear"` ends the old id only. The snippet change needs the owner to re-merge it (stop-and-ask at 9.7). | A documented event, so it outlives transcript format changes; it fired for every clean mode tested. It cannot cover history, which R2 does. Hook `waiting` comes after both exit rows because an exit while a prompt was open leaves the `waiting` record uncleared. |
+| R6 | **A Codex lane's step looks all-time.** A Codex lane whose Claude parent is outside the TUI window takes its step from the worker's all-time hand-offs (per Codex id). `own_step`'s rules stay: the parent must belong to the lane's repo group (by the parent session's repo), and the latest tagged hand-off wins. | The 8.5 limit: a long background run outlives its parent's window and lost its step. |
+
+R7 (a `codex exec resume --last` fix round is a turn of an existing run, link `evidence` `resume_turn`) was added to
+Phase 9 after Step 9.0; Step 9.6 writes its row here, its contract and its own fixtures and keys.
+
+Non-goals: the lost key on resize (upstream crossterm-rs/crossterm#1154); reading the task path from the transcript
+(T10 as first written, ~0 of 37 gain); pipes to `tail` / `head`; the live
+grid and pane jump; who compresses rollouts; Windows / Linux paths; `state_since` for the new `finished` rows.
+
+**Existing keys under R2.** 12 `fixtures/sessions` transcripts (all `claude-desktop`, none with a record) end with a
+`cost-state` after their last turn, so `sessions.json`, `overview.json` and the three hook keys change for them, and
+with them the hook home goldens (11c1f13c stops being `waiting` / `hook`). The exact values and the tests that fail
+until 9.2 are listed in PROGRESS.md (Step 9.0). The Phase 9 root carries the hook-waiting case instead (92000012).

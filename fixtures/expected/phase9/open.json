@@ -1,0 +1,409 @@
+{
+  "root": "fixtures/sessions-phase9",
+  "now": "2026-11-09T12:00:00.000Z",
+  "command": "open <id> --dry-run [--fork] --root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z",
+  "open": {
+    "92000001-0000-4000-8000-000092000001": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000001-0000-4000-8000-000092000001"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000002-0000-4000-8000-000092000002": {
+      "exit": 0,
+      "action": {
+        "action": "app_link",
+        "url": "claude://code/continue?session=local_92f00002-0000-4000-8000-000000009202"
+      }
+    },
+    "92000003-0000-4000-8000-000092000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "app_session",
+        "command": "claude --resume 92000003-0000-4000-8000-000092000003",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000004-0000-4000-8000-000092000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "app_session",
+        "command": "claude --resume 92000004-0000-4000-8000-000092000004",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000005-0000-4000-8000-000092000005": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000005-0000-4000-8000-000092000005"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000006-0000-4000-8000-000092000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "unknown_entrypoint",
+        "command": "claude --resume 92000006-0000-4000-8000-000092000006",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000007-0000-4000-8000-000092000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000007-0000-4000-8000-000092000007",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000008-0000-4000-8000-000092000008": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000008-0000-4000-8000-000092000008"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000009-0000-4000-8000-000092000009": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000009-0000-4000-8000-000092000009",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000010-0000-4000-8000-00009200000a": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000010-0000-4000-8000-00009200000a",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000011-0000-4000-8000-00009200000b": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000011-0000-4000-8000-00009200000b"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000012-0000-4000-8000-00009200000c": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000012-0000-4000-8000-00009200000c",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000013-0000-4000-8000-00009200000d": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000013-0000-4000-8000-00009200000d",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000014-0000-4000-8000-00009200000e": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000014-0000-4000-8000-00009200000e",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "94000001-0000-4000-8000-000094000001": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "94000001-0000-4000-8000-000094000001"
+        ],
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000002-0000-4000-8000-000094000002": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "94000002-0000-4000-8000-000094000002"
+        ],
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000003-0000-4000-8000-000094000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000003-0000-4000-8000-000094000003",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000004-0000-4000-8000-000094000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 94000004-0000-4000-8000-000094000004",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000006-0000-4000-8000-000094000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000006-0000-4000-8000-000094000006",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000007-0000-4000-8000-000094000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000007-0000-4000-8000-000094000007",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    }
+  },
+  "fork": {
+    "92000001-0000-4000-8000-000092000001": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000001-0000-4000-8000-000092000001",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000002-0000-4000-8000-000092000002": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "app_session",
+        "command": "claude --resume 92000002-0000-4000-8000-000092000002 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000003-0000-4000-8000-000092000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "app_session",
+        "command": "claude --resume 92000003-0000-4000-8000-000092000003 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000004-0000-4000-8000-000092000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "app_session",
+        "command": "claude --resume 92000004-0000-4000-8000-000092000004 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000005-0000-4000-8000-000092000005": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000005-0000-4000-8000-000092000005",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000006-0000-4000-8000-000092000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "unknown_entrypoint",
+        "command": "claude --resume 92000006-0000-4000-8000-000092000006 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000007-0000-4000-8000-000092000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000007-0000-4000-8000-000092000007 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000008-0000-4000-8000-000092000008": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000008-0000-4000-8000-000092000008",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000009-0000-4000-8000-000092000009": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000009-0000-4000-8000-000092000009 --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000010-0000-4000-8000-00009200000a": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000010-0000-4000-8000-00009200000a --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000011-0000-4000-8000-00009200000b": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "92000011-0000-4000-8000-00009200000b",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000012-0000-4000-8000-00009200000c": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 92000012-0000-4000-8000-00009200000c --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000013-0000-4000-8000-00009200000d": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000013-0000-4000-8000-00009200000d --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "92000014-0000-4000-8000-00009200000e": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 92000014-0000-4000-8000-00009200000e --fork-session",
+        "cwd": "/home/dev/repo-p9c"
+      }
+    },
+    "94000001-0000-4000-8000-000094000001": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "94000001-0000-4000-8000-000094000001",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000002-0000-4000-8000-000094000002": {
+      "exit": 0,
+      "action": {
+        "action": "resume",
+        "program": "claude",
+        "args": [
+          "--resume",
+          "94000002-0000-4000-8000-000094000002",
+          "--fork-session"
+        ],
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000003-0000-4000-8000-000094000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000003-0000-4000-8000-000094000003 --fork-session",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000004-0000-4000-8000-000094000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "not_known_finished",
+        "command": "claude --resume 94000004-0000-4000-8000-000094000004 --fork-session",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000006-0000-4000-8000-000094000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000006-0000-4000-8000-000094000006 --fork-session",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    },
+    "94000007-0000-4000-8000-000094000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 94000007-0000-4000-8000-000094000007 --fork-session",
+        "cwd": "/home/dev/repo-p9e"
+      }
+    }
+  }
+}

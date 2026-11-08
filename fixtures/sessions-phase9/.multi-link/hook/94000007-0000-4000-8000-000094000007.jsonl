@@ -1,0 +1,2 @@
+{"v":1,"kind":"ended","at":"2026-11-09T08:11:00.000Z","session_id":"94000007-0000-4000-8000-000094000007","agent_id":null,"event":"SessionEnd","tool_use_id":null,"cwd":"/home/dev/repo-p9e","child":null,"child_evidence":null,"notification_type":null,"reason":"prompt_input_exit"}
+{"v":1,"kind":"waiting","at":"2026-11-09T08:12:00.000Z","session_id":"94000007-0000-4000-8000-000094000007","agent_id":null,"event":"PermissionRequest","tool_use_id":null,"cwd":"/home/dev/repo-p9e","child":null,"child_evidence":null,"notification_type":null}

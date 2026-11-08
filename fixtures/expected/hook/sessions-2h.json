@@ -2,37 +2,6 @@
   "now": "2026-10-29T23:15:00.000Z",
   "sessions": [
     {
-      "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
-      "harness": "claude",
-      "transcript": ".claude/projects/-home-dev-repo-c/11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43.jsonl",
-      "record": null,
-      "host_session_id": null,
-      "cwd": "/home/dev/repo-c",
-      "repo": "/home/dev/repo-c",
-      "checkout": "/home/dev/repo-c",
-      "branch": "main",
-      "started_at": "2026-10-28T09:48:34.173Z",
-      "last_activity": "2026-10-28T10:03:04.840Z",
-      "state": "waiting",
-      "state_evidence": "hook",
-      "segments": [
-        {
-          "from": "2026-10-28T09:48:34.173Z",
-          "to": "2026-10-28T10:03:04.840Z",
-          "step": null,
-          "step_source": "unknown"
-        }
-      ],
-      "subagents": [],
-      "activity": [],
-      "asked": null,
-      "last_asked": null,
-      "title": "<name>",
-      "started_by": null,
-      "imported": false,
-      "state_since": "2026-10-28T10:03:11.004Z"
-    },
-    {
       "id": "6358ec7e-ab3b-40b4-a75d-87f6da09cedc",
       "harness": "claude",
       "transcript": null,
@@ -164,8 +133,8 @@
       "branch": "main",
       "started_at": "2026-10-29T22:58:22.432Z",
       "last_activity": "2026-10-29T22:58:42.511Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T22:58:22.432Z",
@@ -226,8 +195,8 @@
       "branch": "main",
       "started_at": "2026-10-29T22:58:47.061Z",
       "last_activity": "2026-10-29T22:59:04.662Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T22:58:47.061Z",
@@ -257,8 +226,8 @@
       "branch": "main",
       "started_at": "2026-10-29T22:59:08.725Z",
       "last_activity": "2026-10-29T22:59:32.147Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T22:59:08.725Z",
@@ -321,8 +290,8 @@
       "branch": "main",
       "started_at": "2026-10-29T22:59:36.313Z",
       "last_activity": "2026-10-29T22:59:59.499Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T22:59:36.313Z",
@@ -383,8 +352,8 @@
       "branch": "main",
       "started_at": "2026-10-29T23:00:03.496Z",
       "last_activity": "2026-10-29T23:00:07.816Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T23:00:03.496Z",
@@ -414,8 +383,8 @@
       "branch": "main",
       "started_at": "2026-10-29T23:00:12.184Z",
       "last_activity": "2026-10-29T23:00:28.757Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T23:00:12.184Z",
@@ -445,8 +414,8 @@
       "branch": "wt",
       "started_at": "2026-10-29T23:00:12.201Z",
       "last_activity": "2026-10-29T23:00:29.712Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T23:00:12.201Z",
@@ -538,8 +507,8 @@
       "branch": "main",
       "started_at": "2026-10-29T23:00:33.781Z",
       "last_activity": "2026-10-29T23:00:53.156Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T23:00:33.781Z",
@@ -569,8 +538,8 @@
       "branch": "main",
       "started_at": "2026-10-29T23:00:35.769Z",
       "last_activity": "2026-10-29T23:00:52.046Z",
-      "state": "unknown",
-      "state_evidence": "no_signal",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
       "segments": [
         {
           "from": "2026-10-29T23:00:35.769Z",

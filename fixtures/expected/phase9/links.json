@@ -1,0 +1,288 @@
+{
+  "links": [
+    {
+      "step": "1.1",
+      "parent": "93000001-0000-4000-8000-000093000001",
+      "invocation": "toolu_p9_93000001_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T05:10:20.000Z",
+      "checkout": "/home/dev/repo-r1",
+      "match": "exact",
+      "child": "93c00001-0000-4000-8000-000093c00001",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000002-0000-4000-8000-000093000002",
+      "invocation": "toolu_p9_93000002_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T05:20:20.000Z",
+      "checkout": "/home/dev/repo-r2",
+      "match": "heuristic",
+      "child": "93c00002-0000-4000-8000-000093c00002",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "93c00002-0000-4000-8000-000093c00002",
+          "gap_ms": 5000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "93000003-0000-4000-8000-000093000003",
+      "invocation": "toolu_p9_93000003_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T05:30:20.000Z",
+      "checkout": "/home/dev/repo-r3",
+      "match": "heuristic",
+      "child": "93c00003-0000-4000-8000-000093c00003",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "93c00003-0000-4000-8000-000093c00003",
+          "gap_ms": 5000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "93000004-0000-4000-8000-000093000004",
+      "invocation": "toolu_p9_93000004_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T05:40:20.000Z",
+      "checkout": "/home/dev/repo-r4",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000005-0000-4000-8000-000093000005",
+      "invocation": "toolu_p9_93000005_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T05:50:20.000Z",
+      "checkout": "/home/dev/repo-r5",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000006-0000-4000-8000-000093000006",
+      "invocation": "toolu_p9_93000006_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:00:20.000Z",
+      "checkout": "/home/dev/repo-r6",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "2.2",
+      "parent": "95000002-0000-4000-8000-000095000002",
+      "invocation": "toolu_p9_95000002_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:00:30.000Z",
+      "checkout": "/home/dev/repo-p9l",
+      "match": "exact",
+      "child": "95c00002-0000-4000-8000-000095c00002",
+      "evidence": "stdout",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000007-0000-4000-8000-000093000007",
+      "invocation": "toolu_p9_93000007_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:10:20.000Z",
+      "checkout": "/home/dev/repo-r7",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000008-0000-4000-8000-000093000008",
+      "invocation": "toolu_p9_93000008_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:20:20.000Z",
+      "checkout": "/home/dev/repo-r8",
+      "match": "exact",
+      "child": "93c00008-0000-4000-8000-000093c00008",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "93000009-0000-4000-8000-000093000009",
+      "invocation": "toolu_p9_93000009_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:30:20.000Z",
+      "checkout": "/home/dev/repo-r9",
+      "match": "exact",
+      "child": "93c00009-0000-4000-8000-000093c00009",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "9300000a-0000-4000-8000-00009300000a",
+      "invocation": "toolu_p9_9300000a_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:40:20.000Z",
+      "checkout": "/home/dev/repo-r10",
+      "match": "exact",
+      "child": "93c0000a-0000-4000-8000-000093c0000a",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "9300000b-0000-4000-8000-00009300000b",
+      "invocation": "toolu_p9_9300000b_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T06:50:20.000Z",
+      "checkout": "/home/dev/repo-r11",
+      "match": "exact",
+      "child": "93c0000b-0000-4000-8000-000093c0000b",
+      "evidence": "hook",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "9300000c-0000-4000-8000-00009300000c",
+      "invocation": "toolu_p9_9300000c_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T07:00:20.000Z",
+      "checkout": "/home/dev/repo-r12",
+      "match": "heuristic",
+      "child": "93c0000c-0000-4000-8000-000093c0000c",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "93c0000c-0000-4000-8000-000093c0000c",
+          "gap_ms": 5000
+        }
+      ]
+    },
+    {
+      "step": "2.1",
+      "parent": "95000001-0000-4000-8000-000095000001",
+      "invocation": "toolu_p9_95000001_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T07:00:30.000Z",
+      "checkout": "/home/dev/repo-p9l",
+      "match": "exact",
+      "child": "95c00001-0000-4000-8000-000095c00001",
+      "evidence": "stdout",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "9300000d-0000-4000-8000-00009300000d",
+      "invocation": "toolu_p9_9300000d_2",
+      "subagent": null,
+      "form": "exec",
+      "background": true,
+      "at": "2026-11-09T07:10:20.000Z",
+      "checkout": "/home/dev/repo-r13",
+      "match": "exact",
+      "child": "93c0000d-0000-4000-8000-000093c0000d",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "9300000e-0000-4000-8000-00009300000e",
+      "invocation": "toolu_p9_9300000e_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T07:20:20.000Z",
+      "checkout": "/home/dev/repo-r14",
+      "match": "exact",
+      "child": "93c0000e-0000-4000-8000-000093c0000e",
+      "evidence": "redirect_file",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "91000001-0000-4000-8000-000091000001",
+      "invocation": "toolu_p9_91000001_4",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T09:00:40.000Z",
+      "checkout": "/home/dev/repo-p9a",
+      "match": "exact",
+      "child": "91c00001-0000-4000-8000-000091c00001",
+      "evidence": "stdout",
+      "candidates": []
+    },
+    {
+      "step": "7.1",
+      "parent": "95000003-0000-4000-8000-000095000003",
+      "invocation": "toolu_p9_95000003_2",
+      "subagent": null,
+      "form": "resume",
+      "background": false,
+      "at": "2026-11-09T10:30:30.000Z",
+      "checkout": "/home/dev/repo-p9m",
+      "match": "exact",
+      "child": "95c00002-0000-4000-8000-000095c00002",
+      "evidence": "resume_arg",
+      "candidates": []
+    },
+    {
+      "step": null,
+      "parent": "95000004-0000-4000-8000-000095000004",
+      "invocation": "toolu_p9_95000004_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-09T11:00:30.000Z",
+      "checkout": "/home/dev/repo-p9l",
+      "match": "exact",
+      "child": "95c00004-0000-4000-8000-000095c00004",
+      "evidence": "stdout",
+      "candidates": []
+    }
+  ],
+  "unparented": [
+    "91c00002-0000-4000-8000-000091c00002"
+  ]
+}

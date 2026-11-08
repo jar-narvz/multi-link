@@ -44,6 +44,14 @@ response-item fallback finds an eligible prompt (the existing scrubbed `CASE-<na
 overview key changes; every committed key stays equal. New isolated fixture root `fixtures/sessions-phase8/` (board 9's
 shape, synthetic prompts, the Codex `exec` record shape) with answer keys `fixtures/expected/phase8/graph-<id>.json`.
 
+**Phase 9 changes (Step 9.0, all additive, design R0–R6):** `state_evidence` gains `"transcript_exit"` and
+`"session_end"`; Link `evidence` and hook `child_evidence` gain `"redirect_file"`; hook records gain `kind: "ended"`
+(event `SessionEnd`, field `reason`); OpenAction `reason` gains `"app_session"` and `"unknown_entrypoint"`. Session
+gains no key (Step 9.6 adds `resume_turn` for R7, written there). Codex rollouts are also read from `rollout-*.jsonl.zst`. State, Exact evidence, Hook records and Open
+below carry the rules. Existing keys change only where R2 applies (12 `fixtures/sessions` transcripts end with a
+`cost-state` after their last turn; the values are listed in PROGRESS.md, Step 9.0). New isolated fixture root
+`fixtures/sessions-phase9/` with answer keys `fixtures/expected/phase9/` (Phase 9 fixture results, at the end).
+
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
 synthetic busy record `.claude/sessions/70001.json` (a second busy session in `/home/dev/repo-c`, for the
@@ -175,7 +183,8 @@ user (a permission prompt, H3). Transcripts carry no waiting signal (Phase 0 (b)
 live session record does (`status: "waiting"` + `waitingFor`, design H11), and the hook adds a fallback
 for sessions without a record (H8). Codex waiting is unsupported.
 
-`state_evidence` ∈ `process_exit | session_record | open_turn | turns_complete | no_signal | hook`.
+`state_evidence` ∈ `process_exit | session_record | open_turn | turns_complete | no_signal | hook | transcript_exit | session_end`
+(the last two since Phase 9).
 
 Rows are checked top to bottom; the first match wins. If the process probe cannot run (fixture mode,
 `ps` denied, permission error) the record is trusted as written and the `finished` row is skipped.
@@ -189,6 +198,8 @@ Rows are checked top to bottom; the first match wins. If the process probe canno
 | Claude session record, `status=busy`, process probe `Unavailable`, older than 300 s | `stale` | `session_record` |
 | Claude session record, `status=idle` (any age; freshness applies to `busy` only, Step 0.2 review) | `idle` | `session_record` |
 | Claude session record with any other `status` value | `unknown` | `session_record` |
+| *(Phase 9, R5)* Claude transcript, no session record, and the session has an uncleared `ended` hook record (Hook records → Ended). | `finished` | `session_end` |
+| *(Phase 9, R2)* Claude transcript, no session record, and the last `cost-state` record of its main transcript (own `sessionId` or none) comes after its last turn (below). | `finished` | `transcript_exit` |
 | Claude transcript, no session record, and the session's latest hook record is an uncleared `waiting` (Hook records → Waiting). Design H8: after `finished` (a record session never reaches this row, so the record's own status always wins), before the transcript-only fallback. | `waiting` | `hook` |
 | Claude transcript, no session record | `unknown` | `no_signal` |
 | Codex, last `task_started` turn has no `task_complete`, `last_activity` ≤ 300 s ago | `busy` | `open_turn` |
@@ -196,14 +207,26 @@ Rows are checked top to bottom; the first match wins. If the process probe canno
 | Codex, last `task_started` turn has its `task_complete` (the latest turn governs; an earlier unmatched turn was interrupted and is ignored) | `unknown` | `turns_complete` |
 | Codex, no `task_started` in the file | `unknown` | `no_signal` |
 
-Why `unknown` and not `finished` for transcript-only sessions: Phase 0 found no exit evidence in
+**Turn (R2, R5).** A record of the session's main transcript whose `sessionId` is the transcript id or
+absent, and that is either `assistant`, or `user` with `isMeta` not `true` whose text (string content, or the
+first `text` block) does not start, after leading whitespace, with `<command-name>`, `<command-message>`,
+`<command-args>`, `<local-command-stdout>`, `<local-command-stderr>` or `<local-command-caveat>`. A `user`
+record holding only `tool_result` blocks is a turn. Subagent files are not read for this. `cost-state` has no
+timestamp, so R2 compares file positions (line order); R5 compares a turn's `timestamp` with the record's `at`.
+Every other record (`system`, `last-prompt`, `mode`, a `/exit` echo) neither clears nor sets the marker.
+`state_since` is `null` for both Phase 9 rows (a `cost-state` has no time; `finished` is `null` under W5).
+
+Why `unknown` and not `finished` for transcript-only sessions *(Phase 1–8 text; Phase 9 adds the two rows above
+on positive evidence only)*: Phase 0 found no exit evidence in
 transcripts. A missing session record proves nothing (`claude -p` may never write one), and a completed
 Codex turn ends the turn, not the process. Showing `finished` would be a guess.
 
 In fixture mode the session records are trusted as written (process probing is off; their pids belong
 to another machine). With `--now 2026-10-29T23:15:00Z` the two busy records are `busy` (`60243.json`, `statusUpdatedAt`
 23:12:39.714Z, age 140 s; synthetic `70001.json`, 23:13:30.000Z, age 90 s); the four idle records are `idle`; all transcript sessions are
-`unknown`. `stale` and `finished` have no fixture: Phase 1 covers them with state-machine unit tests
+`unknown` until Phase 9, which makes 12 of them `finished` / `transcript_exit` (their last `cost-state` follows
+their last turn: 0d7faed4, 85a715ba, 11c1f13c, bb792d9c, ef72378c, 80cce3e4, c86d374f, 07c80c2e, 11bf1b58,
+9d9a0ed8, df403bfa, f4d83303; all `claude-desktop`, none with a record). `stale` and `finished` have no fixture: Phase 1 covers them with state-machine unit tests
 (busy record with unavailable process probe at now + 301 s → `stale`; open Codex turn; process gone → `finished`). `waiting` has no row
 in the plain fixtures; the Hook variant has one of each evidence (Hook records → Hook variant).
 
@@ -257,7 +280,7 @@ Subagent transcripts are scanned too. A skipped line never stops the file; later
 | `checkout` | string | `cwd` of that record. |
 | `match` | `"exact"` \| `"heuristic"` \| `"ambiguous"` \| `"unlinked"` | |
 | `child` | string \| null | Codex id for `exact` / `heuristic`; `null` otherwise. |
-| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"hook"` \| null | What made it exact; `null` unless `exact`. `hook` only in Phase 2, see Exact evidence. |
+| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| null | What made it exact; `null` unless `exact`. `hook` only in Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
 | `candidates` | `{"id": string, "gap_ms": int}`[] | Heuristic candidates (1 for `heuristic`, ≥ 2 for `ambiguous`); `[]` for `exact` and `unlinked`. Ordered by `gap_ms`, then `id`. |
 | `step` | string \| null | Step tag of the launch segment (Step tags), set on every link whatever its `match`. `null` when the segment has no tag. |
 
@@ -291,6 +314,24 @@ One launch per `tool_use`. Env-var prefixes (`FOO=1 codex exec`) are not recogni
    (the named `/tmp/dev/...` path does not exist). A missing file is not an error; it just gives no
    evidence, and the link falls through to the heuristic. Temp task files vanish, so real-mode
    background links will often end up heuristic — by design, never guessed exact.
+4b. *(Phase 9, R4)* The launch segment redirects stdout to a literal path and that file holds **exactly one**
+   `session id: <uuid>` line → `"redirect_file"`. Checked after source 4.
+   - **Redirect forms** on the launch segment only (the segment Recognised invocations chose): `>`, `>>`, `1>`,
+     `>|`, `&>`, `&>>`, each with or without `2>&1`; the target is the next word or the text glued to the
+     operator. Exactly one stdout redirect on the segment, else nothing is read. A target that is not a
+     literal path (contains `$`, a backtick, a glob or a quoted expansion) → nothing is read.
+   - **Path.** An absolute target is used as is. A relative one resolves against the record's `cwd` (the hook:
+     the payload `cwd`) only when no earlier segment of the same command is `cd`, `pushd` or a subshell
+     (`dir_moved`, as for the heuristic); otherwise nothing is read.
+   - **Safe read.** Open non-blocking and `fstat` the opened file: anything but a regular file (FIFO, device,
+     directory, socket) → no read and no wait. Then the opened file's canonical path must be under the
+     canonical `cwd` or a temp dir (`$TMPDIR`, `/tmp`, `/private/tmp`); else no read. Read at most 64 KiB.
+     A missing or unreadable file gives no evidence and no diagnostic, like a gone task output file.
+   - **Fixture mode** (`--root`): the path is read root-relative, `<root>/<path without its leading />`, and a
+     relative target is `<root>/<cwd without its leading />/<target>`. Containment is checked against
+     `<root>/<cwd>`, `<root>/tmp` and `<root>/private/tmp` (canonical); `$TMPDIR` is ignored.
+   - **Why exactly one id:** with `>>` an older run's header can be in the same file, and the file does not say
+     which run this invocation started. Two or more ids → no exact; the heuristic then runs as today.
 5. *(Phase 2)* A hook record for this invocation (joined on `tool_use_id` = `invocation`) names a child
    the hook observed → `"hook"` (design H5). Checked only after sources 1–4 found nothing; when a
    transcript source exists and the hook names a different child, the transcript wins and the conflict
@@ -429,16 +470,21 @@ text, prompt, tool output or message.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `v` | `1` | Format version. |
-| `kind` | `"handoff"` \| `"waiting"` | |
+| `kind` | `"handoff"` \| `"waiting"` \| `"ended"` | `ended` since Phase 9 (R5). |
 | `at` | timestamp | The hook's own clock when the record is written (payloads carry no event time, 2.1 (h)); RFC 3339 UTC, 3 fractional digits. A first or only record is written on receipt, so `at` is the receive time and trails the event by about 0.1–0.2 s (async hook). The appended background child record (below) has the time the child was found, later than its first record's `at`. |
 | `session_id` | string | Payload `session_id` (= transcript stem, 2.1 (f)); equals the file stem. For a subagent call it is the **parent's** id. |
 | `agent_id` | string \| null | Payload `agent_id` (subagent calls only, e.g. `aee8ad2d0134ca48a` for the Codex plugin's `codex:codex-rescue` subagent; 17 chars in 2.1). Informational: the join below does not use it. |
-| `event` | string | Source hook event: `PostToolUse` or `PostToolUseFailure` for `handoff`; `PermissionRequest` or `Notification` for `waiting`. |
+| `event` | string | Source hook event: `PostToolUse` or `PostToolUseFailure` for `handoff`; `PermissionRequest` or `Notification` for `waiting`; `SessionEnd` for `ended`. |
 | `tool_use_id` | string \| null | Payload `tool_use_id` (= the transcript's `tool_use.id`, 2.1 (f)) for `handoff`; `null` for `waiting` (`PermissionRequest` / `Notification` have none). |
 | `cwd` | string | Payload `cwd`. Informational. |
 | `child` | string \| null | `handoff` only: the Codex session id the hook observed (lowercase uuid), else `null`. Always `null` for `waiting`. |
-| `child_evidence` | `"stdout"` \| `"thread_ready"` \| `"task_output"` \| null | Where `child` was seen; `null` exactly when `child` is `null`. `stdout`: a `session id: <uuid>` line in `tool_response.stdout`, or for `PostToolUseFailure` in `error` (2.1: a failed run prints its id there; `event` tells the two apart). `thread_ready`: `[codex] Thread ready (<uuid>)` in that text (plugin). `task_output`: a `session id:` line in the background task's output file, at `dirname(scratchpad_dir)/tasks/<tool_response.backgroundTaskId>.output` (2.1 (g)). |
+| `child_evidence` | `"stdout"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| null | Where `child` was seen; `null` exactly when `child` is `null`. `stdout`: a `session id: <uuid>` line in `tool_response.stdout`, or for `PostToolUseFailure` in `error` (2.1: a failed run prints its id there; `event` tells the two apart). `thread_ready`: `[codex] Thread ready (<uuid>)` in that text (plugin). `task_output`: a `session id:` line in the background task's output file, at `dirname(scratchpad_dir)/tasks/<tool_response.backgroundTaskId>.output` (2.1 (g)). |
 | `notification_type` | string \| null | `Notification` only: `"permission_prompt"` or `"elicitation_dialog"`; `null` for every other event. |
+| `reason` | string | **`ended` only, and only there** (other kinds have no `reason` key, so older records stay valid): the payload `reason` verbatim. Observed: `prompt_input_exit` (`/exit`, Ctrl-C), `other` (SIGTERM, SIGHUP); documented: `clear`, `logout` and others. Any string is accepted. |
+
+`redirect_file` (Phase 9, R4): a `session id:` line in the file the launch segment's stdout is redirected to
+(Links → Exact evidence 4b, same path rules, the payload `cwd`). An `ended` record has `tool_use_id`, `child`,
+`child_evidence`, `notification_type` and `agent_id` all `null`.
 
 **What the hook writes (Step 2.5):**
 - `PostToolUse` / `PostToolUseFailure` with `tool_name` `Bash` whose command has a recognised launch
@@ -453,6 +499,13 @@ text, prompt, tool output or message.
   interactively (2.1 (h)).
 - `Notification` with `notification_type` `permission_prompt` or `elicitation_dialog` → `waiting`
   (interactive only; about 6 s after `PermissionRequest` for the same prompt, a harmless duplicate).
+- *(Phase 9, R4)* A hand-off with no id in its output text (and, for a background call, none in the task
+  output file) whose launch segment has a readable stdout redirect (Exact evidence 4b) polls that file the way
+  it polls the task output (64 KiB, 25 s, first record `child: null` at once) and appends a second record with
+  `child_evidence: "redirect_file"` when exactly one `session id:` line appears. Still at most two records per
+  `tool_use_id`.
+- *(Phase 9, R5)* `SessionEnd` → one `ended` record with the payload `reason`. Snippet entry shape as the
+  others (`async: true`, `timeout: 60`).
 - Anything else (other events or notification types, e.g. `idle_prompt`; non-launch Bash; invalid
   payloads) → nothing is written.
 
@@ -463,7 +516,8 @@ text, prompt, tool output or message.
 - Blank line → `empty_line`. Non-empty, newline-terminated line that is not a JSON object →
   `invalid_json`. An unterminated last line is buffered, not skipped (as for transcripts).
 - Valid JSON that is not a `v: 1` record this reader understands → `unknown_type`: `v` ≠ `1` or missing,
-  `kind` not `handoff` / `waiting`, a missing field, a wrong type, an `event` / `child_evidence` /
+  `kind` not `handoff` / `waiting` / `ended`, an `ended` record without a string `reason` or with a non-null
+  `tool_use_id` / `child` / `child_evidence` / `notification_type`, a missing field, a wrong type, an `event` / `child_evidence` /
   `notification_type` value not allowed for its `kind`, `child` and `child_evidence` not both null or
   both set, or `session_id` ≠ the file stem. Never a crash; later lines are still read.
 - Hook records never create a session. Records whose `session_id` is not a Claude session found from a
@@ -482,6 +536,16 @@ text, prompt, tool output or message.
   heuristic exclusion.
 - `hook_conflicts` (count of links with a conflict) is a diagnostic, printed on stderr with the others
   (Step 2.7); it is not part of the JSON.
+
+### Ended (State row `finished` / `session_end`, Phase 9, R5)
+- Only for a Claude session with a transcript and **no** session record (a record always wins: it says the
+  process lives). Precedence: session record → `process_exit` → `session_end` → `transcript_exit` → hook
+  `waiting` → `no_signal`.
+- The session's latest `ended` record (by `at`, ties by line) counts only when **no turn** (State → Turn) in
+  the main transcript has a `timestamp` later than its `at`, **and** no other valid hook record of that session
+  has a later `at` (a resume clears it, also when its async hook record lands late).
+- `reason: "clear"` ends the record's own `session_id` (the old id) only; the id the process continues under
+  has its own transcript and record.
 
 ### Waiting (State row `waiting` / `hook`)
 - Only for a Claude session with a transcript and **no** session record: when a record exists, its
@@ -517,7 +581,7 @@ Commands (`--root <tmp> --now 2026-10-29T23:15:00Z --json`):
 | `85a715ba-….jsonl` (repo-c) | `handoff` `child: null` for `toolu_01DYjrRidN29nXMRN9Rci1uz` | stays `unlinked` |
 | `bb792d9c-….jsonl` (exec) | `handoff` naming `01a189e5-5b32-…` (the manual run) | conflict: exec link keeps `stdout` / `01a189e2-d57f-…`; manual stays `unparented`; `hook_conflicts` = 1 |
 | `9d9a0ed8-….jsonl` (plugin) | `handoff` with `agent_id` `aee8ad2d0134ca48a`, same child as the transcript (`thread_ready`) | agrees: no change, no conflict |
-| `11c1f13c-….jsonl` (repo-c, last line 2026-10-28T10:03:04.840Z) | `waiting` `PermissionRequest` 10:03:05.020Z, then `Notification` `permission_prompt` 10:03:11.004Z | `waiting` / `hook`; listed in `sessions-2h` although its last line is ~37 h old |
+| `11c1f13c-….jsonl` (repo-c, last line 2026-10-28T10:03:04.840Z) | `waiting` `PermissionRequest` 10:03:05.020Z, then `Notification` `permission_prompt` 10:03:11.004Z | Phases 2–8: `waiting` / `hook`; listed in `sessions-2h` although its last line is ~37 h old. **Phase 9:** its transcript ends with a `cost-state` after the last turn, and `transcript_exit` comes before hook `waiting` (R5 order) → `finished` / `transcript_exit`, `state_since` `null`, and it leaves `sessions-2h` (not `waiting`, last line before the window) |
 | `0d7faed4-….jsonl` (repo-d, last line 2026-10-27T10:04:27.890Z) | line 1 `waiting` at 10:04:20.150Z; line 2 truncated JSON; line 3 a `v: 2` `waiting` at 10:05:00.000Z | cleared: stays `unknown` / `no_signal` and out of `sessions-2h`; skipped line 2 `invalid_json`, line 3 `unknown_type` (a reader that accepted either would show `waiting`) |
 | `d1f3b188-….jsonl` (record session) | `waiting` `PermissionRequest` and `Notification` | the record decides: `waiting` / `session_record`, not `hook` |
 | `1f47e9b3-….jsonl` (record session `64044.json`, `status: idle`, `updatedAt` 2026-10-29T20:44:16.946Z) | `waiting` `PermissionRequest` at 20:45:02.318Z, after every record time | the record disagrees and wins: stays `idle` / `session_record` (a reader letting an uncleared hook `waiting` override a record would show `waiting`) |
@@ -534,7 +598,9 @@ the bg link's `evidence` `"hook"`. `hook/sessions.json` = `sessions.json` with 1
 without the four sessions whose `last_activity` is before 2026-10-29T21:15:00Z and that are neither
 record sessions nor `waiting` (0d7faed4, 85a715ba, the synthetic `…000e` and `…000f`); `skipped` is not
 windowed. Exactly one session is `waiting` / `hook` (11c1f13c) and one `waiting` / `session_record`
-(d1f3b188) in both session files. (Phase 3: the synthetic `70001.json` row is in `sessions.json`, so it is
+(d1f3b188) in both session files. **Phase 9 (R2, R5):** 11c1f13c is `finished` / `transcript_exit` and drops out of
+`hook/sessions-2h.json`, so the hook variant has no `waiting` / `hook` row any more; that row moved to the Phase 9
+root (92000012, with 92000011 for the precedence). The other 11 R2 sessions change as in `sessions.json`. (Phase 3: the synthetic `70001.json` row is in `sessions.json`, so it is
 in all three session keys; as a record session it is never windowed out.)
 
 ## `overview`
@@ -661,7 +727,8 @@ equal `last_activity` (ordered by `repo`); two repos with one plan basename; sev
   `/home/dev/project`, sandbox `repo-a`, sandbox `repo-b`, sandbox `repo-a-wt`, the `Library/…/scratch-…`
   folder, `/home/dev/repo-d`, `/home/dev/repo-e`.
 - repo-c: FR17 warning `{"cwd": "/home/dev/repo-c", "sessions": ["00000000-…-000000000010", "6358ec7e-…"]}`;
-  rows: the two busy records (90 s-old `70001` first, by activity), then 11c1f13c, 85a715ba; latest
+  rows: the two busy records (90 s-old `70001` first, by activity), then 11c1f13c, 85a715ba (both
+  `finished` / `transcript_exit` since Phase 9; the order is unchanged); latest
   hand-off `toolu_014Qp7cwQso6jcrnVvi6GhGq` (`unlinked`).
 - sandbox repo-a (T11): Codex `01a189e2-…` has two hand-offs (exec from bb792d9c 22:58:26, resume from
   ef72378c 22:58:53); it sits under ef72378c (the later one) with both links in `handoffs`; bb792d9c has
@@ -675,7 +742,9 @@ equal `last_activity` (ordered by `repo`); two repos with one plan basename; sev
 Hook variant (`hook/overview.json`, `--since all`, built as in Hook records → Hook variant): sandbox repo-a
 (d1f3b188 `waiting` / `session_record`, latest activity 2026-10-30T06:08Z) and repo-c (11c1f13c `waiting` /
 `hook`) form the `waiting` tier, in that order; no group is `busy`; the `other` order is unchanged. A
-waiting row comes first in its group. repo-a now has 4 Claude rows but only 3 quiet ones: still no merge.
+waiting row comes first in its group. **Phase 9:** 11c1f13c is `finished` / `transcript_exit`, so repo-c is the
+`busy` tier (its two busy records) and its rows read `70001`, 6358ec7e, 11c1f13c, 85a715ba; sandbox repo-a stays
+`waiting` (d1f3b188) and comes first. The TUI hook goldens follow (one fewer `need you`, no waiting card row). repo-a now has 4 Claude rows but only 3 quiet ones: still no merge.
 The bg child's hand-off carries `evidence: "hook"`.
 
 ### Phase 4 fixture results (`phase4/overview.json`, `--since all`)
@@ -895,13 +964,23 @@ one full id, never from the last drawn report (Codex P1 #2).
 | `"app_link"` | `url`: `"claude://code/continue?session=" + host_session_id` | `open <url>` (macOS). Undocumented app behaviour, tested once (2026-10-29). |
 | `"unavailable"` | `reason` (below); `command`: string \| null, the command for me to run myself; `cwd`: Session `cwd` | Nothing runs. CLI: reason on stderr, exit 3; TUI: footer message with `command`. |
 
+**Phase 9 (R3) inputs.** *Entrypoint* = the `entrypoint` string of the last main-transcript record that has one
+(own `sessionId` or none); observed values `cli`, `sdk-cli`, `claude-desktop`. *App mapping* = app records (Step 8.4c
+reader) whose `cliSessionId` equals the session id; their `app_id` (`sessionId`, else the file stem). Both reach
+`open::action` through an internal core resolver; Session gains no key (R0). Why the desktop rule: resuming a desktop
+session in a terminal makes two writers if the app reopens it, and the app link cannot fork.
+
 ### Rules, checked top to bottom (first match wins)
 | Session | `fork` | Action | `reason` / `command` |
 | --- | --- | --- | --- |
 | `id` is not a lowercase uuid (8-4-4-4-12 hex) | any | `unavailable` | `unsafe_id`, `command: null` (ids reach argv and text; a file stem could start with `-`) |
 | Codex (any state) | false | `unavailable` | `codex_not_supported`, `codex resume <id>` |
 | Codex (any state) | true | `unavailable` | `codex_not_supported`, `codex fork <id>` |
-| Claude `finished`, `transcript` not null | any | `resume` | (positive exit evidence: record + process gone or pid reused) |
+| Claude `finished` / `process_exit`, `transcript` not null | any | `resume` | (positive exit evidence: record + process gone or pid reused; entrypoint not consulted, as before Phase 9) |
+| *(R3)* Claude `finished` / `transcript_exit` or `session_end`, entrypoint `cli` or `sdk-cli` | any | `resume` | |
+| *(R3)* same, entrypoint `claude-desktop`, exactly one app record maps the id to an `app_id` matching `^local_[A-Za-z0-9-]+$` | false | `app_link` | `url`: `claude://code/continue?session=<app_id>` |
+| *(R3)* same, entrypoint `claude-desktop`, otherwise (no mapping, two or more, an unsafe `app_id`, or `fork`) | any | `unavailable` | `app_session`, `claude --resume <id>` (+ ` --fork-session`) |
+| *(R3)* same, entrypoint missing or any other value | any | `unavailable` | `unknown_entrypoint`, `claude --resume <id>` (+ ` --fork-session`) |
 | Claude `finished`, `transcript` null (record-only) | any | `unavailable` | `no_transcript`, `claude --resume <id>` (+ ` --fork-session`) |
 | Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches `^local_[A-Za-z0-9-]+$` | false | `app_link` | |
 | Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches | true | `unavailable` | `fork_needs_finished`, `claude --resume <id> --fork-session` (the app link cannot fork, and multi-link resumes nothing that may be running) |
@@ -913,7 +992,7 @@ one full id, never from the last drawn report (Codex P1 #2).
 ids. No match → `no session matches <prefix>` on stderr, exit 4; several → exit 2 listing them. TUI: if
 the fresh pass no longer finds the id, a footer message and nothing runs.
 
-**Known limits.** Resume is reachable only when a record outlives its process (a crash, a kill); if
+**Known limits (Phases 3–8; Phase 9 adds clean-exit resume for terminal sessions, R3).** Resume is reachable only when a record outlives its process (a crash, a kill); if
 Claude deletes its record on a clean exit (Step 3.8 checks), a normally closed session is `unknown` →
 `not_known_finished`, so FR18 resume is crash-only in practice, by design of the safety rule. A second
 process that writes no record (`claude -p --resume <id>`) while the old record remains but its process
@@ -921,17 +1000,21 @@ has exited cannot be seen; such a session would show `finished` and could be res
 mid-write, and the command text is offered instead.
 
 `command` strings use single spaces and the full id. `resume` is the only action that starts a harness,
-and it needs `state: finished`, which only the process probe can produce. When the probe cannot run
+and it needs `state: finished`, which before Phase 9 only the process probe could produce. Since Phase 9 a
+transcript `cost-state` or a `SessionEnd` record also gives `finished`, in fixture mode too, so the Phase 9 root's
+terminal sessions resume (`open.json`); the rest of this paragraph describes the probe-only rows. When the probe cannot run
 (fixture mode, `ps` denied) no session is `finished` (State), so nothing resumes; record sessions then
 follow their record status (`app_link` or `unavailable`), and opening the app view resumes nothing in this
 terminal. A `waiting` / `hook` session has no record, so it is `running_without_app_link`.
 
 Fixture coverage (`--root fixtures/sessions`, probe off, so no `resume`): the five desktop records (busy
 6358ec7e, idle 1f47e9b3, f8017fcd, 9d02a552, bed52539) → `app_link`; the synthetic busy `70001` record (no
-`hostSessionId`) → `running_without_app_link`; every transcript-only Claude → `not_known_finished`; every
+`hostSessionId`) → `running_without_app_link`; every transcript-only Claude → `not_known_finished`, except, since
+Phase 9, the 12 `transcript_exit` sessions (all `claude-desktop`, no app records in that root) → `app_session`, so
+the root still resumes nothing; every
 Codex → `codex_not_supported`; with `fork`, the desktop records → `fork_needs_finished`. Hook variant:
 d1f3b188 (`waiting`, `entrypoint: cli`, no `hostSessionId`) and 11c1f13c (`waiting` / `hook`) →
-`running_without_app_link`. `resume` and `no_transcript` are unit tests with `FakeProcessProbe`.
+`running_without_app_link` (Phase 9: 11c1f13c is `finished` / `transcript_exit` → `app_session`). `resume` and `no_transcript` are unit tests with `FakeProcessProbe`.
 
 ### Step 8.4b presentation amendment
 `title` comes from the last non-blank string `customTitle` in an own (`sessionId == id`), main-file
@@ -944,3 +1027,57 @@ preamble independently; JSON prompts stay unchanged. The placing-parent rule for
 The repo header adds `· latest hand-off step <id>` when the latest tagged hand-off differs from the latest
 logged step. Place words show the memoised current main branch (recorded branch as fallback) or
 `worktree <folder>` for a linked checkout. Place is display metadata excluded from JSON; `branch` stays recorded.
+
+## Phase 9 fixture results (`fixtures/sessions-phase9/`, Step 9.0)
+Synthetic root (W10: no real prompt, id or path), `--now 2026-11-09T12:00:00Z`, `--since all` unless noted. Every
+id's first two hex digits name the step whose rule it tests (`91…` = 9.1, …, `95…` = 9.5). Keys in
+`fixtures/expected/phase9/` are the **final** Phase 9 output; step 9.N compares the ids with prefixes `91`–`9N`
+(`fixtures/expected/phase9/check.sh <N>`), so a later step's cases never block an earlier step and an earlier
+step's cases are re-checked at every later one. The full keys (including `skipped: []`) hold from 9.4 on.
+
+**Compressed rollouts (R1).** Discovery takes `rollout-*.jsonl` and `rollout-*.jsonl.zst` under
+`.codex/sessions`. A `.zst` file is one or more zstd frames holding the same JSONL; it is decoded (pure-Rust
+`ruzstd`) and parsed by the same Codex parser. `transcript` is the path of the file read, so a `.zst` session's
+ends in `.jsonl.zst`. The same id in both forms → the plain file is read and the `.zst` ignored (no diagnostic).
+Decoded size is capped at 64 MiB (`.zst` only); over the cap or failing to decode → one `unreadable` entry
+(stderr `unreadable: N`), never an error exit and never a session. Cached by file key like plain reads.
+
+| Ids | Case | Expected |
+| --- | --- | --- |
+| `91000001` (repo-p9a) → `91c00001` | Claude hand-off `Step 1.1`, id in stdout; the Codex run exists only as `.zst` | link `exact` / `stdout` (already); session `91c00001` listed with the `.zst` path; `graph-1.1.json`: the part has its calls, turns and `status: done` |
+| `91c00002` (repo-p9b) | same id as plain `.jsonl` (two turns) and `.jsonl.zst` (first turn only) | one session, plain path, two turns' values; `unparented` |
+| `91c00003` | `.jsonl.zst` with a zstd magic number and no valid frame | no session; stderr `unreadable: 1`; exit 0 |
+| `92000001` | clean exit, `cli` | `finished` / `transcript_exit`; open and fork → `resume` |
+| `92000002` | clean exit, `claude-desktop`, one app record (`local_92f00002-…`) | `finished` / `transcript_exit`; open → `app_link`; fork → `app_session` |
+| `92000003` / `92000004` | clean exit, `claude-desktop`, no / two app records | `finished` / `transcript_exit`; `app_session` |
+| `92000005` / `92000006` | clean exit, `sdk-cli` / no `entrypoint` | `finished` / `transcript_exit`; `resume` / `unknown_entrypoint` |
+| `92000007` | a turn after the `cost-state` (resumed) | `unknown` / `no_signal`; `not_known_finished` |
+| `92000008` | `cost-state`, then the `/exit` echo (meta caveat, `<command-name>`, `<local-command-stdout>`) | `finished` / `transcript_exit` (echoes are not turns); `resume` |
+| `92000009` | SIGKILL: record kept (`busy`, `statusUpdatedAt` 05:30:30Z), no `cost-state` | fixture mode trusts the record: `stale` / `session_record`; `running_without_app_link`. `finished` / `process_exit` with `FakeProcessProbe::Gone` is a core test |
+| `92000010` | live record (`idle`) and a `cost-state` after the last turn | the record wins: `idle` / `session_record` |
+| `92000011` | uncleared hook `waiting` and a `cost-state` after the last turn | `finished` / `transcript_exit` (before hook `waiting`); `resume` |
+| `92000012` | uncleared hook `waiting`, no `cost-state` | `waiting` / `hook` (today's rule; `state_since` 06:02:00Z) |
+| `92000013` / `92000014` | after the `cost-state`, only a non-meta `user` prompt / only a `tool_result` record (no `assistant`) | `unknown` / `no_signal` (each counts as a turn); `not_known_finished` |
+| `93000001` (repo-r1) | `> /tmp/dev/p9/r1.log 2>&1`, log holds one id, rollout 5 s later | `exact` / `redirect_file` (today `heuristic`) |
+| `93000002` | log without an id, rollout present | `heuristic` |
+| `93000003` | `>>`, log holds an older id and this run's id | `heuristic` (two ids → no exact) |
+| `93000004` | `> /home/dev/elsewhere/r4.log` (outside cwd and temp; the file exists and holds an id) | `unlinked` (not read) |
+| `93000005` | `> "$S/r5.log"` | `unlinked` |
+| `93000006` | `cd sub && codex exec … > out.log` (both `out.log` files exist with an id) | `unlinked` (relative path after `cd`; heuristic off) |
+| `93000007` | two stdout redirects, both files hold an id | `unlinked` |
+| `93000008` | relative `> logs/r8.log`, no `cd` | `exact` / `redirect_file` |
+| `93000009` / `9300000a` / `9300000e` | `&>`, `>>` with one id, `1>`; no rollout on disk | `exact` / `redirect_file` (the file alone is the evidence) |
+| `9300000b` | log gone; hook records `child: null` then `redirect_file` | `exact` / `hook` |
+| `9300000c` | log gone, no hook record, rollout present | `heuristic` |
+| `9300000d` | background call (`run_in_background`), redirect log holds the id | `exact` / `redirect_file` |
+| `94000001` | `ended` (`prompt_input_exit`) after the last turn, and a `cost-state` | `finished` / `session_end` (before `transcript_exit`); `resume` |
+| `94000002` → `94000003` | `ended` (`clear`) on the old id; the new id has its own transcript and a live `idle` record | old `finished` / `session_end` (`resume`); new `idle` / `session_record` |
+| `94000004` | `ended`, then a turn 3 min later (resumed) | `unknown` / `no_signal` |
+| `94000006` | live record (`idle`) and an `ended` record | the record wins: `idle` / `session_record` |
+| `94000007` | `ended`, then a hook `waiting` record 1 min later; no `cost-state`, no later turn | the later hook record clears `ended`: `waiting` / `hook` (`state_since` 08:12:00Z); `running_without_app_link` |
+| `95c00001` (repo-p9l) | only incoming hand-off: `Step 2.1` from `95000001`, 5 h before now | `lanes.json`: `s` opens step 2.1 with the 2 h window |
+| `95c00002` | `Step 2.2` from same-repo `95000002` (6 h before), then `codex exec resume` with `Step 7.1` from `95000003` in repo-p9m (90 min before) | `s` opens 2.2 (same-repo rule beats the newer cross-repo parent) |
+| `95c00004` | untagged hand-off from `95000004` (inside the window) | footer `no step on this session` |
+
+`skipped` is `[]`: the five `ended` lines and the `redirect_file` hand-off line are valid from 9.4 / 9.3 on (until
+then each is one `unknown_type` entry).

@@ -1,0 +1,1794 @@
+{
+  "now": "2026-11-09T12:00:00.000Z",
+  "sessions": [
+    {
+      "id": "92000001-0000-4000-8000-000092000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000001-0000-4000-8000-000092000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T04:10:00.000Z",
+      "last_activity": "2026-11-09T04:10:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T04:10:00.000Z",
+          "to": "2026-11-09T04:10:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T04:10:00.000Z",
+          "to": "2026-11-09T04:10:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 1.",
+      "last_asked": "Synthetic exit case 1.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000002-0000-4000-8000-000092000002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000002-0000-4000-8000-000092000002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T04:20:00.000Z",
+      "last_activity": "2026-11-09T04:20:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T04:20:00.000Z",
+          "to": "2026-11-09T04:20:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T04:20:00.000Z",
+          "to": "2026-11-09T04:20:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 2.",
+      "last_asked": "Synthetic exit case 2.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000003-0000-4000-8000-000092000003",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000003-0000-4000-8000-000092000003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T04:30:00.000Z",
+      "last_activity": "2026-11-09T04:30:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T04:30:00.000Z",
+          "to": "2026-11-09T04:30:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T04:30:00.000Z",
+          "to": "2026-11-09T04:30:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 3.",
+      "last_asked": "Synthetic exit case 3.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000004-0000-4000-8000-000092000004",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000004-0000-4000-8000-000092000004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T04:40:00.000Z",
+      "last_activity": "2026-11-09T04:40:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T04:40:00.000Z",
+          "to": "2026-11-09T04:40:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T04:40:00.000Z",
+          "to": "2026-11-09T04:40:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 4.",
+      "last_asked": "Synthetic exit case 4.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000005-0000-4000-8000-000092000005",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000005-0000-4000-8000-000092000005.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T04:50:00.000Z",
+      "last_activity": "2026-11-09T04:50:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T04:50:00.000Z",
+          "to": "2026-11-09T04:50:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T04:50:00.000Z",
+          "to": "2026-11-09T04:50:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 5.",
+      "last_asked": "Synthetic exit case 5.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000006-0000-4000-8000-000092000006",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000006-0000-4000-8000-000092000006.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:00:00.000Z",
+      "last_activity": "2026-11-09T05:00:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T05:00:00.000Z",
+          "to": "2026-11-09T05:00:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:00:00.000Z",
+          "to": "2026-11-09T05:00:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 6.",
+      "last_asked": "Synthetic exit case 6.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000007-0000-4000-8000-000092000007",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000007-0000-4000-8000-000092000007.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:10:00.000Z",
+      "last_activity": "2026-11-09T05:13:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:10:00.000Z",
+          "to": "2026-11-09T05:13:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:10:00.000Z",
+          "to": "2026-11-09T05:13:20.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 7.",
+      "last_asked": "Synthetic resumed prompt.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000001-0000-4000-8000-000093000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r1/93000001-0000-4000-8000-000093000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r1",
+      "repo": "/home/dev/repo-r1",
+      "checkout": "/home/dev/repo-r1",
+      "branch": "main",
+      "started_at": "2026-11-09T05:10:00.000Z",
+      "last_activity": "2026-11-09T05:12:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:10:00.000Z",
+          "to": "2026-11-09T05:12:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:10:00.000Z",
+          "to": "2026-11-09T05:12:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 1.",
+      "last_asked": "Synthetic redirect case 1.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93c00001-0000-4000-8000-000093c00001",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T05-10-25-93c00001-0000-4000-8000-000093c00001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r1",
+      "repo": "/home/dev/repo-r1",
+      "checkout": "/home/dev/repo-r1",
+      "branch": null,
+      "started_at": "2026-11-09T05:10:25.000Z",
+      "last_activity": "2026-11-09T05:11:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T05:10:25.000Z",
+          "to": "2026-11-09T05:11:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:10:25.000Z",
+          "to": "2026-11-09T05:11:40.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 1.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 1.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T05:11:40.000Z"
+    },
+    {
+      "id": "92000008-0000-4000-8000-000092000008",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000008-0000-4000-8000-000092000008.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:20:00.000Z",
+      "last_activity": "2026-11-09T05:21:00.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T05:20:00.000Z",
+          "to": "2026-11-09T05:21:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:20:00.000Z",
+          "to": "2026-11-09T05:21:00.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 8.",
+      "last_asked": "Synthetic exit case 8.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000002-0000-4000-8000-000093000002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r2/93000002-0000-4000-8000-000093000002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r2",
+      "repo": "/home/dev/repo-r2",
+      "checkout": "/home/dev/repo-r2",
+      "branch": "main",
+      "started_at": "2026-11-09T05:20:00.000Z",
+      "last_activity": "2026-11-09T05:22:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:20:00.000Z",
+          "to": "2026-11-09T05:22:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:20:00.000Z",
+          "to": "2026-11-09T05:22:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 2.",
+      "last_asked": "Synthetic redirect case 2.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93c00002-0000-4000-8000-000093c00002",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T05-20-25-93c00002-0000-4000-8000-000093c00002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r2",
+      "repo": "/home/dev/repo-r2",
+      "checkout": "/home/dev/repo-r2",
+      "branch": null,
+      "started_at": "2026-11-09T05:20:25.000Z",
+      "last_activity": "2026-11-09T05:21:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T05:20:25.000Z",
+          "to": "2026-11-09T05:21:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:20:25.000Z",
+          "to": "2026-11-09T05:21:40.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 2.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 2.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T05:21:40.000Z"
+    },
+    {
+      "id": "92000009-0000-4000-8000-000092000009",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000009-0000-4000-8000-000092000009.jsonl",
+      "record": ".claude/sessions/92009.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:30:00.000Z",
+      "last_activity": "2026-11-09T05:30:30.000Z",
+      "state": "stale",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-09T05:30:00.000Z",
+          "to": "2026-11-09T05:30:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:30:00.000Z",
+          "to": "2026-11-09T05:30:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 9.",
+      "last_asked": "Synthetic exit case 9.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T05:30:30.000Z"
+    },
+    {
+      "id": "93000003-0000-4000-8000-000093000003",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r3/93000003-0000-4000-8000-000093000003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r3",
+      "repo": "/home/dev/repo-r3",
+      "checkout": "/home/dev/repo-r3",
+      "branch": "main",
+      "started_at": "2026-11-09T05:30:00.000Z",
+      "last_activity": "2026-11-09T05:32:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:30:00.000Z",
+          "to": "2026-11-09T05:32:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:30:00.000Z",
+          "to": "2026-11-09T05:32:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 3.",
+      "last_asked": "Synthetic redirect case 3.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93c00003-0000-4000-8000-000093c00003",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T05-30-25-93c00003-0000-4000-8000-000093c00003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r3",
+      "repo": "/home/dev/repo-r3",
+      "checkout": "/home/dev/repo-r3",
+      "branch": null,
+      "started_at": "2026-11-09T05:30:25.000Z",
+      "last_activity": "2026-11-09T05:31:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T05:30:25.000Z",
+          "to": "2026-11-09T05:31:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:30:25.000Z",
+          "to": "2026-11-09T05:31:40.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 3.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 3.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T05:31:40.000Z"
+    },
+    {
+      "id": "92000010-0000-4000-8000-00009200000a",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000010-0000-4000-8000-00009200000a.jsonl",
+      "record": ".claude/sessions/92010.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:40:00.000Z",
+      "last_activity": "2026-11-09T05:40:30.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-09T05:40:00.000Z",
+          "to": "2026-11-09T05:40:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:40:00.000Z",
+          "to": "2026-11-09T05:40:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 10.",
+      "last_asked": "Synthetic exit case 10.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000004-0000-4000-8000-000093000004",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r4/93000004-0000-4000-8000-000093000004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r4",
+      "repo": "/home/dev/repo-r4",
+      "checkout": "/home/dev/repo-r4",
+      "branch": "main",
+      "started_at": "2026-11-09T05:40:00.000Z",
+      "last_activity": "2026-11-09T05:42:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:40:00.000Z",
+          "to": "2026-11-09T05:42:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:40:00.000Z",
+          "to": "2026-11-09T05:42:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 4.",
+      "last_asked": "Synthetic redirect case 4.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000011-0000-4000-8000-00009200000b",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000011-0000-4000-8000-00009200000b.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T05:50:00.000Z",
+      "last_activity": "2026-11-09T05:50:30.000Z",
+      "state": "finished",
+      "state_evidence": "transcript_exit",
+      "segments": [
+        {
+          "from": "2026-11-09T05:50:00.000Z",
+          "to": "2026-11-09T05:50:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:50:00.000Z",
+          "to": "2026-11-09T05:50:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 11.",
+      "last_asked": "Synthetic exit case 11.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000005-0000-4000-8000-000093000005",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r5/93000005-0000-4000-8000-000093000005.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r5",
+      "repo": "/home/dev/repo-r5",
+      "checkout": "/home/dev/repo-r5",
+      "branch": "main",
+      "started_at": "2026-11-09T05:50:00.000Z",
+      "last_activity": "2026-11-09T05:52:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T05:50:00.000Z",
+          "to": "2026-11-09T05:52:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T05:50:00.000Z",
+          "to": "2026-11-09T05:52:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 5.",
+      "last_asked": "Synthetic redirect case 5.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000012-0000-4000-8000-00009200000c",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000012-0000-4000-8000-00009200000c.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T06:00:00.000Z",
+      "last_activity": "2026-11-09T06:00:30.000Z",
+      "state": "waiting",
+      "state_evidence": "hook",
+      "segments": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:00:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:00:30.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 12.",
+      "last_asked": "Synthetic exit case 12.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T06:02:00.000Z"
+    },
+    {
+      "id": "93000006-0000-4000-8000-000093000006",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r6/93000006-0000-4000-8000-000093000006.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r6",
+      "repo": "/home/dev/repo-r6",
+      "checkout": "/home/dev/repo-r6",
+      "branch": "main",
+      "started_at": "2026-11-09T06:00:00.000Z",
+      "last_activity": "2026-11-09T06:02:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:02:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:02:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 6.",
+      "last_asked": "Synthetic redirect case 6.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "95000002-0000-4000-8000-000095000002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9l/95000002-0000-4000-8000-000095000002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": "main",
+      "started_at": "2026-11-09T06:00:00.000Z",
+      "last_activity": "2026-11-09T06:01:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:01:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:00:00.000Z",
+          "to": "2026-11-09T06:01:30.000Z"
+        }
+      ],
+      "asked": "Synthetic lane parent 2.",
+      "last_asked": "Synthetic lane parent 2.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "95c00002-0000-4000-8000-000095c00002",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T06-00-35-95c00002-0000-4000-8000-000095c00002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": null,
+      "started_at": "2026-11-09T06:00:35.000Z",
+      "last_activity": "2026-11-09T10:31:20.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T06:00:35.000Z",
+          "to": "2026-11-09T10:31:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:00:35.000Z",
+          "to": "2026-11-09T06:01:06.000Z"
+        },
+        {
+          "from": "2026-11-09T10:30:35.000Z",
+          "to": "2026-11-09T10:31:20.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.2 in PLAN.md. Synthetic export.",
+      "last_asked": "Read AGENTS.md, then do Step 7.1 in PLAN.md. Synthetic other repo.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T10:31:20.000Z"
+    },
+    {
+      "id": "92000013-0000-4000-8000-00009200000d",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000013-0000-4000-8000-00009200000d.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T06:10:00.000Z",
+      "last_activity": "2026-11-09T06:13:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:10:00.000Z",
+          "to": "2026-11-09T06:13:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:10:00.000Z",
+          "to": "2026-11-09T06:13:00.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 13.",
+      "last_asked": "Synthetic resumed prompt, no reply yet.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000007-0000-4000-8000-000093000007",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r7/93000007-0000-4000-8000-000093000007.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r7",
+      "repo": "/home/dev/repo-r7",
+      "checkout": "/home/dev/repo-r7",
+      "branch": "main",
+      "started_at": "2026-11-09T06:10:00.000Z",
+      "last_activity": "2026-11-09T06:12:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:10:00.000Z",
+          "to": "2026-11-09T06:12:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:10:00.000Z",
+          "to": "2026-11-09T06:12:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 7.",
+      "last_asked": "Synthetic redirect case 7.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "92000014-0000-4000-8000-00009200000e",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9c/92000014-0000-4000-8000-00009200000e.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9c",
+      "repo": "/home/dev/repo-p9c",
+      "checkout": "/home/dev/repo-p9c",
+      "branch": "main",
+      "started_at": "2026-11-09T06:20:00.000Z",
+      "last_activity": "2026-11-09T06:23:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:20:00.000Z",
+          "to": "2026-11-09T06:23:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:20:00.000Z",
+          "to": "2026-11-09T06:23:00.000Z"
+        }
+      ],
+      "asked": "Synthetic exit case 14.",
+      "last_asked": "Synthetic exit case 14.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93000008-0000-4000-8000-000093000008",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r8/93000008-0000-4000-8000-000093000008.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r8",
+      "repo": "/home/dev/repo-r8",
+      "checkout": "/home/dev/repo-r8",
+      "branch": "main",
+      "started_at": "2026-11-09T06:20:00.000Z",
+      "last_activity": "2026-11-09T06:22:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:20:00.000Z",
+          "to": "2026-11-09T06:22:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:20:00.000Z",
+          "to": "2026-11-09T06:22:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 8.",
+      "last_asked": "Synthetic redirect case 8.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93c00008-0000-4000-8000-000093c00008",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T06-20-25-93c00008-0000-4000-8000-000093c00008.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r8",
+      "repo": "/home/dev/repo-r8",
+      "checkout": "/home/dev/repo-r8",
+      "branch": null,
+      "started_at": "2026-11-09T06:20:25.000Z",
+      "last_activity": "2026-11-09T06:21:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T06:20:25.000Z",
+          "to": "2026-11-09T06:21:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:20:25.000Z",
+          "to": "2026-11-09T06:21:40.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 8.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 8.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T06:21:40.000Z"
+    },
+    {
+      "id": "93000009-0000-4000-8000-000093000009",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r9/93000009-0000-4000-8000-000093000009.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r9",
+      "repo": "/home/dev/repo-r9",
+      "checkout": "/home/dev/repo-r9",
+      "branch": "main",
+      "started_at": "2026-11-09T06:30:00.000Z",
+      "last_activity": "2026-11-09T06:32:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:30:00.000Z",
+          "to": "2026-11-09T06:32:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:30:00.000Z",
+          "to": "2026-11-09T06:32:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 9.",
+      "last_asked": "Synthetic redirect case 9.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "9300000a-0000-4000-8000-00009300000a",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r10/9300000a-0000-4000-8000-00009300000a.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r10",
+      "repo": "/home/dev/repo-r10",
+      "checkout": "/home/dev/repo-r10",
+      "branch": "main",
+      "started_at": "2026-11-09T06:40:00.000Z",
+      "last_activity": "2026-11-09T06:42:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:40:00.000Z",
+          "to": "2026-11-09T06:42:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:40:00.000Z",
+          "to": "2026-11-09T06:42:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 10.",
+      "last_asked": "Synthetic redirect case 10.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "9300000b-0000-4000-8000-00009300000b",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r11/9300000b-0000-4000-8000-00009300000b.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r11",
+      "repo": "/home/dev/repo-r11",
+      "checkout": "/home/dev/repo-r11",
+      "branch": "main",
+      "started_at": "2026-11-09T06:50:00.000Z",
+      "last_activity": "2026-11-09T06:52:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T06:50:00.000Z",
+          "to": "2026-11-09T06:52:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T06:50:00.000Z",
+          "to": "2026-11-09T06:52:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 11.",
+      "last_asked": "Synthetic redirect case 11.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "9300000c-0000-4000-8000-00009300000c",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r12/9300000c-0000-4000-8000-00009300000c.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r12",
+      "repo": "/home/dev/repo-r12",
+      "checkout": "/home/dev/repo-r12",
+      "branch": "main",
+      "started_at": "2026-11-09T07:00:00.000Z",
+      "last_activity": "2026-11-09T07:02:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T07:00:00.000Z",
+          "to": "2026-11-09T07:02:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:00:00.000Z",
+          "to": "2026-11-09T07:02:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 12.",
+      "last_asked": "Synthetic redirect case 12.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "95000001-0000-4000-8000-000095000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9l/95000001-0000-4000-8000-000095000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": "main",
+      "started_at": "2026-11-09T07:00:00.000Z",
+      "last_activity": "2026-11-09T07:01:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T07:00:00.000Z",
+          "to": "2026-11-09T07:01:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:00:00.000Z",
+          "to": "2026-11-09T07:01:30.000Z"
+        }
+      ],
+      "asked": "Synthetic lane parent 1.",
+      "last_asked": "Synthetic lane parent 1.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "93c0000c-0000-4000-8000-000093c0000c",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T07-00-25-93c0000c-0000-4000-8000-000093c0000c.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r12",
+      "repo": "/home/dev/repo-r12",
+      "checkout": "/home/dev/repo-r12",
+      "branch": null,
+      "started_at": "2026-11-09T07:00:25.000Z",
+      "last_activity": "2026-11-09T07:01:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T07:00:25.000Z",
+          "to": "2026-11-09T07:01:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:00:25.000Z",
+          "to": "2026-11-09T07:01:40.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 12.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 12.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T07:01:40.000Z"
+    },
+    {
+      "id": "95c00001-0000-4000-8000-000095c00001",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T07-00-35-95c00001-0000-4000-8000-000095c00001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": null,
+      "started_at": "2026-11-09T07:00:35.000Z",
+      "last_activity": "2026-11-09T11:30:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T07:00:35.000Z",
+          "to": "2026-11-09T11:30:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:00:35.000Z",
+          "to": "2026-11-09T07:01:06.000Z"
+        },
+        {
+          "from": "2026-11-09T11:20:00.000Z",
+          "to": "2026-11-09T11:20:31.000Z"
+        },
+        {
+          "from": "2026-11-09T11:30:00.000Z",
+          "to": "2026-11-09T11:30:00.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic import.",
+      "last_asked": "Synthetic follow-up turn.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T11:30:00.000Z"
+    },
+    {
+      "id": "9300000d-0000-4000-8000-00009300000d",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r13/9300000d-0000-4000-8000-00009300000d.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r13",
+      "repo": "/home/dev/repo-r13",
+      "checkout": "/home/dev/repo-r13",
+      "branch": "main",
+      "started_at": "2026-11-09T07:10:00.000Z",
+      "last_activity": "2026-11-09T07:12:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T07:10:00.000Z",
+          "to": "2026-11-09T07:12:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:10:00.000Z",
+          "to": "2026-11-09T07:12:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 13.",
+      "last_asked": "Synthetic redirect case 13.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000001-0000-4000-8000-000094000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000001-0000-4000-8000-000094000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T07:10:00.000Z",
+      "last_activity": "2026-11-09T07:10:30.000Z",
+      "state": "finished",
+      "state_evidence": "session_end",
+      "segments": [
+        {
+          "from": "2026-11-09T07:10:00.000Z",
+          "to": "2026-11-09T07:10:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:10:00.000Z",
+          "to": "2026-11-09T07:10:30.000Z"
+        }
+      ],
+      "asked": "Synthetic session end case 1.",
+      "last_asked": "Synthetic session end case 1.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "9300000e-0000-4000-8000-00009300000e",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-r14/9300000e-0000-4000-8000-00009300000e.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-r14",
+      "repo": "/home/dev/repo-r14",
+      "checkout": "/home/dev/repo-r14",
+      "branch": "main",
+      "started_at": "2026-11-09T07:20:00.000Z",
+      "last_activity": "2026-11-09T07:22:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T07:20:00.000Z",
+          "to": "2026-11-09T07:22:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:20:00.000Z",
+          "to": "2026-11-09T07:22:20.000Z"
+        }
+      ],
+      "asked": "Synthetic redirect case 14.",
+      "last_asked": "Synthetic redirect case 14.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000002-0000-4000-8000-000094000002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000002-0000-4000-8000-000094000002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T07:20:00.000Z",
+      "last_activity": "2026-11-09T07:20:30.000Z",
+      "state": "finished",
+      "state_evidence": "session_end",
+      "segments": [
+        {
+          "from": "2026-11-09T07:20:00.000Z",
+          "to": "2026-11-09T07:20:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:20:00.000Z",
+          "to": "2026-11-09T07:20:30.000Z"
+        }
+      ],
+      "asked": "Synthetic session end case 2.",
+      "last_asked": "Synthetic session end case 2.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000003-0000-4000-8000-000094000003",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000003-0000-4000-8000-000094000003.jsonl",
+      "record": ".claude/sessions/94003.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T07:21:05.000Z",
+      "last_activity": "2026-11-09T07:21:30.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-09T07:21:05.000Z",
+          "to": "2026-11-09T07:21:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:21:05.000Z",
+          "to": "2026-11-09T07:21:30.000Z"
+        }
+      ],
+      "asked": "Synthetic prompt after clear.",
+      "last_asked": "Synthetic prompt after clear.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000004-0000-4000-8000-000094000004",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000004-0000-4000-8000-000094000004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T07:40:00.000Z",
+      "last_activity": "2026-11-09T07:44:20.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T07:40:00.000Z",
+          "to": "2026-11-09T07:44:20.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T07:40:00.000Z",
+          "to": "2026-11-09T07:44:20.000Z"
+        }
+      ],
+      "asked": "Synthetic session end case 4.",
+      "last_asked": "Synthetic resumed prompt.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000006-0000-4000-8000-000094000006",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000006-0000-4000-8000-000094000006.jsonl",
+      "record": ".claude/sessions/94006.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T08:00:00.000Z",
+      "last_activity": "2026-11-09T08:00:30.000Z",
+      "state": "idle",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-09T08:00:00.000Z",
+          "to": "2026-11-09T08:00:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T08:00:00.000Z",
+          "to": "2026-11-09T08:00:30.000Z"
+        }
+      ],
+      "asked": "Synthetic session end case 6.",
+      "last_asked": "Synthetic session end case 6.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "94000007-0000-4000-8000-000094000007",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9e/94000007-0000-4000-8000-000094000007.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9e",
+      "repo": "/home/dev/repo-p9e",
+      "checkout": "/home/dev/repo-p9e",
+      "branch": "main",
+      "started_at": "2026-11-09T08:10:00.000Z",
+      "last_activity": "2026-11-09T08:10:30.000Z",
+      "state": "waiting",
+      "state_evidence": "hook",
+      "segments": [
+        {
+          "from": "2026-11-09T08:10:00.000Z",
+          "to": "2026-11-09T08:10:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T08:10:00.000Z",
+          "to": "2026-11-09T08:10:30.000Z"
+        }
+      ],
+      "asked": "Synthetic session end case 7.",
+      "last_asked": "Synthetic session end case 7.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T08:12:00.000Z"
+    },
+    {
+      "id": "91000001-0000-4000-8000-000091000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9a/91000001-0000-4000-8000-000091000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9a",
+      "repo": "/home/dev/repo-p9a",
+      "checkout": "/home/dev/repo-p9a",
+      "branch": "main",
+      "started_at": "2026-11-09T09:00:00.000Z",
+      "last_activity": "2026-11-09T09:13:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T09:00:00.000Z",
+          "to": "2026-11-09T09:13:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T09:00:00.000Z",
+          "to": "2026-11-09T09:00:40.000Z"
+        },
+        {
+          "from": "2026-11-09T09:12:00.000Z",
+          "to": "2026-11-09T09:13:00.000Z"
+        }
+      ],
+      "asked": "Coordinate the synthetic parser step.",
+      "last_asked": "Coordinate the synthetic parser step.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "91c00001-0000-4000-8000-000091c00001",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T09-00-45-91c00001-0000-4000-8000-000091c00001.jsonl.zst",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9a",
+      "repo": "/home/dev/repo-p9a",
+      "checkout": "/home/dev/repo-p9a",
+      "branch": null,
+      "started_at": "2026-11-09T09:00:45.000Z",
+      "last_activity": "2026-11-09T09:11:50.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T09:00:45.000Z",
+          "to": "2026-11-09T09:11:50.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T09:00:45.000Z",
+          "to": "2026-11-09T09:02:16.000Z"
+        },
+        {
+          "from": "2026-11-09T09:11:50.000Z",
+          "to": "2026-11-09T09:11:50.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Fix the synthetic parser.",
+      "last_asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Fix the synthetic parser.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T09:11:50.000Z"
+    },
+    {
+      "id": "91c00002-0000-4000-8000-000091c00002",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T09-30-00-91c00002-0000-4000-8000-000091c00002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9b",
+      "repo": "/home/dev/repo-p9b",
+      "checkout": "/home/dev/repo-p9b",
+      "branch": null,
+      "started_at": "2026-11-09T09:30:00.000Z",
+      "last_activity": "2026-11-09T09:55:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T09:30:00.000Z",
+          "to": "2026-11-09T09:55:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T09:30:00.000Z",
+          "to": "2026-11-09T09:35:00.000Z"
+        },
+        {
+          "from": "2026-11-09T09:50:00.000Z",
+          "to": "2026-11-09T09:55:00.000Z"
+        }
+      ],
+      "asked": "Synthetic duplicate rollout, first turn.",
+      "last_asked": "Synthetic duplicate rollout, second turn.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T09:55:00.000Z"
+    },
+    {
+      "id": "95000003-0000-4000-8000-000095000003",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9m/95000003-0000-4000-8000-000095000003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9m",
+      "repo": "/home/dev/repo-p9m",
+      "checkout": "/home/dev/repo-p9m",
+      "branch": "main",
+      "started_at": "2026-11-09T10:30:00.000Z",
+      "last_activity": "2026-11-09T10:32:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T10:30:00.000Z",
+          "to": "2026-11-09T10:32:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T10:30:00.000Z",
+          "to": "2026-11-09T10:32:30.000Z"
+        }
+      ],
+      "asked": "Synthetic lane parent 3.",
+      "last_asked": "Synthetic lane parent 3.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "95000004-0000-4000-8000-000095000004",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9l/95000004-0000-4000-8000-000095000004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": "main",
+      "started_at": "2026-11-09T11:00:00.000Z",
+      "last_activity": "2026-11-09T11:01:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T11:00:00.000Z",
+          "to": "2026-11-09T11:01:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T11:00:00.000Z",
+          "to": "2026-11-09T11:01:30.000Z"
+        }
+      ],
+      "asked": "Synthetic lane parent 4.",
+      "last_asked": "Synthetic lane parent 4.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "95c00004-0000-4000-8000-000095c00004",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T11-00-35-95c00004-0000-4000-8000-000095c00004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9l",
+      "repo": "/home/dev/repo-p9l",
+      "checkout": "/home/dev/repo-p9l",
+      "branch": null,
+      "started_at": "2026-11-09T11:00:35.000Z",
+      "last_activity": "2026-11-09T11:01:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T11:00:35.000Z",
+          "to": "2026-11-09T11:01:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T11:00:35.000Z",
+          "to": "2026-11-09T11:01:06.000Z"
+        }
+      ],
+      "asked": "Tidy the synthetic README wording.",
+      "last_asked": "Tidy the synthetic README wording.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T11:01:00.000Z"
+    }
+  ],
+  "skipped": []
+}
