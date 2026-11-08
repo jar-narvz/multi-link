@@ -96,6 +96,172 @@ fn rendered_styles(buf: &Buffer, rows: RangeInclusive<usize>) -> String {
 }
 
 #[test]
+fn phase8_render_equals_golden() {
+    let buf = render(&report("1.1"), &golden_options(), 120, 40);
+    assert_eq!(
+        text(&buf),
+        include_str!("../../../fixtures/expected/tui/step-phase8.txt")
+    );
+    assert_eq!(
+        support::dump_styles(&buf),
+        include_str!("../../../fixtures/expected/tui/step-phase8.styles.txt")
+    );
+}
+
+#[test]
+fn strip_widths() {
+    let options = golden_options();
+    let buf = render(&report("1.1"), &options, 120, 40);
+    for (first, last, label, background, foreground) in [
+        (
+            23,
+            30,
+            "plan",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+        (
+            32,
+            63,
+            "implement",
+            options.theme.graph_selected,
+            options.theme.codex,
+        ),
+        (
+            65,
+            77,
+            "review",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+        (
+            79,
+            88,
+            "fix",
+            options.theme.codex_strip,
+            options.theme.codex,
+        ),
+        (
+            90,
+            116,
+            "verify + commit",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+    ] {
+        for x in first..=last {
+            assert_eq!(buf[(x, 33)].bg, background, "strip fill at {x}");
+        }
+        assert_eq!(buf[(first - 1, 33)].bg, options.theme.screen);
+        assert_eq!(buf[(last + 1, 33)].bg, options.theme.screen);
+        assert_eq!(buf[(first - 1, 33)].symbol(), " ");
+        assert_eq!(buf[(last + 1, 33)].symbol(), " ");
+        assert_colored_text(&buf, first + 1, 33, label, foreground);
+    }
+    assert_eq!(rendered_rows(&buf, 33..=34), golden_rows(33..=34));
+    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+}
+
+#[test]
+fn strip_with_a_one_second_part() {
+    let mut report = report("1.1");
+    report.parts[0].to =
+        Some(Timestamp::from_epoch_ms(report.parts[0].from.unwrap().epoch_ms() + 1_000).unwrap());
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    // With 90 filled cells, the label minima use 47 and duration shares use 43.
+    // The one-second plan receives no extra cell: its width is exactly 4 + 2.
+    for (first, last, label, background, foreground) in [
+        (
+            23,
+            28,
+            "plan",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+        (
+            30,
+            62,
+            "implement",
+            options.theme.graph_selected,
+            options.theme.codex,
+        ),
+        (
+            64,
+            77,
+            "review",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+        (
+            79,
+            88,
+            "fix",
+            options.theme.codex_strip,
+            options.theme.codex,
+        ),
+        (
+            90,
+            116,
+            "verify + commit",
+            options.theme.claude_strip,
+            options.theme.claude,
+        ),
+    ] {
+        for x in first..=last {
+            assert_eq!(buf[(x, 33)].bg, background, "strip fill at {x}");
+        }
+        assert_eq!(buf[(first - 1, 33)].bg, options.theme.screen);
+        assert_eq!(buf[(last + 1, 33)].bg, options.theme.screen);
+        assert_colored_text(&buf, first + 1, 33, label, foreground);
+    }
+    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+}
+
+#[test]
+fn strip_without_room_for_labels() {
+    let mut report = report("1.1");
+    report.parts = report.parts.iter().cloned().cycle().take(40).collect();
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    let mut x = 23;
+    let mut widths = Vec::new();
+    for (index, part) in report.parts.iter().enumerate() {
+        let background = if index == options.selected {
+            options.theme.graph_selected
+        } else if part.harness == report.parts[0].harness {
+            options.theme.claude_strip
+        } else {
+            options.theme.codex_strip
+        };
+        let first = x;
+        while x <= 116 && buf[(x, 33)].bg == background {
+            assert_eq!(buf[(x, 33)].symbol(), " ", "no label at {x}");
+            x += 1;
+        }
+        assert!(x > first, "part {index} must receive at least one cell");
+        widths.push(x - first);
+        assert_eq!(
+            buf[(x, 33)].bg,
+            options.theme.screen,
+            "gap after part {index}"
+        );
+        assert_eq!(buf[(x, 33)].symbol(), " ");
+        if index < 39 {
+            x += 1;
+        }
+    }
+    assert_eq!(widths.len(), 40);
+    assert_eq!(widths.iter().sum::<u16>(), 55);
+    assert_eq!(x, 117, "strip must end at column 116");
+    assert_eq!(buf[(22, 33)].bg, options.theme.screen);
+    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+}
+
+#[test]
 fn header_footer_and_legend_match_golden() {
     let buf = render(&report("1.1"), &golden_options(), 120, 40);
     for rows in [0..=3, 36..=39] {
