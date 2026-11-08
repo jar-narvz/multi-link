@@ -1529,3 +1529,429 @@ fn no_interval_handoff_after_run_ended_starts_at_handoff() {
     assert_eq!(report.parts[2].edge_in, back("2026-11-06T12:01:00Z"));
     assert_eq!(report.parts[4].edge_in, None);
 }
+
+// ---- Task 5: calls in parts (G6) ----
+
+/// `(reads, edits, runs)` of a part.
+fn counts(part: &Part) -> (usize, usize, usize) {
+    (part.counts.reads, part.counts.edits, part.counts.runs)
+}
+
+/// `(label, ok)` of a part's notable calls.
+fn notables(part: &Part) -> Vec<(String, Option<bool>)> {
+    part.notable
+        .iter()
+        .map(|n| (n.label.clone(), n.ok))
+        .collect()
+}
+
+fn n(label: &str, ok: Option<bool>) -> (String, Option<bool>) {
+    (label.to_string(), ok)
+}
+
+/// `p1` (burst 10:00–10:10) hands 1.1 to `c1` at 10:01 (run 10:01:01–10:03)
+/// and resumes it at 10:05 (run 10:05:01–10:06). Parts: plan [10:00, 10:01],
+/// implement, review [10:03, 10:05], fix round 1, review [10:06, 10:10].
+fn calls_world() -> World {
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:10:00Z")],
+    ));
+    w.sessions.push(codex_session(
+        "c1",
+        &[("2026-11-06T10:01:01Z", "2026-11-06T10:06:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.1"),
+        "2026-11-06T10:01:00Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.1"),
+        "2026-11-06T10:05:00Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.rollout(
+        "c1",
+        vec![
+            done_turn("2026-11-06T10:01:01Z", "2026-11-06T10:03:00Z", "go", "ok"),
+            done_turn("2026-11-06T10:05:01Z", "2026-11-06T10:06:00Z", "fix", "ok"),
+        ],
+    );
+    w
+}
+
+/// Add an owned call of `p1`.
+fn p1_call(w: &mut World, c: Call) {
+    w.claude_calls.get_mut("p1").unwrap().push(c);
+}
+
+#[test]
+fn handoff_counts_for_the_part_it_ends_not_counted() {
+    let report = calls_world().build("/repo", "1.1");
+    assert_eq!(report.parts.len(), 5);
+    let plan = &report.parts[0];
+    // h1 at plan's `to` ends plan; h2 at review's `to` ends review.
+    assert_eq!(notables(plan), vec![n("▸ codex exec · step 1.1", None)]);
+    assert_eq!(counts(plan), (0, 0, 0));
+    assert_eq!(
+        notables(&report.parts[2]),
+        vec![n("▸ codex exec · continue 1.1", None)]
+    );
+    assert_eq!(counts(&report.parts[2]), (0, 0, 0));
+    for i in [1, 3, 4] {
+        assert_eq!(notables(&report.parts[i]), vec![], "part {i}");
+    }
+    for part in &report.parts {
+        assert_eq!((part.waiting_reads, part.untagged_handoffs), (0, 0));
+    }
+}
+
+#[test]
+fn call_at_exact_bounds() {
+    let mut w = calls_world();
+    // Claude: `from ≤ at ≤ to` for calls.
+    for (id, at) in [
+        ("r1", "2026-11-06T10:00:00Z"), // plan.from
+        ("r2", "2026-11-06T10:01:00Z"), // plan.to (same instant as h1)
+        ("r3", "2026-11-06T10:03:00Z"), // review.from
+        ("r4", "2026-11-06T10:05:00Z"), // review.to
+        ("r5", "2026-11-06T10:06:00Z"), // last part's from
+        ("r6", "2026-11-06T10:10:00Z"), // last part's to = chain end
+        ("r7", "2026-11-06T10:10:01Z"), // after the chain: nowhere
+    ] {
+        p1_call(&mut w, call(id, at, CallKind::Read, None, None));
+    }
+    // Codex: within a turn, `start ≤ at ≤ end`.
+    let codex_calls = vec![
+        call("x1", "2026-11-06T10:01:01Z", CallKind::Edit, None, None),
+        call("x2", "2026-11-06T10:03:00Z", CallKind::Run, None, None),
+        call("x3", "2026-11-06T10:04:00Z", CallKind::Run, None, None), // between turns
+        call("x4", "2026-11-06T10:05:01Z", CallKind::Read, None, None),
+        call("x5", "2026-11-06T10:06:00Z", CallKind::Edit, None, None),
+        call("x6", "2026-11-06T10:06:01Z", CallKind::Edit, None, None), // after the run
+    ];
+    w.codex.get_mut("c1").unwrap().calls = codex_calls;
+    let report = w.build("/repo", "1.1");
+    let c: Vec<_> = report.parts.iter().map(counts).collect();
+    assert_eq!(
+        c,
+        vec![(2, 0, 0), (0, 1, 1), (2, 0, 0), (1, 1, 0), (2, 0, 0)]
+    );
+    // No read was outside every part inside the chain.
+    assert!(report.parts.iter().all(|p| p.waiting_reads == 0));
+
+    // A hand-off exactly at a part's `from` belongs to the part it ends.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:10:00Z")],
+    ));
+    for (id, at) in [
+        ("u1", "2026-11-06T10:02:00Z"),
+        ("u2", "2026-11-06T10:04:00Z"),
+    ] {
+        w.hand_off("p1", id, Some("1.1"), at, Match::Unlinked, None);
+    }
+    let report = w.build("/repo", "1.1");
+    assert_eq!(report.parts.len(), 5);
+    assert_eq!(
+        notables(&report.parts[0]),
+        vec![n("▸ codex exec · step 1.1", None)]
+    );
+    assert_eq!(
+        notables(&report.parts[2]),
+        vec![n("▸ codex exec · continue 1.1", None)]
+    );
+    assert_eq!(notables(&report.parts[4]), vec![]);
+}
+
+#[test]
+fn merge_keeps_latest_position_and_ok() {
+    let mut w = calls_world();
+    for (id, at, kind, label, ok) in [
+        (
+            "a",
+            "2026-11-06T10:07:00Z",
+            CallKind::Run,
+            "$ cargo test",
+            Some(false),
+        ),
+        (
+            "b",
+            "2026-11-06T10:08:00Z",
+            CallKind::Edit,
+            "edit a.rs",
+            Some(true),
+        ),
+        (
+            "c",
+            "2026-11-06T10:09:00Z",
+            CallKind::Run,
+            "$ cargo test",
+            Some(true),
+        ),
+    ] {
+        p1_call(&mut w, call(id, at, kind, Some(label), ok));
+    }
+    let report = w.build("/repo", "1.1");
+    let last = report.parts.last().unwrap();
+    assert_eq!(
+        notables(last),
+        vec![n("edit a.rs", Some(true)), n("$ cargo test", Some(true))]
+    );
+    assert_eq!(counts(last), (0, 1, 2));
+}
+
+#[test]
+fn keeps_last_three() {
+    let mut w = calls_world();
+    for (i, label) in [
+        "$ git diff",
+        "edit a.rs",
+        "$ cargo build",
+        "$ pytest",
+        "$ npm test",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let at = format!("2026-11-06T10:07:0{i}Z");
+        p1_call(
+            &mut w,
+            call(
+                &format!("k{i}"),
+                &at,
+                CallKind::Run,
+                Some(label),
+                Some(true),
+            ),
+        );
+    }
+    // Unlabelled calls count but are never notable.
+    p1_call(
+        &mut w,
+        call("z", "2026-11-06T10:09:00Z", CallKind::Run, None, Some(true)),
+    );
+    // Calls arrive out of time order; notable is newest last.
+    w.claude_calls.get_mut("p1").unwrap().reverse();
+    let report = w.build("/repo", "1.1");
+    let last = report.parts.last().unwrap();
+    assert_eq!(
+        notables(last),
+        vec![
+            n("$ cargo build", Some(true)),
+            n("$ pytest", Some(true)),
+            n("$ npm test", Some(true)),
+        ]
+    );
+    assert_eq!(counts(last), (0, 0, 6));
+}
+
+#[test]
+fn reads_during_run_are_waiting_reads() {
+    let mut w = calls_world();
+    for (id, at, kind) in [
+        ("w1", "2026-11-06T10:02:00Z", CallKind::Read), // during run 1
+        ("w2", "2026-11-06T10:02:30Z", CallKind::Read),
+        ("w3", "2026-11-06T10:02:40Z", CallKind::Run), // dropped
+        ("w4", "2026-11-06T10:02:50Z", CallKind::Edit), // dropped
+        ("w5", "2026-11-06T10:05:30Z", CallKind::Read), // during run 2
+        ("w6", "2026-11-06T10:11:00Z", CallKind::Read), // after the chain
+    ] {
+        p1_call(&mut w, call(id, at, kind, Some("$ git diff"), Some(true)));
+    }
+    let report = w.build("/repo", "1.1");
+    let waiting: Vec<_> = report.parts.iter().map(|p| p.waiting_reads).collect();
+    assert_eq!(waiting, vec![2, 0, 1, 0, 0]);
+    // Calls in no part are not counted and not notable.
+    for part in &report.parts {
+        assert!(
+            !part.notable.iter().any(|x| x.label == "$ git diff"),
+            "{}",
+            part.kind
+        );
+    }
+    assert!(report.parts.iter().all(|p| counts(p) == (0, 0, 0)));
+
+    // The last run outlasts the chain (no last part): reads up to its end
+    // are still inside the chain.
+    let mut w = calls_world();
+    w.rollout(
+        "c1",
+        vec![
+            done_turn("2026-11-06T10:01:01Z", "2026-11-06T10:03:00Z", "go", "ok"),
+            turn(
+                "2026-11-06T10:05:01Z",
+                None,
+                "2026-11-06T10:12:00Z",
+                Some("fix"),
+            ),
+        ],
+    );
+    for (id, at) in [
+        ("v1", "2026-11-06T10:11:00Z"),
+        ("v2", "2026-11-06T10:12:01Z"),
+    ] {
+        p1_call(&mut w, call(id, at, CallKind::Read, None, None));
+    }
+    let report = w.build("/repo", "1.1");
+    assert_eq!(report.parts.len(), 4);
+    assert_eq!(report.parts[2].waiting_reads, 1);
+}
+
+#[test]
+fn handoff_during_run_is_notable_of_previous_claude_part() {
+    // 1.5 shape: the second hand-off is made while the first run is going.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T17:50:00Z", "2026-11-06T17:50:30Z")],
+    ));
+    for c in ["c1", "c2"] {
+        w.sessions.push(codex_session(
+            c,
+            &[("2026-11-06T17:50:21Z", "2026-11-06T17:58:30Z")],
+        ));
+    }
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.5"),
+        "2026-11-06T17:50:20Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.5"),
+        "2026-11-06T17:52:00Z",
+        Match::Exact,
+        Some("c2"),
+    );
+    // An untagged hand-off during the run is neither notable nor counted.
+    w.hand_off(
+        "p1",
+        "hu",
+        None,
+        "2026-11-06T17:53:00Z",
+        Match::Unlinked,
+        None,
+    );
+    w.rollout(
+        "c1",
+        vec![done_turn(
+            "2026-11-06T17:50:21Z",
+            "2026-11-06T17:54:00Z",
+            "go",
+            "ok",
+        )],
+    );
+    w.rollout(
+        "c2",
+        vec![turn(
+            "2026-11-06T17:52:01Z",
+            None,
+            "2026-11-06T17:58:30Z",
+            Some("fix"),
+        )],
+    );
+    for (id, at) in [
+        ("r1", "2026-11-06T17:51:00Z"),
+        ("r2", "2026-11-06T17:55:00Z"),
+        ("r3", "2026-11-06T17:58:30Z"),
+    ] {
+        p1_call(&mut w, call(id, at, CallKind::Read, None, None));
+    }
+    let report = w.build("/repo", "1.5");
+    assert_eq!(report.parts.len(), 3);
+    let plan = &report.parts[0];
+    assert_eq!(
+        notables(plan),
+        vec![
+            n("▸ codex exec · step 1.5", None),
+            n("▸ codex exec · continue 1.5", None),
+        ]
+    );
+    assert_eq!(plan.waiting_reads, 3);
+    assert_eq!(counts(plan), (0, 0, 0));
+    assert_eq!(plan.untagged_handoffs, 0);
+}
+
+#[test]
+fn untagged_handoff_counted_not_drawn() {
+    let mut w = calls_world();
+    for (id, at) in [
+        ("u1", "2026-11-06T10:03:00Z"), // review.from: not counted
+        ("u2", "2026-11-06T10:04:00Z"),
+        ("u3", "2026-11-06T10:09:00Z"),
+    ] {
+        w.hand_off("p1", id, None, at, Match::Unlinked, None);
+    }
+    let report = w.build("/repo", "1.1");
+    // Untagged hand-offs never split the chain or make parts.
+    assert_eq!(report.parts.len(), 5);
+    let untagged: Vec<_> = report.parts.iter().map(|p| p.untagged_handoffs).collect();
+    assert_eq!(untagged, vec![0, 0, 1, 0, 1]);
+    assert_eq!(
+        notables(&report.parts[2]),
+        vec![n("▸ codex exec · continue 1.1", None)]
+    );
+    assert_eq!(notables(&report.parts[4]), vec![]);
+    assert!(report.parts.iter().all(|p| counts(p) == (0, 0, 0)));
+    assert!(
+        report
+            .parts
+            .iter()
+            .flat_map(|p| &p.notable)
+            .all(|x| x.label != "▸ codex exec")
+    );
+}
+
+#[test]
+fn continue_label_after_first() {
+    // A (1.1) → B (2.0) → A (1.1): two chains of 1.1; labels restart per chain.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:30:00Z")],
+    ));
+    for (id, step, at) in [
+        ("a1", "1.1", "2026-11-06T10:01:00Z"),
+        ("a2", "1.1", "2026-11-06T10:03:00Z"),
+        ("a3", "1.1", "2026-11-06T10:05:00Z"),
+        ("b1", "2.0", "2026-11-06T10:10:00Z"),
+        ("a4", "1.1", "2026-11-06T10:20:00Z"),
+    ] {
+        w.hand_off("p1", id, Some(step), at, Match::Unlinked, None);
+    }
+    let report = w.build("/repo", "1.1");
+    let labels: Vec<(usize, String)> = report
+        .parts
+        .iter()
+        .flat_map(|p| p.notable.iter().map(move |x| (p.chain, x.label.clone())))
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            (0, "▸ codex exec · step 1.1".to_string()),
+            (0, "▸ codex exec · continue 1.1".to_string()),
+            (0, "▸ codex exec · continue 1.1".to_string()),
+            (1, "▸ codex exec · step 1.1".to_string()),
+        ]
+    );
+    // The other step's hand-off is in no 1.1 part's notable.
+    assert!(!labels.iter().any(|(_, l)| l.contains("2.0")));
+}

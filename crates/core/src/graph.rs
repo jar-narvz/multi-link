@@ -8,8 +8,8 @@ use std::{
 };
 
 use multi_link_model::{
-    Activity, Call, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness, Link, Match, Part,
-    PartStatus, RepoSteps, Session, Timestamp, Turn,
+    Activity, Call, CallKind, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness, Link,
+    Match, Notable, Part, PartStatus, RepoSteps, Session, Timestamp, Turn,
 };
 
 use crate::{Options, RepoMode, Scanner, overview::plan_folder};
@@ -218,6 +218,25 @@ fn codex_part(
         })
         .map_or(&[][..], |s| s.activity.as_slice());
     let (active_ms, stretches) = stretches(bursts, &run.turns);
+    // Codex calls belong to the run whose turn holds them (pinned G6).
+    let held: Vec<(Timestamp, &Call)> = run
+        .session
+        .as_deref()
+        .and_then(|child| input.codex.get(child))
+        .map(|details| {
+            details
+                .calls
+                .iter()
+                .filter(|c| {
+                    run.turns
+                        .iter()
+                        .any(|t| t.start <= c.at && c.at <= turn_end(t))
+                })
+                .map(|c| (c.at, c))
+                .collect()
+        })
+        .unwrap_or_default();
+    let (counts, notable) = tally(&held, &HashMap::new());
     Part {
         chain,
         kind: match position {
@@ -236,8 +255,8 @@ fn codex_part(
         said: last
             .filter(|t| t.completed_at.is_some())
             .and_then(|t| t.last_agent_message.clone()),
-        counts: Counts::default(),
-        notable: Vec::new(),
+        counts,
+        notable,
         waiting_reads: 0,
         untagged_handoffs: 0,
         edge_in: Some(Edge::Handoff {
@@ -249,6 +268,47 @@ fn codex_part(
             candidates: link.candidates.len(),
         }),
     }
+}
+
+/// Most notable calls a part keeps (G6).
+const NOTABLE_MAX: usize = 3;
+
+/// Counts and notable calls of the calls a part holds (G6, pinned G6 Merge).
+/// `held` may be in any order; it is sorted by time, stably. Hand-offs are
+/// never counted, and are notable only when `labels` names them (the chain's
+/// own tagged hand-offs, keyed by invocation): their 8.2 label is not used.
+/// A label seen twice keeps one entry at its latest position with the latest
+/// `ok`; then the last 3 are kept.
+fn tally(held: &[(Timestamp, &Call)], labels: &HashMap<&str, String>) -> (Counts, Vec<Notable>) {
+    let mut held = held.to_vec();
+    held.sort_by_key(|(at, _)| *at);
+    let mut counts = Counts::default();
+    let mut notable: Vec<Notable> = Vec::new();
+    for (_, call) in held {
+        let count = match call.kind {
+            CallKind::Read => &mut counts.reads,
+            CallKind::Edit => &mut counts.edits,
+            CallKind::Run => &mut counts.runs,
+            CallKind::Handoff => {
+                if let Some(label) = labels.get(call.id.as_str()) {
+                    notable.retain(|n| &n.label != label);
+                    notable.push(Notable {
+                        label: label.clone(),
+                        ok: None,
+                    });
+                }
+                continue;
+            }
+        };
+        *count += 1;
+        if let Some(label) = call.label.clone() {
+            notable.retain(|n| n.label != label);
+            notable.push(Notable { label, ok: call.ok });
+        }
+    }
+    let excess = notable.len().saturating_sub(NOTABLE_MAX);
+    notable.drain(..excess);
+    (counts, notable)
 }
 
 /// A run's interval `(from, to)`: first turn's start to last turn's end.
@@ -374,7 +434,10 @@ fn holds_commit(input: &GraphInput<'_>, parent: &str, from: Timestamp, to: Times
 
 /// Cut one chain into parts (G2 cuts, G3 names) and append them to `parts`:
 /// `plan`, then per hop its Codex part and the Claude part after it. A Claude
-/// part is kept only when `from < to`.
+/// part is kept only when `from < to`. Returns the time inside the chain
+/// `(start, end)` for calls in no part (pinned G6): chain start to chain end,
+/// or, when there is no last part, to the latest end of the chain's runs if
+/// that is later (Codex is still at work for the chain until then).
 fn cut(
     input: &GraphInput<'_>,
     owned: &[&Link],
@@ -382,7 +445,7 @@ fn cut(
     index: usize,
     chain: &Chain<'_>,
     parts: &mut Vec<Part>,
-) {
+) -> (Timestamp, Timestamp) {
     let parent = chain.hops[0].link.parent.as_str();
     let (start, end) = bounds(input, owned, id, chain);
     // Index in `parts` of the chain's latest Claude part so far: it holds or
@@ -400,6 +463,7 @@ fn cut(
             None,
         ));
     }
+    let mut last_part = false;
     for (position, hop) in chain.hops.iter().enumerate() {
         parts.push(codex_part(input, index, position, hop, last_claude));
         let next = chain.hops.get(position + 1);
@@ -442,7 +506,125 @@ fn cut(
             "review"
         };
         last_claude = Some(parts.len());
+        last_part = next.is_none();
         parts.push(claude_part(input, index, kind, parent, (from, to), edge_in));
+    }
+    let inside_to = if last_part {
+        end
+    } else {
+        chain
+            .hops
+            .iter()
+            .filter_map(|h| interval(&h.run))
+            .map(|(_, run_to)| run_to)
+            .fold(end, Timestamp::max)
+    };
+    (start, inside_to)
+}
+
+/// The hand-off label of a chain's hop at `position` (G6, pinned G3/G6 Per
+/// chain): the chain's first hand-off is `step`, later ones `continue`.
+fn handoff_label(id: &str, position: usize) -> String {
+    match position {
+        0 => format!("▸ codex exec · step {id}"),
+        _ => format!("▸ codex exec · continue {id}"),
+    }
+}
+
+/// True when the Claude part `part` holds `call` (pinned G6 Which part holds
+/// a call): `from ≤ at ≤ to`, but a hand-off belongs to the part it ends
+/// (`from < at ≤ to`).
+fn holds(part: &Part, call: &Call) -> bool {
+    let (Some(from), Some(to)) = (part.from, part.to) else {
+        return false;
+    };
+    let after_from = match call.kind {
+        CallKind::Handoff => from < call.at,
+        _ => from <= call.at,
+    };
+    after_from && call.at <= to
+}
+
+/// Place the parents' owned calls in the Claude parts (G6): counts, notable
+/// calls, `waiting_reads` and `untagged_handoffs`. `inside` is each chain's
+/// time inside the chain, from `cut`. A call held by two parts that meet at
+/// one instant goes to the earlier one.
+fn place(
+    input: &GraphInput<'_>,
+    owned: &[&Link],
+    id: &str,
+    chains: &[Chain<'_>],
+    inside: &[(Timestamp, Timestamp)],
+    parts: &mut [Part],
+) {
+    let claude: Vec<usize> = (0..parts.len())
+        .filter(|&i| parts[i].harness == Harness::Claude)
+        .collect();
+    let mut held: Vec<Vec<(Timestamp, &Call)>> = vec![Vec::new(); parts.len()];
+    let mut waiting = vec![0; parts.len()];
+    // Unheld calls already placed, by `(parent, call id)`: two chains of one
+    // parent whose times inside meet place a call once, in the earlier chain.
+    let mut placed: HashSet<(&str, &str)> = HashSet::new();
+    // Per chain: its parent's calls held by no part.
+    for (index, chain) in chains.iter().enumerate() {
+        let parent = chain.hops[0].link.parent.as_str();
+        let (start, end) = inside[index];
+        // Only the chain's own tagged hand-offs are notable.
+        let labels: HashMap<&str, String> = chain
+            .hops
+            .iter()
+            .enumerate()
+            .map(|(position, hop)| (hop.link.invocation.as_str(), handoff_label(id, position)))
+            .collect();
+        let mine: Vec<usize> = claude
+            .iter()
+            .copied()
+            .filter(|&i| parts[i].chain == index)
+            .collect();
+        for call in input.claude_calls.get(parent).into_iter().flatten() {
+            let holder = claude
+                .iter()
+                .copied()
+                .find(|&i| parts[i].session.as_deref() == Some(parent) && holds(&parts[i], call));
+            if let Some(i) = holder {
+                // Held calls are gathered once, from the holder's chain.
+                if parts[i].chain == index {
+                    held[i].push((call.at, call));
+                }
+                continue;
+            }
+            if call.at < start || call.at > end || !placed.insert((parent, call.id.as_str())) {
+                continue;
+            }
+            // The last Claude part of this chain before the call.
+            let Some(&before) = mine
+                .iter()
+                .rev()
+                .find(|&&i| parts[i].to.is_some_and(|to| to <= call.at))
+            else {
+                continue;
+            };
+            match call.kind {
+                CallKind::Read => waiting[before] += 1,
+                CallKind::Handoff if labels.contains_key(call.id.as_str()) => {
+                    held[before].push((call.at, call));
+                }
+                _ => {}
+            }
+        }
+        for &i in &mine {
+            let (counts, notable) = tally(&held[i], &labels);
+            let part = &mut parts[i];
+            part.counts = counts;
+            part.notable = notable;
+            part.waiting_reads = waiting[i];
+            part.untagged_handoffs = owned
+                .iter()
+                .filter(|l| l.parent == parent && l.step.is_none())
+                .filter(|l| part.from.is_some_and(|from| from < l.at))
+                .filter(|l| part.to.is_some_and(|to| l.at <= to))
+                .count();
+        }
     }
 }
 
@@ -456,9 +638,12 @@ pub fn build(input: &GraphInput<'_>) -> GraphReport {
     owned_links.sort_by(|a, b| order(a).cmp(&order(b)));
     let chains = chains(input, &owned_links, id);
     let mut parts = Vec::new();
-    for (index, chain) in chains.iter().enumerate() {
-        cut(input, &owned_links, id, index, chain, &mut parts);
-    }
+    let inside: Vec<(Timestamp, Timestamp)> = chains
+        .iter()
+        .enumerate()
+        .map(|(index, chain)| cut(input, &owned_links, id, index, chain, &mut parts))
+        .collect();
+    place(input, &owned_links, id, &chains, &inside, &mut parts);
     // A chain exists exactly when an owned hand-off has this step (G1).
     let empty = chains.is_empty().then(|| {
         format!("no hand-offs tagged step {id} (a Claude-only step, or its prompt did not name it)")
