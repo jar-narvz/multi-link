@@ -1546,12 +1546,15 @@ fn narrow_cuts_no_words() {
                     let mut row_tokens = row.split_whitespace().peekable();
                     while let Some(token) = row_tokens.next() {
                         assert!(
-                            token == "↑↓" || tokens.contains(&whole_token(token)),
+                            token == "↑↓"
+                                || token.chars().all(|ch| ch == '─')
+                                || tokens.contains(&whole_token(token)),
                             "{id}, selected {selected}, width {width}: cut/new token {token:?} in {row:?}"
                         );
                         if token.ends_with('…') || token.ends_with("…”") {
                             assert!(
-                                row_tokens.peek().is_none(),
+                                row_tokens.peek().is_none()
+                                    || row_tokens.clone().collect::<Vec<_>>() == ["(reported)"],
                                 "{id}, selected {selected}, width {width}: ellipsis before row end in {row:?}"
                             );
                         }
@@ -1580,6 +1583,7 @@ fn narrow_selected_part_is_highlighted() {
                     .enumerate()
                     .filter(|(_, row)| {
                         !row.contains("selected")
+                            && !row.trim_start().starts_with(['╎', '│', '▲'])
                             && (row.contains("claude · ") || row.contains("codex · "))
                     })
                     .map(|(y, _)| y as u16)
@@ -1719,7 +1723,7 @@ fn shrinking_screens_drop_strip_then_legend_then_panel_lines() {
             32 => 3,
             31 => 2,
             28..=30 => 1,
-            _ => 0,
+            _ => usize::from(height.saturating_sub(3) > 2),
         };
         assert_eq!(count, expected, "height {height}");
         assert!(count <= previous_count, "height {height}: panel grew");
@@ -1747,4 +1751,166 @@ fn ten_rows_keep_rule_and_footer_on_the_last_two_rows() {
         assert_eq!(short[(x, 8)], full[(x, 38)], "rule cell {x}");
         assert_eq!(short[(x, 9)], full[(x, 39)], "footer cell {x}");
     }
+}
+
+#[test]
+fn narrow_verify_keeps_reported_suffix() {
+    let buf = render(&report("1.1"), &golden_options(), 119, 40);
+    let row = rendered_rows(&buf, 1..=1);
+    assert!(row.contains("Verify  cargo test… (reported)"), "{row:?}");
+}
+
+#[test]
+fn narrow_titles_distinguish_selection_without_color() {
+    for theme in [
+        golden_options().theme,
+        Theme::from_env(None, Some(std::ffi::OsStr::new("1"))),
+    ] {
+        let options = GraphOptions {
+            theme,
+            ..golden_options()
+        };
+        let buf = render(&report("1.1"), &options, 100, 40);
+        for (title, harness, selected) in [
+            ("claude · plan", "claude", false),
+            ("codex · implement", "codex", true),
+        ] {
+            let y = text(&buf)
+                .lines()
+                .position(|row| row.contains(title) && !row.contains("selected"))
+                .unwrap() as u16;
+            for x in 3..3 + harness.len() as u16 {
+                assert!(buf[(x, y)].modifier.contains(Modifier::BOLD));
+                assert_eq!(
+                    buf[(x, y)].fg,
+                    if harness == "claude" {
+                        theme.claude
+                    } else {
+                        theme.codex
+                    }
+                );
+            }
+            for x in 3 + harness.len() as u16..3 + title.len() as u16 - 1 {
+                assert_eq!(
+                    buf[(x, y)].modifier.contains(Modifier::BOLD),
+                    selected,
+                    "{title} at {x}"
+                );
+                assert_eq!(buf[(x, y)].fg, theme.text);
+            }
+        }
+    }
+}
+
+#[test]
+fn short_graph_keeps_selected_line_above_bottom_rule() {
+    for (width, height) in [(100, 27), (100, 20), (120, 26), (120, 20)] {
+        let buf = render(&report("1.1"), &golden_options(), width, height);
+        assert!(
+            rendered_rows(&buf, usize::from(height - 3)..=usize::from(height - 3))
+                .starts_with("  selected  codex · implement"),
+            "{width}x{height}"
+        );
+        for x in 1..width - 1 {
+            assert_eq!(buf[(x, height - 2)].symbol(), "─");
+        }
+    }
+}
+
+#[test]
+fn empty_narrow_verify_cuts_only_whole_command_words() {
+    let buf = render(&report("1.13"), &golden_options(), 40, 40);
+    assert_eq!(
+        rendered_rows(&buf, 1..=1).trim(),
+        "Verify  cargo test… (reported)"
+    );
+}
+
+#[test]
+fn narrow_header_cuts_repo_prefix_as_one_line_and_omits_lone_title_ellipsis() {
+    let mut report = report("1.1");
+    let buf = render(&report, &golden_options(), 20, 20);
+    assert_eq!(rendered_rows(&buf, 0..=0), " repo-g › step 1.1\n");
+    report.repo = "/home/dev/a very long repository name with words".into();
+    let buf = render(&report, &golden_options(), 40, 40);
+    assert_eq!(
+        rendered_rows(&buf, 0..=0),
+        " a very long repository name with…\n"
+    );
+}
+
+#[test]
+fn narrow_edges_keep_match_glyphs_and_wide_colors() {
+    let options = golden_options();
+    let buf = render(&report("1.1"), &options, 100, 40);
+    for (y, expected) in [
+        (6, "╎ handed step 1.1 · 08:05:43 · matched by time"),
+        (9, "▲ back to claude · 08:09:00"),
+        (12, "│ handed fix · 08:09:53 · confirmed"),
+    ] {
+        assert_eq!(rendered_rows(&buf, y..=y), format!("   {expected}\n"));
+    }
+    assert_colored_text(&buf, 3, 6, "╎ handed step 1.1", options.theme.text);
+    assert_colored_text(
+        &buf,
+        23,
+        6,
+        "08:05:43 · matched by time",
+        options.theme.secondary,
+    );
+    assert_colored_text(&buf, 3, 9, "▲ back to claude", options.theme.secondary);
+}
+
+#[test]
+fn narrow_rules_span_the_inner_width() {
+    let options = golden_options();
+    for width in [119, 100, 80, 60] {
+        let buf = render(&report("1.1"), &options, width, 40);
+        for y in [2, 26, 38] {
+            assert_eq!(buf[(0, y)].symbol(), " ");
+            for x in 1..width - 1 {
+                assert_eq!(buf[(x, y)].symbol(), "─");
+                assert_eq!(buf[(x, y)].fg, options.theme.border);
+            }
+            assert_eq!(buf[(width - 1, y)].symbol(), " ");
+        }
+    }
+}
+
+#[test]
+fn narrow_footer_reserves_zone_and_keeps_whole_hints() {
+    for width in [100, 80, 60] {
+        let buf = render(&report("1.1"), &golden_options(), width, 40);
+        assert_colored_text(
+            &buf,
+            width - 12,
+            39,
+            "times UTC-8",
+            golden_options().theme.secondary,
+        );
+        let hints: String = (1..width - 15).map(|x| buf[(x, 39)].symbol()).collect();
+        for hint in hints.trim().split("   ") {
+            assert!(
+                [
+                    "↑↓ move along the step",
+                    "[ ] prev / next step",
+                    "o open",
+                    "f fork",
+                    "esc repo view",
+                    "q quit"
+                ]
+                .contains(&hint),
+                "width {width}: {hint:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn narrow_subline_drops_separator_before_ellipsis() {
+    let buf = render(&report("1.6"), &golden_options(), 40, 20);
+    let row = rendered_rows(&buf, 8..=8);
+    assert!(!row.trim_end().ends_with("·…"), "{row:?}");
+    assert_eq!(row.trim(), "✓ done 03:02 · 1 min · 1 edit");
+    assert!(!text(&buf).contains(" ·…"));
 }

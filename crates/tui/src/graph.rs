@@ -109,7 +109,15 @@ impl Layout {
     fn new(height: u16) -> Self {
         let rule = height.saturating_sub(FOOTER_ROWS);
         let compact = height < MIN_PANEL_HEIGHT;
-        let panel = if compact { LANES_END } else { PANEL };
+        let panel = if compact {
+            if rule > CLAUDE_LANE - 1 {
+                LANES_END.min(rule - 1)
+            } else {
+                rule
+            }
+        } else {
+            PANEL
+        };
         let panel_rows = rule
             .saturating_sub(panel)
             .min(if compact { 1 } else { PANEL_ROWS });
@@ -157,6 +165,9 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
     };
     header(report, options, &layout, &mut paint);
     paint.rule(layout.header_rule);
+    if report.empty.is_none() && layout.panel_rows > 0 {
+        paint.bottom = layout.panel_rule.unwrap_or(layout.panel);
+    }
     if let Some(empty) = &report.empty {
         let y = layout.claude_lane.min(layout.rule.saturating_sub(1));
         paint.clear_row(y);
@@ -187,6 +198,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
         lanes(report, options, &layout, &slots, first, &mut paint);
     }
     if report.empty.is_none() {
+        paint.bottom = layout.rule;
         panel(report, options, &layout, &mut paint);
         if let Some(y) = layout.strip {
             strip(report, options, y, &mut paint);
@@ -219,7 +231,7 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
     let mut starts = Vec::new();
     for part in &report.parts {
         if let Some(edge) = &part.edge_in {
-            let words = match edge {
+            let line = match edge {
                 Edge::Handoff {
                     at,
                     r#match,
@@ -231,17 +243,29 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
                     } else {
                         "handed fix".to_owned()
                     };
-                    format!(
-                        "{handed} · {} · {}",
-                        clock(*at, options.offset, true),
-                        match_words(*r#match, *candidates)
-                    )
+                    let glyph = if *r#match == Match::Exact {
+                        "│"
+                    } else {
+                        "╎"
+                    };
+                    Line::from(vec![
+                        paint.span(format!("{glyph} {handed}"), t.text),
+                        paint.span(
+                            format!(
+                                " · {} · {}",
+                                clock(*at, options.offset, true),
+                                match_words(*r#match, *candidates)
+                            ),
+                            t.secondary,
+                        ),
+                    ])
                 }
-                Edge::Return { at } => {
-                    format!("back to claude  {}", clock(*at, options.offset, true))
-                }
+                Edge::Return { at } => Line::from(paint.span(
+                    format!("▲ back to claude · {}", clock(*at, options.offset, true)),
+                    t.secondary,
+                )),
             };
-            rows.push((3, Line::from(paint.span(words, t.secondary)), None));
+            rows.push((3, line, None));
         }
         let index = starts.len();
         starts.push(rows.len());
@@ -264,16 +288,21 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
             Line::from(vec![
                 Span::styled("● ", style(color)),
                 Span::styled(
-                    format!(
-                        "{} · {}",
-                        if part.harness == Harness::Codex {
-                            "codex"
-                        } else {
-                            "claude"
-                        },
-                        part.kind
-                    ),
+                    if part.harness == Harness::Codex {
+                        "codex"
+                    } else {
+                        "claude"
+                    },
                     style(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" · {}", part.kind),
+                    if index == options.selected {
+                        style(if missing { t.secondary } else { t.text })
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        style(if missing { t.secondary } else { t.text })
+                    },
                 ),
             ]),
             Some(bg),
@@ -670,6 +699,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &
     let available = !codex || has_run(part);
     let session = part.session.as_deref().filter(|id| !id.is_empty());
     let harness = if codex { "codex" } else { "claude" };
+    paint.clear_row(y);
     if let Some(y) = layout.panel_rule {
         paint.rule(y);
     }
@@ -857,7 +887,8 @@ fn cut_words(text: &str, width: usize) -> String {
     if end == 0 {
         return cut(&text, width);
     }
-    format!("{}…", text[..end].trim_end())
+    let prefix = text[..end].trim_end().trim_end_matches('·').trim_end();
+    format!("{prefix}…")
 }
 
 fn without_controls(text: &str) -> String {
@@ -924,9 +955,6 @@ impl Paint<'_> {
     }
 
     fn rule(&mut self, y: u16) {
-        if self.buf.area.width < 120 {
-            return;
-        }
         self.write(
             1,
             y,
@@ -1079,20 +1107,30 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
     );
     let repo_width =
         usize::from(title_end.saturating_sub(1)).saturating_sub(suffix_width + title_min);
-    let prefix = Line::from(vec![
-        Span::styled(cut(basename(&report.repo), repo_width), bold),
-        paint.span(" › ", t.secondary),
-        Span::styled(step, bold),
-        paint.span("  ", t.text),
-    ]);
-    let title_x = 1usize.saturating_add(prefix.width());
+    let prefix = if narrow {
+        Line::from(vec![
+            Span::styled(basename(&report.repo).to_owned(), bold),
+            paint.span(" › ", t.secondary),
+            Span::styled(step, bold),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(cut(basename(&report.repo), repo_width), bold),
+            paint.span(" › ", t.secondary),
+            Span::styled(step, bold),
+            paint.span("  ", t.text),
+        ])
+    };
+    let title_x = 1usize.saturating_add(prefix.width()) + if narrow { 2 } else { 0 };
     paint.line(1, layout.header[0], prefix, title_end);
     if title_x < usize::from(title_end) {
         let title = fit(
             report.step.title.as_deref().unwrap_or(""),
             usize::from(title_end) - title_x,
         );
-        paint.write(title_x as u16, layout.header[0], &title, t.text, title_end);
+        if !narrow || title != "…" {
+            paint.write(title_x as u16, layout.header[0], &title, t.text, title_end);
+        }
     }
     let left = if report.parts.is_empty() {
         String::new()
@@ -1112,12 +1150,18 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
         let suffix = " (reported)";
         let fixed = Span::raw(prefix).width() + Span::raw(suffix).width();
         if available >= fixed + 2 {
-            if narrow && !report.parts.is_empty() {
-                let label = cut_words(&format!("{prefix}{verify}{suffix}"), available);
-                paint.right(layout.header[1], &label, t.secondary);
+            // cut_words permits a fallback for a single overlong word. A
+            // command with arguments must retain at least its whole first word.
+            if narrow
+                && verify.split_whitespace().nth(1).is_some()
+                && verify
+                    .split_whitespace()
+                    .next()
+                    .is_some_and(|word| Span::raw(word).width() > available - fixed)
+            {
                 return;
             }
-            let command = cut(verify, available - fixed);
+            let command = fit(verify, available - fixed);
             paint.right(
                 layout.header[1],
                 &format!("{prefix}{command}{suffix}"),
@@ -1270,6 +1314,11 @@ fn legend(y: u16, paint: &mut Paint<'_>) {
 
 fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let t = paint.theme;
+    let zone = format!("times {}", view::offset_label(options.offset));
+    let until = paint
+        .end()
+        .saturating_sub(Span::raw(&zone).width() as u16 + 3);
+    let narrow = paint.buf.area.width < 120;
     let mut spans = Vec::new();
     for (i, (key, words)) in [
         (
@@ -1289,21 +1338,21 @@ fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     .into_iter()
     .enumerate()
     {
+        if narrow {
+            let used: usize = spans.iter().map(Span::width).sum();
+            let gap = if i > 0 { 3 } else { 0 };
+            if used + gap + Span::raw(key).width() + Span::raw(words).width()
+                > usize::from(until.saturating_sub(1))
+            {
+                break;
+            }
+        }
         if i > 0 {
             spans.push(paint.span("   ", t.secondary));
         }
         spans.push(paint.span(key, t.text));
         spans.push(paint.span(words, t.secondary));
     }
-    let zone = format!("times {}", view::offset_label(options.offset));
-    let until = paint
-        .end()
-        .saturating_sub(Span::raw(&zone).width() as u16 + 3);
-    if paint.buf.area.width < 120 {
-        spans.push(paint.span(format!("   {zone}"), t.secondary));
-        paint.line(1, y, Line::from(spans), paint.end());
-    } else {
-        paint.line(1, y, Line::from(spans), until);
-        paint.right(y, &zone, t.secondary);
-    }
+    paint.line(1, y, Line::from(spans), until);
+    paint.right(y, &zone, t.secondary);
 }
