@@ -29,7 +29,7 @@ const FULL_HEIGHT: u16 = LEGEND + 2 + FOOTER_ROWS;
 const MIN_PANEL_HEIGHT: u16 = PANEL + 1 + FOOTER_ROWS;
 const MIN_LEGEND_HEIGHT: u16 = PANEL + PANEL_ROWS + 2 + FOOTER_ROWS;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GraphOptions {
     pub selected: usize,
     pub first_slot: usize,
@@ -565,7 +565,7 @@ fn subline(part: &Part, offset: UtcOffset) -> Option<(String, Role, String)> {
         match part.status {
             Some(PartStatus::Done) => (format!("✓ done {}", clock(to, offset, false)), Role::Done),
             Some(PartStatus::Stale) => (
-                format!("stale since {}", clock(from, offset, false)),
+                format!("stale since {}", clock(to, offset, false)),
                 Role::Warning,
             ),
             _ => ("working now".to_owned(), Role::Claude),
@@ -1051,6 +1051,7 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
         .iter()
         .filter(|p| p.harness == Harness::Claude)
         .filter_map(|p| p.session.as_deref())
+        .filter(|id| !id.is_empty())
         .collect::<HashSet<_>>()
         .len();
     let runs = report
@@ -1320,7 +1321,7 @@ fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
         .saturating_sub(Span::raw(&zone).width() as u16 + 3);
     let narrow = paint.buf.area.width < 120;
     let mut spans = Vec::new();
-    for (i, (key, words)) in [
+    let mut hints = [
         (
             if paint.buf.area.width < 120 {
                 "↑↓"
@@ -1334,10 +1335,16 @@ fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
         ("f", " fork"),
         ("esc", " repo view"),
         ("q", " quit"),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    ];
+    let hints_width: usize = hints
+        .iter()
+        .map(|(key, words)| Span::raw(*key).width() + Span::raw(*words).width())
+        .sum::<usize>()
+        + 3 * (hints.len() - 1);
+    if narrow && hints_width > usize::from(until.saturating_sub(1)) {
+        hints[1..].rotate_right(2);
+    }
+    for (i, (key, words)) in hints.into_iter().enumerate() {
         if narrow {
             let used: usize = spans.iter().map(Span::width).sum();
             let gap = if i > 0 { 3 } else { 0 };

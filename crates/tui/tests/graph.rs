@@ -32,6 +32,19 @@ fn golden_options() -> GraphOptions {
 }
 
 #[test]
+fn graph_options_support_debug_and_value_comparison() {
+    let options = golden_options();
+    assert_eq!(options, golden_options());
+    assert_ne!(
+        options,
+        GraphOptions {
+            selected: 0,
+            ..options
+        }
+    );
+}
+
+#[test]
 fn panel_empty_quotes_are_absent() {
     let mut report = report("1.1");
     report.parts[1].asked = Some(String::new());
@@ -1336,13 +1349,38 @@ fn working_subline_splits_orange_status_and_grey_duration() {
 }
 
 #[test]
-fn stale_subline_names_the_run_start_in_red() {
+fn stale_subline_names_the_last_record_in_red() {
     let mut report = report("1.1");
     report.parts[3].status = Some(PartStatus::Stale);
     let options = golden_options();
     let buf = render(&report, &options, 120, 40);
-    assert_colored_text(&buf, 69, 18, "stale since 08:09", options.theme.warning);
+    assert_colored_text(&buf, 69, 18, "stale since 08:10", options.theme.warning);
     assert_eq!(buf[(86, 18)].symbol(), " ");
+    let narrow = render(&report, &options, 80, 40);
+    assert!(text(&narrow).contains("stale since 08:10"));
+}
+
+#[test]
+fn header_counts_only_distinct_nonempty_claude_sessions() {
+    let mut report = report("1.1");
+    report.parts[0].session = Some(String::new());
+    report.parts[2].session = None;
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert!(rendered_rows(&buf, 1..=1).contains("1 claude session ·"));
+
+    report.parts[4].session = Some(String::new());
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert!(rendered_rows(&buf, 1..=1).contains("0 claude sessions ·"));
+}
+
+#[test]
+fn narrow_footer_prioritizes_return_and_quit_at_eighty_columns() {
+    let buf = render(&report("1.1"), &golden_options(), 80, 40);
+    let hints: String = (1..65).map(|x| buf[(x, 39)].symbol()).collect();
+    assert_eq!(
+        hints.trim(),
+        "↑↓ move along the step   esc repo view   q quit"
+    );
 }
 
 #[test]
