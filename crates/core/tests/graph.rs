@@ -1012,14 +1012,15 @@ fn previous_run_still_going_leaves_no_plan() {
         None,
     );
     // The 2.0 run is still going at 10:05, so the chain starts at its end
-    // 10:08, after the first hand-off: no plan. That run is another chain's,
-    // so the part after the hand-off still starts at it.
+    // 10:08, after the first hand-off: no plan, and no Claude part of the
+    // chain starts before 10:08. That run is another chain's, so the part
+    // has no return edge.
     let report = w.build("/repo", "1.1");
     assert_eq!(
         rows(&report),
         vec![
             codex(0, "implement", None, None),
-            claude(0, "review", "2026-11-06T10:05:00Z", "2026-11-06T10:20:00Z"),
+            claude(0, "review", "2026-11-06T10:08:00Z", "2026-11-06T10:20:00Z"),
         ]
     );
     assert_eq!(parent_part(&report.parts[0]), None);
@@ -1921,8 +1922,8 @@ fn handoff_during_run_is_notable_of_previous_claude_part() {
         Match::Exact,
         Some("c2"),
     );
-    // An untagged hand-off during the run is not notable; it is counted on
-    // the last Claude part before it.
+    // An untagged hand-off during the run is not notable, and no part holds
+    // it (`from < at ≤ to`), so it is counted nowhere.
     w.hand_off(
         "p1",
         "hu",
@@ -1968,14 +1969,14 @@ fn handoff_during_run_is_notable_of_previous_claude_part() {
     );
     assert_eq!(plan.waiting_reads, 3);
     assert_eq!(counts(plan), (0, 0, 0));
-    assert_eq!(plan.untagged_handoffs, 1);
+    assert!(report.parts.iter().all(|p| p.untagged_handoffs == 0));
 }
 
 #[test]
 fn untagged_handoff_counted_not_drawn() {
     let mut w = calls_world();
     for (id, at) in [
-        ("u1", "2026-11-06T10:03:00Z"), // review.from: held by no part, so plan
+        ("u1", "2026-11-06T10:03:00Z"), // review.from: held by no part, so nowhere
         ("u2", "2026-11-06T10:04:00Z"),
         ("u3", "2026-11-06T10:09:00Z"),
     ] {
@@ -1985,7 +1986,7 @@ fn untagged_handoff_counted_not_drawn() {
     // Untagged hand-offs never split the chain or make parts.
     assert_eq!(report.parts.len(), 5);
     let untagged: Vec<_> = report.parts.iter().map(|p| p.untagged_handoffs).collect();
-    assert_eq!(untagged, vec![1, 0, 1, 0, 1]);
+    assert_eq!(untagged, vec![0, 0, 1, 0, 1]);
     assert_eq!(
         notables(&report.parts[2]),
         vec![n("▸ codex exec · continue 1.1", None)]
@@ -2002,9 +2003,9 @@ fn untagged_handoff_counted_not_drawn() {
 }
 
 #[test]
-fn untagged_handoff_during_run_counts_on_previous_claude_part() {
-    // Made while run 1 is going (held by no Claude part) but inside the
-    // chain: counted on the last Claude part before it, like a waiting read.
+fn untagged_handoff_held_by_no_part_counts_nowhere() {
+    // Made while run 1 is going: no Claude part has `from < at ≤ to`, so it
+    // is counted nowhere (schema: only the part holding it counts it).
     let mut w = calls_world();
     w.hand_off(
         "p1",
@@ -2025,7 +2026,7 @@ fn untagged_handoff_during_run_counts_on_previous_claude_part() {
     );
     let report = w.build("/repo", "1.1");
     let untagged: Vec<_> = report.parts.iter().map(|p| p.untagged_handoffs).collect();
-    assert_eq!(untagged, vec![1, 0, 0, 0, 0]);
+    assert_eq!(untagged, vec![0, 0, 0, 0, 0]);
     assert!(
         report
             .parts
@@ -2198,4 +2199,199 @@ fn call_at_meeting_instant_goes_to_earlier_part() {
         claude_parts.iter().map(|p| counts(p).1).collect::<Vec<_>>(),
         vec![0, 1, 0]
     );
+}
+
+#[test]
+fn no_last_part_window_capped_at_next_other_step_handoff() {
+    // A (1.1) runs until 10:30 and the parent is silent after 10:05:30: no
+    // last part. B (2.0) is handed off at 10:10, so A's chain ends there: a
+    // read at 10:20 is not inside A's chain, even though A's run is going.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:05:30Z")],
+    ));
+    w.sessions.push(codex_session(
+        "c1",
+        &[("2026-11-06T10:01:01Z", "2026-11-06T10:30:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "a1",
+        Some("1.1"),
+        "2026-11-06T10:01:00Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.hand_off(
+        "p1",
+        "b1",
+        Some("2.0"),
+        "2026-11-06T10:10:00Z",
+        Match::Unlinked,
+        None,
+    );
+    w.rollout(
+        "c1",
+        vec![done_turn(
+            "2026-11-06T10:01:01Z",
+            "2026-11-06T10:30:00Z",
+            "go",
+            "ok",
+        )],
+    );
+    for (id, at) in [
+        ("r1", "2026-11-06T10:08:00Z"), // before B: inside A's chain
+        ("r2", "2026-11-06T10:20:00Z"), // after B: not A's
+    ] {
+        p1_call(&mut w, call(id, at, CallKind::Read, None, None));
+    }
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        report.parts.last().unwrap().harness,
+        Harness::Codex,
+        "no last part"
+    );
+    assert_eq!(
+        report.parts.iter().map(|p| p.waiting_reads).sum::<usize>(),
+        1
+    );
+}
+
+#[test]
+fn commit_at_meeting_instant_names_last_part_review() {
+    // An unavailable hand-off at 15:03:00 splits two Claude parts that meet
+    // there; a commit exactly at that instant belongs to the earlier part, so
+    // the last part does not hold it.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T15:00:00Z", "2026-11-06T15:04:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.2"),
+        "2026-11-06T15:00:20Z",
+        Match::Unlinked,
+        None,
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.2"),
+        "2026-11-06T15:03:00Z",
+        Match::Exact,
+        Some("gone"),
+    );
+    p1_call(
+        &mut w,
+        call(
+            "g1",
+            "2026-11-06T15:03:00Z",
+            CallKind::Run,
+            Some("$ git commit"),
+            Some(true),
+        ),
+    );
+    let report = w.build("/repo", "1.2");
+    let claude_parts: Vec<_> = report
+        .parts
+        .iter()
+        .filter(|p| p.harness == Harness::Claude)
+        .collect();
+    assert_eq!(claude_parts.len(), 3);
+    assert_eq!(claude_parts[1].to, claude_parts[2].from);
+    assert_eq!(claude_parts[2].kind, "review");
+    assert!(
+        claude_parts[1]
+            .notable
+            .iter()
+            .any(|x| x.label == "$ git commit")
+    );
+    // One second later the commit is the last part's: `verify + commit`.
+    w.claude_calls.get_mut("p1").unwrap().last_mut().unwrap().at = t("2026-11-06T15:03:01Z");
+    let report = w.build("/repo", "1.2");
+    assert_eq!(report.parts.last().unwrap().kind, "verify + commit");
+}
+
+#[test]
+fn later_claude_part_clamped_to_chain_start() {
+    // B (2.0) runs 10:01:01–10:08. A (1.1) hands off at 10:02 (unavailable)
+    // and again at 10:05 (unavailable): the chain starts at 10:08, so no
+    // Claude part of A starts before it; the parts between both hand-offs
+    // are dropped and the last starts at 10:08 with no edge.
+    let mut w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:20:00Z")],
+        "2.0",
+        "2026-11-06T10:01:00Z",
+        "2026-11-06T10:01:01Z",
+        "2026-11-06T10:08:00Z",
+    );
+    for (id, at) in [
+        ("a1", "2026-11-06T10:02:00Z"),
+        ("a2", "2026-11-06T10:05:00Z"),
+    ] {
+        w.hand_off("p1", id, Some("1.1"), at, Match::Unlinked, None);
+    }
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report),
+        vec![
+            codex(0, "implement", None, None),
+            codex(0, "fix round 1", None, None),
+            claude(0, "review", "2026-11-06T10:08:00Z", "2026-11-06T10:20:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[2].edge_in, None);
+}
+
+#[test]
+fn child_file_removed_before_reading_is_unavailable() {
+    // Through `Scanner::graph`'s real I/O path: the 8201 rollout is listed
+    // by the refresh but vanishes before its details are read.
+    use std::path::Path;
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+    let root = fixtures.join("sessions-phase8");
+    let state = tempfile::tempdir().unwrap();
+    let options = multi_link_core::Options {
+        state_dir: state.path().to_path_buf(),
+        now: t("2026-11-06T18:00:00Z"),
+        since: None,
+        repo_mode: multi_link_core::RepoMode::Fixture,
+        probe: &multi_link_core::FixtureProcessProbe,
+    };
+    let mut plans = |folder: &Path| {
+        multi_link_plan::steps_report(&root, &[folder.to_string_lossy().into_owned()])
+            .repos
+            .remove(0)
+    };
+    let child = "82010000-0000-4000-8000-000000008201";
+    let mut read = |path: &Path| {
+        if path.to_string_lossy().contains(child) {
+            Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+        } else {
+            multi_link_codex::read_details(path)
+        }
+    };
+    let report = multi_link_core::Scanner::default()
+        .graph_with_reader(
+            &root,
+            &options,
+            "/home/dev/repo-g",
+            "1.1",
+            &mut plans,
+            &mut read,
+        )
+        .unwrap();
+    let parts = codex_parts(&report);
+    assert!(!parts.is_empty());
+    for part in parts {
+        assert_eq!(part.session.as_deref(), Some(child));
+        assert_eq!(part.status, Some(PartStatus::Unavailable));
+        assert_eq!(part.run_available, Some(false));
+        assert_eq!((part.from, part.to), (None, None));
+    }
 }

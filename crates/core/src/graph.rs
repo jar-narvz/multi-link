@@ -9,8 +9,8 @@ use std::{
 };
 
 use multi_link_model::{
-    Activity, Call, CallKind, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness, Link,
-    Match, Notable, Part, PartStatus, RepoSteps, Session, Timestamp, Turn,
+    Activity, Call, CallKind, Calls, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness,
+    Link, Match, Notable, Part, PartStatus, RepoSteps, Session, Timestamp, Turn,
 };
 
 use crate::{Options, RepoMode, Scanner, overview::plan_folder};
@@ -343,13 +343,14 @@ fn other_step(link: &Link, id: &str) -> bool {
 /// the previous run tagged another step (only when that run has an interval).
 /// End: the parent's last burst that overlaps the time after the last
 /// hand-off and starts before the next hand-off tagged another step, capped
-/// at that hand-off. Either falls back to the hand-off itself.
+/// at that hand-off. Either falls back to the hand-off itself. Also returns
+/// that cap (the next hand-off tagged another step), when there is one.
 fn bounds(
     input: &GraphInput<'_>,
     owned: &[&Link],
     id: &str,
     chain: &Chain<'_>,
-) -> (Timestamp, Timestamp) {
+) -> (Timestamp, Timestamp, Option<Timestamp>) {
     let first = chain.hops[0].link;
     let last = chain.hops[chain.hops.len() - 1].link;
     let bursts = claude_bursts(input, &first.parent);
@@ -380,7 +381,7 @@ fn bounds(
         .map(|b| b.to)
         .next_back()
         .unwrap_or(last.at);
-    (start, next.map_or(end, |next| end.min(next)))
+    (start, next.map_or(end, |next| end.min(next)), next)
 }
 
 /// A Claude part of `parent` over `[from, to]`: bursts ∩ part, one stretch per
@@ -423,22 +424,24 @@ fn claude_part(
     }
 }
 
-/// True when `parent` owns a `$ git commit` call with `from ≤ at ≤ to`
-/// (pinned G6 Which part holds a call).
-fn holds_commit(input: &GraphInput<'_>, parent: &str, from: Timestamp, to: Timestamp) -> bool {
-    input.claude_calls.get(parent).is_some_and(|calls| {
-        calls
-            .iter()
-            .any(|c| c.label.as_deref() == Some("$ git commit") && from <= c.at && c.at <= to)
-    })
+/// What `cut` tells `place` about one chain.
+struct ChainCut {
+    /// The time inside the chain `(start, end)` for calls in no part (pinned
+    /// G6).
+    inside: (Timestamp, Timestamp),
+    /// Index in `parts` of the chain's last part, if it has one. It is named
+    /// `review` here; `place` renames it `verify + commit` when it holds a
+    /// `$ git commit` call (G3), with the same ownership as every call.
+    last: Option<usize>,
 }
 
 /// Cut one chain into parts (G2 cuts, G3 names) and append them to `parts`:
 /// `plan`, then per hop its Codex part and the Claude part after it. A Claude
-/// part is kept only when `from < to`. Returns the time inside the chain
-/// `(start, end)` for calls in no part (pinned G6): chain start to chain end,
+/// part never starts before the chain start and is kept only when
+/// `from < to`. The time inside the chain runs from chain start to chain end,
 /// or, when there is no last part, to the latest end of the chain's runs if
-/// that is later (Codex is still at work for the chain until then).
+/// that is later (Codex is still at work for the chain until then), but never
+/// past the next hand-off tagged another step.
 fn cut(
     input: &GraphInput<'_>,
     owned: &[&Link],
@@ -446,9 +449,9 @@ fn cut(
     index: usize,
     chain: &Chain<'_>,
     parts: &mut Vec<Part>,
-) -> (Timestamp, Timestamp) {
+) -> ChainCut {
     let parent = chain.hops[0].link.parent.as_str();
-    let (start, end) = bounds(input, owned, id, chain);
+    let (start, end, cap) = bounds(input, owned, id, chain);
     // Index in `parts` of the chain's latest Claude part so far: it holds or
     // precedes the next hand-off.
     let mut last_claude = None;
@@ -464,7 +467,7 @@ fn cut(
             None,
         ));
     }
-    let mut last_part = false;
+    let mut last = None;
     for (position, hop) in chain.hops.iter().enumerate() {
         parts.push(codex_part(input, index, position, hop, last_claude));
         let next = chain.hops.get(position + 1);
@@ -507,29 +510,50 @@ fn cut(
                 (from, Some(Edge::Return { at: from }))
             }
         };
+        // No Claude part starts before the chain start. When that moves
+        // `from`, it lands on the end of another step's run, which is not
+        // this chain's: no return edge, unless a run of this chain also ends
+        // exactly there.
+        let (from, edge_in) = if from < start {
+            let returns = chain.hops[..=position]
+                .iter()
+                .filter_map(|h| interval(&h.run))
+                .any(|(_, run_to)| run_to == start);
+            (start, returns.then_some(Edge::Return { at: start }))
+        } else {
+            (from, edge_in)
+        };
         if from >= to {
             continue;
         }
-        let kind = if next.is_none() && holds_commit(input, parent, from, to) {
-            "verify + commit"
-        } else {
-            "review"
-        };
         last_claude = Some(parts.len());
-        last_part = next.is_none();
-        parts.push(claude_part(input, index, kind, parent, (from, to), edge_in));
+        if next.is_none() {
+            last = Some(parts.len());
+        }
+        parts.push(claude_part(
+            input,
+            index,
+            "review",
+            parent,
+            (from, to),
+            edge_in,
+        ));
     }
-    let inside_to = if last_part {
+    let inside_to = if last.is_some() {
         end
     } else {
-        chain
+        let latest = chain
             .hops
             .iter()
             .filter_map(|h| interval(&h.run))
             .map(|(_, run_to)| run_to)
-            .fold(end, Timestamp::max)
+            .fold(end, Timestamp::max);
+        cap.map_or(latest, |cap| latest.min(cap))
     };
-    (start, inside_to)
+    ChainCut {
+        inside: (start, inside_to),
+        last,
+    }
 }
 
 /// The hand-off label of a chain's hop at `position` (G6, pinned G3/G6 Per
@@ -556,15 +580,15 @@ fn holds(part: &Part, call: &Call) -> bool {
 }
 
 /// Place the parents' owned calls in the Claude parts (G6): counts, notable
-/// calls, `waiting_reads` and `untagged_handoffs`. `inside` is each chain's
-/// time inside the chain, from `cut`. A call held by two parts that meet at
-/// one instant goes to the earlier one.
+/// calls, `waiting_reads`, `untagged_handoffs` and the `verify + commit`
+/// name of a last part (G3). `cuts` is each chain's result from `cut`. A call
+/// held by two parts that meet at one instant goes to the earlier one.
 fn place(
     input: &GraphInput<'_>,
     owned: &[&Link],
     id: &str,
     chains: &[Chain<'_>],
-    inside: &[(Timestamp, Timestamp)],
+    cuts: &[ChainCut],
     parts: &mut [Part],
 ) {
     let claude: Vec<usize> = (0..parts.len())
@@ -572,27 +596,19 @@ fn place(
         .collect();
     let mut held: Vec<Vec<(Timestamp, &Call)>> = vec![Vec::new(); parts.len()];
     let mut waiting = vec![0; parts.len()];
-    // Untagged hand-offs held by no Claude part, per part they count on.
-    let mut untagged = vec![0; parts.len()];
     // Unheld calls already placed, by `(parent, call id)`: two chains of one
     // parent whose times inside meet place a call once, in the earlier chain.
     let mut placed: HashSet<(&str, &str)> = HashSet::new();
     // Per chain: its parent's calls held by no part.
     for (index, chain) in chains.iter().enumerate() {
         let parent = chain.hops[0].link.parent.as_str();
-        let (start, end) = inside[index];
+        let (start, end) = cuts[index].inside;
         // Only the chain's own tagged hand-offs are notable.
         let labels: HashMap<&str, String> = chain
             .hops
             .iter()
             .enumerate()
             .map(|(position, hop)| (hop.link.invocation.as_str(), handoff_label(id, position)))
-            .collect();
-        // The parent's owned untagged hand-offs, by invocation (G1).
-        let untagged_ids: HashSet<&str> = owned
-            .iter()
-            .filter(|l| l.parent == parent && l.step.is_none())
-            .map(|l| l.invocation.as_str())
             .collect();
         let mine: Vec<usize> = claude
             .iter()
@@ -627,25 +643,29 @@ fn place(
                 CallKind::Handoff if labels.contains_key(call.id.as_str()) => {
                     held[before].push((call.at, call));
                 }
-                CallKind::Handoff if untagged_ids.contains(call.id.as_str()) => {
-                    untagged[before] += 1;
-                }
                 _ => {}
             }
         }
         for &i in &mine {
             let (counts, notable) = tally(&held[i], &labels);
+            let commits = held[i]
+                .iter()
+                .any(|(_, c)| c.label.as_deref() == Some("$ git commit"));
             let part = &mut parts[i];
             part.counts = counts;
             part.notable = notable;
             part.waiting_reads = waiting[i];
-            part.untagged_handoffs = untagged[i]
-                + owned
-                    .iter()
-                    .filter(|l| l.parent == parent && l.step.is_none())
-                    .filter(|l| part.from.is_some_and(|from| from < l.at))
-                    .filter(|l| part.to.is_some_and(|to| l.at <= to))
-                    .count();
+            // Owned untagged hand-offs with `from < at ≤ to` (schema); one
+            // held by no part counts nowhere.
+            part.untagged_handoffs = owned
+                .iter()
+                .filter(|l| l.parent == parent && l.step.is_none())
+                .filter(|l| part.from.is_some_and(|from| from < l.at))
+                .filter(|l| part.to.is_some_and(|to| l.at <= to))
+                .count();
+            if cuts[index].last == Some(i) && commits {
+                part.kind = "verify + commit".to_string();
+            }
         }
     }
 }
@@ -660,12 +680,12 @@ pub fn build(input: &GraphInput<'_>) -> GraphReport {
     owned_links.sort_by(|a, b| order(a).cmp(&order(b)));
     let chains = chains(input, &owned_links, id);
     let mut parts = Vec::new();
-    let inside: Vec<(Timestamp, Timestamp)> = chains
+    let cuts: Vec<ChainCut> = chains
         .iter()
         .enumerate()
         .map(|(index, chain)| cut(input, &owned_links, id, index, chain, &mut parts))
         .collect();
-    place(input, &owned_links, id, &chains, &inside, &mut parts);
+    place(input, &owned_links, id, &chains, &cuts, &mut parts);
     // A chain exists exactly when an owned hand-off has this step (G1).
     let empty = chains.is_empty().then(|| {
         format!("no hand-offs tagged step {id} (a Claude-only step, or its prompt did not name it)")
@@ -716,6 +736,10 @@ pub fn commit_for_step(repo: &Path, step: &str) -> Option<GraphCommit> {
     })
 }
 
+/// Reads one Codex rollout's calls and turns, like `codex::read_details`.
+#[doc(hidden)]
+pub type ReadDetails<'a> = dyn FnMut(&Path) -> io::Result<(Calls, Vec<Turn>)> + 'a;
+
 impl Scanner {
     /// Build the graph of one PLAN.md step. `plans` maps a plan folder to its
     /// steps report; the caller supplies it so core stays free of the plan parser.
@@ -726,6 +750,28 @@ impl Scanner {
         repo: &str,
         step: &str,
         plans: &mut dyn FnMut(&Path) -> RepoSteps,
+    ) -> io::Result<GraphReport> {
+        self.graph_with_reader(
+            root,
+            options,
+            repo,
+            step,
+            plans,
+            &mut multi_link_codex::read_details,
+        )
+    }
+
+    /// `graph` with the Codex rollout reader injected, so a test can make a
+    /// rollout vanish between the refresh and the read. Not public API.
+    #[doc(hidden)]
+    pub fn graph_with_reader(
+        &mut self,
+        root: &Path,
+        options: &Options<'_>,
+        repo: &str,
+        step: &str,
+        plans: &mut dyn FnMut(&Path) -> RepoSteps,
+        read_details: &mut ReadDetails<'_>,
     ) -> io::Result<GraphReport> {
         // G2: report windows are `--since all`, whatever the caller's window.
         let all = Options {
@@ -826,7 +872,7 @@ impl Scanner {
             let Some(path) = by_id.get(child).and_then(|s| s.transcript.as_deref()) else {
                 continue;
             };
-            if let Ok((calls, turns)) = multi_link_codex::read_details(&root.join(path)) {
+            if let Ok((calls, turns)) = read_details(&root.join(path)) {
                 codex.insert(
                     child.to_string(),
                     CodexDetails {

@@ -135,3 +135,30 @@ fn sentinels_never_in_output() {
         }
     }
 }
+
+#[test]
+fn text_mode_prints_part_details() {
+    let output = graph("/home/dev/repo-g", "1.1", false);
+    assert_eq!(output.status.code(), Some(0));
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        text.contains("Verify cargo test --workspace (reported)"),
+        "{text}"
+    );
+    assert!(text.contains("$ git commit"), "{text}");
+    assert!(text.contains("6 reads while codex ran"), "{text}");
+    assert!(text.contains("▸ codex exec · step 1.1"), "{text}");
+    assert!(
+        text.contains("asked Read AGENTS.md, then do Step 1.1"),
+        "{text}"
+    );
+    assert!(text.contains("said Implemented Step 1.1"), "{text}");
+    assert!(text.contains("$ cargo test ok"), "{text}");
+}
+
+#[test]
+fn text_mode_prints_untagged_handoffs() {
+    let output = graph("/home/dev/repo-g", "1.8", false);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("1 untagged hand-off here"), "{text}");
+}

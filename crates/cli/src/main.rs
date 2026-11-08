@@ -449,6 +449,14 @@ fn graph_text(writer: &mut impl Write, report: &GraphReport) -> io::Result<()> {
         report.step.id,
         report.step.title.as_deref().unwrap_or("")
     )?;
+    if let Some(commit) = &report.commit {
+        // `HH:MM` of the commit time (G7).
+        let at: String = clock(&commit.at).chars().take(5).collect();
+        writeln!(writer, "✓ committed {} · {at}", commit.hash)?;
+    }
+    if let Some(verify) = &report.step.verify {
+        writeln!(writer, "Verify {verify} (reported)")?;
+    }
     if let Some(empty) = &report.empty {
         return writeln!(writer, "{empty}");
     }
@@ -471,6 +479,32 @@ fn graph_text(writer: &mut impl Write, report: &GraphReport) -> io::Result<()> {
             part.counts.edits,
             part.counts.runs
         )?;
+        // Notable calls are fixed labels only (G6); `ok` is the exit status.
+        for notable in &part.notable {
+            let mark = match notable.ok {
+                Some(true) => " ok",
+                Some(false) => " failed",
+                None => "",
+            };
+            writeln!(writer, "    {}{mark}", notable.label)?;
+        }
+        if part.waiting_reads > 0 {
+            writeln!(writer, "    {} reads while codex ran", part.waiting_reads)?;
+        }
+        if part.untagged_handoffs > 0 {
+            let plural = if part.untagged_handoffs == 1 { "" } else { "s" };
+            writeln!(
+                writer,
+                "    {} untagged hand-off{plural} here",
+                part.untagged_handoffs
+            )?;
+        }
+        if let Some(asked) = &part.asked {
+            writeln!(writer, "    asked {asked}")?;
+        }
+        if let Some(said) = &part.said {
+            writeln!(writer, "    said {said}")?;
+        }
     }
     Ok(())
 }
