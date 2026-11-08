@@ -139,7 +139,8 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
         "PostToolUse":[{"matcher":"Bash", "hooks":[entry.clone()]}],
         "PostToolUseFailure":[{"matcher":"Bash", "hooks":[entry.clone()]}],
         "PermissionRequest":[{"hooks":[entry.clone()]}],
-        "Notification":[{"matcher":"permission_prompt|elicitation_dialog", "hooks":[entry]}]
+        "Notification":[{"matcher":"permission_prompt|elicitation_dialog", "hooks":[entry.clone()]}],
+        "SessionEnd":[{"hooks":[entry]}]
     }});
     let mut stderr = io::stderr().lock();
     if uninstall {

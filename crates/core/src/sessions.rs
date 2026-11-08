@@ -68,7 +68,10 @@ pub(crate) fn assemble(
     let mut sessions = Vec::new();
     let mut incomplete = Vec::new();
     for transcript in claude.transcripts {
-        let hook_waiting = !records.contains_key(&transcript.id)
+        let hook_ended = !records.contains_key(&transcript.id)
+            && hooks.ended(&transcript.id, transcript.last_turn_at);
+        let hook_waiting = !hook_ended
+            && !records.contains_key(&transcript.id)
             && !transcript.clean_exit
             && waiting.contains(&transcript.transcript);
         let (Some(cwd), Some(started_at), Some(last_activity)) = (
@@ -82,7 +85,9 @@ pub(crate) fn assemble(
             continue;
         };
         let record = records.remove(&transcript.id);
-        let (state, state_evidence) = if hook_waiting {
+        let (state, state_evidence) = if hook_ended {
+            (State::Finished, StateEvidence::SessionEnd)
+        } else if hook_waiting {
             (State::Waiting, StateEvidence::Hook)
         } else {
             match &record {

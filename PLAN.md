@@ -1772,7 +1772,9 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 ### Step 9.4 — `SessionEnd` hook record (Codex)
 - Depends on: 9.3. R5.
 - Files: `crates/hook/src/lib.rs`, `crates/hook/tests/**`, `crates/cli/src/hook.rs`, `crates/cli/tests/**`,
-  `crates/core/src/{hook,state,sessions}.rs`, `crates/core/tests/**`, `PROGRESS.md`
+  `crates/core/src/{hook,state,sessions}.rs`, `crates/core/tests/**`, `crates/claude/src/lib.rs` and
+  `crates/claude/tests/**` (only to expose the main transcript's last *turn* timestamp; added 2026-11-08, see
+  Review log), `PROGRESS.md`
 - Verify: tests and clippy clean; the 9.0 `SessionEnd` fixtures → `finished session_end` (exit) and the `clear`
   case as its key says; exit → resume → turn → not `session_end`; precedence tests (live record, `process_exit`,
   `session_end`, `transcript_exit`, and against hook `waiting` evidence); the printed
@@ -1852,6 +1854,14 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 `codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 9.4 scope amendment (Claude)
+Codex stopped before coding: R5 clears an `ended` record only on a later main-transcript *turn*, and `Transcript`
+exposes no turn timestamps (`activity_timestamps` and `last_activity` also count meta records, `/exit` echoes and
+subagent activity, so using them could clear a real `/exit`, whose echo records follow the `cost-state`). Accepted:
+Files gain `crates/claude/src/lib.rs` and `crates/claude/tests/**`, limited to one new field with the last turn's
+timestamp (turn as defined at 9.0). Rejected the alternative (re-reading the transcript in the core hook reader):
+a second scan of every file for one value.
 
 ### 2026-11-08 — Step 9.6 / R7 critique (Codex, read-only, Codex loop)
 Owner added R7 and Step 9.6 to Phase 9 after the step 8.7 screenshot. 8 points; 7 accepted, 1 in part. Accepted:

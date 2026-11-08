@@ -1,8 +1,22 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.3 (2026-11-08, Codex, mode Codex loop) is committed: hand-off child from the redirect file (R4).
-Step 9.4 is next** (then 9.5 → 9.6 / R7, which writes its own keys first, then 9.7). Claude reviewed one round
+**Step 9.4 (2026-11-08, Codex, mode Codex loop) is committed: `SessionEnd` hook record (R5). Step 9.5 is next**
+(then 9.6 / R7, which writes its own keys first, then 9.7). Claude reviewed the diff (no findings, no fix round),
+re-ran Verify (565 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 4` 46/46 `ok`, keys unchanged) and ran
+the sandbox PTY `/exit` check (one `ended` line, `prompt_input_exit`; log entry below).
+- **9.4 / R5:** `hook record` turns `SessionEnd` into one `{"kind":"ended","reason":…}` line (no polling). The core
+  reader accepts `ended`; `Records::ended(id, last_turn_at)` takes the latest `ended` by `(at, line)` and drops it when
+  a later own main-transcript turn or any later valid hook record of that id exists (late async lines too).
+  `sessions::assemble`: session record (and so `process_exit`) → `session_end` → `transcript_exit` → hook `waiting`.
+  New `Transcript::last_turn_at` (scope amendment in PLAN.md's Review log) uses the 9.0 turn definition.
+- **Snippet:** install/uninstall print `SessionEnd` with `async: true`, `timeout: 60`. The owner re-merges it into
+  `~/.claude/settings.json` at 9.7; until then real sessions get no `ended` records.
+- Sandbox `repo-a/.claude/settings.local.json` now holds the 9.4 snippet pointing at `target/debug/multi-link`
+  (git-ignored in the sandbox; harmless if the binary moves).
+Quota check for 9.4: `primary 60%, secondary 28%, CODEX: OK` (63% before the second Codex round).
+
+**Step 9.3 (2026-11-08, Codex, mode Codex loop) is committed: hand-off child from the redirect file (R4).** Claude reviewed one round
 (5 findings, all fixed) and re-ran Verify: `check.sh 3` 32 `ok`, workspace 554 passed / 0 failed / 1 ignored.
 Quota check supplied for 9.3: `primary 44%, secondary 25%, CODEX: OK`.
 - **9.3 / R4:** Shared launch-segment redirect parsing and descriptor-based safe reads serve both hook
@@ -631,6 +645,167 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.4: `SessionEnd` hook record — Codex
+- Did: Implemented R5, mode **Codex loop**. Quota check supplied by user:
+  `primary 60%, secondary 28%, CODEX: OK`. Claude's scope amendment resolved the earlier blocker;
+  this entry replaces the blocked entry. Added only the own main-transcript maximum turn timestamp
+  to the Claude parser, using the existing `is_turn` definition and leaving clean-exit file order intact.
+  Hook writer emits exactly one ended line, requires a string reason (unknown strings accepted), forces
+  ended-only nullable fields to null, and skips polling. Other kinds omit reason. Reader validates ended
+  records fail-soft; only a valid record can clear earlier ended evidence. Latest ended uses `(at, line)`;
+  strictly later own main turns or valid hooks clear it, even if an older async line is appended last.
+  Session records/process exit still win; session_end beats transcript_exit and hook waiting. Snippets
+  print SessionEnd with the same async/timeout shape for install and uninstall.
+- Changed: `crates/claude/src/lib.rs`, `crates/claude/tests/last_turn.rs`, `crates/hook/src/lib.rs`,
+  `crates/hook/tests/hook.rs`, `crates/core/src/hook.rs`, `crates/core/src/sessions.rs`,
+  `crates/core/tests/session_end.rs`, `crates/cli/src/hook.rs`, `crates/cli/tests/cli.rs`, `PROGRESS.md`.
+- Verify: All four commands exited 0; actual output excerpts pasted below. Workspace: 565 passed,
+  0 failed, 1 existing ignored test. Phase 9: 46 lines, every line ok, including whole sessions/links keys.
+  New coverage: precedence with FakeProcessProbe::Gone, record wins, ended over transcript exit/waiting,
+  transcript exit over waiting, late async arrival after newer turns/waiting/handoff/ended, warm resume
+  invalidating finished/open, equal timestamp boundaries, malformed records, arbitrary reasons, old-id-only
+  clear from Claude's keys, main-turn classification (including tool_result), and exact writer/CLI/snippet JSON.
+  Initial tests failed on missing ended support and snippet entry before implementation. During verification,
+  corrected the synthetic record's timestamp format to epoch milliseconds and qualified the CLI test's
+  Timestamp import; final commands below are after those fixes.
+- Review: Claude, 2026-11-08. Round 0 (before code): Codex stopped on the Files list; Claude added
+  `crates/claude/{src/lib.rs,tests/**}` for `last_turn_at` only (PLAN.md Review log). Round 1 review of
+  `git diff`: no findings. Checked: record (so `process_exit`) still wins; `ended` cleared by a strictly later turn
+  or any later valid hook record, including a late append on a warm cache; meta, local-command echoes, inherited
+  ids and subagent records do not clear it; `reason` rejected on other kinds; snippet shape. Files within the
+  amended list. No answer keys changed (`git diff --stat -- fixtures/expected` empty). Claude re-ran Verify: workspace
+  565 passed / 0 failed / 1 ignored, clippy exit 0, fmt exit 0, `check.sh 4` exit 0 with all 46 lines `ok`
+  (same as below).
+- Sandbox PTY `/exit` (Claude, Claude Code 2.1.319, Expect PTY, `env -i HOME USER LOGNAME TERM LANG PATH
+  MULTI_LINK_HOME=<scratch>`, snippet from `target/debug/multi-link hook install --scope local` written to
+  `~/multi-link-sandbox/repo-a/.claude/settings.local.json`; `~/.claude/settings.json` untouched):
+  - Run 1, `/exit` with no prompt: exit 0; hook file `ae233a93….jsonl` holds exactly one line,
+    `{"kind":"ended","event":"SessionEnd","reason":"prompt_input_exit",…}`. Claude Code wrote no transcript for a
+    prompt-less session, so the reader ignores it (hook records never create a session) — expected.
+  - Run 2, one prompt then `/exit`: the CLI is **still logged out** ("Not logged in · Please run /login"), so the
+    turn ended in an auth error; not signed in, as instructed. `SessionEnd` **still fired**: one `ended` line,
+    `prompt_input_exit`, at 23:33:18.438Z, after the last turn (assistant 23:33:05.221Z). The transcript ends with two
+    `cost-state` records and no `/exit` echo. `multi-link sessions --since all --json` (real `~/.claude`, scratch
+    hook dir) → `66960480…` `finished` / `session_end`, `record: null`; `open 66960480… --dry-run` → `resume`
+    `claude --resume 66960480…` in repo-a. The missing sign-in did not block the check.
+Commands run with `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"`.
+`cargo test --workspace` → actual result lines (all test targets and doc-tests, in command order):
+
+```text
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+`cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual completion line:
+
+```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.80s
+```
+
+`cargo fmt --check` → exit 0, stdout/stderr empty.
+
+`fixtures/expected/phase9/check.sh 4` → exit 0, complete actual output:
+
+```text
+ok   sessions.json (^9[1-4])
+ok   links.json (^9[1-4])
+ok   graph-1.1.json (^9[1-4])
+ok   sessions.json (^9[1-4])
+ok   links.json (^9[1-4])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+```
 
 ### 2026-11-08 — Step 9.3: Hand-off child from the redirect file — Codex
 - Did: Implemented R4, mode **Codex loop**. Quota check: `primary 44%, secondary 25%, CODEX: OK`.

@@ -50,6 +50,8 @@ pub struct Transcript {
     pub entrypoint: Option<String>,
     /// An own cost-state follows every own main-transcript turn, in file order.
     pub clean_exit: bool,
+    /// Latest timestamp of any own main-transcript turn; excludes meta and local echoes.
+    pub last_turn_at: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -473,6 +475,7 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         last_asked: None,
         entrypoint: None,
         clean_exit: false,
+        last_turn_at: None,
     };
     let activity_id = if subagent {
         path.parent()
@@ -570,6 +573,7 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
                 transcript.clean_exit = true;
             } else if is_turn(&value) {
                 transcript.clean_exit = false;
+                transcript.last_turn_at = transcript.last_turn_at.max(at);
             }
         }
         // R8: inherited records update metadata freely until an own record sets home.

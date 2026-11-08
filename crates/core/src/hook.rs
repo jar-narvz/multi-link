@@ -11,6 +11,7 @@ pub(crate) struct Record {
     pub tool_use_id: Option<String>,
     pub child: Option<String>,
     pub waiting: bool,
+    pub ended: bool,
     pub at: Timestamp,
     pub line: usize,
 }
@@ -22,6 +23,23 @@ pub(crate) struct Records {
 }
 
 impl Records {
+    /// A resumed turn or any strictly later valid hook record clears ended.
+    pub fn ended(&self, id: &str, last_turn_at: Option<Timestamp>) -> bool {
+        let Some(ended) = self
+            .records
+            .iter()
+            .filter(|r| r.session_id == id && r.ended)
+            .max_by_key(|r| (r.at, r.line))
+        else {
+            return false;
+        };
+        last_turn_at.is_none_or(|at| at <= ended.at)
+            && !self
+                .records
+                .iter()
+                .any(|r| r.session_id == id && r.at > ended.at)
+    }
+
     pub fn summary(&self) -> HookSummary {
         HookSummary {
             records: self.records.len(),
@@ -104,6 +122,15 @@ fn parse(value: &Value, stem: &str, line: usize) -> Option<Record> {
                     _ => false,
                 }
         }
+        "ended" => {
+            event == "SessionEnd"
+                && value.get("reason").is_some_and(Value::is_string)
+                && value["agent_id"].is_null()
+                && tool.is_none()
+                && child.is_none()
+                && evidence.is_none()
+                && notification.is_none()
+        }
         "waiting" => {
             tool.is_none()
                 && child.is_none()
@@ -119,11 +146,13 @@ fn parse(value: &Value, stem: &str, line: usize) -> Option<Record> {
         }
         _ => false,
     };
+    let valid = valid && (kind == "ended" || value.get("reason").is_none());
     valid.then(|| Record {
         session_id: stem.to_owned(),
         tool_use_id: tool.map(str::to_owned),
         child: child.map(str::to_owned),
         waiting: kind == "waiting",
+        ended: kind == "ended",
         at,
         line,
     })

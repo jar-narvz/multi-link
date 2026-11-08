@@ -634,3 +634,51 @@ fn background_non_missing_task_open_error_is_returned_after_first_record() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0]["child"], Value::Null);
 }
+
+#[test]
+fn session_end_writes_one_metadata_record_without_polling() {
+    for reason in [
+        "prompt_input_exit",
+        "clear",
+        "other",
+        "logout",
+        "future-reason",
+        "",
+    ] {
+        let tmp = TempDir::new().unwrap();
+        let mut p = payload();
+        p["hook_event_name"] = json!("SessionEnd");
+        p["reason"] = json!(reason);
+        p["agent_id"] = json!("ignored-agent");
+        let mut clock = Fake::new(tmp.path());
+        assert_eq!(
+            record_and_write(&bytes(&p), &env(tmp.path()), &mut clock).unwrap(),
+            1
+        );
+        assert_eq!(clock.elapsed, Duration::ZERO);
+        assert_eq!(
+            lines(tmp.path()),
+            vec![json!({"v":1,"kind":"ended","at":"2026-10-29T23:12:39.000Z",
+            "session_id":PARENT,"agent_id":null,"event":"SessionEnd","tool_use_id":null,
+            "cwd":"/synthetic/repo","child":null,"child_evidence":null,"notification_type":null,"reason":reason})]
+        );
+    }
+}
+
+#[test]
+fn session_end_requires_string_reason() {
+    let tmp = TempDir::new().unwrap();
+    for reason in [None, Some(Value::Null), Some(json!(1)), Some(json!([]))] {
+        let mut p = payload();
+        p["hook_event_name"] = json!("SessionEnd");
+        if let Some(reason) = reason {
+            p["reason"] = reason;
+        }
+        let mut clock = Fake::new(tmp.path());
+        assert_eq!(
+            record_and_write(&bytes(&p), &env(tmp.path()), &mut clock).unwrap(),
+            0
+        );
+    }
+    assert!(!tmp.path().join(".multi-link").exists());
+}

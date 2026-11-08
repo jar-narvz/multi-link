@@ -658,7 +658,8 @@ fn install_uninstall_print_parseable_entries_without_changing_files() {
                     "PostToolUse":[{"matcher":"Bash","hooks":[entry.clone()]}],
                     "PostToolUseFailure":[{"matcher":"Bash","hooks":[entry.clone()]}],
                     "PermissionRequest":[{"hooks":[entry.clone()]}],
-                    "Notification":[{"matcher":"permission_prompt|elicitation_dialog","hooks":[entry]}]
+                    "Notification":[{"matcher":"permission_prompt|elicitation_dialog","hooks":[entry.clone()]}],
+                    "SessionEnd":[{"hooks":[entry]}]
                 }})
             );
             let stderr = String::from_utf8(output.stderr).unwrap();
@@ -946,4 +947,28 @@ fn started_root_overview_text_counts_nested_sessions_at_every_depth() {
     // 18 listed sessions: K, A, B, A2, A's Codex child and the 13 top-level ones.
     let count = line.split_whitespace().nth(1).unwrap();
     assert_eq!(count, "18", "{line}");
+}
+
+#[test]
+fn session_end_record_command_writes_exact_metadata_silently() {
+    let home = tempfile::tempdir().unwrap();
+    let payload = json!({"session_id":HOOK_PARENT,"cwd":"/synthetic/repo",
+        "hook_event_name":"SessionEnd","reason":"clear","agent_id":"ignored"});
+    record_input(
+        &mut hook_command(home.path()),
+        &serde_json::to_vec(&payload).unwrap(),
+    );
+    let records = hook_lines(&home.path().join(".multi-link"));
+    assert_eq!(records.len(), 1);
+    let at = records[0]["at"].as_str().unwrap();
+    assert_eq!(
+        multi_link_model::Timestamp::parse(at).unwrap().to_string(),
+        at
+    );
+    assert_eq!(
+        records[0],
+        json!({"v":1,"kind":"ended","at":at,
+        "session_id":HOOK_PARENT,"agent_id":null,"event":"SessionEnd","tool_use_id":null,
+        "cwd":"/synthetic/repo","child":null,"child_evidence":null,"notification_type":null,"reason":"clear"})
+    );
 }

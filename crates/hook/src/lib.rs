@@ -53,6 +53,8 @@ pub struct HookRecord {
     pub child: Option<String>,
     pub child_evidence: Option<String>,
     pub notification_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 fn uuid(input: &str) -> Option<String> {
@@ -119,6 +121,7 @@ fn record_value(p: &Value, env: &HookEnv) -> Option<HookRecord> {
         child: None,
         child_evidence: None,
         notification_type: None,
+        reason: None,
     };
     match event {
         "PostToolUse" | "PostToolUseFailure" => {
@@ -139,6 +142,11 @@ fn record_value(p: &Value, env: &HookEnv) -> Option<HookRecord> {
                 r.child = Some(id);
                 r.child_evidence = Some(evidence);
             }
+        }
+        "SessionEnd" => {
+            r.kind = "ended".into();
+            r.reason = Some(p.get("reason")?.as_str()?.to_owned());
+            r.agent_id = None;
         }
         "PermissionRequest" => r.kind = "waiting".into(),
         "Notification" => {
