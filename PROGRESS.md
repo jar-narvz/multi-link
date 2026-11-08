@@ -448,7 +448,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   - Wall-clock: 1 h 20 min 33 s (22:34:07–23:54:40 PST, step session start to writing this entry; merge follows).
   - Tests added: 80, all in `crates/tui/tests/graph.rs` (358 → 438 passed).
   - Implementer runs: 28 `codex exec` calls (7 red, 7 green, 14 fix calls; one fix call was wasted on a missing findings
-    file, one continued a stopped fix). Codex time from the per-call timer: 3 289 s in all.
+    file, one continued a stopped fix). Codex time from the per-call timer: 3 033 s in all.
   - Reviewer runs: 22 Claude subagents started: 18 finished (13 spec/quality reviews, 4 re-reviews, 1 final review), 4
     stopped unfinished when hybrid mode ended.
   - Findings: 98 raised by the reviewers that finished (counted from their reports, notes included); 81 sent to Codex and
