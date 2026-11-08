@@ -252,3 +252,151 @@ fn unreadable_app_dir_is_an_unreadable_diagnostic_not_an_error() {
             .all(|s| s.started_by.is_none())
     );
 }
+
+fn overview(root: &Path) -> Value {
+    let mut plans = |folder: &Path| {
+        multi_link_plan::steps_report(root, &[folder.to_string_lossy().into_owned()])
+            .repos
+            .remove(0)
+    };
+    let output = Scanner::default()
+        .overview(root, &options(root), &mut plans)
+        .unwrap();
+    serde_json::to_value(output.report).unwrap()
+}
+
+fn repo_rows<'a>(overview: &'a Value, repo: &str) -> &'a Vec<Value> {
+    overview["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|group| group["repo"] == repo)
+        .unwrap()["rows"]
+        .as_array()
+        .unwrap()
+}
+
+/// Every session row in `rows`, at any depth and inside merged rows.
+fn all_rows(rows: &[Value], out: &mut Vec<Value>) {
+    for row in rows {
+        if row["kind"] == "merged" {
+            all_rows(row["rows"].as_array().unwrap(), out);
+        } else {
+            out.push(row.clone());
+            all_rows(row["children"].as_array().unwrap(), out);
+        }
+    }
+}
+
+#[test]
+fn overview_matches_the_key_on_cold_and_warm_passes() {
+    let root = fixtures().join("sessions-started");
+    let mut plans = |folder: &Path| {
+        multi_link_plan::steps_report(&root, &[folder.to_string_lossy().into_owned()])
+            .repos
+            .remove(0)
+    };
+    let mut scanner = Scanner::default();
+    let expected = key("overview.json");
+    for _ in 0..2 {
+        let output = scanner
+            .overview(&root, &options(&root), &mut plans)
+            .unwrap();
+        assert_eq!(serde_json::to_value(&output.report).unwrap(), expected);
+    }
+}
+
+#[test]
+fn nesting_is_k_a_codex_a2_and_k_b_and_each_session_appears_once() {
+    let root = fixtures().join("sessions-started");
+    let overview = overview(&root);
+    let rows = repo_rows(&overview, "/home/dev/repo-k");
+    let k = rows
+        .iter()
+        .find(|row| row["id"] == id(1).as_str())
+        .expect("K is a visible top-level row (A2 is busy)");
+    let kids: Vec<_> = k["children"].as_array().unwrap().iter().collect();
+    assert_eq!(
+        kids.iter().map(|c| c["id"].clone()).collect::<Vec<_>>(),
+        [id(2), id(3)]
+    );
+    let a: Vec<_> = kids[0]["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        a,
+        ["84c000c2-0000-4000-8000-0000000084c2".to_owned(), id(4)]
+    );
+
+    let mut seen = Vec::new();
+    for group in overview["repos"].as_array().unwrap() {
+        let mut flat = Vec::new();
+        all_rows(group["rows"].as_array().unwrap(), &mut flat);
+        seen.extend(flat.iter().map(|r| r["id"].as_str().unwrap().to_owned()));
+    }
+    let listed: Vec<_> = Scanner::default()
+        .sessions(&root, &options(&root))
+        .unwrap()
+        .report
+        .sessions
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    seen.sort();
+    let mut listed = listed;
+    listed.sort();
+    assert_eq!(seen, listed);
+}
+
+#[test]
+fn k_is_not_quiet_merged_while_a2_is_busy_and_its_counts_ignore_the_app_dir() {
+    let root = fixtures().join("sessions-started");
+    let with = overview(&root);
+    let k = |overview: &Value| {
+        let mut flat = Vec::new();
+        all_rows(repo_rows(overview, "/home/dev/repo-k"), &mut flat);
+        flat.into_iter()
+            .find(|r| r["id"] == id(1).as_str())
+            .unwrap()
+    };
+    let top_ids: Vec<_> = repo_rows(&with, "/home/dev/repo-k")
+        .iter()
+        .filter(|r| r["kind"] == "session")
+        .map(|r| r["id"].clone())
+        .collect();
+    assert!(top_ids.contains(&Value::String(id(1))));
+
+    let (_temp, copy) = scratch();
+    fs::remove_dir_all(copy.join(DIR)).unwrap();
+    let without = overview(&copy);
+    assert_eq!(k(&with)["made"], k(&without)["made"]);
+    assert_eq!(k(&with)["handoffs"], k(&without)["handoffs"]);
+    assert_eq!(
+        with["repos"][0]["latest_handoff"],
+        without["repos"][0]["latest_handoff"]
+    );
+}
+
+#[test]
+fn removing_the_app_dir_puts_every_row_back_at_top_level() {
+    let (_temp, root) = scratch();
+    fs::remove_dir_all(root.join(DIR)).unwrap();
+    let overview = overview(&root);
+    let mut flat = Vec::new();
+    for group in overview["repos"].as_array().unwrap() {
+        all_rows(group["rows"].as_array().unwrap(), &mut flat);
+    }
+    for row in &flat {
+        assert_eq!(row["started_by"], Value::Null);
+        for child in row["children"].as_array().unwrap() {
+            assert_eq!(child["harness"], "codex", "only Codex children remain");
+        }
+    }
+    let mut rows = Vec::new();
+    all_rows(repo_rows(&overview, "/home/dev/repo-k"), &mut rows);
+    let a = rows.iter().find(|r| r["id"] == id(2).as_str()).unwrap();
+    assert_eq!(a["children"].as_array().unwrap().len(), 1);
+}

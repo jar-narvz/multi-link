@@ -926,3 +926,23 @@ Each prompt candidate starting with `Background (from the session that started t
 The repo header appends `· latest hand-off step <id>` when its latest tagged hand-off differs from the logged step.
 Place words use checkout identity: a linked worktree shows `worktree <folder>`; the main checkout uses its
 memoised git branch, falling back to recorded `gitBranch`. These display values never replace JSON `branch`.
+
+### Phase 8 amendment: sessions started by a session (Step 8.4c, S1-S3)
+Extends need 2 from Claude to Codex to Claude to Claude. The desktop app keeps one record per app session at
+`<home>/Library/Application Support/Claude/claude-code-sessions/<a>/<b>/local_<id>.json` (macOS). This is
+undocumented app behaviour: every field is an assumption confirmed only by the fixture and a counts-only real run.
+- **S1 Started-by link.** Session C is started by P when C's record has `cliSessionId` = C's transcript id,
+  `spawnedFrom.sessionId` names a record whose `cliSessionId` = P's transcript id, both are listed Claude
+  sessions, P differs from C, and `spawnedFrom.userFork` / `btw` are not true (user acts, not a session's).
+  Two records with one `cliSessionId` naming different parents, or two records sharing a `sessionId`, give no
+  link for the affected child. An edge closing a cycle is dropped for every session on it. Always exact; there is no
+  time or brief guessing. An absent directory or missing parent record is normal; a malformed file or wrong field
+  type is a bad record; an unreadable directory is the existing unreadable diagnostic; never an error exit.
+- **S2 Contract.** `Session` and `SessionRow` gain `started_by`. It is not a `Link`: never in `links`,
+  `handoffs`, `unparented` or any Codex hand-off count, and step graphs ignore it. Without app records the
+  output equals Step 8.4b's plus `started_by: null`.
+- **S3 Nesting.** In the repo group (mapped repo, not `cwd`) a started Claude row nests under its starter at any
+  depth; cross-repo or unlisted starters stay top level. Children are ordered by time (Codex: placing hand-off;
+  started: `started_at`), ties by id; a parent's own order and state are unchanged; quiet-merge eligibility looks at
+  all descendants. Why: the owner's coordinator sessions start step sessions, and the hierarchy is the one thing
+  the flat list hid. Home stays flat (non-goal).

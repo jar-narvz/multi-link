@@ -904,3 +904,26 @@ fn tui_has_only_dashboard_flags_and_rejects_invalid_history() {
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("expected 'all' or a duration"));
 }
+
+#[test]
+fn started_root_json_matches_the_three_keys() {
+    for command in ["sessions", "links", "overview"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+            .arg(command)
+            .arg("--root")
+            .arg(fixtures().join("sessions-started"))
+            .args(["--now", "2026-11-08T12:00:00Z", "--since", "all", "--json"])
+            .output()
+            .unwrap();
+        success(&output);
+        let key: Value = serde_json::from_slice(
+            &fs::read(fixtures().join(format!("expected/started/{command}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+            key,
+            "{command}"
+        );
+    }
+}

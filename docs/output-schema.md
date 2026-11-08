@@ -117,6 +117,7 @@ must equal `fixtures/expected/overview.json` (parsed); the Hook variant has its 
 | `activity` | `{"from": timestamp, "to": timestamp}`[] | Phase 6, design W1: recorded activity as bursts, oldest first. See Phase 6 fields. |
 | `asked` | string \| null | Phase 6, design W3: the session's first prompt. See Phase 6 fields. |
 | `title` | string \| null | U1: last own main-file Claude custom title, trimmed with controls removed; otherwise null. Codex and record-only sessions: null. |
+| `started_by` | string \| null | Step 8.4c, design S1: the transcript id of the Claude session that started this one (from the desktop app's session records), else null. Always null for Codex and record-only sessions. Not a `Link`. |
 | `last_asked` | string \| null | Step 7.5, design P5: the latest eligible prompt. |
 | `imported` | bool | Phase 6, design W2: a Codex Desktop import. Always `false` for Claude. |
 | `state_since` | timestamp \| null | Phase 6, design W5: when the current `state` began, from the evidence `state` used. |
@@ -582,11 +583,11 @@ ascending.
 A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
 
 SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
-"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "last_asked", "title", "imported",
+"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "last_asked", "title", "started_by", "imported",
 "state_since", "children": SessionRow[]}` (Phase 6 fields and P5: Session → Phase 6 fields). The plain fields are copied
 from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
 (`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
-under this Claude row (below); always `[]` on a Codex row.
+under this Claude row and, from Step 8.4c, Claude rows it started (below); always `[]` on a Codex row.
 `made` (Phase 5, design V1): for a Claude row, the distinct non-null `step` values of the listed links whose
 `parent` is this id, ordered by each step's newest link (`at`, `invocation`), newest first; a step that
 several links carry appears once, at its newest link's place. Any `match` counts (an `unlinked` launch still
@@ -602,14 +603,23 @@ the window or in another repo; its `handoffs` still lists every link). A child i
 hand-offs it has. Children are ordered by their placing hand-off (`at`, `invocation`). The same-repo
 condition keeps every row inside its own repo's group; no fixture has a cross-repo link (3.3 unit test).
 
+**Started-by nesting (Step 8.4c, design S3).** A Claude row whose `started_by` names a listed Claude session in
+the **same repo group** (the mapped `repo`, never the app record's `cwd`) is a child of that row, to any depth
+(coordinator, step session, its Codex run). Cross-repo or parent not listed: the row stays top level. A parent
+is the first listed session with that id; a cycle never hides its members (the closing edge is ignored). Every
+session appears exactly once. `children` of one row are one list ordered by time, then id: a Codex child by its
+placing hand-off (`at`, `invocation`), a started child by its `started_at`. A parent's own place and state never
+depend on its children. `handoffs`, `made`, `links`, `unparented` and every hand-off count ignore started-by.
+With no app records every `started_by` is null and the overview equals the Step 8.4b shape.
+
 **Top-level order (design T5).** `state`: `waiting`, `busy`, `stale`, `idle`, `unknown`, `finished`; then
 `last_activity` descending; then `id` ascending. A parent's place follows its own `state` and
 `last_activity`, never its children's.
 
 **Merge (`claude ×N`, `codex ×N`).** After ordering, the *quiet* rows of a harness are:
 - Claude: the top-level Claude SessionRows whose `state` is `idle`, `unknown` or `finished` **and** whose
-  children are all `idle`, `unknown` or `finished` (a busy or stale Codex child keeps its parent visible,
-  review #4).
+  descendants (Codex or started, at any depth) are all `idle`, `unknown` or `finished` (a busy or stale child
+  keeps its parent visible, review #4; Step 8.4c makes the test recursive).
 - Codex (Phase 4, design U2): the top-level Codex SessionRows (no placing hand-off, so not a child) whose
   `state` is `idle`, `unknown` or `finished`. Their `handoffs` do not matter: an `unlinked`, `ambiguous`
   or cross-repo link leaves the row top-level and still mergeable.

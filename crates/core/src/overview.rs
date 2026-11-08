@@ -123,42 +123,73 @@ pub fn build(
     let mut repos: Vec<RepoGroup> = groups
         .into_iter()
         .map(|(repo, members)| {
-            // Each placed child attaches once: to the first top-level member (in
-            // member order) whose id is its placing parent. Two listed sessions
-            // sharing an id must not both show the child (every session once).
-            let mut owner: HashMap<&str, usize> = HashMap::new();
-            for (index, parent) in members.iter().enumerate() {
-                if placed.contains_key(parent.id.as_str()) {
-                    continue;
-                }
-                for child in &members {
-                    if let Some(link) = placed.get(child.id.as_str())
-                        && link.parent == parent.id
-                    {
-                        owner.entry(child.id.as_str()).or_insert(index);
-                    }
-                }
+            // Every session appears once. A member's parent is the first member
+            // (in member order) with the id of its placing Codex hand-off parent
+            // or, for a Claude session, its `started_by`; both live in this
+            // group. A parent never nests under its own descendant (a cycle
+            // would hide its members), so a closing edge is ignored.
+            let mut first: HashMap<&str, usize> = HashMap::new();
+            for (index, member) in members.iter().enumerate() {
+                first.entry(member.id.as_str()).or_insert(index);
             }
-            let mut rows: Vec<SessionRow> = members
+            let mut parent_of: Vec<Option<usize>> = members
                 .iter()
                 .enumerate()
-                .filter(|(_, session)| !placed.contains_key(session.id.as_str()))
-                .map(|(index, session)| {
-                    let mut children: Vec<(&Link, &Session)> = members
-                        .iter()
-                        .filter_map(|child| {
-                            let link = placed.get(child.id.as_str())?;
-                            (owner.get(child.id.as_str()) == Some(&index))
-                                .then_some((*link, *child))
-                        })
-                        .collect();
-                    children.sort_by_key(|(link, _)| key(link));
-                    let children = children
-                        .into_iter()
-                        .map(|(_, child)| session_row(child, Vec::new()))
-                        .collect();
-                    session_row(session, children)
+                .map(|(index, member)| {
+                    let parent_id = match member.harness {
+                        Harness::Codex => placed.get(member.id.as_str())?.parent.as_str(),
+                        Harness::Claude => member.started_by.as_deref()?,
+                    };
+                    let parent = *first.get(parent_id)?;
+                    (parent != index && members[parent].harness == Harness::Claude)
+                        .then_some(parent)
                 })
+                .collect();
+            for index in 0..members.len() {
+                let mut at = parent_of[index];
+                let mut steps = 0;
+                while let Some(ancestor) = at {
+                    if ancestor == index || steps > members.len() {
+                        parent_of[index] = None;
+                        break;
+                    }
+                    at = parent_of[ancestor];
+                    steps += 1;
+                }
+            }
+            let mut kids: Vec<Vec<usize>> = vec![Vec::new(); members.len()];
+            for (index, parent) in parent_of.iter().enumerate() {
+                if let Some(parent) = parent {
+                    kids[*parent].push(index);
+                }
+            }
+            let child_key = |index: usize| {
+                let member = members[index];
+                match placed.get(member.id.as_str()) {
+                    Some(link) if member.harness == Harness::Codex => {
+                        (link.at, link.invocation.clone(), member.id.clone())
+                    }
+                    _ => (member.started_at, String::new(), member.id.clone()),
+                }
+            };
+            for list in &mut kids {
+                list.sort_by_key(|index| child_key(*index));
+            }
+            fn build_row(
+                index: usize,
+                members: &[&Session],
+                kids: &[Vec<usize>],
+                session_row: &dyn Fn(&Session, Vec<SessionRow>) -> SessionRow,
+            ) -> SessionRow {
+                let children = kids[index]
+                    .iter()
+                    .map(|child| build_row(*child, members, kids, session_row))
+                    .collect();
+                session_row(members[index], children)
+            }
+            let mut rows: Vec<SessionRow> = (0..members.len())
+                .filter(|index| parent_of[*index].is_none())
+                .map(|index| build_row(index, &members, &kids, &session_row))
                 .collect();
             rows.sort_by(|a, b| {
                 (
@@ -319,7 +350,7 @@ fn quiet_state(state: State) -> bool {
 
 /// Quiet top-level rows merge by harness; an active child keeps its parent visible.
 fn quiet(row: &SessionRow) -> bool {
-    quiet_state(row.state) && row.children.iter().all(|child| quiet_state(child.state))
+    quiet_state(row.state) && row.children.iter().all(quiet)
 }
 
 /// Replace each harness's quiet rows at its first member's position, preserving
