@@ -131,7 +131,8 @@ fn refresh(
     .collect::<Vec<_>>()
     .join(" · ");
     // One all-time pass per refresh, whatever the TUI's window: started children that went
-    // quiet long ago still count for `s` (G9 amendment), and G2 step lists are all-time.
+    // quiet long ago still count for `s` (G9 amendment), Codex incoming steps use all-time
+    // same-repo parents (R6), and G2 step lists are all-time.
     let all = Options {
         state_dir: options.state_dir.clone(),
         since: None,
@@ -141,6 +142,7 @@ fn refresh(
     let sessions = &sessions.report.sessions;
     let links = &links.report.links;
     let started_steps = started_steps(sessions, links);
+    let codex_steps = codex_steps(sessions, links);
     let (graph, graph_steps) = match graph {
         None => (None, Vec::new()),
         Some((repo, step)) => {
@@ -157,8 +159,37 @@ fn refresh(
         diagnostics,
         graph,
         graph_steps,
+        codex_steps,
         started_steps,
     }))
+}
+
+/// Latest tagged incoming hand-off per Codex session (R6), using all-time sessions to
+/// require a parent in the child's repo. Max `at` wins, ties by later link position.
+fn codex_steps(sessions: &[Session], links: &[Link]) -> HashMap<String, String> {
+    let by_id: HashMap<&str, &Session> = sessions.iter().map(|s| (s.id.as_str(), s)).collect();
+    let mut latest: HashMap<&str, (Timestamp, usize, &str)> = HashMap::new();
+    for (i, link) in links.iter().enumerate() {
+        let (Some(child), Some(step)) = (link.child.as_deref(), link.step.as_deref()) else {
+            continue;
+        };
+        let (Some(child_session), Some(parent)) =
+            (by_id.get(child), by_id.get(link.parent.as_str()))
+        else {
+            continue;
+        };
+        if child_session.harness != Harness::Codex || parent.repo != child_session.repo {
+            continue;
+        }
+        let entry = latest.entry(child).or_insert((link.at, i, step));
+        if (link.at, i) > (entry.0, entry.1) {
+            *entry = (link.at, i, step);
+        }
+    }
+    latest
+        .into_iter()
+        .map(|(id, (_, _, step))| (id.to_string(), step.to_string()))
+        .collect()
 }
 
 /// Steps a Claude session's direct started children reached (G9 amendment), keyed by the
@@ -749,6 +780,157 @@ mod tests {
             status(&mut scanner, "2026-11-06T18:06:00Z"),
             Some(PartStatus::Stale)
         );
+    }
+
+    #[test]
+    fn codex_steps_use_latest_tagged_same_repo_incoming_by_time_and_position() {
+        let root = fixtures().join("sessions-phase9");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let (sessions, links) = Scanner::default()
+            .refresh(&root, &fixture_options(&probe, "2026-11-09T12:00:00Z"))
+            .unwrap();
+        let template = &sessions.report.sessions[0];
+        let session = |id: &str, repo: &str, harness: Harness| {
+            let mut s = template.clone();
+            s.id = id.into();
+            s.repo = repo.into();
+            s.harness = harness;
+            s
+        };
+        let sessions = vec![
+            session("p", "/r", Harness::Claude),
+            session("other", "/other", Harness::Claude),
+            session("x", "/r", Harness::Codex),
+            session("untagged", "/r", Harness::Codex),
+        ];
+        let template = &links.report.links[0];
+        let link = |parent: &str, child: &str, step: Option<&str>, at: &str| {
+            let mut l = template.clone();
+            l.parent = parent.into();
+            l.child = Some(child.into());
+            l.step = step.map(Into::into);
+            l.at = at.parse().unwrap();
+            l
+        };
+        let links = vec![
+            link("p", "x", Some("2.0"), "2026-11-09T09:00:00Z"),
+            link("p", "x", Some("2.1"), "2026-11-09T09:00:00Z"),
+            link("p", "x", Some("1.0"), "2026-11-09T08:00:00Z"),
+            link("other", "x", Some("7.1"), "2026-11-09T11:00:00Z"),
+            link("missing", "x", Some("8.1"), "2026-11-09T11:00:00Z"),
+            link("p", "x", None, "2026-11-09T12:00:00Z"),
+            link("p", "untagged", None, "2026-11-09T12:00:00Z"),
+            link("p", "p", Some("9.9"), "2026-11-09T12:00:00Z"),
+        ];
+        assert_eq!(
+            codex_steps(&sessions, &links),
+            HashMap::from([("x".into(), "2.1".into())])
+        );
+    }
+
+    fn phase9_codex_lane(id: &str) {
+        let key: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/expected/phase9/lanes.json"))
+                .unwrap();
+        let lane = key["lanes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|lane| lane["codex"].as_str() == Some(id))
+            .unwrap();
+        let repo = lane["repo"].as_str().unwrap();
+        let root = fixtures().join("sessions-phase9");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let options = fixture_options(&probe, "2026-11-09T12:00:00Z");
+        let report = refresh(&mut Scanner::default(), &root, &options, None).unwrap();
+        let group = report
+            .overview
+            .repos
+            .iter()
+            .find(|g| g.repo == repo)
+            .unwrap();
+        let count = multi_link_tui::view::sessions(group).count();
+        assert!(
+            multi_link_tui::view::sessions(group).any(|row| row.id == id),
+            "Codex lane {id} absent from the 2 h overview; do not widen the window"
+        );
+        let tagged_parent = match id {
+            "95c00001-0000-4000-8000-000095c00001" => Some("95000001-0000-4000-8000-000095000001"),
+            "95c00002-0000-4000-8000-000095c00002" => Some("95000002-0000-4000-8000-000095000002"),
+            _ => None,
+        };
+        if let Some(parent) = tagged_parent {
+            assert_eq!(
+                report.codex_steps.get(id).map(String::as_str),
+                lane["opens_step"].as_str()
+            );
+            // Both same-repo tagged parents went quiet before 10:00; window own_step cannot use them.
+            assert!(
+                !report
+                    .overview
+                    .repos
+                    .iter()
+                    .flat_map(multi_link_tui::view::sessions)
+                    .any(|row| row.id == parent),
+                "tagged parent {parent} unexpectedly present in the 2 h overview"
+            );
+        }
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(report)));
+        app.selection = multi_link_tui::selectable_home(
+            &app.report.as_ref().unwrap().overview,
+            &Default::default(),
+        )
+        .iter()
+        .position(|(r, _)| *r == repo)
+        .unwrap();
+        assert!(app.update(Event::Key(KeyCode::Enter)).is_empty());
+        for _ in 0..count {
+            app.update(Event::Key(KeyCode::Up));
+        }
+        for _ in 0..count {
+            let effects = app.update(Event::Key(KeyCode::Char('o')));
+            let [Effect::FreshOpen { id: selected, .. }] = effects.as_slice() else {
+                panic!("no lane selected")
+            };
+            let found = selected == id;
+            app.update(Event::Opened(String::new()));
+            if found {
+                break;
+            }
+            app.update(Event::Key(KeyCode::Down));
+        }
+        assert!(
+            matches!(app.update(Event::Key(KeyCode::Char('o'))).as_slice(),
+            [Effect::FreshOpen { id: selected, .. }] if selected == id)
+        );
+        app.update(Event::Opened(String::new()));
+        let effects = app.update(Event::Key(KeyCode::Char('s')));
+        if let Some(step) = lane["opens_step"].as_str() {
+            assert_eq!(effects, [Effect::Graph(Some(graph_target(repo, step)))]);
+        } else {
+            assert!(effects.is_empty());
+            let area = ratatui::layout::Rect::new(0, 0, 120, 40);
+            let mut buf = ratatui::buffer::Buffer::empty(area);
+            app.render(area, &mut buf);
+            let footer = (0..120).map(|x| buf[(x, 39)].symbol()).collect::<String>();
+            assert_eq!(footer.trim_end(), lane["footer"].as_str().unwrap());
+        }
+    }
+
+    #[test]
+    fn phase9_codex_lane_parent_outside_window() {
+        phase9_codex_lane("95c00001-0000-4000-8000-000095c00001");
+    }
+
+    #[test]
+    fn phase9_codex_lane_same_repo_beats_newer_cross_repo() {
+        phase9_codex_lane("95c00002-0000-4000-8000-000095c00002");
+    }
+
+    #[test]
+    fn phase9_codex_lane_untagged_has_no_step() {
+        phase9_codex_lane("95c00004-0000-4000-8000-000095c00004");
     }
 
     #[test]

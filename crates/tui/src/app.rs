@@ -20,6 +20,8 @@ pub struct Refresh {
     pub graph: Option<GraphReport>,
     /// Step ids `[` `]` walk for that graph's repo, in G9 order; empty when none is open.
     pub graph_steps: Vec<String>,
+    /// Per Codex session id: latest tagged incoming hand-off step from a same-repo parent, all-time.
+    pub codex_steps: std::collections::HashMap<String, String>,
     /// Per Claude session id: (repo, step) of each direct started child's latest tagged
     /// hand-off, all-time, in the order `s` lists them (G9 amendment).
     pub started_steps: std::collections::HashMap<String, Vec<(String, String)>>,
@@ -381,7 +383,12 @@ impl App {
         let found = match self.targets(&view).get(self.selection) {
             Some((repo, Target::Session(row))) => {
                 let group = view.repos.iter().find(|g| g.repo == *repo);
-                match group.and_then(|group| own_step(group, row, &report.links.links)) {
+                let all_time = (row.harness == Harness::Codex)
+                    .then(|| report.codex_steps.get(&row.id).cloned())
+                    .flatten();
+                match all_time
+                    .or_else(|| group.and_then(|group| own_step(group, row, &report.links.links)))
+                {
                     Some(step) => Ok((repo.to_string(), step)),
                     None if row.harness == Harness::Claude => Err(report
                         .started_steps
@@ -694,7 +701,8 @@ impl App {
     }
 }
 
-/// A lane's latest tagged hand-off step: a Claude lane's own hand-offs (it is the parent), a
+/// A lane's latest tagged hand-off step within the window (Codex fallback when the
+/// worker has no all-time entry): a Claude lane's own hand-offs (it is the parent), a
 /// Codex lane's incoming ones (it is the child) whose parent is a session of the lane's repo
 /// group, as overview placement and the G1 graph require. Latest = max `at`, ties by later
 /// position.
@@ -745,6 +753,7 @@ mod tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            codex_steps: Default::default(),
             started_steps: Default::default(),
         })
     }
@@ -955,6 +964,7 @@ mod phase6_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            codex_steps: Default::default(),
             started_steps: Default::default(),
         })
     }
@@ -1134,6 +1144,7 @@ mod repo_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            codex_steps: Default::default(),
             started_steps: Default::default(),
         })
     }
@@ -1360,6 +1371,7 @@ mod graph_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            codex_steps: Default::default(),
             started_steps: Default::default(),
         })
     }
@@ -1371,6 +1383,7 @@ mod graph_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            codex_steps: Default::default(),
             started_steps: Default::default(),
         })
     }
@@ -1527,6 +1540,45 @@ mod graph_tests {
         assert_eq!(
             key(&mut app, KeyCode::Char('s')),
             [Effect::Graph(Some((REPO.into(), "1.4".into())))]
+        );
+    }
+
+    #[test]
+    fn codex_all_time_step_wins_over_window_and_leaves_claude_unchanged() {
+        let mut r = base();
+        tag(&mut r, "bb792d9c", "1.3");
+        let codex = r
+            .overview
+            .repos
+            .iter()
+            .flat_map(crate::view::sessions)
+            .find(|row| row.id.starts_with("01a189e2"))
+            .unwrap()
+            .id
+            .clone();
+        let claude = r
+            .overview
+            .repos
+            .iter()
+            .flat_map(crate::view::sessions)
+            .find(|row| row.id.starts_with("bb792d9c"))
+            .unwrap()
+            .id
+            .clone();
+        r.codex_steps.insert(codex, "1.4".into());
+        r.codex_steps.insert(claude, "9.9".into());
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO, "01a189e2");
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.4".into())))]
+        );
+        key(&mut app, KeyCode::Esc);
+        select_lane(&mut app, "bb792d9c");
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.3".into())))]
         );
     }
 
@@ -2115,6 +2167,7 @@ mod graph_tests {
                 diagnostics: self.diagnostics.clone(),
                 graph: self.graph.clone(),
                 graph_steps: self.graph_steps.clone(),
+                codex_steps: self.codex_steps.clone(),
                 started_steps: self.started_steps.clone(),
             })
         }

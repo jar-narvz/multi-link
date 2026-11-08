@@ -1,8 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.4 (2026-11-08, Codex, mode Codex loop) is committed: `SessionEnd` hook record (R5). Step 9.5 is next**
-(then 9.6 / R7, which writes its own keys first, then 9.7). Claude reviewed the diff (no findings, no fix round),
+**Step 9.5 (2026-11-08, Codex, mode Codex loop) is committed: Codex lane's step from all-time hand-offs (R6).
+Step 9.6 is next** (R7; Claude writes its fixtures and keys first), then 9.7. Claude reviewed one round (3 findings, all
+fixed) and re-ran Verify: 570 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 5` 46/46 `ok`; keys unchanged.
+- **9.5 / R6:** the TUI worker's existing all-time pass fills `Refresh::codex_steps` (Codex id → step of its latest
+  tagged incoming hand-off from a same-repo parent, max `(at, position)`). `s` on a Codex lane uses that entry first,
+  then window `own_step`, then `no step on this session`. Claude lanes unchanged. Worker-to-App tests in
+  `crates/cli/src/tui.rs` (`phase9_codex_lane_*`) cover the three `lanes.json` lanes.
+Quota check for 9.5: `primary 68%, secondary 29%, CODEX: OK`.
+
+**Step 9.4 (2026-11-08, Codex, mode Codex loop) is committed: `SessionEnd` hook record (R5).**
+Claude reviewed the diff (no findings, no fix round),
 re-ran Verify (565 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 4` 46/46 `ok`, keys unchanged) and ran
 the sandbox PTY `/exit` check (one `ended` line, `prompt_input_exit`; log entry below).
 - **9.4 / R5:** `hook record` turns `SessionEnd` into one `{"kind":"ended","reason":…}` line (no polling). The core
@@ -645,6 +654,37 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.5: Codex lane's step from all-time hand-offs — Codex
+- Did: Implemented R6, mode **Codex loop**. Quota check output supplied by Claude (the coordinator's step session):
+  `primary 68%, secondary 29%, CODEX: OK`. Added `Refresh::codex_steps`, computed from the
+  worker's existing all-time pass. Only Codex children with a listed same-repo parent and a tagged
+  incoming hand-off count; max `(at, position)` wins. App prefers that map for Codex rows, with
+  window `own_step` as fallback; Claude rows retain their existing behavior.
+- Changed: `crates/cli/src/tui.rs`, `crates/tui/src/app.rs`, `crates/tui/tests/started.rs`, `PROGRESS.md`.
+- Verify: Round 1 rerun (Rust PATH per AGENTS.md):
+  `cargo test --workspace` → **570 passed; 0 failed; 1 existing ignored** (summed actual test results), exit 0.
+  `cargo clippy --workspace --all-targets -- -D warnings` →
+  ``Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.31s``, exit 0.
+  `cargo fmt --check` → no output, exit 0 (after correcting match-arm formatting).
+  `fixtures/expected/phase9/check.sh 5` → **46/46 `ok`**, exit 0.
+  `git diff --check` and fixture/key diff checks → no output, exit 0; goldens unchanged.
+  RED→GREEN: both tagged worker-to-App cases initially returned `[]` instead of `Graph(Some(...))`;
+  the untagged case already passed. The map unit test initially returned `{}` instead of
+  `{"x": "2.1"}`; the App precedence test initially returned window step `1.3` instead of all-time
+  step `1.4`. All now pass. Coverage includes older same-repo over newer cross-repo, untagged and
+  missing parents skipped, timestamp ordering, later-position ties, Codex-only entries, App map
+  precedence, unchanged Claude selection, and the existing window fallback tests.
+- Review: Claude round 1 fixes: `Refresh::clone_box` now clones `codex_steps`;
+  both tagged worker-to-App cases assert the expected map entry and their exact same-repo parent
+  is absent from every overview group's session rows before pressing `s`, proving the window rule
+  cannot supply the expected step. Corrected quota attribution.
+  Claude (2026-11-08): round 1 had 3 findings (clone_box dropped `codex_steps`; lane tests did not prove the
+  window could not answer; quota attributed to the user), all fixed and re-reviewed clean. Claude re-ran Verify:
+  `cargo test --workspace` 570 passed / 0 failed / 1 ignored; clippy and fmt clean; `check.sh 5` 46 `ok` plus the
+  `lanes.json` note; `git diff -- fixtures/` empty (keys and goldens unchanged). Committed by Claude.
+- Gotchas: All three key lanes are present with `fixture_options`' original 2 h window at
+  `2026-11-09T12:00:00Z`; no window change needed. Existing untracked `.claude/` left untouched.
 
 ### 2026-11-08 — Step 9.4: `SessionEnd` hook record — Codex
 - Did: Implemented R5, mode **Codex loop**. Quota check supplied by user:
