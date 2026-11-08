@@ -17,6 +17,57 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+#[test]
+fn example_draws_graph_html() {
+    let workspace = root();
+    let temp = std::env::temp_dir().join(format!(
+        "multi-link-graph-html-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&temp).unwrap();
+    let out = temp.join("out.html");
+    let output = std::process::Command::new(workspace.join("target/debug/examples/home_html"))
+        .current_dir(&workspace)
+        .arg("--graph")
+        .arg("fixtures/expected/phase8/graph-1.1.json")
+        .arg(&out)
+        .args(["--size", "120x40", "--offset", "-8", "--selected", "1"])
+        .output()
+        .expect("run the home_html example built by cargo test");
+    let html = fs::read_to_string(&out);
+    fs::remove_dir_all(&temp).unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "home_html failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let html = html.expect("home_html writes out.html");
+    let mut in_tag = false;
+    let rendered_text: String = html
+        .chars()
+        .filter(|&ch| match ch {
+            '<' => {
+                in_tag = true;
+                false
+            }
+            '>' => {
+                in_tag = false;
+                false
+            }
+            _ => !in_tag,
+        })
+        .collect();
+    for expected in ["step 1.1", "implement", "where the time went"] {
+        assert!(rendered_text.contains(expected), "missing text: {expected}");
+    }
+    assert!(html.contains("#1B2130"), "missing selected background");
+}
+
 fn report(id: &str) -> GraphReport {
     let path = root().join(format!("fixtures/expected/phase8/graph-{id}.json"));
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
