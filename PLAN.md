@@ -1573,9 +1573,14 @@ changes" line for exactly the rows U2/U5 change.
   (unchanged). A lane with none whose **direct** started children (8.4c) have G1 graphs lists those steps (`started:
   step 8.3, step 8.4`, by child `started_at`, one entry per repo+step) and opens the chosen one; children without a
   graph are not listed; with none at all the footer stays `no step on this session`. Graph membership stays G1.
-- Files: `crates/tui/src/{app,timeline}.rs`, `crates/tui/tests/**`, `crates/cli/src/tui.rs`, `crates/cli/tests/**`,
-  `fixtures/expected/tui/repo*.txt` (only the footer's `s` key; the 6.1 pair is unchanged if the key fits, else stop
-  and say so), `PROGRESS.md`
+- **G11 fix (Claude, 2026-11-08, during the step):** measured on real data before any change, a warm `Scanner::graph`
+  for step 8.4 (51 parts) took 4.7–4.9 s, almost all in `multi_link_claude::scan(root)` (4.5 s, a full uncached parse of
+  234 transcripts; `calls` for the parent took 45 ms). So the graph reuses the scanner's cached Claude transcripts
+  (same file-key cache as the overview) instead of a fresh scan; the report is unchanged (the 13 phase8 keys).
+- Files: `crates/tui/src/{app,timeline}.rs`, `crates/tui/src/graph.rs` (the open rule shared with the keys, visibility
+  only), `crates/tui/tests/**`, `crates/cli/src/tui.rs`, `crates/cli/tests/**`, `crates/core/src/{graph,scanner}.rs`
+  and `crates/core/tests/**` (G11 fix only), `fixtures/expected/tui/repo*.txt` (only the footer's `s` key; the 6.1
+  pair is unchanged if the key fits, else stop and say so), `PLAN.md`, `PROGRESS.md`
 - Verify: `cargo test --workspace` → all `ok`, clippy clean; app tests: `s` with and without a step, `←→` at both ends,
   `[` `]` over steps with no graph, `esc` restores repo selection, `o`/`f` on a done, running, unlinked and ambiguous
   part, a refresh adding a part keeps the selection, a refresh error keeps the screen, an unchanged transcript
@@ -1596,6 +1601,15 @@ changes" line for exactly the rows U2/U5 change.
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 8.5 Files amendment (Claude, during the step, Claude-only mode)
+G11 measured first: warm `Scanner::graph` 4.7 s on real step 8.4, 4.5 s of it a fresh `multi_link_claude::scan`. 8.3's
+entry had flagged this ("a cached or per-file path needs the claude crate"). Fix in core instead: reuse the scanner's
+file-key cache of parsed Claude files (no claude-crate change needed). Files gain `crates/core/src/{graph,scanner}.rs`,
+`crates/core/tests/**` and `crates/tui/src/graph.rs` (make the `o`/`f` drawing rule shareable so keys cannot drift
+from it). Readings pinned for the app: a Codex lane's step is its own latest tagged incoming hand-off; a started child
+"has a graph" when it has its own tagged hand-off (its latest one is listed); `[ ]` walks PLAN.md steps with a tagged
+hand-off from a Claude session in the repo (all time), then tagged ids not in PLAN.md by first hand-off.
 
 ### 2026-11-08 — Step 8.4c review round 1 (Claude, adversarial subagent, Claude-only mode)
 9 findings, 0 critical. Accepted and fixed in round 1: 1 the plain-text `overview` count is one level deep
