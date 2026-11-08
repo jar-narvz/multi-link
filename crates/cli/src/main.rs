@@ -460,9 +460,10 @@ fn graph_text(writer: &mut impl Write, report: &GraphReport) -> io::Result<()> {
             part.chain,
             part.kind,
             label(part.harness),
+            // First 8 chars, not bytes: a byte cut can split a char.
             part.session
                 .as_deref()
-                .map_or("-", |id| &id[..id.len().min(8)]),
+                .map_or("-".to_string(), |id| id.chars().take(8).collect()),
             range(&part.from),
             range(&part.to),
             part.status.map_or(String::new(), label),
@@ -702,6 +703,46 @@ mod tests {
             let message = message.unwrap();
             assert!(message.starts_with("\"claude\" exited with "), "{message}");
         }
+    }
+
+    #[test]
+    fn graph_text_cuts_non_ascii_session_ids_by_chars() {
+        use multi_link_model::{Counts, GraphStep, Harness, Part};
+        let at = Timestamp::parse("2026-11-06T10:00:00Z").unwrap();
+        let report = GraphReport {
+            now: at,
+            repo: "/repo".into(),
+            step: GraphStep {
+                id: "1.1".into(),
+                title: None,
+                verify: None,
+            },
+            commit: None,
+            parts: vec![Part {
+                chain: 0,
+                kind: "plan".into(),
+                harness: Harness::Claude,
+                session: Some("aéééééééé-1".into()),
+                from: Some(at),
+                to: Some(at),
+                status: None,
+                run_available: None,
+                active_ms: 0,
+                stretches: 0,
+                asked: None,
+                said: None,
+                counts: Counts::default(),
+                notable: Vec::new(),
+                waiting_reads: 0,
+                untagged_handoffs: 0,
+                edge_in: None,
+            }],
+            empty: None,
+        };
+        let mut out = Vec::new();
+        graph_text(&mut out, &report).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains(" aééééééé 10:00:00"), "{text}");
     }
 
     #[test]

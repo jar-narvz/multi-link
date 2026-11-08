@@ -1159,10 +1159,9 @@ fn overlapping_background_runs_are_neighbours() {
     assert_eq!(parent_part(&report.parts[2]), Some(0));
 }
 
-#[test]
-fn shorter_later_run_inside_earlier_run_leaves_no_part_between() {
-    // The second (last) run ends while the first is still going, so no
-    // Claude part starts at its end: the chain has no last part.
+/// `p1` busy 12:00–12:20; h1 (12:00:20) runs 12:00:21–12:10 and h2 (12:02)
+/// runs 12:02:01–12:04, inside h1's run.
+fn run_inside_run_world() -> World {
     let mut w = one_run_world(
         &[("2026-11-06T12:00:00Z", "2026-11-06T12:20:00Z")],
         "1.5",
@@ -1189,6 +1188,88 @@ fn shorter_later_run_inside_earlier_run_leaves_no_part_between() {
             "2026-11-06T12:04:00Z",
             "more",
             "ok",
+        )],
+    );
+    w
+}
+
+#[test]
+fn shorter_later_run_inside_earlier_run_starts_last_part_at_earlier_end() {
+    // The second (last) run ends while the first is still going, so the last
+    // part starts when the first run ends (same max rule as no interval).
+    let report = run_inside_run_world().build("/repo", "1.5");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T12:00:00Z", "2026-11-06T12:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T12:00:21Z"),
+                Some("2026-11-06T12:10:00Z")
+            ),
+            codex(
+                0,
+                "fix round 1",
+                Some("2026-11-06T12:02:01Z"),
+                Some("2026-11-06T12:04:00Z")
+            ),
+            claude(0, "review", "2026-11-06T12:10:00Z", "2026-11-06T12:20:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[3].edge_in, back("2026-11-06T12:10:00Z"));
+}
+
+#[test]
+fn part_after_run_inside_run_starts_at_earlier_run_end() {
+    // h1 run ends 12:10, h2 run ends 12:04, h3 at 12:15: Claude's time
+    // 12:10–12:15 is a `review` part, and h3 comes from it.
+    let mut w = run_inside_run_world();
+    w.hand_off(
+        "p1",
+        "h3",
+        Some("1.5"),
+        "2026-11-06T12:15:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.5");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T12:00:00Z", "2026-11-06T12:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T12:00:21Z"),
+                Some("2026-11-06T12:10:00Z")
+            ),
+            codex(
+                0,
+                "fix round 1",
+                Some("2026-11-06T12:02:01Z"),
+                Some("2026-11-06T12:04:00Z")
+            ),
+            claude(0, "review", "2026-11-06T12:10:00Z", "2026-11-06T12:15:00Z"),
+            codex(0, "fix round 2", None, None),
+            claude(0, "review", "2026-11-06T12:15:00Z", "2026-11-06T12:20:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[3].edge_in, back("2026-11-06T12:10:00Z"));
+    assert_eq!(parent_part(&report.parts[4]), Some(3));
+}
+
+#[test]
+fn open_earlier_run_still_going_leaves_no_last_part() {
+    // h1's run is open and outlasts h2's (last) run: still no last part.
+    let mut w = run_inside_run_world();
+    w.rollout(
+        "c1",
+        vec![turn(
+            "2026-11-06T12:00:21Z",
+            None,
+            "2026-11-06T12:10:00Z",
+            Some("go"),
         )],
     );
     let report = w.build("/repo", "1.5");
@@ -1840,7 +1921,8 @@ fn handoff_during_run_is_notable_of_previous_claude_part() {
         Match::Exact,
         Some("c2"),
     );
-    // An untagged hand-off during the run is neither notable nor counted.
+    // An untagged hand-off during the run is not notable; it is counted on
+    // the last Claude part before it.
     w.hand_off(
         "p1",
         "hu",
@@ -1886,14 +1968,14 @@ fn handoff_during_run_is_notable_of_previous_claude_part() {
     );
     assert_eq!(plan.waiting_reads, 3);
     assert_eq!(counts(plan), (0, 0, 0));
-    assert_eq!(plan.untagged_handoffs, 0);
+    assert_eq!(plan.untagged_handoffs, 1);
 }
 
 #[test]
 fn untagged_handoff_counted_not_drawn() {
     let mut w = calls_world();
     for (id, at) in [
-        ("u1", "2026-11-06T10:03:00Z"), // review.from: not counted
+        ("u1", "2026-11-06T10:03:00Z"), // review.from: held by no part, so plan
         ("u2", "2026-11-06T10:04:00Z"),
         ("u3", "2026-11-06T10:09:00Z"),
     ] {
@@ -1903,13 +1985,47 @@ fn untagged_handoff_counted_not_drawn() {
     // Untagged hand-offs never split the chain or make parts.
     assert_eq!(report.parts.len(), 5);
     let untagged: Vec<_> = report.parts.iter().map(|p| p.untagged_handoffs).collect();
-    assert_eq!(untagged, vec![0, 0, 1, 0, 1]);
+    assert_eq!(untagged, vec![1, 0, 1, 0, 1]);
     assert_eq!(
         notables(&report.parts[2]),
         vec![n("▸ codex exec · continue 1.1", None)]
     );
     assert_eq!(notables(&report.parts[4]), vec![]);
     assert!(report.parts.iter().all(|p| counts(p) == (0, 0, 0)));
+    assert!(
+        report
+            .parts
+            .iter()
+            .flat_map(|p| &p.notable)
+            .all(|x| x.label != "▸ codex exec")
+    );
+}
+
+#[test]
+fn untagged_handoff_during_run_counts_on_previous_claude_part() {
+    // Made while run 1 is going (held by no Claude part) but inside the
+    // chain: counted on the last Claude part before it, like a waiting read.
+    let mut w = calls_world();
+    w.hand_off(
+        "p1",
+        "u1",
+        None,
+        "2026-11-06T10:02:00Z",
+        Match::Unlinked,
+        None,
+    );
+    // After the chain: counted nowhere.
+    w.hand_off(
+        "p1",
+        "u2",
+        None,
+        "2026-11-06T10:11:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.1");
+    let untagged: Vec<_> = report.parts.iter().map(|p| p.untagged_handoffs).collect();
+    assert_eq!(untagged, vec![1, 0, 0, 0, 0]);
     assert!(
         report
             .parts

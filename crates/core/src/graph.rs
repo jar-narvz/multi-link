@@ -487,15 +487,24 @@ fn cut(
                 }
             }
             Some(_) if next.is_none() && is_open(&hop.run) => continue,
+            // Same max rule as no interval: the part starts when the latest
+            // earlier run of the chain still going at this run's end ends
+            // (an open run's `to` is its last record). If such a run is
+            // open, the chain still has no last part.
             Some((_, run_to)) => {
-                let still_going = chain.hops[..position]
+                let still_going: Vec<(Timestamp, bool)> = chain.hops[..position]
                     .iter()
-                    .filter_map(|h| interval(&h.run))
-                    .any(|(_, earlier_to)| earlier_to > run_to);
-                if still_going {
+                    .filter_map(|h| interval(&h.run).map(|(_, to)| (to, is_open(&h.run))))
+                    .filter(|&(earlier_to, _)| earlier_to > run_to)
+                    .collect();
+                if next.is_none() && still_going.iter().any(|&(_, open)| open) {
                     continue;
                 }
-                (run_to, Some(Edge::Return { at: run_to }))
+                let from = still_going
+                    .iter()
+                    .map(|&(earlier_to, _)| earlier_to)
+                    .fold(run_to, Timestamp::max);
+                (from, Some(Edge::Return { at: from }))
             }
         };
         if from >= to {
@@ -563,6 +572,8 @@ fn place(
         .collect();
     let mut held: Vec<Vec<(Timestamp, &Call)>> = vec![Vec::new(); parts.len()];
     let mut waiting = vec![0; parts.len()];
+    // Untagged hand-offs held by no Claude part, per part they count on.
+    let mut untagged = vec![0; parts.len()];
     // Unheld calls already placed, by `(parent, call id)`: two chains of one
     // parent whose times inside meet place a call once, in the earlier chain.
     let mut placed: HashSet<(&str, &str)> = HashSet::new();
@@ -576,6 +587,12 @@ fn place(
             .iter()
             .enumerate()
             .map(|(position, hop)| (hop.link.invocation.as_str(), handoff_label(id, position)))
+            .collect();
+        // The parent's owned untagged hand-offs, by invocation (G1).
+        let untagged_ids: HashSet<&str> = owned
+            .iter()
+            .filter(|l| l.parent == parent && l.step.is_none())
+            .map(|l| l.invocation.as_str())
             .collect();
         let mine: Vec<usize> = claude
             .iter()
@@ -610,6 +627,9 @@ fn place(
                 CallKind::Handoff if labels.contains_key(call.id.as_str()) => {
                     held[before].push((call.at, call));
                 }
+                CallKind::Handoff if untagged_ids.contains(call.id.as_str()) => {
+                    untagged[before] += 1;
+                }
                 _ => {}
             }
         }
@@ -619,12 +639,13 @@ fn place(
             part.counts = counts;
             part.notable = notable;
             part.waiting_reads = waiting[i];
-            part.untagged_handoffs = owned
-                .iter()
-                .filter(|l| l.parent == parent && l.step.is_none())
-                .filter(|l| part.from.is_some_and(|from| from < l.at))
-                .filter(|l| part.to.is_some_and(|to| l.at <= to))
-                .count();
+            part.untagged_handoffs = untagged[i]
+                + owned
+                    .iter()
+                    .filter(|l| l.parent == parent && l.step.is_none())
+                    .filter(|l| part.from.is_some_and(|from| from < l.at))
+                    .filter(|l| part.to.is_some_and(|to| l.at <= to))
+                    .count();
         }
     }
 }
@@ -680,14 +701,18 @@ pub fn commit_for_step(repo: &Path, step: &str) -> Option<GraphCommit> {
     }
     let text = std::str::from_utf8(&output.stdout).ok()?;
     let marker = format!("(Step {step})");
-    text.lines().find_map(|line| {
-        let mut fields = line.splitn(3, '\u{1f}');
-        let (hash, at, subject) = (fields.next()?, fields.next()?, fields.next()?);
-        subject.contains(&marker).then_some(())?;
-        Some(GraphCommit {
-            hash: hash.to_string(),
-            at: Timestamp::parse(at).ok()?,
-        })
+    // The newest line whose subject matches decides; if its date does not
+    // parse, the answer is `None`, never an older commit.
+    let line = text.lines().find(|line| {
+        line.splitn(3, '\u{1f}')
+            .nth(2)
+            .is_some_and(|subject| subject.contains(&marker))
+    })?;
+    let mut fields = line.splitn(3, '\u{1f}');
+    let (hash, at) = (fields.next()?, fields.next()?);
+    Some(GraphCommit {
+        hash: hash.to_string(),
+        at: Timestamp::parse(at).ok()?,
     })
 }
 
@@ -743,7 +768,10 @@ impl Scanner {
 
         let mut claude_calls: HashMap<String, Vec<Call>> = HashMap::new();
         if !parents.is_empty() {
-            let transcripts = multi_link_claude::scan(root)?.transcripts;
+            // Fail soft: a scan error means no transcripts, so no owned calls.
+            let transcripts = multi_link_claude::scan(root)
+                .map(|scan| scan.transcripts)
+                .unwrap_or_default();
             let load = |wanted: &HashSet<&str>, into: &mut HashMap<String, Vec<Call>>| {
                 for transcript in transcripts
                     .iter()
