@@ -1547,7 +1547,7 @@ changes" line for exactly the rows U2/U5 change.
   the Codex hand-off; Codex does not edit them (a mismatch blamed on a key is reported, not fixed).
 - Files: `crates/claude/src/{lib,app_record}.rs`, `crates/claude/tests/**`, `crates/model/src/lib.rs`,
   `crates/model/tests/**`, `crates/core/src/{scanner,sessions,overview,open}.rs`, `crates/core/tests/**`,
-  `crates/tui/src/{timeline,view,app}.rs`, `crates/tui/tests/**`, `crates/cli/tests/**`, `fixtures/sessions-started/**`
+  `crates/tui/src/{timeline,view,app}.rs`, `crates/tui/tests/**`, `crates/cli/src/main.rs` (overview text count only; added in review 2026-11-08), `crates/cli/tests/**`, `fixtures/sessions-started/**`
   (new root, synthetic, W10), `fixtures/expected/started/**` (new keys), `fixtures/expected/**` (only the added
   `started_by: null`), `docs/output-schema.md`, `docs/design.md` (S1–S3, need 2 mapping), `PROGRESS.md`.
 - Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings` clean. Fixture
@@ -1596,6 +1596,17 @@ changes" line for exactly the rows U2/U5 change.
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 8.4c review round 1 (Claude, adversarial subagent, Claude-only mode)
+9 findings, 0 critical. Accepted and fixed in round 1: 1 the plain-text `overview` count is one level deep
+(`crates/cli/src/main.rs`; added to Files because S3 says counts walk recursively); 2 record-only sessions (no
+transcript) got `started_by` (S1 names both ends by transcript id; now transcript-backed only); 3 the hand-off count
+test compared two empty lists (now compares A's `made` and its Codex child's `handoffs`); 4 cycles were found after the
+`--since` filter (now on the full record graph first); 5 deep nesting drew over the bars (indent clamped); 7 a record
+deleted mid-scan counted as bad (not-found now passes through). Ruled, not code: 6 the repo view keeps W6's
+newest-first order at every level; S3's keys decide order, the direction follows W6 (JSON stays ascending);
+9 two records sharing one app id drop only links that name that id as parent; both records still link as children
+(written into design.md S1). Parked: 8 `home::selectable` (exported, no callers, outside Files) still stops at depth 1.
 
 ### 2026-11-08 — Step 8.4b Verify amendment (Claude, during the step)
 Codex's run showed the key check (`git diff c45fbcd -- fixtures/expected | grep …`) also reads the TUI text goldens
