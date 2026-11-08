@@ -1548,3 +1548,136 @@ fn narrow_selected_part_is_highlighted() {
         }
     }
 }
+
+#[test]
+fn short_screens_reserve_clean_rule_and_footer_rows() {
+    let report = report("1.1");
+    let options = golden_options();
+    for width in [120, 119, 100, 80, 60] {
+        let full = render(&report, &options, width, 40);
+        for height in [26, 24] {
+            let short = render(&report, &options, width, height);
+            for (actual, expected) in [(height - 2, 38), (height - 1, 39)] {
+                for x in 0..width {
+                    assert_eq!(
+                        short[(x, actual)],
+                        full[(x, expected)],
+                        "width {width}, height {height}, cell ({x}, {actual})"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn panel_first_line_moves_after_lanes_at_twenty_eight_and_twenty_nine_rows() {
+    let report = report("1.1");
+    let options = golden_options();
+    for width in [120, 80] {
+        let full = render(&report, &options, width, 40);
+        for height in [28, 29] {
+            let short = render(&report, &options, width, height);
+            assert_eq!(
+                rendered_rows(&short, 25..=25),
+                rendered_rows(&full, 27..=27)
+            );
+            assert_eq!(
+                rendered_rows(&short, 24..=24),
+                rendered_rows(&full, 24..=24)
+            );
+            assert!(!rendered_rows(&short, 25..=usize::from(height - 3)).contains("asked"));
+        }
+    }
+}
+
+#[test]
+fn empty_sentence_survives_at_five_and_six_rows() {
+    let report = report("1.13");
+    for width in [120, 80] {
+        let full = render(&report, &golden_options(), width, 40);
+        for height in [6, 5] {
+            let buf = render(&report, &golden_options(), width, height);
+            let row = usize::from(height - 3);
+            assert_eq!(rendered_rows(&buf, row..=row), rendered_rows(&full, 4..=4));
+        }
+    }
+}
+
+#[test]
+fn thirty_six_rows_keep_the_legend_after_the_full_panel() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let short = render(&report, &options, 120, 36);
+    assert_eq!(
+        rendered_rows(&short, 27..=31),
+        rendered_rows(&full, 27..=31)
+    );
+    assert_eq!(rendered_rows(&short, 32..=32), "\n");
+    assert_eq!(
+        rendered_rows(&short, 33..=33),
+        rendered_rows(&full, 36..=36)
+    );
+}
+
+#[test]
+fn taller_screens_keep_board_rows_and_move_only_rule_and_footer() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let tall = render(&report, &options, 120, 45);
+    assert_eq!(rendered_rows(&tall, 0..=37), rendered_rows(&full, 0..=37));
+    assert_eq!(
+        rendered_styles(&tall, 0..=37),
+        rendered_styles(&full, 0..=37)
+    );
+    assert_eq!(rendered_rows(&tall, 38..=42), "\n".repeat(5));
+    assert_eq!(rendered_rows(&tall, 43..=44), rendered_rows(&full, 38..=39));
+}
+
+#[test]
+fn shrinking_screens_drop_strip_then_legend_then_panel_lines() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let mut previous_count = 5;
+    for height in (20..=41).rev() {
+        let buf = render(&report, &options, 120, height);
+        for (actual, expected) in [(height - 2, 38), (height - 1, 39)] {
+            for x in 0..120 {
+                assert_eq!(buf[(x, actual)], full[(x, expected)], "height {height}");
+            }
+        }
+        let body = rendered_rows(&buf, 0..=usize::from(height - 3));
+        let count = body
+            .lines()
+            .filter(|row| {
+                ["selected", "asked", "from", "said", "o open"]
+                    .iter()
+                    .any(|label| row.trim_start().starts_with(label))
+            })
+            .count();
+        let expected = match height {
+            34.. => 5,
+            33 => 4,
+            32 => 3,
+            31 => 2,
+            28..=30 => 1,
+            _ => 0,
+        };
+        assert_eq!(count, expected, "height {height}");
+        assert!(count <= previous_count, "height {height}: panel grew");
+        previous_count = count;
+        assert_eq!(
+            body.contains("where the time went"),
+            height >= 40,
+            "height {height}"
+        );
+        assert_eq!(
+            body.contains("▭ claude part"),
+            height >= 36,
+            "height {height}"
+        );
+    }
+}

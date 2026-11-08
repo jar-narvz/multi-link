@@ -85,6 +85,7 @@ struct Layout {
     edges: u16,
     panel: u16,
     panel_rows: u16,
+    panel_rule: Option<u16>,
     strip: Option<u16>,
     legend: Option<u16>,
     rule: u16,
@@ -96,7 +97,10 @@ impl Layout {
         let row = |y: u16| y.min(height);
         let codex_lane: u16 = 16;
         let rule = height.saturating_sub(2);
-        let panel = row(27);
+        let panel = row(if height < 30 { 25 } else { 27 });
+        let panel_rows = rule
+            .saturating_sub(panel)
+            .min(if height < 30 { 1 } else { 5 });
         Self {
             header: [row(0), row(1)],
             header_rule: row(2),
@@ -105,9 +109,10 @@ impl Layout {
             codex_lane: row(codex_lane),
             edges: row(codex_lane - 3),
             panel,
-            panel_rows: rule.saturating_sub(panel).min(5),
+            panel_rows,
+            panel_rule: (panel_rows > 0 && height >= 30).then(|| panel - 1),
             strip: (height >= 40).then_some(33),
-            legend: (height >= 37).then(|| height - 4),
+            legend: (height >= 36).then(|| 36.min(height - 3)),
             rule,
             footer: height.saturating_sub(1),
         }
@@ -131,20 +136,17 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
     let mut paint = Paint {
         buf: &mut screen,
         theme: options.theme,
+        bottom: layout.rule,
     };
     header(report, options, &layout, &mut paint);
     paint.rule(layout.header_rule);
     if let Some(empty) = &report.empty {
-        paint.write(
-            2,
-            layout.claude_lane,
-            empty,
-            options.theme.secondary,
-            paint.end(),
-        );
+        let y = layout.claude_lane.min(layout.rule.saturating_sub(1));
+        paint.clear_row(y);
+        paint.write(2, y, empty, options.theme.secondary, paint.end());
     } else if area.width < 120 {
         list(report, options, &layout, &mut paint);
-        panel(report, options, layout.panel, layout.panel_rows, &mut paint);
+        panel(report, options, &layout, &mut paint);
         if let Some(y) = layout.strip {
             strip(report, options, y, &mut paint);
         }
@@ -173,7 +175,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             );
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
-        panel(report, options, layout.panel, layout.panel_rows, &mut paint);
+        panel(report, options, &layout, &mut paint);
         if let Some(y) = layout.strip {
             strip(report, options, y, &mut paint);
         }
@@ -181,6 +183,9 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             legend(y, &mut paint);
         }
     }
+    paint.bottom = area.height;
+    paint.clear_row(layout.rule);
+    paint.clear_row(layout.footer);
     paint.rule(layout.rule);
     footer(options, layout.footer, &mut paint);
     options.theme.apply_no_color(&mut screen);
@@ -271,7 +276,7 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
         }
         rows.push((3, Line::from(spans), Some(bg)));
     }
-    let end = layout.panel.saturating_sub(1).min(layout.rule);
+    let end = layout.panel_rule.unwrap_or(layout.panel).min(layout.rule);
     let room = usize::from(end.saturating_sub(layout.claude_lane));
     let selected = starts.get(options.selected).copied().unwrap_or(0);
     let first = (selected + 2)
@@ -324,7 +329,7 @@ fn lanes(
             let card = part_box(part, selected, options);
             for dy in 0..BOX_HEIGHT {
                 for dx in 0..30 {
-                    if x + dx < paint.end() && y + dy < paint.buf.area.height {
+                    if x + dx < paint.end() && y + dy < paint.bottom {
                         paint.buf[(x + dx, y + dy)] = card[(dx, dy)].clone();
                     }
                 }
@@ -636,7 +641,9 @@ fn match_words(confidence: Match, candidates: usize) -> String {
     }
 }
 
-fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint: &mut Paint<'_>) {
+fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
+    let y = layout.panel;
+    let rows = layout.panel_rows;
     if rows == 0 {
         return;
     }
@@ -649,7 +656,9 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
     let available = !codex || has_run(part);
     let session = part.session.as_deref().filter(|id| !id.is_empty());
     let harness = if codex { "codex" } else { "claude" };
-    paint.rule(y.saturating_sub(1));
+    if let Some(y) = layout.panel_rule {
+        paint.rule(y);
+    }
     paint.write(2, y, "selected", t.secondary, paint.end());
     let mut detail = format!(" · {}", part.kind);
     if !available {
@@ -859,6 +868,7 @@ fn return_edge(x: u16, y: u16, at: Timestamp, options: &GraphOptions, paint: &mu
 struct Paint<'a> {
     buf: &'a mut Buffer,
     theme: Theme,
+    bottom: u16,
 }
 
 impl Paint<'_> {
@@ -869,7 +879,7 @@ impl Paint<'_> {
 
     fn line(&mut self, x: u16, y: u16, line: Line<'_>, until: u16) {
         let until = until.min(self.end());
-        if y < self.buf.area.height && x < until {
+        if y < self.bottom && x < until {
             let line = if self.buf.area.width < 120 {
                 word_line(line, usize::from(until - x))
             } else {
@@ -904,6 +914,15 @@ impl Paint<'_> {
             self.theme.border,
             self.end(),
         );
+    }
+
+    fn clear_row(&mut self, y: u16) {
+        if y < self.bottom {
+            for x in 0..self.buf.area.width {
+                self.buf[(x, y)].reset();
+                self.buf[(x, y)].set_bg(self.theme.screen);
+            }
+        }
     }
 }
 
