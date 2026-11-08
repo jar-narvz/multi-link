@@ -3,7 +3,7 @@
 mod support;
 
 use multi_link_model::{GraphCommit, GraphReport, Timestamp};
-use multi_link_tui::{GraphOptions, render_graph, theme::Theme};
+use multi_link_tui::{GraphOptions, graph_first_slot, graph_slots, render_graph, theme::Theme};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -275,4 +275,132 @@ fn graph_theme_roles() {
     assert_eq!(indexed.codex_box, Color::Indexed(234));
     assert_eq!(indexed.claude_strip, Color::Indexed(236));
     assert_eq!(indexed.codex_strip, Color::Indexed(236));
+}
+
+#[test]
+fn lanes_and_edges_match_golden() {
+    let buf = render(&report("1.1"), &golden_options(), 120, 40);
+    assert_eq!(rendered_rows(&buf, 3..=24), golden_rows(3..=24));
+    assert_eq!(rendered_styles(&buf, 3..=24), golden_styles(3..=24));
+}
+
+#[test]
+fn slot_rule_with_same_harness_neighbours() {
+    for (id, expected) in [
+        ("1.1", vec![0, 1, 2, 3, 4]),
+        ("1.5", vec![0, 1, 3]),
+        ("1.4", vec![0, 1, 2, 4, 5, 6]),
+    ] {
+        assert_eq!(graph_slots(&report(id)), expected, "report {id}");
+    }
+    let buf = render(&report("1.5"), &golden_options(), 120, 40);
+    for x in [23, 67] {
+        assert_eq!(buf[(x, 16)].symbol(), "╭", "Codex box at column {x}");
+    }
+}
+
+#[test]
+fn seven_parts_scroll_at_each_end() {
+    let report = report("1.3");
+    assert_eq!(graph_slots(&report), vec![0, 1, 2, 3, 4, 5, 6]);
+    let mut options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    assert_eq!(graph_first_slot(&report, 0, 0), 0);
+    let start = render(&report, &options, 120, 40);
+    let row = rendered_rows(&start, 3..=3);
+    assert!(row.trim_end().ends_with("2 later ›"));
+    assert_eq!(Span::raw(row.trim_end()).width(), 119);
+    assert_eq!(start[(119, 3)].symbol(), " ");
+    assert!(!row.contains("earlier"));
+
+    options.selected = 6;
+    assert_eq!(graph_first_slot(&report, 6, 0), 2);
+    let end = render(&report, &options, 120, 40);
+    let row = rendered_rows(&end, 3..=3);
+    assert!(row.starts_with(" ‹ 2 earlier"));
+    assert!(!row.contains("later"));
+    assert_eq!(graph_first_slot(&report, 3, 2), 2);
+
+    for (name, buf) in [("start", &start), ("end", &end)] {
+        // Exactly five visible boxes in the alternating lanes.
+        for (x, top) in [(1, 4), (23, 16), (45, 4), (67, 16), (89, 4)] {
+            assert_eq!(buf[(x, top)].symbol(), "╭", "{name}: box at {x},{top}");
+        }
+        for y in [4, 16] {
+            let corners = (0..120).filter(|&x| buf[(x, y)].symbol() == "╭").count();
+            assert_eq!(corners, if y == 4 { 3 } else { 2 }, "{name}: row {y}");
+        }
+    }
+    assert!(rendered_rows(&end, 5..=5).ends_with("│ ● claude · verify + commit │\n"));
+}
+
+#[test]
+fn unlinked_and_ambiguous_parts() {
+    let options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    let buf = render(&report("1.2"), &options, 120, 40);
+    for (x, kind, sub, edge_words) in [
+        (23, "implement", "no codex run found", "no run found"),
+        (67, "fix round 1", "2 possible runs", "2 possible runs"),
+    ] {
+        let title: String = (x + 2..x + 29).map(|col| buf[(col, 17)].symbol()).collect();
+        assert_eq!(title.trim_end(), format!("● codex · {kind}"));
+        let subline: String = (x + 2..x + 29).map(|col| buf[(col, 18)].symbol()).collect();
+        assert_eq!(subline.trim_end(), sub);
+        for y in 16..=24 {
+            for col in x..x + 30 {
+                let cell = &buf[(col, y)];
+                assert_eq!(cell.bg, options.theme.screen, "background at {col},{y}");
+                if y == 16
+                    || y == 24
+                    || col == x
+                    || col == x + 29
+                    || (y == 18 && cell.symbol() != " ")
+                {
+                    assert_eq!(cell.fg, options.theme.secondary, "grey at {col},{y}");
+                }
+            }
+        }
+        for y in 20..=23 {
+            for col in x + 1..x + 29 {
+                assert_eq!(
+                    buf[(col, y)].symbol(),
+                    " ",
+                    "no counts/notables at {col},{y}"
+                );
+            }
+        }
+        for y in [13, 14] {
+            assert_eq!(buf[(x + 4, y)].symbol(), "╎");
+        }
+        assert_eq!(buf[(x + 4, 15)].symbol(), "▼");
+        let words: String = (x + 6..x + 6 + edge_words.len() as u16)
+            .map(|col| buf[(col, 15)].symbol())
+            .collect();
+        assert_eq!(words, edge_words);
+        // Neither following Claude part has a return edge.
+        for y in 13..=15 {
+            assert_eq!(buf[(x + 26, y)].symbol(), " ");
+        }
+    }
+    assert!(!rendered_rows(&buf, 13..=15).contains("back to claude"));
+}
+
+#[test]
+fn exact_edge_is_solid_and_heuristic_dashed() {
+    let buf = render(&report("1.1"), &golden_options(), 120, 40);
+    for (x, glyph, label) in [(27, "╎", "matched by time"), (71, "│", "confirmed")] {
+        for y in [13, 14] {
+            assert_eq!(buf[(x, y)].symbol(), glyph, "edge at {x},{y}");
+        }
+        assert_eq!(buf[(x, 15)].symbol(), "▼");
+        let words: String = (x + 2..x + 2 + label.len() as u16)
+            .map(|col| buf[(col, 15)].symbol())
+            .collect();
+        assert_eq!(words, label);
+    }
 }
