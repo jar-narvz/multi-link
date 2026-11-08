@@ -271,6 +271,104 @@ fn header_footer_and_legend_match_golden() {
 }
 
 #[test]
+fn thirty_nine_rows_drop_the_strip() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let short = render(&report, &options, 120, 39);
+
+    assert!(!text(&short).contains("where the time went"));
+    assert!(text(&short).contains(rendered_rows(&full, 36..=36).trim_end()));
+    assert_eq!(
+        rendered_rows(&short, 38..=38),
+        rendered_rows(&full, 39..=39)
+    );
+    assert_eq!(
+        rendered_rows(&short, 37..=37),
+        rendered_rows(&full, 38..=38)
+    );
+    assert_eq!(
+        rendered_rows(&short, 27..=31),
+        rendered_rows(&full, 27..=31)
+    );
+    assert_eq!(
+        rendered_styles(&short, 27..=31),
+        rendered_styles(&full, 27..=31)
+    );
+}
+
+#[test]
+fn thirty_rows_keep_the_panel_first_line() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let short = render(&report, &options, 120, 30);
+    let short_text = text(&short);
+
+    assert!(!short_text.contains("where the time went"));
+    assert!(!short_text.contains("▭ claude part"));
+    assert!(rendered_rows(&short, 27..=27).contains("selected"));
+    assert_eq!(
+        rendered_rows(&short, 27..=27),
+        rendered_rows(&full, 27..=27)
+    );
+    for label in ["asked", "from", "said", "o open"] {
+        assert!(
+            !rendered_rows(&short, 27..=28).contains(label),
+            "unexpected {label}"
+        );
+    }
+    assert_eq!(
+        rendered_rows(&short, 29..=29),
+        rendered_rows(&full, 39..=39)
+    );
+    assert_eq!(
+        rendered_rows(&short, 28..=28),
+        rendered_rows(&full, 38..=38)
+    );
+    assert_eq!(rendered_rows(&short, 4..=24), rendered_rows(&full, 4..=24));
+    assert_eq!(
+        rendered_styles(&short, 4..=24),
+        rendered_styles(&full, 4..=24)
+    );
+}
+
+#[test]
+fn no_color_keeps_glyphs_and_words() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let plain = render(
+        &report,
+        &GraphOptions {
+            theme: Theme::from_env(None, Some(std::ffi::OsStr::new("1"))),
+            ..options
+        },
+        120,
+        40,
+    );
+
+    assert_eq!(text(&plain), text(&full));
+    for y in 0..40 {
+        for x in 0..120 {
+            let cell = &plain[(x, y)];
+            assert_eq!(cell.fg, Color::Reset, "foreground at ({x}, {y})");
+            assert_eq!(cell.bg, Color::Reset, "background at ({x}, {y})");
+            assert!(!cell.modifier.contains(Modifier::DIM), "DIM at ({x}, {y})");
+        }
+    }
+}
+
+#[test]
+fn tiny_buffers_do_not_panic() {
+    let report = report("1.1");
+    let options = golden_options();
+    for (width, height) in [(120, 10), (120, 5), (10, 40), (1, 1), (0, 0)] {
+        render(&report, &options, width, height);
+    }
+}
+
+#[test]
 fn empty_step_shows_the_sentence() {
     let mut report = report("1.13");
     let options = golden_options();
