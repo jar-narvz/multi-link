@@ -76,7 +76,6 @@ struct Layout {
     scroll: u16,
     claude_lane: u16,
     codex_lane: u16,
-    #[allow(dead_code)]
     panel: u16,
     #[allow(dead_code)]
     strip: u16,
@@ -148,6 +147,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             );
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
+        panel(report, options, layout.panel, &mut paint);
         legend(layout.legend, &mut paint);
     }
     paint.rule(layout.rule);
@@ -424,13 +424,210 @@ fn handoff(part: &Part, step: &str, x: u16, options: &GraphOptions, paint: &mut 
         t.secondary,
         paint.end(),
     );
-    let words = match confidence {
+    let words = match_words(*confidence, *candidates);
+    paint.write(x + 2, 15, &words, t.secondary, paint.end());
+}
+
+fn match_words(confidence: Match, candidates: usize) -> String {
+    match confidence {
         Match::Exact => "confirmed".to_owned(),
         Match::Heuristic => "matched by time".to_owned(),
         Match::Ambiguous => format!("{candidates} possible runs"),
         Match::Unlinked => "no run found".to_owned(),
+    }
+}
+
+fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
+    let Some(selected) = report
+        .parts
+        .len()
+        .checked_sub(1)
+        .map(|last| options.selected.min(last))
+    else {
+        return;
     };
-    paint.write(x + 2, 15, &words, t.secondary, paint.end());
+    let part = &report.parts[selected];
+    let t = options.theme;
+    let codex = part.harness == Harness::Codex;
+    let available = !codex || part.run_available == Some(true);
+    let harness = if codex { "codex" } else { "claude" };
+    paint.rule(y.saturating_sub(1));
+    paint.write(2, y, "selected", t.secondary, paint.end());
+    let mut detail = format!(" · {}", part.kind);
+    if !available {
+        detail.push_str(&format!(" · {}", missing_run(part)));
+    } else {
+        if let Some(session) = &part.session {
+            detail.push_str(&format!(
+                " · {}",
+                session.chars().take(8).collect::<String>()
+            ));
+        }
+        if let (Some(from), Some(to)) = (part.from, part.to) {
+            detail.push_str(&format!(
+                " · {}–{}",
+                clock(from, options.offset, true),
+                clock(to, options.offset, true)
+            ));
+        }
+        detail.push_str(&format!(
+            " · active about {} min in {} stretch{}",
+            view::minutes(part.active_ms),
+            part.stretches,
+            if part.stretches == 1 { "" } else { "es" }
+        ));
+    }
+    paint.line(
+        12,
+        y,
+        Line::from(vec![
+            Span::styled(
+                harness,
+                t.text_style(if codex { t.codex } else { t.claude }, t.screen)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            paint.span(detail, t.text),
+        ]),
+        paint.end(),
+    );
+    if codex && available {
+        for (dy, label, quote) in [(1, "asked", &part.asked), (3, "said", &part.said)] {
+            if let Some(quote) = quote {
+                paint.write(12, y + dy, label, t.secondary, paint.end());
+                let until = paint.end().min(109);
+                let quote = quoted(quote, until.saturating_sub(19) as usize);
+                paint.write(19, y + dy, &quote, t.text, until);
+            }
+        }
+    }
+    if let Some(origin) = panel_origin(report, selected, options.offset) {
+        paint.write(12, y + 2, "from", t.secondary, paint.end());
+        paint.write(19, y + 2, &origin, t.text, paint.end());
+    }
+    if !codex && part.untagged_handoffs > 0 {
+        paint.write(
+            19,
+            y + 3,
+            &format!(
+                "{} untagged hand-off{} here",
+                part.untagged_handoffs,
+                if part.untagged_handoffs == 1 { "" } else { "s" }
+            ),
+            t.secondary,
+            paint.end(),
+        );
+    } else if part.status == Some(PartStatus::Unlinked) {
+        paint.write(
+            19,
+            y + 3,
+            "(the rollout may be gone)",
+            t.secondary,
+            paint.end(),
+        );
+    }
+    if available && part.session.is_some() {
+        paint.line(
+            12,
+            y + 4,
+            Line::from(vec![
+                paint.span("o", t.text),
+                paint.span(
+                    format!(" open in {}   ", if codex { "Codex" } else { "Claude" }),
+                    t.secondary,
+                ),
+                paint.span("f", t.text),
+                paint.span(" fork", t.secondary),
+            ]),
+            paint.end(),
+        );
+    }
+}
+
+fn panel_origin(report: &GraphReport, selected: usize, offset: UtcOffset) -> Option<String> {
+    let part = &report.parts[selected];
+    if part.harness == Harness::Claude {
+        let last = report
+            .parts
+            .iter()
+            .filter_map(|child| {
+                if let Some(Edge::Handoff {
+                    at,
+                    parent_part: Some(parent),
+                    ..
+                }) = &child.edge_in
+                    && *parent == selected
+                {
+                    Some((child, *at))
+                } else {
+                    None
+                }
+            })
+            .max_by_key(|(_, at)| *at);
+        return Some(last.map_or_else(
+            || "no hand-offs".to_owned(),
+            |(child, at)| {
+                let handed = if child.kind == "implement" {
+                    format!("handed step {}", report.step.id)
+                } else {
+                    "handed fix".to_owned()
+                };
+                format!("{handed} to codex at {}", clock(at, offset, true))
+            },
+        ));
+    }
+    let Some(Edge::Handoff {
+        at,
+        parent,
+        parent_part,
+        r#match: confidence,
+        gap_ms,
+        candidates,
+    }) = &part.edge_in
+    else {
+        return None;
+    };
+    let mut origin = format!("claude {}", parent.chars().take(8).collect::<String>());
+    if let Some(parent) = parent_part.and_then(|index| report.parts.get(index)) {
+        origin.push_str(&format!(" · {}", parent.kind));
+    }
+    origin.push_str(&format!(
+        " · handed at {} · {}",
+        clock(*at, offset, true),
+        match_words(*confidence, *candidates)
+    ));
+    if let Some(gap) = gap_ms {
+        let seconds = gap / 1000;
+        let duration = if seconds < 60 {
+            format!("{seconds} s")
+        } else {
+            format!("{} min", seconds / 60)
+        };
+        origin.push_str(&format!(" · started {duration} after the call"));
+    }
+    Some(origin)
+}
+
+/// Keep whole words within the display width, including quotes and ellipsis.
+fn quoted(text: &str, width: usize) -> String {
+    if width < 2 {
+        return String::new();
+    }
+    if Span::raw(text).width() + 2 <= width {
+        return format!("“{text}”");
+    }
+    if width < 3 {
+        return "“”".to_owned();
+    }
+    let mut end = 0;
+    for (index, ch) in text.char_indices() {
+        if ch.is_whitespace() && Span::raw(&text[..index]).width() <= width - 3 {
+            end = index;
+        }
+        if Span::raw(&text[..index + ch.len_utf8()]).width() > width - 3 {
+            break;
+        }
+    }
+    format!("“{}…”", text[..end].trim_end())
 }
 
 fn return_edge(x: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
