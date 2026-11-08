@@ -408,7 +408,7 @@ fn length(milliseconds: i64) -> String {
     }
 }
 
-fn missing_run(part: &Part) -> String {
+pub(crate) fn missing_run(part: &Part) -> String {
     match part.status {
         Some(PartStatus::Unlinked) => "no codex run found".to_owned(),
         Some(PartStatus::Ambiguous) => {
@@ -530,7 +530,7 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
     card
 }
 
-fn has_run(part: &Part) -> bool {
+pub(crate) fn has_run(part: &Part) -> bool {
     part.run_available == Some(true) && part.from.is_some() && part.to.is_some()
 }
 

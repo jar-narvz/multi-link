@@ -1,12 +1,14 @@
 //! Pure interaction state. Effects request work; they never contain a cached open decision.
-use std::collections::HashSet;
+use std::{cell::Cell, collections::HashSet};
 
 use crossterm::event::KeyCode;
-use multi_link_model::{LinksReport, OverviewReport, State};
+use multi_link_model::{
+    GraphReport, Harness, Link, LinksReport, OverviewReport, SessionRow, State,
+};
 use ratatui::{buffer::Buffer, layout::Rect};
 
 use crate::{
-    RepoOptions, Target, TimeWindow,
+    GraphOptions, RepoOptions, Target, TimeWindow, graph_first_slot, render_graph,
     timeline::{lanes, render_repo},
 };
 
@@ -14,6 +16,10 @@ pub struct Refresh {
     pub overview: OverviewReport,
     pub links: LinksReport,
     pub diagnostics: String,
+    /// Graph of the step the App asked for, built on this refresh; None when none is open.
+    pub graph: Option<GraphReport>,
+    /// Step ids `[` `]` walk for that graph's repo, in G9 order; empty when none is open.
+    pub graph_steps: Vec<String>,
 }
 
 pub enum Event {
@@ -26,8 +32,27 @@ pub enum Event {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Effect {
     Bell,
-    FreshOpen { id: String, fork: bool },
+    FreshOpen {
+        id: String,
+        fork: bool,
+    },
     Quit,
+    /// Ask the worker to build this (repo, step) on every refresh from now on; None stops it.
+    Graph(Option<(String, String)>),
+}
+
+/// Below this drawn width the graph is a list and `↑↓` move along it (G10).
+const GRAPH_WIDE: u16 = 120;
+
+/// The open step graph (G9). The repo view's state stays untouched underneath it.
+struct GraphView {
+    repo: String,
+    step: String,
+    /// None until a refresh brings the report for exactly this (repo, step).
+    report: Option<GraphReport>,
+    steps: Vec<String>,
+    selected: usize,
+    first_slot: usize,
 }
 
 #[derive(Default)]
@@ -49,6 +74,11 @@ pub struct App {
     waiting: Option<HashSet<String>>,
     healthy: bool,
     opening: bool,
+    graph: Option<GraphView>,
+    /// Steps of a lane's direct started children (G9 amendment) and the chosen entry.
+    picker: Option<(Vec<(String, String)>, usize)>,
+    /// Width of the last render; 0 means never drawn and counts as wide.
+    drawn_width: Cell<u16>,
 }
 
 /// Stable identity shared by refresh and returning from the timeline.
@@ -208,7 +238,10 @@ impl App {
                 self.healthy = false;
                 self.refresh_error = Some(format!("refresh failed: {error}; keeping last report"));
             }
-            Event::Refresh(Ok(report)) => {
+            Event::Refresh(Ok(mut report)) => {
+                let graph = report.graph.take();
+                let steps = std::mem::take(&mut report.graph_steps);
+                self.take_graph(graph, steps);
                 let selected = self.selection_identity();
                 let waiting = waiting_ids(&report.overview);
                 let bells = self
@@ -236,8 +269,10 @@ impl App {
                 self.opening = false;
                 self.footer = message;
             }
+            Event::Key(KeyCode::Char('q')) => return vec![Effect::Quit],
+            Event::Key(key) if self.picker.is_some() => return self.picker_key(key),
+            Event::Key(key) if self.graph.is_some() => return self.graph_key(key),
             Event::Key(key) => match key {
-                KeyCode::Char('q') => return vec![Effect::Quit],
                 KeyCode::Up => self.selection = self.selection.saturating_sub(1),
                 KeyCode::Down => {
                     let count = self.view().map_or(0, |view| self.targets(&view).len());
@@ -289,6 +324,7 @@ impl App {
                     self.imports = !self.imports;
                     self.restore_selection(selected.as_ref(), self.selection);
                 }
+                KeyCode::Char('s') if self.timeline.is_some() => return self.step_key(),
                 KeyCode::Char('z') if self.timeline.is_some() => self.unfold = !self.unfold,
                 KeyCode::Char('0') if self.timeline.is_some() => {
                     let window = Self::report_window(
@@ -307,6 +343,181 @@ impl App {
             },
         }
         Vec::new()
+    }
+
+    /// A one-shot footer message; never hides `checking current session…`.
+    fn say(&mut self, message: &str) {
+        if !self.opening {
+            self.footer = message.into();
+        }
+    }
+
+    fn open_graph(&mut self, repo: String, step: String, steps: Vec<String>) -> Vec<Effect> {
+        self.graph = Some(GraphView {
+            repo: repo.clone(),
+            step: step.clone(),
+            report: None,
+            steps,
+            selected: 0,
+            first_slot: 0,
+        });
+        vec![Effect::Graph(Some((repo, step)))]
+    }
+
+    /// `s` on a repo-view lane (G9 and its amendment).
+    fn step_key(&mut self) -> Vec<Effect> {
+        let Some(view) = self.view() else {
+            return Vec::new();
+        };
+        let links = self.report.as_ref().map_or(&[][..], |r| &r.links.links[..]);
+        let found = match self.targets(&view).get(self.selection) {
+            Some((repo, Target::Session(row))) => match own_step(row, links) {
+                Some(step) => Ok((repo.to_string(), step)),
+                None if row.harness == Harness::Claude => Err(started_steps(repo, row, links)),
+                None => Err(Vec::new()),
+            },
+            _ => Err(Vec::new()),
+        };
+        match found {
+            Ok((repo, step)) => self.open_graph(repo, step, Vec::new()),
+            Err(entries) if !entries.is_empty() => {
+                self.picker = Some((entries, 0));
+                Vec::new()
+            }
+            Err(_) => {
+                self.say("no step on this session");
+                Vec::new()
+            }
+        }
+    }
+
+    fn picker_key(&mut self, key: KeyCode) -> Vec<Effect> {
+        let Some((entries, chosen)) = &mut self.picker else {
+            return Vec::new();
+        };
+        match key {
+            KeyCode::Left => *chosen = chosen.saturating_sub(1),
+            KeyCode::Right => *chosen = (*chosen + 1).min(entries.len().saturating_sub(1)),
+            KeyCode::Enter => {
+                let (repo, step) = entries[*chosen].clone();
+                self.picker = None;
+                return self.open_graph(repo, step, Vec::new());
+            }
+            KeyCode::Esc => self.picker = None,
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    fn graph_key(&mut self, key: KeyCode) -> Vec<Effect> {
+        let width = self.drawn_width.get();
+        let wide = width == 0 || width >= GRAPH_WIDE;
+        match key {
+            KeyCode::Esc => {
+                self.graph = None;
+                return vec![Effect::Graph(None)];
+            }
+            KeyCode::Left | KeyCode::Right if wide => self.move_part(key == KeyCode::Right),
+            KeyCode::Up | KeyCode::Down if !wide => self.move_part(key == KeyCode::Down),
+            KeyCode::Char(c @ ('[' | ']')) => {
+                let graph = self.graph.as_ref().unwrap();
+                let position = graph.steps.iter().position(|id| *id == graph.step);
+                let next = position
+                    .and_then(|i| {
+                        if c == '[' {
+                            i.checked_sub(1)
+                        } else {
+                            Some(i + 1)
+                        }
+                    })
+                    .and_then(|i| graph.steps.get(i));
+                match next {
+                    Some(step) => {
+                        let (repo, step, steps) =
+                            (graph.repo.clone(), step.clone(), graph.steps.clone());
+                        return self.open_graph(repo, step, steps);
+                    }
+                    None if c == '[' => self.say("no earlier step"),
+                    None => self.say("no later step"),
+                }
+            }
+            KeyCode::Char('o' | 'f') => return self.open_part(key == KeyCode::Char('f')),
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    fn move_part(&mut self, forward: bool) {
+        let Some(graph) = &mut self.graph else { return };
+        let Some(report) = &graph.report else { return };
+        if report.parts.is_empty() {
+            return;
+        }
+        graph.selected = if forward {
+            (graph.selected + 1).min(report.parts.len() - 1)
+        } else {
+            graph.selected.saturating_sub(1)
+        };
+        graph.first_slot = graph_first_slot(report, graph.selected, graph.first_slot);
+    }
+
+    /// `o` / `f` on the selected part: the panel's rule for drawing `o open · f fork`.
+    fn open_part(&mut self, fork: bool) -> Vec<Effect> {
+        let Some(part) = self
+            .graph
+            .as_ref()
+            .and_then(|g| g.report.as_ref()?.parts.get(g.selected))
+        else {
+            return Vec::new();
+        };
+        let available = part.harness != Harness::Codex || crate::graph::has_run(part);
+        let session = part.session.as_deref().filter(|id| !id.is_empty());
+        match (available, session) {
+            (true, Some(id)) => {
+                if self.healthy && !self.opening {
+                    let id = id.to_owned();
+                    self.opening = true;
+                    self.footer = "checking current session…".into();
+                    return vec![Effect::FreshOpen { id, fork }];
+                }
+            }
+            (false, _) => {
+                let words = crate::graph::missing_run(part);
+                self.say(&words);
+            }
+            (true, None) => self.say("run unavailable"),
+        }
+        Vec::new()
+    }
+
+    /// Take a refresh's graph when it is for the open (repo, step); keep the selected part by
+    /// session and position, else clamp the old index.
+    fn take_graph(&mut self, report: Option<GraphReport>, steps: Vec<String>) {
+        let (Some(graph), Some(report)) = (&mut self.graph, report) else {
+            return;
+        };
+        if report.repo != graph.repo || report.step.id != graph.step {
+            return;
+        }
+        let last = report.parts.len().saturating_sub(1);
+        let kept = graph.report.as_ref().and_then(|old| {
+            let part = old.parts.get(graph.selected)?;
+            let nth = old.parts[..graph.selected]
+                .iter()
+                .filter(|p| p.session == part.session)
+                .count();
+            report
+                .parts
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| p.session == part.session)
+                .nth(nth)
+                .map(|(i, _)| i)
+        });
+        graph.selected = kept.unwrap_or(graph.selected).min(last);
+        graph.first_slot = graph_first_slot(&report, graph.selected, graph.first_slot);
+        graph.report = Some(report);
+        graph.steps = steps;
     }
 
     fn adjust_window(&mut self, key: KeyCode) {
@@ -356,7 +567,20 @@ impl App {
         if area.is_empty() {
             return;
         }
-        if let (Some(view), Some(report)) = (self.view(), &self.report) {
+        self.drawn_width.set(area.width);
+        let graph = self
+            .graph
+            .as_ref()
+            .and_then(|g| Some((g, g.report.as_ref()?)));
+        if let Some((graph, report)) = graph {
+            let options = GraphOptions {
+                selected: graph.selected,
+                first_slot: graph.first_slot,
+                theme: self.home_options().theme,
+                offset: self.offset.unwrap_or(time::UtcOffset::UTC),
+            };
+            render_graph(report, &options, area, buf);
+        } else if let (Some(view), Some(report)) = (self.view(), &self.report) {
             if let Some((repo, window)) = &self.timeline {
                 let options = RepoOptions {
                     fitted: !self.explicit_range,
@@ -380,7 +604,10 @@ impl App {
                 crate::render_home_with_options(&view, Some(self.selection), &options, area, buf);
             }
         }
+        let loading = self.graph.as_ref().is_some_and(|g| g.report.is_none());
         if self.report.is_some()
+            && !loading
+            && self.picker.is_none()
             && self.footer.is_empty()
             && self.refresh_error.is_none()
             && self
@@ -417,13 +644,29 @@ impl App {
         if !self.footer.is_empty() {
             return self.footer.clone();
         }
+        if let Some((entries, chosen)) = &self.picker {
+            let steps: Vec<String> = entries.iter().map(|(_, s)| format!("step {s}")).collect();
+            return format!(
+                "started: {} · ←→ choose · enter opens {} · esc cancel",
+                steps.join(", "),
+                steps[*chosen]
+            );
+        }
         if let Some(error) = &self.refresh_error {
             return error.clone();
         }
         let Some(report) = &self.report else {
             return "loading sessions… · q quit".into();
         };
-        let help = if self.timeline.is_some() {
+        if let Some(graph) = self.graph.as_ref().filter(|g| g.report.is_none()) {
+            return format!("loading step {}…", graph.step);
+        }
+        let width = self.drawn_width.get();
+        let help = if self.graph.is_some() && width != 0 && width < GRAPH_WIDE {
+            "↑↓ move along the step · [ ] prev / next step · o open · f fork · esc repo view · q quit"
+        } else if self.graph.is_some() {
+            "←→ move along the step · [ ] prev / next step · o open · f fork · esc repo view · q quit"
+        } else if self.timeline.is_some() {
             "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · s step · q quit"
         } else {
             "↑↓ move · enter repo view · o open session · q quit"
@@ -434,6 +677,42 @@ impl App {
             format!("{help} · {}", report.diagnostics)
         }
     }
+}
+
+/// A lane's latest tagged hand-off step: a Claude lane's own hand-offs (it is the parent), a
+/// Codex lane's incoming ones (it is the child). Latest = max `at`, ties by later position.
+fn own_step(row: &SessionRow, links: &[Link]) -> Option<String> {
+    links
+        .iter()
+        .enumerate()
+        .filter(|(_, link)| match row.harness {
+            Harness::Claude => link.parent == row.id,
+            Harness::Codex => link.child.as_deref() == Some(row.id.as_str()),
+        })
+        .filter_map(|(i, link)| Some((link.at, i, link.step.clone()?)))
+        .max_by_key(|(at, i, _)| (*at, *i))
+        .map(|(_, _, step)| step)
+}
+
+/// Direct started (Claude) children in `started_at` then id order, each with its own latest
+/// tagged step; one entry per repo + step, children without one skipped.
+fn started_steps(repo: &str, row: &SessionRow, links: &[Link]) -> Vec<(String, String)> {
+    let mut children: Vec<&SessionRow> = row
+        .children
+        .iter()
+        .filter(|c| c.harness == Harness::Claude)
+        .collect();
+    children.sort_by(|a, b| (a.started_at, &a.id).cmp(&(b.started_at, &b.id)));
+    let mut entries: Vec<(String, String)> = Vec::new();
+    for child in children {
+        if let Some(step) = own_step(child, links) {
+            let entry = (repo.to_string(), step);
+            if !entries.contains(&entry) {
+                entries.push(entry);
+            }
+        }
+    }
+    entries
 }
 
 fn waiting_ids(report: &OverviewReport) -> HashSet<String> {
@@ -459,6 +738,8 @@ mod tests {
             links: serde_json::from_str(include_str!("../../../fixtures/expected/links.json"))
                 .unwrap(),
             diagnostics: String::new(),
+            graph: None,
+            graph_steps: Vec::new(),
         })
     }
     fn state(report: &mut Refresh, state: State) {
@@ -666,6 +947,8 @@ mod phase6_tests {
                 unparented: vec![],
             },
             diagnostics: String::new(),
+            graph: None,
+            graph_steps: Vec::new(),
         })
     }
     fn app() -> App {
@@ -842,6 +1125,8 @@ mod repo_tests {
             overview,
             links,
             diagnostics: String::new(),
+            graph: None,
+            graph_steps: Vec::new(),
         })
     }
     fn app() -> App {
@@ -1043,5 +1328,699 @@ mod repo_tests {
             actual,
             include_str!("../../../fixtures/expected/tui/repo-phase6.txt")
         );
+    }
+}
+
+#[cfg(test)]
+mod graph_tests {
+    use super::*;
+    use multi_link_model::{GraphReport, Link, Timestamp};
+
+    const REPO: &str = "/home/dev/multi-link-sandbox/repo-a";
+    const REPO_K: &str = "/home/dev/repo-k";
+    const K: &str = "84c00001";
+    const B: &str = "84c00003";
+    const A2: &str = "84c00004";
+
+    fn read(path: &str) -> String {
+        std::fs::read_to_string(format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+    fn base() -> Box<Refresh> {
+        Box::new(Refresh {
+            overview: serde_json::from_str(&read("fixtures/expected/overview.json")).unwrap(),
+            links: serde_json::from_str(&read("fixtures/expected/links.json")).unwrap(),
+            diagnostics: String::new(),
+            graph: None,
+            graph_steps: Vec::new(),
+        })
+    }
+    fn started() -> Box<Refresh> {
+        Box::new(Refresh {
+            overview: serde_json::from_str(&read("fixtures/expected/started/overview.json"))
+                .unwrap(),
+            links: serde_json::from_str(&read("fixtures/expected/started/links.json")).unwrap(),
+            diagnostics: String::new(),
+            graph: None,
+            graph_steps: Vec::new(),
+        })
+    }
+    fn graph(key: &str, repo: &str, step: &str) -> GraphReport {
+        let mut report: GraphReport =
+            serde_json::from_str(&read(&format!("fixtures/expected/phase8/graph-{key}.json")))
+                .unwrap();
+        report.repo = repo.into();
+        report.step.id = step.into();
+        report
+    }
+    fn at(text: &str) -> Timestamp {
+        Timestamp::parse(text).unwrap()
+    }
+    /// Tag every link from `parent` (prefix) with `step`.
+    fn tag(refresh: &mut Refresh, parent: &str, step: &str) {
+        for link in &mut refresh.links.links {
+            if link.parent.starts_with(parent) {
+                link.step = Some(step.into());
+            }
+        }
+    }
+    /// A new tagged hand-off from `parent` (full id taken from an existing row), at `when`.
+    fn handoff(refresh: &mut Refresh, parent: &str, step: &str, when: &str) {
+        let full = refresh
+            .overview
+            .repos
+            .iter()
+            .flat_map(crate::view::sessions)
+            .find(|row| row.id.starts_with(parent))
+            .unwrap()
+            .id
+            .clone();
+        let mut link: Link = refresh.links.links[0].clone();
+        link.parent = full;
+        link.step = Some(step.into());
+        link.at = at(when);
+        link.invocation = format!("toolu_{parent}_{step}");
+        refresh.links.links.push(link);
+    }
+    fn with_graph(mut refresh: Box<Refresh>, graph: GraphReport, steps: &[&str]) -> Box<Refresh> {
+        refresh.graph = Some(graph);
+        refresh.graph_steps = steps.iter().map(|s| s.to_string()).collect();
+        refresh
+    }
+    fn repo_view(app: &mut App, repo: &str, lane: &str) {
+        let view = app.view().unwrap();
+        app.selection = app
+            .targets(&view)
+            .iter()
+            .position(|(r, _)| *r == repo)
+            .unwrap();
+        app.update(Event::Key(KeyCode::Enter));
+        assert!(app.timeline.is_some());
+        select_lane(app, lane);
+    }
+    fn select_lane(app: &mut App, lane: &str) {
+        let view = app.view().unwrap();
+        app.selection = app
+            .targets(&view)
+            .iter()
+            .position(|(_, t)| matches!(t, Target::Session(row) if row.id.starts_with(lane)))
+            .unwrap_or_else(|| panic!("lane {lane}"));
+    }
+    fn key(app: &mut App, code: KeyCode) -> Vec<Effect> {
+        app.update(Event::Key(code))
+    }
+    fn tagged() -> Box<Refresh> {
+        let mut r = base();
+        tag(&mut r, "bb792d9c", "1.3");
+        r
+    }
+    /// Repo view on lane bb792d9c (tagged 1.3), `s` pressed, graph `graph_key` delivered.
+    fn graph_app(graph_key: &str, steps: &[&str]) -> App {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(tagged())));
+        repo_view(&mut app, REPO, "bb792d9c");
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.3".into())))]
+        );
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph(graph_key, REPO, "1.3"),
+            steps,
+        ))));
+        assert!(app.graph.as_ref().unwrap().report.is_some());
+        app
+    }
+    fn draw(app: &App, width: u16, height: u16) -> Buffer {
+        let mut b = Buffer::empty(Rect::new(0, 0, width, height));
+        app.render(b.area, &mut b);
+        b
+    }
+    fn row(b: &Buffer, y: u16) -> String {
+        (0..b.area.width)
+            .map(|x| b[(x, y)].symbol())
+            .collect::<String>()
+            .trim_end()
+            .to_owned()
+    }
+    fn selected(app: &App) -> (usize, usize) {
+        let g = app.graph.as_ref().unwrap();
+        (g.selected, g.first_slot)
+    }
+    fn session_of(app: &App) -> String {
+        let g = app.graph.as_ref().unwrap();
+        g.report.as_ref().unwrap().parts[g.selected]
+            .session
+            .clone()
+            .unwrap()
+    }
+
+    #[test]
+    fn s_opens_latest_tagged_step_of_lane() {
+        let mut r = tagged();
+        tag(&mut r, "bb792d9c", "1.1");
+        handoff(&mut r, "bb792d9c", "1.2", "2026-10-29T23:30:00Z");
+        handoff(&mut r, "bb792d9c", "1.0", "2026-10-29T22:00:00Z");
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO, "bb792d9c");
+        let before = row(&draw(&app, 120, 40), 20);
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.2".into())))]
+        );
+        let b = draw(&app, 120, 40);
+        assert_eq!(row(&b, 39), "loading step 1.2…");
+        // The repo view stays on screen until a matching report arrives.
+        assert_eq!(row(&b, 20), before);
+    }
+
+    #[test]
+    fn s_on_codex_lane_uses_its_incoming_handoff() {
+        let mut r = base();
+        tag(&mut r, "bb792d9c", "1.3");
+        tag(&mut r, "ef72378c", "1.4");
+        for link in &mut r.links.links {
+            if link.parent.starts_with("ef72378c") {
+                link.at = at("2026-10-29T23:40:00Z");
+            }
+        }
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO, "bb792d9c");
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.3".into())))]
+        );
+        key(&mut app, KeyCode::Esc);
+        // The Codex child of both: its latest incoming tagged hand-off.
+        select_lane(&mut app, "01a189e2");
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO.into(), "1.4".into())))]
+        );
+    }
+
+    #[test]
+    fn s_without_step_says_no_step_on_this_session() {
+        for lane in ["ef72378c", "01a189e2"] {
+            let mut app = App::default();
+            app.update(Event::Refresh(Ok(base())));
+            repo_view(&mut app, REPO, lane);
+            let selection = app.selection;
+            assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+            assert!(app.graph.is_none() && app.picker.is_none());
+            assert_eq!(row(&draw(&app, 120, 40), 39), "no step on this session");
+            key(&mut app, KeyCode::Char('x'));
+            assert!(app.footer.is_empty());
+            assert_eq!(app.selection, selection);
+        }
+    }
+
+    fn coordinator(r: Box<Refresh>) -> App {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO_K, K);
+        app
+    }
+
+    #[test]
+    fn s_on_coordinator_lists_direct_started_children_steps() {
+        let mut r = started();
+        // A2 is a grandchild of K (started by A): never listed.
+        handoff(&mut r, A2, "9.9", "2026-11-08T09:30:00Z");
+        // B started after A: listed second, even with an earlier hand-off.
+        handoff(&mut r, B, "3.1", "2026-11-08T09:11:00Z");
+        let mut app = coordinator(r);
+        assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+        assert_eq!(
+            row(&draw(&app, 120, 40), 39),
+            "started: step 2.1, step 3.1 · ←→ choose · enter opens step 2.1 · esc cancel"
+        );
+        // One entry per repo + step.
+        let mut r = started();
+        handoff(&mut r, B, "2.1", "2026-11-08T09:40:00Z");
+        let mut app = coordinator(r);
+        key(&mut app, KeyCode::Char('s'));
+        assert_eq!(
+            app.footer_text(),
+            "started: step 2.1 · ←→ choose · enter opens step 2.1 · esc cancel"
+        );
+    }
+
+    #[test]
+    fn own_tagged_handoff_wins_over_children() {
+        let mut r = started();
+        handoff(&mut r, K, "5.0", "2026-11-08T09:01:00Z");
+        let mut app = coordinator(r);
+        assert_eq!(
+            key(&mut app, KeyCode::Char('s')),
+            [Effect::Graph(Some((REPO_K.into(), "5.0".into())))]
+        );
+        assert!(app.picker.is_none());
+    }
+
+    #[test]
+    fn coordinator_with_no_graphed_children_says_no_step() {
+        let mut r = started();
+        for link in &mut r.links.links {
+            link.step = None;
+        }
+        let mut app = coordinator(r);
+        assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+        assert!(app.picker.is_none());
+        assert_eq!(app.footer_text(), "no step on this session");
+    }
+
+    fn picker_app() -> App {
+        let mut r = started();
+        handoff(&mut r, B, "3.1", "2026-11-08T09:11:00Z");
+        let mut app = coordinator(r);
+        key(&mut app, KeyCode::Char('s'));
+        assert!(app.picker.is_some());
+        app
+    }
+
+    #[test]
+    fn picker_esc_keeps_repo_view() {
+        let mut app = picker_app();
+        let selection = app.selection;
+        let window = app.timeline.clone();
+        for code in [
+            KeyCode::Down,
+            KeyCode::Up,
+            KeyCode::Char('+'),
+            KeyCode::Char('o'),
+            KeyCode::Char('s'),
+            KeyCode::Char('i'),
+        ] {
+            assert!(key(&mut app, code).is_empty());
+        }
+        assert_eq!(app.selection, selection);
+        assert_eq!(app.timeline, window);
+        assert!(!app.imports);
+        assert!(key(&mut app, KeyCode::Esc).is_empty());
+        assert!(app.picker.is_none() && app.graph.is_none());
+        assert_eq!(app.timeline, window);
+        assert_eq!(app.selection, selection);
+        assert!(app.footer_text().starts_with("↑↓ select"));
+        let mut app = picker_app();
+        assert_eq!(key(&mut app, KeyCode::Char('q')), [Effect::Quit]);
+    }
+
+    #[test]
+    fn picker_enter_opens_chosen() {
+        let mut app = picker_app();
+        key(&mut app, KeyCode::Left);
+        assert!(app.footer_text().contains("enter opens step 2.1"));
+        key(&mut app, KeyCode::Right);
+        key(&mut app, KeyCode::Right);
+        assert_eq!(
+            app.footer_text(),
+            "started: step 2.1, step 3.1 · ←→ choose · enter opens step 3.1 · esc cancel"
+        );
+        assert_eq!(
+            key(&mut app, KeyCode::Enter),
+            [Effect::Graph(Some((REPO_K.into(), "3.1".into())))]
+        );
+        assert!(app.picker.is_none());
+        assert_eq!(app.footer_text(), "loading step 3.1…");
+    }
+
+    #[test]
+    fn arrows_clamp_at_both_ends() {
+        let mut app = graph_app("1.3", &[]);
+        let report = app.graph.as_ref().unwrap().report.clone().unwrap();
+        assert_eq!(report.parts.len(), 7);
+        draw(&app, 120, 40);
+        key(&mut app, KeyCode::Left);
+        assert_eq!(selected(&app), (0, 0));
+        let mut first = 0;
+        for i in 1..7 {
+            key(&mut app, KeyCode::Right);
+            first = crate::graph_first_slot(&report, i, first);
+            assert_eq!(selected(&app), (i, first));
+        }
+        assert!(first > 0);
+        key(&mut app, KeyCode::Right);
+        assert_eq!(selected(&app), (6, first));
+        for code in [KeyCode::Up, KeyCode::Down] {
+            key(&mut app, code);
+            assert_eq!(selected(&app), (6, first));
+        }
+        for _ in 0..10 {
+            key(&mut app, KeyCode::Left);
+        }
+        assert_eq!(selected(&app), (0, 0));
+    }
+
+    #[test]
+    fn narrow_uses_up_down_and_resize_switches() {
+        let mut r = tagged();
+        r.diagnostics = "incomplete: 1".into();
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r.clone_box())));
+        repo_view(&mut app, REPO, "bb792d9c");
+        key(&mut app, KeyCode::Char('s'));
+        app.update(Event::Refresh(Ok(with_graph(
+            r,
+            graph("1.3", REPO, "1.3"),
+            &[],
+        ))));
+        let b = draw(&app, 130, 40);
+        assert_eq!(
+            row(&b, 39),
+            "←→ move along the step · [ ] prev / next step · o open · f fork · esc repo view · q quit · incomplete: 1"
+        );
+        key(&mut app, KeyCode::Right);
+        assert_eq!(selected(&app).0, 1);
+        key(&mut app, KeyCode::Down);
+        assert_eq!(selected(&app).0, 1);
+        let b = draw(&app, 100, 40);
+        assert!(row(&b, 39).starts_with("↑↓ move along the step · [ ]"));
+        key(&mut app, KeyCode::Down);
+        assert_eq!(selected(&app).0, 2);
+        key(&mut app, KeyCode::Right);
+        key(&mut app, KeyCode::Left);
+        assert_eq!(selected(&app).0, 2);
+        key(&mut app, KeyCode::Up);
+        assert_eq!(selected(&app).0, 1);
+    }
+
+    #[test]
+    fn brackets_walk_steps_and_stop_at_ends() {
+        let mut app = graph_app("1.3", &["1.1", "1.3", "1.5"]);
+        key(&mut app, KeyCode::Right);
+        assert_eq!(
+            key(&mut app, KeyCode::Char('[')),
+            [Effect::Graph(Some((REPO.into(), "1.1".into())))]
+        );
+        let g = app.graph.as_ref().unwrap();
+        assert_eq!((g.step.as_str(), g.selected, g.first_slot), ("1.1", 0, 0));
+        assert!(g.report.is_none());
+        assert!(key(&mut app, KeyCode::Char('[')).is_empty());
+        assert_eq!(app.footer_text(), "no earlier step");
+        assert_eq!(
+            key(&mut app, KeyCode::Char(']')),
+            [Effect::Graph(Some((REPO.into(), "1.3".into())))]
+        );
+        assert_eq!(
+            key(&mut app, KeyCode::Char(']')),
+            [Effect::Graph(Some((REPO.into(), "1.5".into())))]
+        );
+        assert!(key(&mut app, KeyCode::Char(']')).is_empty());
+        assert_eq!(app.footer_text(), "no later step");
+        // A step missing from the list has no neighbours.
+        let mut app = graph_app("1.3", &["2.0"]);
+        assert!(key(&mut app, KeyCode::Char('[')).is_empty());
+        assert_eq!(app.footer_text(), "no earlier step");
+        assert!(key(&mut app, KeyCode::Char(']')).is_empty());
+        assert_eq!(app.footer_text(), "no later step");
+    }
+
+    #[test]
+    fn stale_graph_refresh_is_ignored() {
+        let mut app = graph_app("1.3", &["1.3", "1.5"]);
+        key(&mut app, KeyCode::Char(']'));
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.3", REPO, "1.3"),
+            &["1.3", "1.5"],
+        ))));
+        let g = app.graph.as_ref().unwrap();
+        assert_eq!(g.step, "1.5");
+        assert!(g.report.is_none());
+        assert_eq!(app.footer_text(), "loading step 1.5…");
+        // Same step id in another repo is another step.
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.5", "/home/dev/elsewhere", "1.5"),
+            &[],
+        ))));
+        assert!(app.graph.as_ref().unwrap().report.is_none());
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.5", REPO, "1.5"),
+            &["1.3", "1.5"],
+        ))));
+        assert_eq!(
+            app.graph.as_ref().unwrap().report.as_ref().unwrap().step.id,
+            "1.5"
+        );
+        // A refresh without a graph keeps the open one.
+        app.update(Event::Refresh(Ok(tagged())));
+        assert!(app.graph.as_ref().unwrap().report.is_some());
+    }
+
+    #[test]
+    fn esc_restores_repo_selection_and_window() {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(tagged())));
+        repo_view(&mut app, REPO, "80cce3e4");
+        key(&mut app, KeyCode::Char('+'));
+        key(&mut app, KeyCode::Left);
+        select_lane(&mut app, "bb792d9c");
+        let before = (
+            app.selection,
+            app.timeline.clone(),
+            app.explicit_range,
+            app.unfold,
+            app.imports,
+        );
+        let screen = draw(&app, 120, 40);
+        key(&mut app, KeyCode::Char('s'));
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.3", REPO, "1.3"),
+            &[],
+        ))));
+        for code in [
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::Char('+'),
+            KeyCode::Char('-'),
+            KeyCode::Char('0'),
+            KeyCode::Char('z'),
+            KeyCode::Char('i'),
+            KeyCode::Enter,
+            KeyCode::Char('t'),
+            KeyCode::Char('s'),
+            KeyCode::Left,
+            KeyCode::Right,
+        ] {
+            assert!(key(&mut app, code).is_empty(), "{code:?}");
+        }
+        assert_eq!(key(&mut app, KeyCode::Esc), [Effect::Graph(None)]);
+        assert!(app.graph.is_none());
+        assert_eq!(
+            (
+                app.selection,
+                app.timeline.clone(),
+                app.explicit_range,
+                app.unfold,
+                app.imports,
+            ),
+            before
+        );
+        assert_eq!(draw(&app, 120, 40), screen);
+        assert_eq!(
+            key(&mut graph_app("1.3", &[]), KeyCode::Char('q')),
+            [Effect::Quit]
+        );
+    }
+
+    #[test]
+    fn open_and_fork_on_done_running_unlinked_ambiguous_parts() {
+        // Done Codex part, then its Claude parent part (the panel draws o/f for both).
+        let mut app = graph_app("1.1", &[]);
+        key(&mut app, KeyCode::Right);
+        let id = session_of(&app);
+        assert!(id.starts_with("82010000"));
+        assert_eq!(
+            key(&mut app, KeyCode::Char('o')),
+            [Effect::FreshOpen {
+                id: id.clone(),
+                fork: false
+            }]
+        );
+        assert_eq!(app.footer_text(), "checking current session…");
+        assert!(key(&mut app, KeyCode::Char('f')).is_empty());
+        app.update(Event::Opened(String::new()));
+        assert_eq!(
+            key(&mut app, KeyCode::Char('f')),
+            [Effect::FreshOpen { id, fork: true }]
+        );
+        app.update(Event::Opened(String::new()));
+        key(&mut app, KeyCode::Left);
+        let claude = session_of(&app);
+        assert_eq!(
+            key(&mut app, KeyCode::Char('o')),
+            [Effect::FreshOpen {
+                id: claude,
+                fork: false
+            }]
+        );
+        // Running part.
+        let mut app = graph_app("1.5", &[]);
+        key(&mut app, KeyCode::Right);
+        key(&mut app, KeyCode::Right);
+        let id = session_of(&app);
+        assert!(id.starts_with("82520000"));
+        assert_eq!(
+            key(&mut app, KeyCode::Char('o')),
+            [Effect::FreshOpen { id, fork: false }]
+        );
+        // Unlinked and ambiguous parts: the panel's words, no effect.
+        let mut app = graph_app("1.2", &[]);
+        for (index, words) in [(1, "no codex run found"), (3, "2 possible runs")] {
+            while selected(&app).0 < index {
+                key(&mut app, KeyCode::Right);
+            }
+            for k in ['o', 'f'] {
+                assert!(key(&mut app, KeyCode::Char(k)).is_empty());
+                assert_eq!(app.footer_text(), words);
+                assert!(!app.opening);
+            }
+        }
+        // Unavailable part.
+        let mut app = graph_app("1.11", &[]);
+        key(&mut app, KeyCode::Right);
+        assert!(key(&mut app, KeyCode::Char('o')).is_empty());
+        assert_eq!(app.footer_text(), "run unavailable");
+    }
+
+    #[test]
+    fn open_blocked_after_failed_refresh() {
+        let mut app = graph_app("1.1", &[]);
+        key(&mut app, KeyCode::Right);
+        app.update(Event::Refresh(Err("denied".into())));
+        for k in ['o', 'f'] {
+            assert!(key(&mut app, KeyCode::Char(k)).is_empty());
+            assert_eq!(
+                app.footer_text(),
+                "refresh failed: denied; keeping last report"
+            );
+        }
+        app.update(Event::Refresh(Ok(tagged())));
+        assert!(matches!(
+            key(&mut app, KeyCode::Char('o')).as_slice(),
+            [Effect::FreshOpen { fork: false, .. }]
+        ));
+    }
+
+    #[test]
+    fn refresh_adding_a_part_keeps_selected_part() {
+        let mut app = graph_app("1.3", &[]);
+        for _ in 0..3 {
+            key(&mut app, KeyCode::Right);
+        }
+        let old = app.graph.as_ref().unwrap().report.clone().unwrap();
+        // Index 3 is the second part of Codex session 82030000.
+        assert_eq!(old.parts[3].session, old.parts[1].session);
+        let mut more = old.clone();
+        let mut extra = more.parts[0].clone();
+        extra.session = Some("new-session".into());
+        more.parts.insert(0, extra);
+        let old_first = selected(&app).1;
+        app.update(Event::Refresh(Ok(with_graph(tagged(), more.clone(), &[]))));
+        assert_eq!(
+            selected(&app),
+            (4, crate::graph_first_slot(&more, 4, old_first))
+        );
+        // The part is gone: clamp the old index.
+        let mut fewer = old.clone();
+        fewer.parts.truncate(2);
+        app.update(Event::Refresh(Ok(with_graph(tagged(), fewer, &[]))));
+        assert_eq!(selected(&app), (1, 0));
+    }
+
+    #[test]
+    fn refresh_error_keeps_graph_screen() {
+        let mut app = graph_app("1.3", &[]);
+        key(&mut app, KeyCode::Right);
+        let before = draw(&app, 120, 40);
+        app.update(Event::Refresh(Err("denied".into())));
+        let after = draw(&app, 120, 40);
+        for y in 0..39 {
+            assert_eq!(row(&after, y), row(&before, y), "row {y}");
+        }
+        assert_eq!(
+            row(&after, 39),
+            "refresh failed: denied; keeping last report"
+        );
+        assert!(app.graph.as_ref().unwrap().report.is_some());
+    }
+
+    #[test]
+    fn keys_on_empty_graph_do_nothing() {
+        let mut app = graph_app("1.13", &[]);
+        assert!(
+            app.graph
+                .as_ref()
+                .unwrap()
+                .report
+                .as_ref()
+                .unwrap()
+                .parts
+                .is_empty()
+        );
+        for width in [120, 80] {
+            draw(&app, width, 40);
+            for code in [
+                KeyCode::Left,
+                KeyCode::Right,
+                KeyCode::Up,
+                KeyCode::Down,
+                KeyCode::Char('o'),
+                KeyCode::Char('f'),
+            ] {
+                assert!(key(&mut app, code).is_empty());
+                assert_eq!(selected(&app), (0, 0));
+            }
+            draw(&app, width, 40);
+        }
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.13", REPO, "1.3"),
+            &[],
+        ))));
+        assert_eq!(selected(&app), (0, 0));
+    }
+
+    #[test]
+    fn graph_render_has_no_sentinels() {
+        for n in 1..=13 {
+            let mut app = graph_app(&format!("1.{n}"), &[]);
+            for width in [120, 80] {
+                let mut moves = 0;
+                loop {
+                    let b = draw(&app, width, 40);
+                    let text: String = b.content.iter().map(|c| c.symbol()).collect();
+                    assert!(!text.contains("sentinel-"), "1.{n} at {width}");
+                    let next = if width >= 120 {
+                        KeyCode::Right
+                    } else {
+                        KeyCode::Down
+                    };
+                    let before = selected(&app).0;
+                    key(&mut app, next);
+                    moves += 1;
+                    if selected(&app).0 == before || moves > 20 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    impl Refresh {
+        fn clone_box(&self) -> Box<Refresh> {
+            Box::new(Refresh {
+                overview: self.overview.clone(),
+                links: self.links.clone(),
+                diagnostics: self.diagnostics.clone(),
+                graph: self.graph.clone(),
+                graph_steps: self.graph_steps.clone(),
+            })
+        }
     }
 }

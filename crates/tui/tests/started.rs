@@ -180,6 +180,8 @@ fn refresh(overview: OverviewReport) -> Result<Box<Refresh>, String> {
         overview,
         links: links(),
         diagnostics: String::new(),
+        graph: None,
+        graph_steps: Vec::new(),
     }))
 }
 fn open(app: &mut App) -> Vec<Effect> {

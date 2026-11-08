@@ -119,6 +119,8 @@ fn refresh(scanner: &mut Scanner, root: &Path, options: &Options<'_>) -> io::Res
         overview: output.report,
         links: output.links.report,
         diagnostics,
+        graph: None,
+        graph_steps: Vec::new(),
     }))
 }
 
@@ -277,6 +279,8 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
                     Effect::Quit => return Ok(()),
                     Effect::FreshOpen { id, fork } => requests.send(Request::Open { id, fork })?,
                     Effect::Bell => unreachable!(),
+                    // Task 4: the worker builds the requested step graph on every refresh.
+                    Effect::Graph(_) => {}
                 }
             }
         }
