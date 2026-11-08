@@ -150,14 +150,14 @@ fn unknown_types_contribute_nothing_and_later_lines_are_read() {
         concat!(
             "{\"type\":\"future\",\"cwd\":\"/ignored\",\"gitBranch\":\"ignored\",\"timestamp\":\"2020-01-01T00:00:00Z\"}\n",
             "{\"type\":\"user\",\"cwd\":\"/first\",\"gitBranch\":\"first\",\"sessionId\":\"inherited\",\"timestamp\":\"2026-10-29T02:00:00Z\"}\n",
-            "{\"type\":\"assistant\",\"cwd\":\"/last\",\"gitBranch\":\"last\",\"timestamp\":\"2026-10-29T01:00:00Z\"}\n",
+            "{\"type\":\"assistant\",\"cwd\":\"/first/last\",\"gitBranch\":\"last\",\"timestamp\":\"2026-10-29T01:00:00Z\"}\n",
             "{\"type\":\"future\",\"cwd\":\"/ignored\",\"gitBranch\":\"ignored\",\"timestamp\":\"2030-01-01T00:00:00Z\"}\n",
         ),
     );
     let actual = scan(root.path()).unwrap();
     let transcript = &actual.transcripts[0];
     assert_eq!(transcript.id, "main");
-    assert_eq!(transcript.cwd.as_deref(), Some("/last"));
+    assert_eq!(transcript.cwd.as_deref(), Some("/first/last"));
     assert_eq!(transcript.branch.as_deref(), Some("last"));
     assert_eq!(
         transcript.started_at,

@@ -44,10 +44,10 @@ response-item fallback finds an eligible prompt (the existing scrubbed `CASE-<na
 overview key changes; every committed key stays equal. New isolated fixture root `fixtures/sessions-phase8/` (board 9's
 shape, synthetic prompts, the Codex `exec` record shape) with answer keys `fixtures/expected/phase8/graph-<id>.json`.
 
-**Phase 9 changes (Step 9.0, all additive, design R0–R6):** `state_evidence` gains `"transcript_exit"` and
+**Phase 9 changes (Step 9.0, all additive, design R0–R7; R7 implemented in Step 9.6):** `state_evidence` gains `"transcript_exit"` and
 `"session_end"`; Link `evidence` and hook `child_evidence` gain `"redirect_file"`; hook records gain `kind: "ended"`
-(event `SessionEnd`, field `reason`); OpenAction `reason` gains `"app_session"` and `"unknown_entrypoint"`. Session
-gains no key (Step 9.6 adds `resume_turn` for R7, written there). Codex rollouts are also read from `rollout-*.jsonl.zst`. State, Exact evidence, Hook records and Open
+(event `SessionEnd`, field `reason`); OpenAction `reason` gains `"app_session"` and `"unknown_entrypoint"`. Link `evidence` also gains `"resume_turn"` (R7, Step 9.6), the only
+value allowed on a `heuristic` link. Session gains no key. Codex rollouts are also read from `rollout-*.jsonl.zst`. State, Exact evidence, Hook records and Open
 below carry the rules. Existing keys change only where R2 applies (12 `fixtures/sessions` transcripts end with a
 `cost-state` after their last turn; the values are listed in PROGRESS.md, Step 9.0). New isolated fixture root
 `fixtures/sessions-phase9/` with answer keys `fixtures/expected/phase9/` (Phase 9 fixture results, at the end).
@@ -280,7 +280,7 @@ Subagent transcripts are scanned too. A skipped line never stops the file; later
 | `checkout` | string | `cwd` of that record. |
 | `match` | `"exact"` \| `"heuristic"` \| `"ambiguous"` \| `"unlinked"` | |
 | `child` | string \| null | Codex id for `exact` / `heuristic`; `null` otherwise. |
-| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| null | What made it exact; `null` unless `exact`. `hook` only in Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
+| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| `"resume_turn"` \| null | What made it exact; `null` unless `exact`, with one exception: `"resume_turn"` (Phase 9, R7) appears only on a `heuristic` link, for a `codex exec resume --last` hand-off matched to a later turn (not the first) of an existing run in the same checkout starting 0–10 s after it; `gap_ms` is turn start − hand-off. `hook` since Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
 | `candidates` | `{"id": string, "gap_ms": int}`[] | Heuristic candidates (1 for `heuristic`, ≥ 2 for `ambiguous`); `[]` for `exact` and `unlinked`. Ordered by `gap_ms`, then `id`. |
 | `step` | string \| null | Step tag of the launch segment (Step tags), set on every link whatever its `match`. `null` when the segment has no tag. |
 
@@ -355,6 +355,12 @@ Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_
 `[at, at + 60 s]`, excluding sessions that are the child of another invocation's `exact` link with
 `form` ≠ `resume` (that invocation created them). `gap_ms` = `started_at − at`. 0 → `unlinked`; 1 → `heuristic`; ≥ 2 → `ambiguous`.
 `gap_ms` is a ranking value, not a probability.
+
+**Phase 9 (design R7, built in Step 9.6):** a `codex exec resume --last` segment is a resume without an id. It
+skips the creation candidates above; its candidates are existing Codex sessions with `cwd` == `checkout` that have a
+non-imported turn, not their first, starting in `[at, at + 10 s]` (exact-launch claims ignored, no fallback to the 60 s
+match, `dir_moved` still suppresses). `gap_ms` = turn start − `at`. 1 → `heuristic` with `evidence: "resume_turn"`;
+≥ 2 → `ambiguous`; 0 → `unlinked`. An observed id (Exact evidence) still wins. `resume <id>` keeps `resume_arg`.
 
 ### Step tags (Phase 2, design H6)
 `step` is the first step tag in the launch segment's text (the segment as split above, quotes and all;
