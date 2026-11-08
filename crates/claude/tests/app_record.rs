@@ -19,7 +19,7 @@ fn write(root: &Path, relative: &str, text: &str) -> std::path::PathBuf {
 fn parse(text: &str) -> AppRecordRead {
     let root = tempfile::tempdir().unwrap();
     let path = write(root.path(), "a/b/local_x.json", text);
-    read_app_record(&path)
+    read_app_record(&path).unwrap()
 }
 
 fn record(read: AppRecordRead) -> AppRecord {
@@ -105,7 +105,7 @@ fn absent_session_id_falls_back_to_the_file_stem() {
         "a/b/local_stem.json",
         r#"{"cliSessionId":"c"}"#,
     );
-    assert_eq!(record(read_app_record(&path)).app_id, "local_stem");
+    assert_eq!(record(read_app_record(&path).unwrap()).app_id, "local_stem");
 }
 
 #[test]
@@ -178,4 +178,12 @@ fn unreadable_directory_is_reported_not_fatal() {
     assert!(paths.is_empty());
     assert_eq!(failures.len(), 1);
     assert!(failures[0].0.ends_with("claude-code-sessions/a"));
+}
+
+#[test]
+fn a_record_deleted_before_the_read_is_not_found_not_bad() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join(DIR).join("a/b/local_gone.json");
+    let error = read_app_record(&path).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
 }

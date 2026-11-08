@@ -190,6 +190,13 @@ pub(crate) fn assemble(
             subagents: Vec::new(),
         });
     }
+    // S1: only transcript-backed Claude sessions can be either end of a started-by link,
+    // judged before the window so a cycle with a member outside it still counts.
+    let eligible: HashSet<String> = sessions
+        .iter()
+        .filter(|session| session.harness == Harness::Claude && session.transcript.is_some())
+        .map(|session| session.id.clone())
+        .collect();
     sessions.retain(|session| {
         session.record.is_some()
             || session.state == State::Waiting
@@ -200,10 +207,11 @@ pub(crate) fn assemble(
     sessions.sort_by(|a, b| (a.started_at, &a.id).cmp(&(b.started_at, &b.id)));
     let listed: HashSet<&str> = sessions
         .iter()
-        .filter(|session| session.harness == Harness::Claude)
+        .filter(|session| session.harness == Harness::Claude && session.transcript.is_some())
         .map(|session| session.id.as_str())
         .collect();
-    let started = started_by_links(&claude.app_records, &listed);
+    let eligible: HashSet<&str> = eligible.iter().map(String::as_str).collect();
+    let started = started_by_links(&claude.app_records, &eligible, &listed);
     for session in &mut sessions {
         if session.harness == Harness::Claude {
             session.started_by = started.get(session.id.as_str()).cloned();
@@ -234,10 +242,14 @@ pub(crate) fn assemble(
 /// - one app id on two records makes the parent unresolvable, so children naming it get no
 ///   link;
 /// - two eligible records of one child naming different parents give that child no link;
-/// - both ends must be listed Claude sessions and differ (a self-link is dropped);
-/// - every session on a cycle loses its edge (sessions pointing into a cycle keep theirs).
+/// - both ends must be transcript-backed Claude sessions (`eligible`, whatever the window
+///   shows; a record-only session is neither end) and differ (a self-link is dropped);
+/// - every session on a cycle loses its edge (sessions pointing into a cycle keep theirs);
+///   cycles are found on all eligible edges, then only links between `listed` sessions
+///   (the window) are kept.
 pub(crate) fn started_by_links(
     app_records: &[AppRecord],
+    eligible: &HashSet<&str>,
     listed: &HashSet<&str>,
 ) -> HashMap<String, String> {
     let mut by_app_id: HashMap<&str, Vec<&AppRecord>> = HashMap::new();
@@ -271,8 +283,8 @@ pub(crate) fn started_by_links(
         parents.dedup();
         if let [Ok(parent)] = parents.as_slice()
             && parent != &child
-            && listed.contains(child)
-            && listed.contains(parent)
+            && eligible.contains(child)
+            && eligible.contains(parent)
         {
             edges.insert(child, parent);
         }
@@ -294,9 +306,12 @@ pub(crate) fn started_by_links(
             false
         })
         .collect();
+    // The window only decides which links are shown, never which edges form a cycle.
     edges
         .into_iter()
-        .filter(|(child, _)| !on_cycle.contains(child))
+        .filter(|(child, parent)| {
+            !on_cycle.contains(child) && listed.contains(child) && listed.contains(parent)
+        })
         .map(|(child, parent)| (child.to_owned(), parent.to_owned()))
         .collect()
 }
@@ -453,8 +468,19 @@ mod started_by_tests {
     }
 
     fn links(records: &[AppRecord], listed: &[&str]) -> Vec<(String, String)> {
+        links_in(records, listed, listed)
+    }
+
+    fn links_in(
+        records: &[AppRecord],
+        eligible: &[&str],
+        listed: &[&str],
+    ) -> Vec<(String, String)> {
+        let eligible: HashSet<&str> = eligible.iter().copied().collect();
         let listed: HashSet<&str> = listed.iter().copied().collect();
-        let mut out: Vec<_> = started_by_links(records, &listed).into_iter().collect();
+        let mut out: Vec<_> = started_by_links(records, &eligible, &listed)
+            .into_iter()
+            .collect();
         out.sort();
         out
     }
@@ -531,5 +557,28 @@ mod started_by_tests {
             rec("lt", "t", Some("l1")),
         ];
         assert_eq!(links(&records, &["c1", "c2", "t"]), [pair("t", "c1")]);
+    }
+
+    #[test]
+    fn a_cycle_is_found_before_the_window_filter() {
+        // c3 is outside the window but still a transcript-backed session: the 3-cycle
+        // keeps c1 and c2 top level, as it does with every session listed.
+        let records = [
+            rec("l1", "c1", Some("l2")),
+            rec("l2", "c2", Some("l3")),
+            rec("l3", "c3", Some("l1")),
+        ];
+        let all = ["c1", "c2", "c3"];
+        assert_eq!(links_in(&records, &all, &["c1", "c2"]), []);
+        assert_eq!(links_in(&records, &all, &all), []);
+    }
+
+    #[test]
+    fn a_session_with_no_transcript_is_neither_end_of_a_link() {
+        let records = [rec("la", "a", None), rec("lb", "b", Some("la"))];
+        // `b` is only a record: not eligible, so not linked even if it is listed.
+        assert_eq!(links_in(&records, &["a"], &["a", "b"]), []);
+        // `a` is only a record: a child of it gets no link.
+        assert_eq!(links_in(&records, &["b"], &["a", "b"]), []);
     }
 }

@@ -258,7 +258,7 @@ impl Scanner {
             .collect();
         for path in app_paths {
             let read = match self.app_records.read(&path, &mut self.stats, || {
-                Ok(multi_link_claude::read_app_record(&path))
+                multi_link_claude::read_app_record(&path)
             }) {
                 Ok(read) => read,
                 // Deleted between listing and reading: nothing to report.

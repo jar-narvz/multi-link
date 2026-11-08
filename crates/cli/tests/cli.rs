@@ -927,3 +927,23 @@ fn started_root_json_matches_the_three_keys() {
         );
     }
 }
+
+#[test]
+fn started_root_overview_text_counts_nested_sessions_at_every_depth() {
+    let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+        .arg("overview")
+        .arg("--root")
+        .arg(fixtures().join("sessions-started"))
+        .args(["--now", "2026-11-08T12:00:00Z", "--since", "all"])
+        .output()
+        .unwrap();
+    success(&output);
+    let text = String::from_utf8(output.stdout).unwrap();
+    let line = text
+        .lines()
+        .find(|line| line.contains("/home/dev/repo-k"))
+        .unwrap();
+    // 18 listed sessions: K, A, B, A2, A's Codex child and the 13 top-level ones.
+    let count = line.split_whitespace().nth(1).unwrap();
+    assert_eq!(count, "18", "{line}");
+}

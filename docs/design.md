@@ -933,9 +933,13 @@ Extends need 2 from Claude to Codex to Claude to Claude. The desktop app keeps o
 undocumented app behaviour: every field is an assumption confirmed only by the fixture and a counts-only real run.
 - **S1 Started-by link.** Session C is started by P when C's record has `cliSessionId` = C's transcript id,
   `spawnedFrom.sessionId` names a record whose `cliSessionId` = P's transcript id, both are listed Claude
-  sessions, P differs from C, and `spawnedFrom.userFork` / `btw` are not true (user acts, not a session's).
+  sessions with a transcript (a record-only session, with no transcript, is neither end), P differs from C, and `spawnedFrom.userFork` / `btw` are not true (user acts, not a session's).
   Two records with one `cliSessionId` naming different parents, or two records sharing a `sessionId`, give no
-  link for the affected child. An edge closing a cycle is dropped for every session on it. Always exact; there is no
+  link for the affected child. "Sharing a `sessionId`" is read narrowly: only links whose parent names that shared
+  app id are dropped (it cannot say which record is meant); the two records still each link as children of
+  whatever they name. An edge closing a cycle is dropped for every session on it; cycles are found on all
+  transcript-backed sessions before the `--since` window is applied, so a cycle with a member outside the window
+  keeps every member top level. Always exact; there is no
   time or brief guessing. An absent directory or missing parent record is normal; a malformed file or wrong field
   type is a bad record; an unreadable directory is the existing unreadable diagnostic; never an error exit.
 - **S2 Contract.** `Session` and `SessionRow` gain `started_by`. It is not a `Link`: never in `links`,
@@ -943,6 +947,8 @@ undocumented app behaviour: every field is an assumption confirmed only by the f
   output equals Step 8.4b's plus `started_by: null`.
 - **S3 Nesting.** In the repo group (mapped repo, not `cwd`) a started Claude row nests under its starter at any
   depth; cross-repo or unlisted starters stay top level. Children are ordered by time (Codex: placing hand-off;
-  started: `started_at`), ties by id; a parent's own order and state are unchanged; quiet-merge eligibility looks at
+  started: `started_at`), ties by id. These keys decide the order; the direction follows each surface. The JSON
+  overview lists children ascending. The repo view keeps W6's newest-first direction at every level, so a parent's
+  children read in the opposite direction there; this is deliberate. A parent's own order and state are unchanged; quiet-merge eligibility looks at
   all descendants. Why: the owner's coordinator sessions start step sessions, and the hierarchy is the one thing
   the flat list hid. Home stays flat (non-goal).

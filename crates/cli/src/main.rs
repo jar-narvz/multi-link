@@ -14,8 +14,8 @@ use multi_link_core::{
     open::{self, OpenAction},
 };
 use multi_link_model::{
-    Convention, GraphReport, LinksReport, OverviewReport, Row, SessionsReport, StepsReport,
-    Timestamp,
+    Convention, GraphReport, LinksReport, OverviewReport, Row, SessionRow, SessionsReport,
+    StepsReport, Timestamp,
 };
 use serde::Serialize;
 
@@ -391,6 +391,11 @@ fn steps_text(writer: &mut impl Write, report: &StepsReport) -> io::Result<()> {
     writeln!(writer, "{count} steps in {} repos", report.repos.len())
 }
 
+/// A row and every session nested under it, at any depth (8.4c S3).
+fn count_sessions(row: &SessionRow) -> usize {
+    1 + row.children.iter().map(count_sessions).sum::<usize>()
+}
+
 /// One line per repo: tier, session count, last activity, latest step, repo.
 fn overview_text(writer: &mut impl Write, report: &OverviewReport) -> io::Result<()> {
     let rows = report
@@ -401,10 +406,8 @@ fn overview_text(writer: &mut impl Write, report: &OverviewReport) -> io::Result
                 .rows
                 .iter()
                 .map(|row| match row {
-                    Row::Session(row) => 1 + row.children.len(),
-                    Row::Merged(merged) => {
-                        merged.rows.iter().map(|row| 1 + row.children.len()).sum()
-                    }
+                    Row::Session(row) => count_sessions(row),
+                    Row::Merged(merged) => merged.rows.iter().map(count_sessions).sum(),
                 })
                 .sum();
             let step = match &group.plan.latest_step {

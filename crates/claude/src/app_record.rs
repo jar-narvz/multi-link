@@ -98,18 +98,24 @@ fn list(root: &Path, directory: &Path, failures: &mut Vec<(String, io::Error)>) 
 }
 
 /// Parse one record file.
-pub fn read_app_record(path: &Path) -> AppRecordRead {
-    let Ok(bytes) = fs::read(path) else {
-        return AppRecordRead::Bad;
+///
+/// A file that is gone (deleted since it was listed) is a `NotFound` error, not a bad
+/// record: the app removes records, and the caller treats that as deleted. Any other
+/// read failure is a bad record.
+pub fn read_app_record(path: &Path) -> io::Result<AppRecordRead> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Err(error),
+        Err(_) => return Ok(AppRecordRead::Bad),
     };
     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-        return AppRecordRead::Bad;
+        return Ok(AppRecordRead::Bad);
     };
     let stem = path
         .file_stem()
         .and_then(|stem| stem.to_str())
         .unwrap_or_default();
-    parse(&value, stem)
+    Ok(parse(&value, stem))
 }
 
 fn parse(value: &Value, stem: &str) -> AppRecordRead {
@@ -175,9 +181,10 @@ pub fn scan_app_records(root: &Path) -> AppRecordScan {
     };
     for path in paths {
         match read_app_record(&path) {
-            AppRecordRead::Record(record) => scan.records.push(record),
-            AppRecordRead::Ignored => {}
-            AppRecordRead::Bad => scan.bad.push(relative(root, &path)),
+            Ok(AppRecordRead::Record(record)) => scan.records.push(record),
+            Ok(AppRecordRead::Ignored) => {}
+            Ok(AppRecordRead::Bad) => scan.bad.push(relative(root, &path)),
+            Err(_) => {} // deleted since the listing
         }
     }
     scan.bad.sort();

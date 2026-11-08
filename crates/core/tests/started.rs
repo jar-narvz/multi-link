@@ -352,15 +352,13 @@ fn nesting_is_k_a_codex_a2_and_k_b_and_each_session_appears_once() {
 }
 
 #[test]
-fn k_is_not_quiet_merged_while_a2_is_busy_and_its_counts_ignore_the_app_dir() {
+fn k_is_not_quiet_merged_while_a2_is_busy_and_hand_off_counts_ignore_the_app_dir() {
     let root = fixtures().join("sessions-started");
     let with = overview(&root);
-    let k = |overview: &Value| {
+    let find = |overview: &Value, n: &str| {
         let mut flat = Vec::new();
         all_rows(repo_rows(overview, "/home/dev/repo-k"), &mut flat);
-        flat.into_iter()
-            .find(|r| r["id"] == id(1).as_str())
-            .unwrap()
+        flat.into_iter().find(|r| r["id"] == n).unwrap()
     };
     let top_ids: Vec<_> = repo_rows(&with, "/home/dev/repo-k")
         .iter()
@@ -372,12 +370,113 @@ fn k_is_not_quiet_merged_while_a2_is_busy_and_its_counts_ignore_the_app_dir() {
     let (_temp, copy) = scratch();
     fs::remove_dir_all(copy.join(DIR)).unwrap();
     let without = overview(&copy);
-    assert_eq!(k(&with)["made"], k(&without)["made"]);
-    assert_eq!(k(&with)["handoffs"], k(&without)["handoffs"]);
+    // A (02) hands off to a Codex child: its `made` and the child's `handoffs` are
+    // non-empty, so a started-by edge leaking into either would show here.
+    let child = "84c000c2-0000-4000-8000-0000000084c2";
+    let a = id(2);
+    assert!(
+        !find(&with, &a)["made"].as_array().unwrap().is_empty(),
+        "A made at least one hand-off"
+    );
+    assert!(
+        !find(&with, child)["handoffs"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "the Codex child has a hand-off"
+    );
+    assert_eq!(find(&with, &a)["made"], find(&without, &a)["made"]);
+    assert_eq!(
+        find(&with, child)["handoffs"],
+        find(&without, child)["handoffs"]
+    );
     assert_eq!(
         with["repos"][0]["latest_handoff"],
         without["repos"][0]["latest_handoff"]
     );
+    let links = |root: &Path| {
+        let out = Scanner::default().links(root, &options(root)).unwrap();
+        serde_json::to_value(&out.report).unwrap()
+    };
+    assert_eq!(links(&root), links(&copy));
+}
+
+#[test]
+fn a_session_with_only_a_record_has_no_started_by_and_does_not_nest() {
+    let (_temp, root) = scratch();
+    let a2 = walk(&root.join(".claude/projects"))
+        .into_iter()
+        .find(|p| p.to_str().unwrap().contains("84c00004"))
+        .unwrap();
+    fs::remove_file(a2).unwrap();
+    let output = Scanner::default().sessions(&root, &options(&root)).unwrap();
+    let a2_row = output
+        .report
+        .sessions
+        .iter()
+        .find(|s| s.id == id(4))
+        .expect("A2 is still listed from its live record");
+    assert!(a2_row.transcript.is_none());
+    assert_eq!(a2_row.started_by, None);
+    let overview = overview(&root);
+    let mut flat = Vec::new();
+    all_rows(repo_rows(&overview, "/home/dev/repo-k"), &mut flat);
+    let a = flat.iter().find(|r| r["id"] == id(2).as_str()).unwrap();
+    let kids: Vec<_> = a["children"].as_array().unwrap().iter().collect();
+    assert!(kids.iter().all(|c| c["id"] != id(4).as_str()));
+    // A2 is no longer anyone's child.
+    let k = flat.iter().find(|r| r["id"] == id(1).as_str()).unwrap();
+    for child in k["children"].as_array().unwrap() {
+        assert!(
+            child["children"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c["id"] != id(4).as_str())
+        );
+    }
+}
+
+#[test]
+fn a_cycle_with_a_member_outside_the_window_keeps_every_member_top_level() {
+    let (_temp, root) = scratch();
+    let app_id = |n: u32| format!("local_84cf00{n:02}-0000-4000-8000-0000000000{n:02}");
+    let reparent = |n: u32, from: u32, to: u32| {
+        let path = first_record(&root, n);
+        let text = fs::read_to_string(&path).unwrap();
+        // Only the parent named in `spawnedFrom`, not the record's own `sessionId`.
+        let rewritten = text.replace(
+            &format!("\"sessionId\": \"{}\",\n    \"taskId\"", app_id(from)),
+            &format!("\"sessionId\": \"{}\",\n    \"taskId\"", app_id(to)),
+        );
+        assert_ne!(text, rewritten);
+        fs::write(path, rewritten).unwrap();
+    };
+    // A 3-cycle C1 (12) -> C2 (13) -> S (14) -> C1, where each names the next as parent.
+    reparent(13, 12, 14);
+    reparent(14, 14, 12);
+    // Push S outside a 1 day window; C1 and C2 stay inside it.
+    let s = walk(&root.join(".claude/projects"))
+        .into_iter()
+        .find(|p| p.to_str().unwrap().contains("84c00014"))
+        .unwrap();
+    let text = fs::read_to_string(&s).unwrap();
+    fs::write(&s, text.replace("2026-11-08T", "2026-10-01T")).unwrap();
+    let started = |since| {
+        let mut opts = options(&root);
+        opts.since = since;
+        let output = Scanner::default().sessions(&root, &opts).unwrap();
+        started_by(&output)
+            .into_iter()
+            .filter(|(who, _)| [id(12), id(13), id(14)].contains(who))
+            .collect::<Vec<_>>()
+    };
+    let all = started(None);
+    assert_eq!(all.len(), 3);
+    assert!(all.iter().all(|(_, parent)| parent.is_none()));
+    let windowed = started(Some(std::time::Duration::from_secs(24 * 3600)));
+    assert_eq!(windowed.len(), 2, "S is outside the window");
+    assert!(windowed.iter().all(|(_, parent)| parent.is_none()));
 }
 
 #[test]

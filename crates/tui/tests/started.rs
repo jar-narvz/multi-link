@@ -295,3 +295,41 @@ fn deep_chains_indent_without_panicking() {
         assert!(line(&b, lane_y(2)).starts_with("     └▸ claude"));
     }
 }
+
+#[test]
+fn deep_indent_is_clamped_so_text_stays_out_of_the_bar_columns() {
+    let mut r = report();
+    let mut leaf = a2(&mut r).clone();
+    leaf.started_at = Timestamp::parse("2026-11-08T11:59:00Z").unwrap();
+    for n in 0..30 {
+        let mut parent = leaf.clone();
+        parent.id = format!("deep-{n:02}");
+        leaf.started_by = Some(parent.id.clone());
+        parent.children = vec![leaf];
+        leaf = parent;
+    }
+    leaf.started_by = None;
+    group(&mut r).rows.push(Row::Session(leaf));
+    // Bars show from 120 columns; no lane row may hold text from the bar gap (col 42) on.
+    let b = render(&r, options(UtcOffset::UTC), 160, 200, 0);
+    let gap_and_bars =
+        |y: u16| -> Vec<String> { (42..160).map(|x| b[(x, y)].symbol().to_owned()).collect() };
+    for lane in 1..=30u16 {
+        for y in [lane_y(lane), lane_y(lane) + 1] {
+            for x in 42..160u16 {
+                let symbol = b[(x, y)].symbol();
+                assert!(
+                    !symbol.chars().any(char::is_alphabetic),
+                    "lane {lane} row {y} col {x} holds text {symbol:?}"
+                );
+            }
+            // Columns 42 and 43 are the gap before the bars.
+            assert_eq!(&gap_and_bars(y)[..2], [" ", " "], "lane {lane} row {y}");
+        }
+    }
+    // The deepest lanes are still drawn and still named by their harness word.
+    assert!(line(&b, lane_y(30)).contains("claude"));
+    // Every chain member is a clone with the same activity: its bars sit in the same
+    // columns at any depth.
+    assert_eq!(first_bar(&b, lane_y(30)), first_bar(&b, lane_y(1)));
+}

@@ -157,6 +157,10 @@ struct Axis {
     end: i64,
     cells: u16,
 }
+/// Furthest column a nested lane's harness word may start at: `claude` plus its blank
+/// then end at column 41, before the bar gap at 42.
+const MAX_HARNESS_X: u16 = 35;
+
 const STEPS: [i64; 11] = [
     60, 120, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400,
 ];
@@ -787,10 +791,12 @@ impl RepoScene<'_> {
             }
         }
         // Each nesting level indents 2 columns (S3); depth 1 keeps the Phase 6 columns.
-        let indent = 2 * lane.depth.saturating_sub(1);
-        let hx = if child { 6 + indent } else { 2 };
+        // The harness word and its blank must end before column 42 (the bar gap), so a
+        // very deep chain stops indenting there instead of painting into the bars.
+        let wanted = 6 + 2 * lane.depth.saturating_sub(1);
+        let hx = if child { wanted.min(MAX_HARNESS_X) } else { 2 };
         if child {
-            p.put(3 + indent, y, "└▸", t.secondary, bg);
+            p.put(hx - 3, y, "└▸", t.secondary, bg);
         }
         p.put(hx, y, harness, color, bg);
         let label = if r.imported {
@@ -827,7 +833,13 @@ impl RepoScene<'_> {
         let sub = self.subline(lane);
         if y + 1 < body_end {
             let sx = if child { hx } else { 4 };
-            p.text(sx, y + 1, &sub, w.saturating_sub(sx + 1), t.secondary, bg);
+            // Depth 1 keeps its Phase 6 widths; deeper sub lines stop before the bar gap too.
+            let room = if bars && lane.depth >= 2 {
+                42u16.saturating_sub(sx)
+            } else {
+                w.saturating_sub(sx + 1)
+            };
+            p.text(sx, y + 1, &sub, room, t.secondary, bg);
         }
         if self.bars {
             self.draw_bars(p, r, y, color, bg);
