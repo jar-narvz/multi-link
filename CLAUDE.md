@@ -26,56 +26,34 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
-**Hybrid mode (owner, 2026-11-07) — from Step 8.4 on.** It replaces steps 2–4 of the loop above for implementation
-steps; plan critiques still come from `codex exec`. Claude designs and reviews, Codex writes all the code, and nobody
-reviews code they wrote. It keeps Superpowers' task split and two-stage review (Step 8.3 trial) and adds a red/green
-gate so test-first is checked, not trusted. CLAUDE.md and AGENTS.md outrank Superpowers' skills wherever they differ.
-- Setup: Superpowers is installed for Claude Code and for Codex (`codex plugin add superpowers@openai-curated-remote`,
-  7.0.1, 2026-11-07). If either is missing, stop and ask the owner.
-- Design (step session): `writing-plans` splits the PLAN.md step into tasks, each naming its files, the test to write
-  first and its `cargo test` filter. The task file goes in the session scratchpad, never the repo (not `docs/superpowers/`).
-  Skip `brainstorming`; PLAN.md stays the source of truth. Tasks touch only the step's files; if another must change,
-  stop and say why.
-- Branch: a worktree from `main` on branch `step/<id>`. Use the committed fixtures: `fixtures/raw/` is not in a worktree.
-  Codex never commits (AGENTS.md; its sandbox also blocks `.git`, seen 2026-11-07). The step session commits on the
-  branch: specific files, subject ends `(Step <id>)`, no AI attribution.
-- Implement, per task (Codex command below). The prompt starts "Read AGENTS.md, then do Task <n> of Step <id>.", gives
-  the task text, says "Use the superpowers `test-driven-development` skill.", and says not to touch PROGRESS.md.
-  1. `codex exec`: write the failing test only, run the filter, stop.
-  2. Red gate (Claude): the filter must FAIL on an assertion or on the missing item the task introduces, not on an
-     unrelated compile error. Pass → commit, subject ends `(red, Step <id>)`. Fail → back to Codex.
-  3. `codex exec resume --last`: write the code that makes it pass (refactor allowed), run the filter, stop.
-  4. Green gate (Claude): the filter passes, full `cargo test` and `cargo clippy` are clean, and the red commit's
-     assertions are unchanged (`git diff <red>.. -- <test file>`). Pass → commit. Fail → back to Codex.
-  A task is not reviewed until both gates pass. A task that fails a gate after 3 Codex rounds is a stop.
-- Review, per task (Claude subagents): spec review, then code-quality review. Findings go back to Codex as a follow-up,
-  at most 2 rounds per task; each fix passes the green gate again before re-review.
-- Final review: a fresh Claude subagent reviews `git diff main...step/<id>` against the step, at most 2 rounds.
-- Finish: the step session re-runs Verify, writes the PROGRESS.md entry (agent `Codex (hybrid)`, reviewer Claude) with
-  gate results per task, then merges with `git merge --ff-only`. Skip `finishing-a-development-branch`. Leave the
-  branch and worktree for the owner.
-- Measure, as for Steps 8.2 and 8.3: wall-clock time, tests added, implementer and reviewer runs, findings, fix rounds,
-  gate failures, and tokens only if a real output shows them. Real numbers only; "not measured" otherwise.
+**Mode switch (owner, 2026-11-07): the normal Codex loop above is the default. When Codex usage is low, switch to
+Claude-only mode automatically; switch back automatically when it resets.** Hybrid mode (Codex + Superpowers) ended
+after Step 8.4: too slow and too many Codex tokens. Never combine the two again unless the owner asks.
+- Check before every `codex exec` (step hand-off, fix round, plan critique): `python3 -I tools/codex-quota.py`. It reads
+  the newest `rate_limits` Codex writes into its rollouts (undocumented; 5-hour and weekly windows). Exit 0 `CODEX: OK`
+  → Codex loop. Exit 1 `CODEX: LOW` (a live window ≥ 90%) → Claude-only mode. Exit 2 unknown → Codex loop, and watch
+  for the error below.
+- A `codex exec` that fails on a usage or rate limit (its output says so) also switches to Claude-only mode at once.
+- Switching back: each new step session runs the check again; `CODEX: OK` → Codex loop from that step on. A step
+  that started in one mode finishes in it. Record the mode and the check output in the PROGRESS.md entry; no owner
+  question is needed for either switch.
+- Never pay to dodge the limit (no credits, no other account).
 
-**Codex-off mode is OFF (owner, 2026-10-30, from Step 3.7 on): use the normal Codex loop above.**
-The rules below are kept for the next time the owner turns it on; they do not apply now.
+**Claude-only mode (replaces the old Codex-off mode).** No `codex exec` for anything. Superpowers (Claude Code, 7.x)
+fills Codex's roles; CLAUDE.md and AGENTS.md outrank its skills wherever they differ. If Superpowers is not installed,
+use plain Claude subagents for the same roles.
+- Design: `writing-plans` splits the step into tasks in the session scratchpad, never in the repo. Skip `brainstorming`.
+  Tasks touch only the step's files.
+- Code: `subagent-driven-development` with `test-driven-development`, on branch `step/<id>` in a worktree from `main`
+  (use the committed fixtures: `fixtures/raw/` is not in a worktree). Implementer subagents commit there only, the one
+  exception to "implementers never commit": specific files, subject ends `(Step <id>)`, no AI attribution.
+- Independent review (stands in for Codex): a fresh adversarial Claude subagent that wrote none of the code, given only
+  `git diff main...step/<id>` and the PLAN.md step, told to break it. At most 2 rounds; fixes are new commits.
+- Plan critiques come from the same kind of adversarial subagent, logged in the Review log as usual.
+- Finish: the step session re-runs Verify, writes the PROGRESS.md entry (agent `Claude (Superpowers)`), merges with
+  `git merge --ff-only`, skips `finishing-a-development-branch`, and leaves the branch and worktree for the owner.
 
-**Codex-off mode (owner, 2026-10-30) — TEMPORARY, not a permanent change.** It applies only while the
-owner's Codex usage is used up. When the owner says usage is back, return to the normal Codex loop above
-(Codex implements, Codex critiques plans) from the next step on. Steps finished in this mode stay as they are.
-While it is on: no `codex exec` for anything. The roles stay the same, but Claude agents fill them:
-- Implementer = a Claude subagent (Agent tool, general-purpose) given the same prompt Codex would get
-  ("Read AGENTS.md, then do Step <id> in PLAN.md."). It follows AGENTS.md exactly as Codex would: only the
-  step's files, runs Verify, writes the PROGRESS.md entry with agent `Claude (implementer)`, never commits.
-- Reviewer = an adversarial Claude review: a fresh subagent that did not write the code, given only
-  `git diff` plus the PLAN.md step and told to try to break it (wrong behaviour, missed edge cases, safety
-  rules, Verify output that doesn't match). Findings go back to the implementer agent, at most 2 rounds.
-- Plan critiques (a phase split) come from the same kind of adversarial subagent instead of `codex exec`,
-  logged in the Review log the same way.
-- The step session still re-runs Verify itself and commits. Steps marked "(Codex)" in PLAN.md are done by
-  the implementer agent.
-
-Codex command (from the repo root, unused while Codex-off mode is on):
+Codex command (from the repo root; not used in Claude-only mode):
 ```
 export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
 codex exec -s workspace-write -c sandbox_workspace_write.network_access=true \
@@ -83,7 +61,9 @@ codex exec -s workspace-write -c sandbox_workspace_write.network_access=true \
 ```
 Always close stdin (`< /dev/null`) when running it in the background, or it waits for input forever.
 Network is on only so cargo can fetch crates; project code still makes no network calls.
-Prompts start with "Read AGENTS.md, then do Step <id> in PLAN.md." and add only what the step lacks.
+Prompts start with "Read AGENTS.md, then do Step <id> in PLAN.md." and add only what the step lacks. Every
+Codex command names `Step <id>` in its own text (resume and fix calls too) and runs it directly: no wrapper script, no
+prompt file in its place, no `cd` in the same command. multi-link reads hand-offs and steps from the command.
 
 Stop and ask the owner only when:
 - a Phase 0 result changes the goal or differentiator (e.g. agtrace already links Claude → Codex).
