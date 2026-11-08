@@ -187,7 +187,7 @@ pub fn codex_parts(report: &GraphReport) -> Vec<&Part> {
         .collect()
 }
 
-/// `edge_in` of a Codex part without `parent_part` (Task 4 fills it):
+/// `edge_in` of a Codex part without `parent_part`:
 /// `(at, match, parent, gap_ms, candidates)`.
 pub fn handoff_edge(part: &Part) -> (Timestamp, Match, String, Option<i64>, usize) {
     match part.edge_in.clone() {
@@ -850,5 +850,570 @@ fn fix_round_numbering_restarts_per_chain() {
             (1, "implement".into()),
             (1, "fix round 1".into()),
         ]
+    );
+}
+
+// ---- Task 4: Claude parts, names, edges (G2 cuts, G3) ----
+
+/// `(chain, harness, kind, from, to)` of every part, in report order.
+type Row = (usize, Harness, String, Option<Timestamp>, Option<Timestamp>);
+
+fn rows(report: &GraphReport) -> Vec<Row> {
+    report
+        .parts
+        .iter()
+        .map(|p| (p.chain, p.harness, p.kind.clone(), p.from, p.to))
+        .collect()
+}
+
+fn claude(chain: usize, kind: &str, from: &str, to: &str) -> Row {
+    (
+        chain,
+        Harness::Claude,
+        kind.to_string(),
+        Some(t(from)),
+        Some(t(to)),
+    )
+}
+
+/// A Codex row; times are `None` for a run with no interval.
+fn codex(chain: usize, kind: &str, from: Option<&str>, to: Option<&str>) -> Row {
+    (
+        chain,
+        Harness::Codex,
+        kind.to_string(),
+        from.map(t),
+        to.map(t),
+    )
+}
+
+fn parent_part(part: &Part) -> Option<usize> {
+    match part.edge_in {
+        Some(Edge::Handoff { parent_part, .. }) => parent_part,
+        ref other => panic!("expected a handoff edge, got {other:?}"),
+    }
+}
+
+fn back(at: &str) -> Option<Edge> {
+    Some(Edge::Return { at: t(at) })
+}
+
+/// `p1` with the given bursts and one exact hand-off of `step` to `c1` at
+/// `at`, whose single done turn runs `start` → `end`.
+fn one_run_world(bursts: &[(&str, &str)], step: &str, at: &str, start: &str, end: &str) -> World {
+    let mut w = World::new();
+    w.sessions.push(claude_session("p1", "/repo", bursts));
+    w.sessions.push(codex_session("c1", &[(start, end)]));
+    w.hand_off("p1", "h1", Some(step), at, Match::Exact, Some("c1"));
+    w.rollout("c1", vec![done_turn(start, end, "go", "done")]);
+    w
+}
+
+#[test]
+fn chain_starts_at_burst_start() {
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[
+            ("2026-11-06T10:00:00Z", "2026-11-06T10:01:00Z"),
+            ("2026-11-06T10:05:00Z", "2026-11-06T10:20:00Z"),
+        ],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.1"),
+        "2026-11-06T10:06:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T10:05:00Z", "2026-11-06T10:06:00Z"),
+            codex(0, "implement", None, None),
+            claude(0, "review", "2026-11-06T10:06:00Z", "2026-11-06T10:20:00Z"),
+        ]
+    );
+    let plan = &report.parts[0];
+    assert_eq!(plan.session.as_deref(), Some("p1"));
+    assert_eq!((plan.status, plan.run_available), (None, None));
+    assert_eq!((plan.asked.as_deref(), plan.said.as_deref()), (None, None));
+    assert_eq!((plan.active_ms, plan.stretches), (60000, 1));
+    assert_eq!(plan.edge_in, None);
+}
+
+#[test]
+fn chain_start_capped_by_previous_other_step_run() {
+    let mut w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:20:00Z")],
+        "2.0",
+        "2026-11-06T10:01:00Z",
+        "2026-11-06T10:01:01Z",
+        "2026-11-06T10:04:00Z",
+    );
+    // An untagged hand-off in between is not "the previous" one.
+    w.hand_off(
+        "p1",
+        "hu",
+        None,
+        "2026-11-06T10:04:30Z",
+        Match::Unlinked,
+        None,
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.1"),
+        "2026-11-06T10:05:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report)[0],
+        claude(0, "plan", "2026-11-06T10:04:00Z", "2026-11-06T10:05:00Z")
+    );
+
+    // The previous run has no interval: it does not cap the start.
+    w.links[0].r#match = Match::Unlinked;
+    w.links[0].child = None;
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report)[0],
+        claude(0, "plan", "2026-11-06T10:00:00Z", "2026-11-06T10:05:00Z")
+    );
+
+    // The chain of 2.0 ends at 1.1's hand-off.
+    let report = w.build("/repo", "2.0");
+    assert_eq!(
+        rows(&report).last().unwrap(),
+        &claude(0, "review", "2026-11-06T10:01:00Z", "2026-11-06T10:05:00Z")
+    );
+}
+
+#[test]
+fn previous_run_still_going_leaves_no_plan() {
+    let mut w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:20:00Z")],
+        "2.0",
+        "2026-11-06T10:01:00Z",
+        "2026-11-06T10:01:01Z",
+        "2026-11-06T10:08:00Z",
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.1"),
+        "2026-11-06T10:05:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.1");
+    assert_eq!(report.parts[0].harness, Harness::Codex);
+    assert_eq!(parent_part(&report.parts[0]), None);
+}
+
+#[test]
+fn no_claude_part_during_silent_run() {
+    let w = one_run_world(
+        &[
+            ("2026-11-06T14:00:00Z", "2026-11-06T14:00:20Z"),
+            ("2026-11-06T14:06:40Z", "2026-11-06T14:10:00Z"),
+        ],
+        "1.3",
+        "2026-11-06T14:00:20Z",
+        "2026-11-06T14:00:21Z",
+        "2026-11-06T14:06:40Z",
+    );
+    let report = w.build("/repo", "1.3");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T14:00:00Z", "2026-11-06T14:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T14:00:21Z"),
+                Some("2026-11-06T14:06:40Z")
+            ),
+            claude(0, "review", "2026-11-06T14:06:40Z", "2026-11-06T14:10:00Z"),
+        ]
+    );
+    let (plan, review) = (&report.parts[0], &report.parts[2]);
+    assert_eq!((plan.active_ms, plan.stretches), (20000, 1));
+    assert_eq!((review.active_ms, review.stretches), (200000, 1));
+    assert_eq!(review.edge_in, back("2026-11-06T14:06:40Z"));
+}
+
+#[test]
+fn parent_silent_at_return_no_last_part() {
+    let w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:03:00Z")],
+        "1.1",
+        "2026-11-06T10:01:00Z",
+        "2026-11-06T10:01:01Z",
+        "2026-11-06T10:05:00Z",
+    );
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T10:00:00Z", "2026-11-06T10:01:00Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T10:01:01Z"),
+                Some("2026-11-06T10:05:00Z")
+            ),
+        ]
+    );
+}
+
+#[test]
+fn open_last_run_has_no_last_part() {
+    let mut w = open_world();
+    w.sessions[0] = claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T17:50:00Z", "2026-11-06T17:59:30Z")],
+    );
+    let report = w.build_at("/repo", "1.5", "2026-11-06T18:00:00Z");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T17:50:00Z", "2026-11-06T17:52:00Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T17:52:01Z"),
+                Some("2026-11-06T17:58:30Z")
+            ),
+        ]
+    );
+}
+
+#[test]
+fn overlapping_background_runs_are_neighbours() {
+    let mut w = one_run_world(
+        &[("2026-11-06T12:00:00Z", "2026-11-06T12:20:00Z")],
+        "1.5",
+        "2026-11-06T12:00:20Z",
+        "2026-11-06T12:00:21Z",
+        "2026-11-06T12:04:00Z",
+    );
+    w.sessions.push(codex_session(
+        "c2",
+        &[("2026-11-06T12:02:01Z", "2026-11-06T12:08:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.5"),
+        "2026-11-06T12:02:00Z",
+        Match::Exact,
+        Some("c2"),
+    );
+    w.rollout(
+        "c2",
+        vec![done_turn(
+            "2026-11-06T12:02:01Z",
+            "2026-11-06T12:08:00Z",
+            "more",
+            "ok",
+        )],
+    );
+    let report = w.build("/repo", "1.5");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T12:00:00Z", "2026-11-06T12:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T12:00:21Z"),
+                Some("2026-11-06T12:04:00Z")
+            ),
+            codex(
+                0,
+                "fix round 1",
+                Some("2026-11-06T12:02:01Z"),
+                Some("2026-11-06T12:08:00Z")
+            ),
+            claude(0, "review", "2026-11-06T12:08:00Z", "2026-11-06T12:20:00Z"),
+        ]
+    );
+    assert_eq!(parent_part(&report.parts[1]), Some(0));
+    assert_eq!(parent_part(&report.parts[2]), Some(0));
+}
+
+#[test]
+fn shorter_later_run_inside_earlier_run_leaves_no_part_between() {
+    // The second (last) run ends while the first is still going, so no
+    // Claude part starts at its end: the chain has no last part.
+    let mut w = one_run_world(
+        &[("2026-11-06T12:00:00Z", "2026-11-06T12:20:00Z")],
+        "1.5",
+        "2026-11-06T12:00:20Z",
+        "2026-11-06T12:00:21Z",
+        "2026-11-06T12:10:00Z",
+    );
+    w.sessions.push(codex_session(
+        "c2",
+        &[("2026-11-06T12:02:01Z", "2026-11-06T12:04:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.5"),
+        "2026-11-06T12:02:00Z",
+        Match::Exact,
+        Some("c2"),
+    );
+    w.rollout(
+        "c2",
+        vec![done_turn(
+            "2026-11-06T12:02:01Z",
+            "2026-11-06T12:04:00Z",
+            "more",
+            "ok",
+        )],
+    );
+    let report = w.build("/repo", "1.5");
+    let harnesses: Vec<Harness> = report.parts.iter().map(|p| p.harness).collect();
+    assert_eq!(
+        harnesses,
+        vec![Harness::Claude, Harness::Codex, Harness::Codex]
+    );
+}
+
+#[test]
+fn no_plan_when_first_handoff_opens_burst() {
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:10:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.1"),
+        "2026-11-06T10:00:00Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.1");
+    assert_eq!(
+        rows(&report),
+        vec![
+            codex(0, "implement", None, None),
+            claude(0, "review", "2026-11-06T10:00:00Z", "2026-11-06T10:10:00Z"),
+        ]
+    );
+    assert_eq!(parent_part(&report.parts[0]), None);
+    assert_eq!(report.parts[1].edge_in, None);
+}
+
+fn commit_world(commit_at: &str) -> World {
+    let mut w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:10:00Z")],
+        "1.1",
+        "2026-11-06T10:01:00Z",
+        "2026-11-06T10:01:01Z",
+        "2026-11-06T10:03:00Z",
+    );
+    w.claude_calls.get_mut("p1").unwrap().push(call(
+        "g1",
+        commit_at,
+        CallKind::Run,
+        Some("$ git commit"),
+        Some(true),
+    ));
+    w
+}
+
+#[test]
+fn last_part_without_commit_is_review() {
+    // The commit is in `plan`, not in the last part.
+    let report = commit_world("2026-11-06T10:00:30Z").build("/repo", "1.1");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T10:00:00Z", "2026-11-06T10:01:00Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T10:01:01Z"),
+                Some("2026-11-06T10:03:00Z")
+            ),
+            claude(0, "review", "2026-11-06T10:03:00Z", "2026-11-06T10:10:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[2].edge_in, back("2026-11-06T10:03:00Z"));
+}
+
+#[test]
+fn last_part_with_commit_is_verify_commit() {
+    // A call exactly at the part's `to` is held by it (`from ≤ at ≤ to`).
+    for at in ["2026-11-06T10:03:00Z", "2026-11-06T10:10:00Z"] {
+        let report = commit_world(at).build("/repo", "1.1");
+        assert_eq!(report.parts[0].kind, "plan");
+        assert_eq!(report.parts[2].kind, "verify + commit", "commit at {at}");
+    }
+    // Outside the chain: not held.
+    let report = commit_world("2026-11-06T10:10:01Z").build("/repo", "1.1");
+    assert_eq!(report.parts[2].kind, "review");
+}
+
+#[test]
+fn no_interval_run_keeps_claude_time_unbroken() {
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T15:00:00Z", "2026-11-06T15:04:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.2"),
+        "2026-11-06T15:00:20Z",
+        Match::Unlinked,
+        None,
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.2"),
+        "2026-11-06T15:03:00Z",
+        Match::Ambiguous,
+        None,
+    );
+    let report = w.build("/repo", "1.2");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T15:00:00Z", "2026-11-06T15:00:20Z"),
+            codex(0, "implement", None, None),
+            claude(0, "review", "2026-11-06T15:00:20Z", "2026-11-06T15:03:00Z"),
+            codex(0, "fix round 1", None, None),
+            claude(0, "review", "2026-11-06T15:03:00Z", "2026-11-06T15:04:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[2].edge_in, None);
+    assert_eq!(report.parts[4].edge_in, None);
+    assert_eq!(
+        (report.parts[2].active_ms, report.parts[2].stretches),
+        (160000, 1)
+    );
+}
+
+#[test]
+fn parent_part_indices() {
+    let mut w = World::new();
+    for (p, c, at, start, end) in [
+        (
+            "p1",
+            "c1",
+            "2026-11-06T13:00:20Z",
+            "2026-11-06T13:00:22Z",
+            "2026-11-06T13:02:00Z",
+        ),
+        (
+            "p2",
+            "c2",
+            "2026-11-06T13:20:20Z",
+            "2026-11-06T13:20:21Z",
+            "2026-11-06T13:22:00Z",
+        ),
+    ] {
+        let burst_from = format!("{}00Z", &at[..17]);
+        let burst_to = format!("{}3:00Z", &at[..15]);
+        w.sessions.push(claude_session(
+            p,
+            "/repo",
+            &[(burst_from.as_str(), burst_to.as_str())],
+        ));
+        w.sessions.push(codex_session(c, &[(start, end)]));
+        w.hand_off(p, &format!("h{p}"), Some("1.4"), at, Match::Exact, Some(c));
+        w.rollout(c, vec![done_turn(start, end, "go", "done")]);
+    }
+    w.hand_off(
+        "p1",
+        "hp1b",
+        Some("1.4"),
+        "2026-11-06T13:02:30Z",
+        Match::Unlinked,
+        None,
+    );
+    let report = w.build("/repo", "1.4");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T13:00:00Z", "2026-11-06T13:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T13:00:22Z"),
+                Some("2026-11-06T13:02:00Z")
+            ),
+            claude(0, "review", "2026-11-06T13:02:00Z", "2026-11-06T13:02:30Z"),
+            codex(0, "fix round 1", None, None),
+            claude(0, "review", "2026-11-06T13:02:30Z", "2026-11-06T13:03:00Z"),
+            claude(1, "plan", "2026-11-06T13:20:00Z", "2026-11-06T13:20:20Z"),
+            codex(
+                1,
+                "implement",
+                Some("2026-11-06T13:20:21Z"),
+                Some("2026-11-06T13:22:00Z")
+            ),
+            claude(1, "review", "2026-11-06T13:22:00Z", "2026-11-06T13:23:00Z"),
+        ]
+    );
+    assert_eq!(parent_part(&report.parts[1]), Some(0));
+    assert_eq!(parent_part(&report.parts[3]), Some(2));
+    assert_eq!(parent_part(&report.parts[6]), Some(5));
+    assert_eq!(report.parts[5].session.as_deref(), Some("p2"));
+}
+
+#[test]
+fn second_parent_resume_caps_the_run() {
+    // p2 resumes the same child with a hand-off not tagged with the step;
+    // it is owned, so it ends p1's run window.
+    let mut w = one_run_world(
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:30:00Z")],
+        "1.1",
+        "2026-11-06T10:00:00Z",
+        "2026-11-06T10:00:01Z",
+        "2026-11-06T10:02:00Z",
+    );
+    w.sessions.push(claude_session(
+        "p2",
+        "/repo",
+        &[("2026-11-06T10:04:00Z", "2026-11-06T10:06:00Z")],
+    ));
+    w.hand_off(
+        "p2",
+        "h2",
+        None,
+        "2026-11-06T10:05:00Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.codex.get_mut("c1").unwrap().turns.push(done_turn(
+        "2026-11-06T10:05:01Z",
+        "2026-11-06T10:07:00Z",
+        "other",
+        "x",
+    ));
+    let report = w.build("/repo", "1.1");
+    let run = codex_parts(&report)[0];
+    assert_eq!(run.to, Some(t("2026-11-06T10:02:00Z")));
+    assert_eq!(
+        rows(&report).last().unwrap(),
+        &claude(0, "review", "2026-11-06T10:02:00Z", "2026-11-06T10:30:00Z")
     );
 }
