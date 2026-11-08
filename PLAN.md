@@ -1649,7 +1649,7 @@ Measured 2026-11-08 on real data (`links` / `sessions --since all`, at 6a2c306):
 
 Decisions (amend design.md in 9.0):
 - **R0 Contract.** Additive only. `state_evidence` gains `transcript_exit` and `session_end`; link `evidence`
-  gains `redirect_file`; Session gains nothing else. Every committed JSON value stays equal except where a fixture
+  gains `redirect_file` and `resume_turn` (R7; allowed on a heuristic link, unlike every other value); Session gains nothing else. Every committed JSON value stays equal except where a fixture
   added in 9.0 says otherwise. Answer keys are Claude's: 9.0 writes every new key and every existing key a phase
   rule changes (with the list of changed values in PROGRESS), and later steps never edit keys; a key that looks
   wrong is a stop for Claude to fix. Each step's Verify compares parsed JSON (`diff <(jq -S . key) <(… --json | jq
@@ -1690,13 +1690,28 @@ Decisions (amend design.md in 9.0):
   `at` (a resumed session clears it, including when the async record lands late). Reason `clear` ends the old id
   only. The snippet change needs the owner to re-merge it into
   `~/.claude/settings.json` (stop-and-ask at 9.6).
+- **R7 A `codex exec resume --last` fix round is a turn of an existing run.** Owner's screenshot of step 8.7
+  (2026-11-08): both fix rounds showed `no codex run found` while `implement` looked like one 9-minute run.
+  Real rollout `01a1bd11` (counts only): one `session_meta`, then three `task_started` → `task_complete` turns;
+  the two resume hand-offs (21:32:27, 21:34:45 UTC) each match a `task_started` 0–2 s later in that file; no new
+  rollout was written. Rule: `invocation.rs` classifies `codex exec resume --last` as a resume (today it is
+  `Exec`), kept apart from `resume <id>` (which keeps `resume_arg`). Its match searches existing runs in the same
+  checkout for a non-imported turn that is not that run's first non-imported turn, starting 0–10 s after the
+  hand-off (both readers use the same non-imported turn list). It ignores the exact-launch claims and never
+  falls back to the 60 s creation match; `dir_moved` suppression stays. One child (candidates deduplicated by
+  id) → `heuristic`, evidence `resume_turn`, `gap_ms` = turn start − hand-off; none → unlinked; two or more →
+  ambiguous. An observed id (stdout, R4 redirect log) still wins and makes it exact. Why `heuristic`: decision 2
+  keeps `exact` for an observed child id. Why 10 s: a conservative, uncalibrated choice; the two known resumes
+  started 0–2 s after their hand-offs; 9.7 counts more. The graph needs no new rule: `core::graph` already gives
+  a Codex part the turns between its hand-off and the next hand-off to the same child (G4), so linking the
+  resumes alone should split step 8.7 into implement, fix 1 and fix 2. R0 amended: `resume_turn` is the one
+  `evidence` value allowed on a non-exact link.
 - **R6 A Codex lane's step looks all-time.** A Codex lane whose Claude parent is outside the TUI window takes its
   step from the worker's all-time hand-offs (per Codex id), so it no longer says `no step on this session`. The
   rules of `own_step` stay: the parent must belong to the lane's repo group, and the latest tagged hand-off wins.
 
 Non-goals: the lost key on resize (wait for upstream crossterm-rs/crossterm#1154; rare, and a vendored fork costs
-more than it fixes); T10 as first written (read the task path from the transcript: about 0 of 37 gain); linking
-`codex exec resume --last` fix rounds (backlog: needs its own evidence study); pipes to `tail`/`head`; the live
+more than it fixes); T10 as first written (read the task path from the transcript: about 0 of 37 gain); pipes to `tail`/`head`; the live
 grid and pane jump; deciding who compresses rollouts; Windows/Linux paths.
 
 Whole-phase Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings`
@@ -1774,8 +1789,34 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
   cross-repo one, the same-repo step opens; a Codex lane with no tagged incoming hand-off still says `no step on
   this session`; goldens unchanged.
 
-### Step 9.6 — Real check, README, owner confirm (Claude)
-- Depends on: 9.5. Real counts before/after for every step (counts only, W10). Re-shoot `docs/img/**` for the
+### Step 9.6 — Fix rounds from `codex exec resume --last` (Codex)
+- Depends on: 9.5. R7. Owner added this to Phase 9 on 2026-11-08 after the step 8.7 screenshot. Claude writes
+  this step's fixtures and answer keys first (9.0 predates R7): a run with three turns and two `resume --last`
+  hand-offs (each turn 1 s after its hand-off), one whose turn starts 15 s late (unlinked), two runs in the same
+  cwd both starting a turn in the window (ambiguous), and the graph report for that step.
+- The selected panel: on step 8.7 the `plan` part's panel said `from handed fix to codex at 1:34:45pm`. Its rule
+  (`crates/tui/src/graph.rs:804`) picks the latest hand-off whose parent part is the selected one, so the missing
+  review parts made later fixes point back to `plan`; linking should fix it. Keep that rule and its fallback for
+  hand-offs made during Codex work; add exact panel assertions: `plan` reports the implement hand-off and each
+  review reports its own fix.
+- Files: `crates/codex/src/lib.rs` (non-imported turn list shared by both readers), `crates/codex/tests/**`,
+  `crates/claude/src/invocation.rs`, `crates/claude/tests/**`, `crates/model/src/lib.rs`
+  (`LinkEvidence::ResumeTurn`), `crates/core/src/link.rs`, `crates/core/tests/**`, `crates/cli/tests/**`
+  (Phase 9 key runner), `crates/tui/tests/**` (panel assertions), `fixtures/sessions-phase9/**` and
+  `fixtures/expected/phase9/**` (Claude, before code), `fixtures/expected/**` (existing keys whose hand-offs
+  become `resume_turn`, each listed by Claude), `docs/design.md` (R7, decision 2), `docs/output-schema.md`
+  (evidence on heuristic links), `PROGRESS.md`
+- Verify: tests and clippy clean. Recognition tests: `--last` with wrappers and options, help excluded, `--last`
+  inside prompt text is not a flag, `resume <id>` still `resume_arg`, a `cd` before it. Link tests: gaps −1 ms,
+  0, 10 000 and 10 001 ms; another checkout; two concurrent candidates; imported-only, imported-then-first-real
+  and later-real turns; an observed id wins. The named Phase 9 key tests in `crates/cli/tests/` compare `links`
+  and `graph` on the 9.0 root with the keys (two resume hand-offs → `heuristic resume_turn` to one run, late →
+  `unlinked`, two runs → `ambiguous`; graph: implement, fix 1, fix 2 with a Claude review part between) and fail
+  with resume matching turned off (shown once in PROGRESS). Real run, counts only: unlinked hand-offs
+  before/after, and step 8.7's parts (expected: both fix rounds linked, implement about 2 min).
+
+### Step 9.7 — Real check, README, owner confirm (Claude)
+- Depends on: 9.6. Real counts before/after for every step (counts only, W10). Re-shoot `docs/img/**` for the
   12-hour clock and the new states. README: what `finished` now means and its evidence, the `.zst` reading, the
   redirect rule and its path limit, and that all of it rests on undocumented formats. Then stop and ask the owner
   to re-merge the hook snippet that `multi-link hook install --scope user` prints into `~/.claude/settings.json`,
@@ -1787,6 +1828,17 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 `codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 9.6 / R7 critique (Codex, read-only, Codex loop)
+Owner added R7 and Step 9.6 to Phase 9 after the step 8.7 screenshot. 8 points; 7 accepted, 1 in part. Accepted:
+(1) the graph already cuts Codex parts by turns between hand-offs (G4), so the G2 "one part = one turn" amendment is
+dropped and linking alone must split step 8.7; (2) `--last` is classified as a resume, ignores exact-launch claims
+and never falls back to the creation match; (3) turns counted on the non-imported list in both readers; (4) R0 and
+the schema amended: `resume_turn` is allowed on a heuristic link, `gap_ms` = turn start − hand-off; (6) the panel
+rule stays, with exact assertions; (7) `crates/claude/tests/**` and `crates/cli/tests/**` added. In part: (5) the
+10 s window stays but is documented as uncalibrated, with boundary tests, and 9.7 counts more real resumes;
+(8) key tests are named and must fail with resume matching off; no generated allowed-diff tool (existing key
+tests already fail on any other change).
 
 ### 2026-11-08 — Phase 9 plan critique (Codex, read-only, Codex loop)
 10 points; 8 accepted, 2 in part. Accepted: (1) `SessionEnd` must not outlive a resume: an `ended` record counts
