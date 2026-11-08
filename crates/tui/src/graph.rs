@@ -142,6 +142,15 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             options.theme.secondary,
             paint.end(),
         );
+    } else if area.width < 120 {
+        list(report, options, &layout, &mut paint);
+        panel(report, options, layout.panel, layout.panel_rows, &mut paint);
+        if let Some(y) = layout.strip {
+            strip(report, options, y, &mut paint);
+        }
+        if let Some(y) = layout.legend {
+            legend(y, &mut paint);
+        }
     } else {
         let slots = graph_slots(report);
         let first = first_visible_slot(&slots, options.selected, options.first_slot);
@@ -179,6 +188,104 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
         for x in 0..area.width {
             buf[(area.x + x, area.y + y)] = screen[(x, y)].clone();
         }
+    }
+}
+
+/// Two rows per part, with its incoming edge on the preceding indented row.
+fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
+    let t = options.theme;
+    let mut rows = Vec::new();
+    let mut starts = Vec::new();
+    for part in &report.parts {
+        if let Some(edge) = &part.edge_in {
+            let words = match edge {
+                Edge::Handoff {
+                    at,
+                    r#match,
+                    candidates,
+                    ..
+                } => {
+                    let handed = if part.kind == "implement" {
+                        format!("handed step {}", report.step.id)
+                    } else {
+                        "handed fix".to_owned()
+                    };
+                    format!(
+                        "{handed} · {} · {}",
+                        clock(*at, options.offset, true),
+                        match_words(*r#match, *candidates)
+                    )
+                }
+                Edge::Return { at } => {
+                    format!("back to claude  {}", clock(*at, options.offset, true))
+                }
+            };
+            rows.push((3, Line::from(paint.span(words, t.secondary)), None));
+        }
+        let index = starts.len();
+        starts.push(rows.len());
+        let missing = part.harness == Harness::Codex && !has_run(part);
+        let color = if missing {
+            t.secondary
+        } else if part.harness == Harness::Codex {
+            t.codex
+        } else {
+            t.claude
+        };
+        let bg = if index == options.selected {
+            t.graph_selected
+        } else {
+            t.screen
+        };
+        let style = |fg| t.text_style(fg, bg);
+        rows.push((
+            1,
+            Line::from(vec![
+                Span::styled("● ", style(color)),
+                Span::styled(
+                    format!(
+                        "{} · {}",
+                        if part.harness == Harness::Codex {
+                            "codex"
+                        } else {
+                            "claude"
+                        },
+                        part.kind
+                    ),
+                    style(color).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Some(bg),
+        ));
+        let mut spans = Vec::new();
+        if let Some((label, role, suffix)) = subline(part, options.offset) {
+            spans.push(Span::styled(label, style(role.color(t))));
+            spans.push(Span::styled(suffix, style(t.secondary)));
+        }
+        let counts = counts_label(&part.counts);
+        if !missing && !counts.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(" · ", style(t.secondary)));
+            }
+            spans.push(Span::styled(counts, style(t.text)));
+        }
+        rows.push((3, Line::from(spans), Some(bg)));
+    }
+    let end = layout.panel.saturating_sub(1).min(layout.rule);
+    let room = usize::from(end.saturating_sub(layout.claude_lane));
+    let selected = starts.get(options.selected).copied().unwrap_or(0);
+    let first = (selected + 2)
+        .saturating_sub(room)
+        .min(rows.len().saturating_sub(room));
+    for (dy, (x, line, bg)) in rows.into_iter().skip(first).take(room).enumerate() {
+        let y = layout.claude_lane + dy as u16;
+        if let Some(bg) = bg {
+            paint.buf.set_style(
+                Rect::new(1, y, paint.end().saturating_sub(1), 1),
+                Style::default().bg(bg),
+            );
+        }
+        paint.line(x, y, line, paint.end());
     }
 }
 
@@ -763,6 +870,11 @@ impl Paint<'_> {
     fn line(&mut self, x: u16, y: u16, line: Line<'_>, until: u16) {
         let until = until.min(self.end());
         if y < self.buf.area.height && x < until {
+            let line = if self.buf.area.width < 120 {
+                word_line(line, usize::from(until - x))
+            } else {
+                line
+            };
             self.buf.set_line(x, y, &line, until - x);
         }
     }
@@ -782,6 +894,9 @@ impl Paint<'_> {
     }
 
     fn rule(&mut self, y: u16) {
+        if self.buf.area.width < 120 {
+            return;
+        }
         self.write(
             1,
             y,
@@ -790,6 +905,35 @@ impl Paint<'_> {
             self.end(),
         );
     }
+}
+
+/// Preserve span colours while applying the same word cut as panel quotes.
+fn word_line(line: Line<'_>, width: usize) -> Line<'_> {
+    let text = line.to_string();
+    let shortened = cut_words(&text, width);
+    if shortened == text {
+        return line;
+    }
+    let mut remaining = shortened
+        .strip_suffix('…')
+        .unwrap_or(&shortened)
+        .chars()
+        .count();
+    let mut spans = Vec::new();
+    let mut style = Style::default();
+    for span in line.spans {
+        style = span.style;
+        let prefix: String = span.content.chars().take(remaining).collect();
+        remaining -= prefix.chars().count();
+        spans.push(Span::styled(prefix, style));
+        if remaining == 0 {
+            break;
+        }
+    }
+    if shortened.ends_with('…') {
+        spans.push(Span::styled("…", style));
+    }
+    Line::from(spans)
 }
 
 /// Cut by character and display width, keeping an ellipsis for a long word.
@@ -869,6 +1013,8 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
 
 fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
     let t = options.theme;
+    let narrow = paint.buf.area.width < 120;
+    let fit = if narrow { cut_words } else { cut };
     let commit = report.commit.as_ref().map(|commit| {
         format!(
             "✓ committed {} · {}",
@@ -903,7 +1049,7 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
     let title_x = 1usize.saturating_add(prefix.width());
     paint.line(1, layout.header[0], prefix, title_end);
     if title_x < usize::from(title_end) {
-        let title = cut(
+        let title = fit(
             report.step.title.as_deref().unwrap_or(""),
             usize::from(title_end) - title_x,
         );
@@ -914,7 +1060,7 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
     } else {
         summary(report, options.offset)
     };
-    let left = cut(&left, paint.end().saturating_sub(1) as usize);
+    let left = fit(&left, paint.end().saturating_sub(1) as usize);
     paint.write(1, layout.header[1], &left, t.secondary, paint.end());
     if let Some(verify) = &report.step.verify {
         let start = if left.is_empty() {
@@ -927,6 +1073,11 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
         let suffix = " (reported)";
         let fixed = Span::raw(prefix).width() + Span::raw(suffix).width();
         if available >= fixed + 2 {
+            if narrow && !report.parts.is_empty() {
+                let label = cut_words(&format!("{prefix}{verify}{suffix}"), available);
+                paint.right(layout.header[1], &label, t.secondary);
+                return;
+            }
             let command = cut(verify, available - fixed);
             paint.right(
                 layout.header[1],
@@ -985,6 +1136,11 @@ fn strip_widths(parts: &[Part], labels: &[&str], span: usize) -> Option<(Vec<usi
 
 fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let t = options.theme;
+    let end = if paint.buf.area.width < 120 {
+        paint.end().saturating_sub(2)
+    } else {
+        117
+    };
     paint.write(2, y, "where the time went", t.secondary, paint.end());
     // The time range describes the whole report, even when parts overlap or
     // there are too many parts to draw with a cell and a gap each.
@@ -994,16 +1150,16 @@ fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             y + 1,
             &clock(from, options.offset, false),
             t.secondary,
-            117,
+            end,
         );
     }
     if let Some(to) = report.parts.iter().filter_map(|part| part.to).max() {
         paint.write(
-            112,
+            end.saturating_sub(5),
             y + 1,
             &clock(to, options.offset, false),
             t.secondary,
-            117,
+            end,
         );
     }
     let labels: Vec<_> = report
@@ -1017,7 +1173,9 @@ fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             }
         })
         .collect();
-    let Some((widths, show_labels)) = strip_widths(&report.parts, &labels, 94) else {
+    let Some((widths, show_labels)) =
+        strip_widths(&report.parts, &labels, usize::from(end.saturating_sub(23)))
+    else {
         return;
     };
     let selected = options.selected;
@@ -1075,7 +1233,14 @@ fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let t = paint.theme;
     let mut spans = Vec::new();
     for (i, (key, words)) in [
-        ("←→", " move along the step"),
+        (
+            if paint.buf.area.width < 120 {
+                "↑↓"
+            } else {
+                "←→"
+            },
+            " move along the step",
+        ),
         ("[ ]", " prev / next step"),
         ("o", " open"),
         ("f", " fork"),
@@ -1095,6 +1260,11 @@ fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let until = paint
         .end()
         .saturating_sub(Span::raw(&zone).width() as u16 + 3);
-    paint.line(1, y, Line::from(spans), until);
-    paint.right(y, &zone, t.secondary);
+    if paint.buf.area.width < 120 {
+        spans.push(paint.span(format!("   {zone}"), t.secondary));
+        paint.line(1, y, Line::from(spans), paint.end());
+    } else {
+        paint.line(1, y, Line::from(spans), until);
+        paint.right(y, &zone, t.secondary);
+    }
 }
