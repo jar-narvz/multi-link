@@ -815,9 +815,8 @@ impl Scanner {
         let mut claude_calls: HashMap<String, Vec<Call>> = HashMap::new();
         if !parents.is_empty() {
             // Fail soft: a scan error means no transcripts, so no owned calls.
-            let transcripts = multi_link_claude::scan(root)
-                .map(|scan| scan.transcripts)
-                .unwrap_or_default();
+            // G11: reuse the scanner's file-key cache of parsed transcripts.
+            let transcripts = self.claude_transcripts(root).unwrap_or_default();
             let load = |wanted: &HashSet<&str>, into: &mut HashMap<String, Vec<Call>>| {
                 for transcript in transcripts
                     .iter()

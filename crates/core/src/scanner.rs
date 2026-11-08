@@ -114,6 +114,9 @@ pub struct Scanner {
     repos: HashMap<String, crate::RepoPaths>,
     pub stats: ParseStats,
     pub diagnostics: Vec<String>,
+    /// Files `claude_transcripts` had to parse (cache misses), last call only.
+    #[cfg(test)]
+    graph_parsed: usize,
 }
 
 type ClaudeInputs = (
@@ -280,6 +283,26 @@ impl Scanner {
             (a.at, &a.parent, &a.invocation).cmp(&(b.at, &b.parent, &b.invocation))
         });
         Ok((claude, invocations, latest, app_unreadable))
+    }
+
+    /// Every Claude transcript, built from the file-key cache `read_claude`
+    /// uses, in the shape `multi_link_claude::scan` returns (G11). The graph
+    /// reads these only for their calls, so `stats` and `diagnostics` are left
+    /// as the refresh set them.
+    pub(crate) fn claude_transcripts(
+        &mut self,
+        root: &Path,
+    ) -> io::Result<Vec<multi_link_claude::Transcript>> {
+        let stats = self.stats;
+        let diagnostics = self.diagnostics.clone();
+        let result = self.read_claude(root);
+        #[cfg(test)]
+        {
+            self.graph_parsed = self.stats.files - stats.files;
+        }
+        self.stats = stats;
+        self.diagnostics = diagnostics;
+        result.map(|(claude, ..)| claude.transcripts)
     }
 
     fn read_codex(&mut self, root: &Path) -> io::Result<Discovery> {
@@ -537,6 +560,42 @@ mod tests {
                 fs::copy(entry.path(), target).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn warm_graph_parses_no_claude_file_again() {
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+        let root = tempfile::tempdir().unwrap();
+        copy_tree(&fixtures.join("sessions-phase8"), root.path());
+        let mut options = options(&FixtureProcessProbe);
+        options.now = Timestamp::parse("2026-11-06T18:00:00Z").unwrap();
+        let mut scanner = Scanner::default();
+        let graph = |scanner: &mut Scanner| {
+            scanner
+                .graph(
+                    root.path(),
+                    &options,
+                    "/home/dev/repo-g",
+                    "1.3",
+                    &mut |_| RepoSteps {
+                        repo: String::new(),
+                        convention: multi_link_model::Convention::Missing,
+                        latest_logged_step: None,
+                        steps: Vec::new(),
+                    },
+                )
+                .unwrap()
+        };
+        let first = graph(&mut scanner);
+        assert!(!first.parts.is_empty());
+        // The refresh inside `graph` already cached every file.
+        assert_eq!(scanner.graph_parsed, 0);
+        let second = graph(&mut scanner);
+        assert_eq!(first, second);
+        assert_eq!(
+            scanner.graph_parsed, 0,
+            "a warm graph parses no Claude file"
+        );
     }
 
     #[test]
