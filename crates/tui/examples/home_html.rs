@@ -1,4 +1,4 @@
-//! Renders the home screen, or one repo view, with its colours to a standalone HTML page, for
+//! Renders the home screen, one repo view, or a step graph with its colours to a standalone HTML page, for
 //! screenshots.
 //!
 //! The report comes from the CLI's JSON, so the same example covers a fixture and real `~`:
@@ -9,6 +9,9 @@
 //! cargo run -p multi-link-tui --example home_html -- overview.json links.json out.html \
 //!     [--size 120x40] [--offset -7 | --offset 5:30 | --offset local] [--repo NAME]
 //!     [--since 2h]
+//! multi-link graph --repo R --step ID --json > graph.json
+//! cargo run -p multi-link-tui --example home_html -- --graph graph.json out.html \
+//!     [--size 120x40] [--offset -8 | --offset 5:30 | --offset local] [--selected N]
 //! ```
 //!
 //! The theme is the truecolor palette (what `COLORTERM=truecolor` gives). `--offset` defaults to
@@ -17,12 +20,13 @@
 //! folds on, imports hidden and the first lane selected, as the TUI opens it from the repo's title
 //! line. Pass the report's
 //! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would give it.
+//! `--graph` draws a GraphReport instead; `--selected` is its zero-based part index (default 0).
 use std::{env, fmt::Write, fs, time::Duration};
 
-use multi_link_model::{LinksReport, OverviewReport};
+use multi_link_model::{GraphReport, LinksReport, OverviewReport};
 use multi_link_tui::{
-    DEFAULT_WINDOW, HomeOptions, RepoOptions, TimeWindow, render_home_with_options, render_repo,
-    view,
+    DEFAULT_WINDOW, GraphOptions, HomeOptions, RepoOptions, TimeWindow, render_graph,
+    render_home_with_options, render_repo, view,
 };
 use ratatui::{
     buffer::Buffer,
@@ -150,17 +154,21 @@ fn parse_since(value: &str) -> Result<Duration, String> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
-    let [overview, links, out] = match args.get(..3) {
-        Some([a, b, c]) => [a, b, c],
+    let (input, links, out) = match args.get(..3) {
+        Some([mode, report, out]) if mode == "--graph" => (report, None, out),
+        Some([a, b, c]) => (a, Some(b), c),
         _ => return Err(
             "usage: home_html OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local] \
-             [--repo NAME] [--since 30m|2h|1d]"
+             [--repo NAME] [--since 30m|2h|1d]\n\
+             or: home_html --graph REPORT.json OUT.html [--size WxH] \
+             [--offset H[:MM]|local] [--selected N]"
                 .into(),
         ),
     };
     let (mut width, mut height, mut offset_arg) = (120, 40, "local".to_string());
     let mut repo_arg: Option<String> = None;
     let mut since = DEFAULT_WINDOW;
+    let mut selected = 0;
     let mut rest = args[3..].iter();
     while let Some(flag) = rest.next() {
         let value = rest.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -170,20 +178,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (width, height) = (w.parse()?, h.parse()?);
             }
             "--offset" => offset_arg = value.clone(),
-            "--repo" => repo_arg = Some(value.clone()),
-            "--since" => since = parse_since(value)?,
+            "--repo" if links.is_some() => repo_arg = Some(value.clone()),
+            "--since" if links.is_some() => since = parse_since(value)?,
+            "--selected" if links.is_none() => selected = value.parse()?,
             _ => return Err(format!("unknown flag {flag}").into()),
         }
     }
-    let report: OverviewReport = serde_json::from_str(&fs::read_to_string(overview)?)?;
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    let Some(links) = links else {
+        let report: GraphReport = serde_json::from_str(&fs::read_to_string(input)?)?;
+        let offset = if offset_arg == "local" {
+            view::local_offset(report.now)
+        } else {
+            parse_offset(&offset_arg)?
+        };
+        let options = GraphOptions {
+            selected,
+            offset,
+            ..GraphOptions::default()
+        };
+        render_graph(&report, &options, area, &mut buf);
+        fs::write(out, html(&buf, "multi-link step graph")?)?;
+        return Ok(());
+    };
+    let report: OverviewReport = serde_json::from_str(&fs::read_to_string(input)?)?;
     let links: LinksReport = serde_json::from_str(&fs::read_to_string(links)?)?;
     let offset = if offset_arg == "local" {
         view::local_offset(report.now)
     } else {
         parse_offset(&offset_arg)?
     };
-    let area = Rect::new(0, 0, width, height);
-    let mut buf = Buffer::empty(area);
     let window = TimeWindow::ending_at(report.now, since);
     let title = if let Some(name) = repo_arg {
         // An exact path wins; a bare name must end exactly one repo path.
