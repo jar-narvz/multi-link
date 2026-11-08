@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 mod support;
 
-use multi_link_model::{GraphCommit, GraphReport, Notable, PartStatus, Timestamp};
+use multi_link_model::{Edge, GraphCommit, GraphReport, Notable, PartStatus, Timestamp};
 use multi_link_tui::{GraphOptions, graph_first_slot, graph_slots, render_graph, theme::Theme};
 use ratatui::{
     buffer::Buffer,
@@ -680,6 +680,155 @@ fn quote_cut_on_word_boundary_by_width() {
             .is_some_and(|rest| rest.starts_with(' ')),
         "quote must end after a whole word: {body:?}"
     );
+    assert_eq!(
+        row,
+        format!("            asked  “{}日本…”", "日本 word ".repeat(8))
+    );
+}
+
+#[test]
+fn panel_quote_keeps_text_when_the_first_word_does_not_fit() {
+    let mut report = report("1.1");
+    report.parts[1].asked = Some(format!("{} tail", "x".repeat(100)));
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert_eq!(
+        rendered_rows(&buf, 28..=28),
+        format!("            asked  “{}…”\n", "x".repeat(87))
+    );
+    assert_eq!(buf[(108, 28)].symbol(), "”");
+    assert_eq!(buf[(109, 28)].symbol(), " ");
+}
+
+#[test]
+fn panel_missing_runs_keep_their_handoff_origin_without_a_gap() {
+    let report = report("1.2");
+    for (selected, expected) in [
+        (
+            1,
+            "            from   claude 81020000 · plan · handed at 07:00:20 · no run found\n",
+        ),
+        (
+            3,
+            "            from   claude 81020000 · review · handed at 07:03:00 · 2 possible runs\n",
+        ),
+    ] {
+        let buf = render(
+            &report,
+            &GraphOptions {
+                selected,
+                ..golden_options()
+            },
+            120,
+            40,
+        );
+        assert_eq!(rendered_rows(&buf, 29..=29), expected);
+        if selected == 1 {
+            assert_colored_text(
+                &buf,
+                19,
+                30,
+                "(the rollout may be gone)",
+                golden_options().theme.secondary,
+            );
+        }
+    }
+}
+
+#[test]
+fn panel_unavailable_run_has_no_open_action() {
+    let buf = render(&report("1.11"), &golden_options(), 120, 40);
+    assert_eq!(
+        rendered_rows(&buf, 27..=27),
+        "  selected  codex · implement · run unavailable\n"
+    );
+    assert_eq!(rendered_rows(&buf, 31..=31), "\n");
+}
+
+#[test]
+fn panel_gap_uses_whole_minutes_and_at_least_one_second() {
+    let mut report = report("1.1");
+    for (gap, suffix) in [
+        (125000, " · started 2 min after the call"),
+        (59999, " · started 59 s after the call"),
+        (0, " · started 1 s after the call"),
+        (999, " · started 1 s after the call"),
+        (-1, ""),
+    ] {
+        let Some(Edge::Handoff { gap_ms, .. }) = &mut report.parts[1].edge_in else {
+            panic!("expected handoff")
+        };
+        *gap_ms = Some(gap);
+        let buf = render(&report, &golden_options(), 120, 40);
+        assert_eq!(
+            rendered_rows(&buf, 29..=29),
+            format!(
+                "            from   claude 81010000 · plan · handed at 08:05:43 · matched by time{suffix}\n"
+            ),
+            "gap {gap}"
+        );
+    }
+}
+
+#[test]
+fn panel_pluralizes_stretches_and_untagged_handoffs() {
+    let buf = render(&report("1.3"), &golden_options(), 120, 40);
+    assert!(rendered_rows(&buf, 27..=27).ends_with("active about 1 min in 2 stretches\n"));
+    let mut report = report("1.8");
+    report.parts[2].untagged_handoffs = 2;
+    let buf = render(
+        &report,
+        &GraphOptions {
+            selected: 2,
+            ..golden_options()
+        },
+        120,
+        40,
+    );
+    assert_eq!(
+        rendered_rows(&buf, 30..=30),
+        "                   2 untagged hand-offs here\n"
+    );
+}
+
+#[test]
+fn panel_working_run_without_a_reply_leaves_said_row_blank() {
+    let buf = render(
+        &report("1.5"),
+        &GraphOptions {
+            selected: 2,
+            ..golden_options()
+        },
+        120,
+        40,
+    );
+    assert_eq!(rendered_rows(&buf, 30..=30), "\n");
+}
+
+#[test]
+fn panel_origin_without_parent_part_omits_the_kind() {
+    let mut report = report("1.1");
+    let Some(Edge::Handoff { parent_part, .. }) = &mut report.parts[1].edge_in else {
+        panic!("expected handoff")
+    };
+    *parent_part = None;
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert_eq!(
+        rendered_rows(&buf, 29..=29),
+        "            from   claude 81010000 · handed at 08:05:43 · matched by time · started 1 s after the call\n"
+    );
+}
+
+#[test]
+fn panel_claude_action_keys_are_text_and_words_are_grey() {
+    let options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    let buf = render(&report("1.1"), &options, 120, 40);
+    assert_colored_text(&buf, 12, 31, "o", options.theme.text);
+    assert_colored_text(&buf, 14, 31, "open in Claude", options.theme.secondary);
+    assert_colored_text(&buf, 31, 31, "f", options.theme.text);
+    assert_colored_text(&buf, 33, 31, "fork", options.theme.secondary);
 }
 
 #[test]

@@ -684,6 +684,9 @@ fn quoted(text: &str, width: usize) -> String {
             break;
         }
     }
+    if end == 0 {
+        return format!("“{}”", cut(text, width - 2));
+    }
     format!("“{}…”", text[..end].trim_end())
 }
 
