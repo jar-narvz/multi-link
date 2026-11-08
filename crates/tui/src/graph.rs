@@ -77,7 +77,6 @@ struct Layout {
     claude_lane: u16,
     codex_lane: u16,
     panel: u16,
-    #[allow(dead_code)]
     strip: u16,
     legend: u16,
     rule: u16,
@@ -148,6 +147,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
         panel(report, options, layout.panel, &mut paint);
+        strip(report, options, layout.strip, &mut paint);
         legend(layout.legend, &mut paint);
     }
     paint.rule(layout.rule);
@@ -841,6 +841,115 @@ fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: 
                 t.secondary,
             );
         }
+    }
+}
+
+/// Reserve label minima, then apportion the remaining cells by elapsed time.
+/// Integer remainders keep equal shares deterministic, with earlier parts first.
+fn strip_widths(parts: &[Part], labels: &[&str], span: usize) -> Option<(Vec<usize>, bool)> {
+    let available = span.checked_sub(parts.len().saturating_sub(1))?;
+    if parts.is_empty() || available < parts.len() {
+        return None;
+    }
+    let mut widths: Vec<_> = labels
+        .iter()
+        .map(|label| Span::raw(*label).width() + 2)
+        .collect();
+    let show_labels = widths.iter().sum::<usize>() <= available;
+    if !show_labels {
+        widths.fill(1);
+    }
+    let extra = available - widths.iter().sum::<usize>();
+    let mut lengths: Vec<u128> = parts
+        .iter()
+        .map(|part| match (part.from, part.to) {
+            (Some(from), Some(to)) => {
+                (i128::from(to.epoch_ms()) - i128::from(from.epoch_ms())).max(0) as u128
+            }
+            _ => 0,
+        })
+        .collect();
+    // With no elapsed time to distinguish parts, share the space equally.
+    if lengths.iter().all(|&length| length == 0) {
+        lengths.fill(1);
+    }
+    let total: u128 = lengths.iter().sum();
+    let mut remainders = Vec::with_capacity(parts.len());
+    let mut left = extra;
+    for (index, length) in lengths.into_iter().enumerate() {
+        let share = length * extra as u128;
+        let whole = (share / total) as usize;
+        widths[index] += whole;
+        left -= whole;
+        remainders.push((index, share % total));
+    }
+    remainders.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    for &(index, _) in remainders.iter().take(left) {
+        widths[index] += 1;
+    }
+    Some((widths, show_labels))
+}
+
+fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
+    let t = options.theme;
+    paint.write(2, y, "where the time went", t.secondary, paint.end());
+    let labels: Vec<_> = report
+        .parts
+        .iter()
+        .map(|part| {
+            if part.kind.starts_with("fix round ") {
+                "fix"
+            } else {
+                part.kind.as_str()
+            }
+        })
+        .collect();
+    let Some((widths, show_labels)) = strip_widths(&report.parts, &labels, 94) else {
+        return;
+    };
+    let selected = options.selected.min(report.parts.len() - 1);
+    let mut x = 23;
+    for (index, ((part, label), width)) in report.parts.iter().zip(labels).zip(widths).enumerate() {
+        let codex = part.harness == Harness::Codex;
+        let bg = if index == selected {
+            t.graph_selected
+        } else if codex {
+            t.codex_strip
+        } else {
+            t.claude_strip
+        };
+        let area = Rect::new(x, y, width as u16, 1).intersection(paint.buf.area);
+        paint.buf.set_style(area, Style::default().bg(bg));
+        if show_labels {
+            paint.line(
+                x + 1,
+                y,
+                Line::from(Span::styled(
+                    label,
+                    t.text_style(if codex { t.codex } else { t.claude }, bg),
+                )),
+                x + width as u16,
+            );
+        }
+        x += width as u16 + 1;
+    }
+    if let Some(from) = report.parts.first().and_then(|part| part.from) {
+        paint.write(
+            23,
+            y + 1,
+            &clock(from, options.offset, false),
+            t.secondary,
+            117,
+        );
+    }
+    if let Some(to) = report.parts.last().and_then(|part| part.to) {
+        paint.write(
+            112,
+            y + 1,
+            &clock(to, options.offset, false),
+            t.secondary,
+            117,
+        );
     }
 }
 
