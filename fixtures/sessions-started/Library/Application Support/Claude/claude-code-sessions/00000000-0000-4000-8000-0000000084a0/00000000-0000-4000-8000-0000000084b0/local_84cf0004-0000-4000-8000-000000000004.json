@@ -1,0 +1,16 @@
+{
+  "sessionId": "local_84cf0004-0000-4000-8000-000000000004",
+  "cwd": "/home/dev/repo-k",
+  "originCwd": "/home/dev/repo-k",
+  "createdAt": 1794128400000,
+  "title": "<title>",
+  "isArchived": false,
+  "cliSessionId": "84c00004-0000-4000-8000-000000008404",
+  "spawnedFrom": {
+    "sessionId": "local_84cf0002-0000-4000-8000-000000000002",
+    "taskId": "task_84c0",
+    "name": "<name>",
+    "title": "<title>",
+    "sideSession": true
+  }
+}

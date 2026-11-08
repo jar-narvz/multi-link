@@ -1,0 +1,19 @@
+{
+  "links": [
+    {
+      "step": "2.1",
+      "parent": "84c00002-0000-4000-8000-000000008402",
+      "invocation": "toolu_started_a1",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-08T09:20:00.000Z",
+      "checkout": "/home/dev/repo-k",
+      "match": "exact",
+      "child": "84c000c2-0000-4000-8000-0000000084c2",
+      "evidence": "stdout",
+      "candidates": []
+    }
+  ],
+  "unparented": []
+}

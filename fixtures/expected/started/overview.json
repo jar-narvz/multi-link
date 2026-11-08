@@ -1,0 +1,608 @@
+{
+  "now": "2026-11-08T12:00:00.000Z",
+  "hook": {
+    "records": 0,
+    "latest": null
+  },
+  "repos": [
+    {
+      "repo": "/home/dev/repo-k",
+      "tier": "busy",
+      "last_activity": "2026-11-08T11:57:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": {
+        "step": "2.1",
+        "parent": "84c00002-0000-4000-8000-000000008402",
+        "invocation": "toolu_started_a1",
+        "subagent": null,
+        "form": "exec",
+        "background": false,
+        "at": "2026-11-08T09:20:00.000Z",
+        "checkout": "/home/dev/repo-k",
+        "match": "exact",
+        "child": "84c000c2-0000-4000-8000-0000000084c2",
+        "evidence": "stdout",
+        "candidates": []
+      },
+      "rows": [
+        {
+          "kind": "merged",
+          "harness": "claude",
+          "count": 13,
+          "rows": [
+            {
+              "kind": "session",
+              "id": "84c00019-0000-4000-8000-000000008419",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:35:00.000Z",
+              "last_activity": "2026-11-08T10:39:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:35:00.000Z",
+                  "to": "2026-11-08T10:39:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session sharing an app id, second.",
+              "last_asked": "Synthetic session sharing an app id, second.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00018-0000-4000-8000-000000008418",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:30:00.000Z",
+              "last_activity": "2026-11-08T10:34:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:30:00.000Z",
+                  "to": "2026-11-08T10:34:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session sharing an app id, first.",
+              "last_asked": "Synthetic session sharing an app id, first.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00017-0000-4000-8000-000000008417",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:25:00.000Z",
+              "last_activity": "2026-11-08T10:29:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:25:00.000Z",
+                  "to": "2026-11-08T10:29:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session whose starter id is shared by two records.",
+              "last_asked": "Synthetic session whose starter id is shared by two records.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00016-0000-4000-8000-000000008416",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:20:00.000Z",
+              "last_activity": "2026-11-08T10:24:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:20:00.000Z",
+                  "to": "2026-11-08T10:24:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session whose starter record has no transcript id.",
+              "last_asked": "Synthetic session whose starter record has no transcript id.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00015-0000-4000-8000-000000008415",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:15:00.000Z",
+              "last_activity": "2026-11-08T10:19:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:15:00.000Z",
+                  "to": "2026-11-08T10:19:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session with a wrong-typed starter field.",
+              "last_asked": "Synthetic session with a wrong-typed starter field.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00014-0000-4000-8000-000000008414",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:10:00.000Z",
+              "last_activity": "2026-11-08T10:14:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:10:00.000Z",
+                  "to": "2026-11-08T10:14:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session that names itself.",
+              "last_asked": "Synthetic session that names itself.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00013-0000-4000-8000-000000008413",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:05:00.000Z",
+              "last_activity": "2026-11-08T10:09:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:05:00.000Z",
+                  "to": "2026-11-08T10:09:00.000Z"
+                }
+              ],
+              "asked": "Synthetic cycle member two.",
+              "last_asked": "Synthetic cycle member two.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00012-0000-4000-8000-000000008412",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T10:00:00.000Z",
+              "last_activity": "2026-11-08T10:04:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T10:00:00.000Z",
+                  "to": "2026-11-08T10:04:00.000Z"
+                }
+              ],
+              "asked": "Synthetic cycle member one.",
+              "last_asked": "Synthetic cycle member one.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00011-0000-4000-8000-000000008411",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:55:00.000Z",
+              "last_activity": "2026-11-08T09:59:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:55:00.000Z",
+                  "to": "2026-11-08T09:59:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session with two conflicting records.",
+              "last_asked": "Synthetic session with two conflicting records.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00008-0000-4000-8000-000000008408",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:45:00.000Z",
+              "last_activity": "2026-11-08T09:49:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:45:00.000Z",
+                  "to": "2026-11-08T09:49:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session started from another repo.",
+              "last_asked": "Synthetic session started from another repo.",
+              "title": null,
+              "started_by": "84c00009-0000-4000-8000-000000008409",
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00007-0000-4000-8000-000000008407",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:40:00.000Z",
+              "last_activity": "2026-11-08T09:44:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:40:00.000Z",
+                  "to": "2026-11-08T09:44:00.000Z"
+                }
+              ],
+              "asked": "Synthetic session whose starter record is gone.",
+              "last_asked": "Synthetic session whose starter record is gone.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00006-0000-4000-8000-000000008406",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:35:00.000Z",
+              "last_activity": "2026-11-08T09:39:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:35:00.000Z",
+                  "to": "2026-11-08T09:39:00.000Z"
+                }
+              ],
+              "asked": "Synthetic side question.",
+              "last_asked": "Synthetic side question.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            },
+            {
+              "kind": "session",
+              "id": "84c00005-0000-4000-8000-000000008405",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:30:00.000Z",
+              "last_activity": "2026-11-08T09:34:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:30:00.000Z",
+                  "to": "2026-11-08T09:34:00.000Z"
+                }
+              ],
+              "asked": "Synthetic fork of the coordinator.",
+              "last_asked": "Synthetic fork of the coordinator.",
+              "title": null,
+              "started_by": null,
+              "imported": false,
+              "state_since": null,
+              "children": []
+            }
+          ]
+        },
+        {
+          "kind": "session",
+          "id": "84c00001-0000-4000-8000-000000008401",
+          "harness": "claude",
+          "state": "unknown",
+          "state_evidence": "no_signal",
+          "checkout": "/home/dev/repo-k",
+          "branch": "main",
+          "started_at": "2026-11-08T09:00:00.000Z",
+          "last_activity": "2026-11-08T09:04:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "activity": [
+            {
+              "from": "2026-11-08T09:00:00.000Z",
+              "to": "2026-11-08T09:04:00.000Z"
+            }
+          ],
+          "asked": "Coordinate the synthetic steps and start one session per step.",
+          "last_asked": "Coordinate the synthetic steps and start one session per step.",
+          "title": null,
+          "started_by": null,
+          "imported": false,
+          "state_since": null,
+          "children": [
+            {
+              "kind": "session",
+              "id": "84c00002-0000-4000-8000-000000008402",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:05:00.000Z",
+              "last_activity": "2026-11-08T09:30:00.000Z",
+              "handoffs": [],
+              "made": [
+                "2.1"
+              ],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:05:00.000Z",
+                  "to": "2026-11-08T09:09:00.000Z"
+                },
+                {
+                  "from": "2026-11-08T09:20:00.000Z",
+                  "to": "2026-11-08T09:20:00.000Z"
+                },
+                {
+                  "from": "2026-11-08T09:30:00.000Z",
+                  "to": "2026-11-08T09:30:00.000Z"
+                }
+              ],
+              "asked": "Do synthetic step one and hand it to codex.",
+              "last_asked": "Do synthetic step one and hand it to codex.",
+              "title": null,
+              "started_by": "84c00001-0000-4000-8000-000000008401",
+              "imported": false,
+              "state_since": null,
+              "children": [
+                {
+                  "kind": "session",
+                  "id": "84c000c2-0000-4000-8000-0000000084c2",
+                  "harness": "codex",
+                  "state": "unknown",
+                  "state_evidence": "turns_complete",
+                  "checkout": "/home/dev/repo-k",
+                  "branch": null,
+                  "started_at": "2026-11-08T09:20:02.000Z",
+                  "last_activity": "2026-11-08T09:28:00.000Z",
+                  "handoffs": [
+                    {
+                      "step": "2.1",
+                      "parent": "84c00002-0000-4000-8000-000000008402",
+                      "invocation": "toolu_started_a1",
+                      "subagent": null,
+                      "form": "exec",
+                      "background": false,
+                      "at": "2026-11-08T09:20:00.000Z",
+                      "checkout": "/home/dev/repo-k",
+                      "match": "exact",
+                      "child": "84c000c2-0000-4000-8000-0000000084c2",
+                      "evidence": "stdout",
+                      "candidates": []
+                    }
+                  ],
+                  "made": [],
+                  "activity": [
+                    {
+                      "from": "2026-11-08T09:20:03.000Z",
+                      "to": "2026-11-08T09:28:00.000Z"
+                    }
+                  ],
+                  "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md.",
+                  "last_asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md.",
+                  "title": null,
+                  "started_by": null,
+                  "imported": false,
+                  "state_since": "2026-11-08T09:28:00.000Z",
+                  "children": []
+                },
+                {
+                  "kind": "session",
+                  "id": "84c00004-0000-4000-8000-000000008404",
+                  "harness": "claude",
+                  "state": "busy",
+                  "state_evidence": "session_record",
+                  "checkout": "/home/dev/repo-k",
+                  "branch": "main",
+                  "started_at": "2026-11-08T09:25:00.000Z",
+                  "last_activity": "2026-11-08T11:57:00.000Z",
+                  "handoffs": [],
+                  "made": [],
+                  "activity": [
+                    {
+                      "from": "2026-11-08T09:25:00.000Z",
+                      "to": "2026-11-08T09:29:00.000Z"
+                    },
+                    {
+                      "from": "2026-11-08T11:57:00.000Z",
+                      "to": "2026-11-08T11:57:00.000Z"
+                    }
+                  ],
+                  "asked": "Do the synthetic sub-step of step one.",
+                  "last_asked": "Synthetic follow-up for the sub-step.",
+                  "title": null,
+                  "started_by": "84c00002-0000-4000-8000-000000008402",
+                  "imported": false,
+                  "state_since": null,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "kind": "session",
+              "id": "84c00003-0000-4000-8000-000000008403",
+              "harness": "claude",
+              "state": "unknown",
+              "state_evidence": "no_signal",
+              "checkout": "/home/dev/repo-k",
+              "branch": "main",
+              "started_at": "2026-11-08T09:10:00.000Z",
+              "last_activity": "2026-11-08T09:14:00.000Z",
+              "handoffs": [],
+              "made": [],
+              "activity": [
+                {
+                  "from": "2026-11-08T09:10:00.000Z",
+                  "to": "2026-11-08T09:14:00.000Z"
+                }
+              ],
+              "asked": "Do synthetic step two.",
+              "last_asked": "Do synthetic step two.",
+              "title": null,
+              "started_by": "84c00001-0000-4000-8000-000000008401",
+              "imported": false,
+              "state_since": null,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-o",
+      "tier": "other",
+      "last_activity": "2026-11-08T09:54:00.000Z",
+      "plan": {
+        "convention": "missing",
+        "latest_step": null
+      },
+      "active_steps": [],
+      "concurrency": [],
+      "latest_handoff": null,
+      "rows": [
+        {
+          "kind": "session",
+          "id": "84c00010-0000-4000-8000-000000008410",
+          "harness": "claude",
+          "state": "unknown",
+          "state_evidence": "no_signal",
+          "checkout": "/home/dev/repo-o",
+          "branch": "main",
+          "started_at": "2026-11-08T09:50:00.000Z",
+          "last_activity": "2026-11-08T09:54:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "activity": [
+            {
+              "from": "2026-11-08T09:50:00.000Z",
+              "to": "2026-11-08T09:54:00.000Z"
+            }
+          ],
+          "asked": "Synthetic session in the other repo started from repo-k.",
+          "last_asked": "Synthetic session in the other repo started from repo-k.",
+          "title": null,
+          "started_by": "84c00001-0000-4000-8000-000000008401",
+          "imported": false,
+          "state_since": null,
+          "children": []
+        },
+        {
+          "kind": "session",
+          "id": "84c00009-0000-4000-8000-000000008409",
+          "harness": "claude",
+          "state": "unknown",
+          "state_evidence": "no_signal",
+          "checkout": "/home/dev/repo-o",
+          "branch": "main",
+          "started_at": "2026-11-08T08:50:00.000Z",
+          "last_activity": "2026-11-08T08:54:00.000Z",
+          "handoffs": [],
+          "made": [],
+          "activity": [
+            {
+              "from": "2026-11-08T08:50:00.000Z",
+              "to": "2026-11-08T08:54:00.000Z"
+            }
+          ],
+          "asked": "Synthetic coordinator in the other repo.",
+          "last_asked": "Synthetic coordinator in the other repo.",
+          "title": null,
+          "started_by": null,
+          "imported": false,
+          "state_since": null,
+          "children": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,738 @@
+{
+  "now": "2026-11-08T12:00:00.000Z",
+  "sessions": [
+    {
+      "id": "84c00009-0000-4000-8000-000000008409",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-o/84c00009-0000-4000-8000-000000008409.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-o",
+      "repo": "/home/dev/repo-o",
+      "checkout": "/home/dev/repo-o",
+      "branch": "main",
+      "started_at": "2026-11-08T08:50:00.000Z",
+      "last_activity": "2026-11-08T08:54:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T08:50:00.000Z",
+          "to": "2026-11-08T08:54:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T08:50:00.000Z",
+          "to": "2026-11-08T08:54:00.000Z"
+        }
+      ],
+      "asked": "Synthetic coordinator in the other repo.",
+      "last_asked": "Synthetic coordinator in the other repo.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00001-0000-4000-8000-000000008401",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00001-0000-4000-8000-000000008401.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:00:00.000Z",
+      "last_activity": "2026-11-08T09:04:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:00:00.000Z",
+          "to": "2026-11-08T09:04:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:00:00.000Z",
+          "to": "2026-11-08T09:04:00.000Z"
+        }
+      ],
+      "asked": "Coordinate the synthetic steps and start one session per step.",
+      "last_asked": "Coordinate the synthetic steps and start one session per step.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00002-0000-4000-8000-000000008402",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00002-0000-4000-8000-000000008402.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:05:00.000Z",
+      "last_activity": "2026-11-08T09:30:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:05:00.000Z",
+          "to": "2026-11-08T09:30:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:05:00.000Z",
+          "to": "2026-11-08T09:09:00.000Z"
+        },
+        {
+          "from": "2026-11-08T09:20:00.000Z",
+          "to": "2026-11-08T09:20:00.000Z"
+        },
+        {
+          "from": "2026-11-08T09:30:00.000Z",
+          "to": "2026-11-08T09:30:00.000Z"
+        }
+      ],
+      "asked": "Do synthetic step one and hand it to codex.",
+      "last_asked": "Do synthetic step one and hand it to codex.",
+      "title": null,
+      "started_by": "84c00001-0000-4000-8000-000000008401",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00003-0000-4000-8000-000000008403",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00003-0000-4000-8000-000000008403.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:10:00.000Z",
+      "last_activity": "2026-11-08T09:14:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:10:00.000Z",
+          "to": "2026-11-08T09:14:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:10:00.000Z",
+          "to": "2026-11-08T09:14:00.000Z"
+        }
+      ],
+      "asked": "Do synthetic step two.",
+      "last_asked": "Do synthetic step two.",
+      "title": null,
+      "started_by": "84c00001-0000-4000-8000-000000008401",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c000c2-0000-4000-8000-0000000084c2",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/08/rollout-2026-11-08T09-20-02-84c000c2-0000-4000-8000-0000000084c2.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": null,
+      "started_at": "2026-11-08T09:20:02.000Z",
+      "last_activity": "2026-11-08T09:28:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-08T09:20:02.000Z",
+          "to": "2026-11-08T09:28:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:20:03.000Z",
+          "to": "2026-11-08T09:28:00.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md.",
+      "last_asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-08T09:28:00.000Z"
+    },
+    {
+      "id": "84c00004-0000-4000-8000-000000008404",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00004-0000-4000-8000-000000008404.jsonl",
+      "record": ".claude/sessions/84004.json",
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:25:00.000Z",
+      "last_activity": "2026-11-08T11:57:00.000Z",
+      "state": "busy",
+      "state_evidence": "session_record",
+      "segments": [
+        {
+          "from": "2026-11-08T09:25:00.000Z",
+          "to": "2026-11-08T11:57:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:25:00.000Z",
+          "to": "2026-11-08T09:29:00.000Z"
+        },
+        {
+          "from": "2026-11-08T11:57:00.000Z",
+          "to": "2026-11-08T11:57:00.000Z"
+        }
+      ],
+      "asked": "Do the synthetic sub-step of step one.",
+      "last_asked": "Synthetic follow-up for the sub-step.",
+      "title": null,
+      "started_by": "84c00002-0000-4000-8000-000000008402",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00005-0000-4000-8000-000000008405",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00005-0000-4000-8000-000000008405.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:30:00.000Z",
+      "last_activity": "2026-11-08T09:34:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:30:00.000Z",
+          "to": "2026-11-08T09:34:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:30:00.000Z",
+          "to": "2026-11-08T09:34:00.000Z"
+        }
+      ],
+      "asked": "Synthetic fork of the coordinator.",
+      "last_asked": "Synthetic fork of the coordinator.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00006-0000-4000-8000-000000008406",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00006-0000-4000-8000-000000008406.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:35:00.000Z",
+      "last_activity": "2026-11-08T09:39:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:35:00.000Z",
+          "to": "2026-11-08T09:39:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:35:00.000Z",
+          "to": "2026-11-08T09:39:00.000Z"
+        }
+      ],
+      "asked": "Synthetic side question.",
+      "last_asked": "Synthetic side question.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00007-0000-4000-8000-000000008407",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00007-0000-4000-8000-000000008407.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:40:00.000Z",
+      "last_activity": "2026-11-08T09:44:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:40:00.000Z",
+          "to": "2026-11-08T09:44:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:40:00.000Z",
+          "to": "2026-11-08T09:44:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session whose starter record is gone.",
+      "last_asked": "Synthetic session whose starter record is gone.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00008-0000-4000-8000-000000008408",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00008-0000-4000-8000-000000008408.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:45:00.000Z",
+      "last_activity": "2026-11-08T09:49:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:45:00.000Z",
+          "to": "2026-11-08T09:49:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:45:00.000Z",
+          "to": "2026-11-08T09:49:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session started from another repo.",
+      "last_asked": "Synthetic session started from another repo.",
+      "title": null,
+      "started_by": "84c00009-0000-4000-8000-000000008409",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00010-0000-4000-8000-000000008410",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-o/84c00010-0000-4000-8000-000000008410.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-o",
+      "repo": "/home/dev/repo-o",
+      "checkout": "/home/dev/repo-o",
+      "branch": "main",
+      "started_at": "2026-11-08T09:50:00.000Z",
+      "last_activity": "2026-11-08T09:54:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:50:00.000Z",
+          "to": "2026-11-08T09:54:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:50:00.000Z",
+          "to": "2026-11-08T09:54:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session in the other repo started from repo-k.",
+      "last_asked": "Synthetic session in the other repo started from repo-k.",
+      "title": null,
+      "started_by": "84c00001-0000-4000-8000-000000008401",
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00011-0000-4000-8000-000000008411",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00011-0000-4000-8000-000000008411.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T09:55:00.000Z",
+      "last_activity": "2026-11-08T09:59:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T09:55:00.000Z",
+          "to": "2026-11-08T09:59:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T09:55:00.000Z",
+          "to": "2026-11-08T09:59:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session with two conflicting records.",
+      "last_asked": "Synthetic session with two conflicting records.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00012-0000-4000-8000-000000008412",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00012-0000-4000-8000-000000008412.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:00:00.000Z",
+      "last_activity": "2026-11-08T10:04:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:00:00.000Z",
+          "to": "2026-11-08T10:04:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:00:00.000Z",
+          "to": "2026-11-08T10:04:00.000Z"
+        }
+      ],
+      "asked": "Synthetic cycle member one.",
+      "last_asked": "Synthetic cycle member one.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00013-0000-4000-8000-000000008413",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00013-0000-4000-8000-000000008413.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:05:00.000Z",
+      "last_activity": "2026-11-08T10:09:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:05:00.000Z",
+          "to": "2026-11-08T10:09:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:05:00.000Z",
+          "to": "2026-11-08T10:09:00.000Z"
+        }
+      ],
+      "asked": "Synthetic cycle member two.",
+      "last_asked": "Synthetic cycle member two.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00014-0000-4000-8000-000000008414",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00014-0000-4000-8000-000000008414.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:10:00.000Z",
+      "last_activity": "2026-11-08T10:14:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:10:00.000Z",
+          "to": "2026-11-08T10:14:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:10:00.000Z",
+          "to": "2026-11-08T10:14:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session that names itself.",
+      "last_asked": "Synthetic session that names itself.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00015-0000-4000-8000-000000008415",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00015-0000-4000-8000-000000008415.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:15:00.000Z",
+      "last_activity": "2026-11-08T10:19:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:15:00.000Z",
+          "to": "2026-11-08T10:19:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:15:00.000Z",
+          "to": "2026-11-08T10:19:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session with a wrong-typed starter field.",
+      "last_asked": "Synthetic session with a wrong-typed starter field.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00016-0000-4000-8000-000000008416",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00016-0000-4000-8000-000000008416.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:20:00.000Z",
+      "last_activity": "2026-11-08T10:24:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:20:00.000Z",
+          "to": "2026-11-08T10:24:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:20:00.000Z",
+          "to": "2026-11-08T10:24:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session whose starter record has no transcript id.",
+      "last_asked": "Synthetic session whose starter record has no transcript id.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00017-0000-4000-8000-000000008417",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00017-0000-4000-8000-000000008417.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:25:00.000Z",
+      "last_activity": "2026-11-08T10:29:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:25:00.000Z",
+          "to": "2026-11-08T10:29:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:25:00.000Z",
+          "to": "2026-11-08T10:29:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session whose starter id is shared by two records.",
+      "last_asked": "Synthetic session whose starter id is shared by two records.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00018-0000-4000-8000-000000008418",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00018-0000-4000-8000-000000008418.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:30:00.000Z",
+      "last_activity": "2026-11-08T10:34:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:30:00.000Z",
+          "to": "2026-11-08T10:34:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:30:00.000Z",
+          "to": "2026-11-08T10:34:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session sharing an app id, first.",
+      "last_asked": "Synthetic session sharing an app id, first.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "84c00019-0000-4000-8000-000000008419",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-k/84c00019-0000-4000-8000-000000008419.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-k",
+      "repo": "/home/dev/repo-k",
+      "checkout": "/home/dev/repo-k",
+      "branch": "main",
+      "started_at": "2026-11-08T10:35:00.000Z",
+      "last_activity": "2026-11-08T10:39:00.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-08T10:35:00.000Z",
+          "to": "2026-11-08T10:39:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-08T10:35:00.000Z",
+          "to": "2026-11-08T10:39:00.000Z"
+        }
+      ],
+      "asked": "Synthetic session sharing an app id, second.",
+      "last_asked": "Synthetic session sharing an app id, second.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    }
+  ],
+  "skipped": []
+}

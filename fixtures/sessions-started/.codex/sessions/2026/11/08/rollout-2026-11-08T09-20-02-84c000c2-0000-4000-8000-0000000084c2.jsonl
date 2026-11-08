@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-08T09:20:02.000Z", "payload": {"id": "84c000c2-0000-4000-8000-0000000084c2", "cwd": "/home/dev/repo-k", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-08T09:20:03.000Z", "payload": {"type": "task_started", "turn_id": "84c0c201-0000-4000-8000-0000000184c2"}}
+{"type": "event_msg", "timestamp": "2026-11-08T09:20:03.000Z", "payload": {"type": "user_message", "message": "Read AGENTS.md, then do Step 2.1 in PLAN.md.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-08T09:24:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-08T09:28:00.000Z", "payload": {"type": "task_complete", "turn_id": "84c0c201-0000-4000-8000-0000000184c2"}}
