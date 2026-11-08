@@ -1,7 +1,26 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-06, latest).** **Step 8.2 is committed; Step 8.3 is next** (Superpowers trial, rules in CLAUDE.md;
+**Resume here (2026-11-07, latest).** **Step 8.3 is committed (Superpowers trial, done); Step 8.4 is next** (normal
+Codex loop again; the trial is over). What 8.4 needs:
+- The report: `multi-link graph --repo R --step ID [--json]`; types `model::{GraphReport, GraphStep, GraphCommit, Part,
+  PartStatus, Counts, Notable, Edge}` (crates/model). `Edge` is serde-tagged `kind: handoff|return`. Build it in tests with
+  the CLI command in output-schema "Phase 8 fixture results"; all 13 keys match (`crates/cli/tests/graph.rs`).
+- Core API: `multi_link_core::graph::{build, GraphInput, CodexDetails, commit_for_step}` and `Scanner::graph(root,
+  options, repo, step, plans)` (in `crates/core/src/graph.rs`, not scanner.rs). The TUI depends on model only, so 8.4
+  renders a `GraphReport` value; 8.5 wires `Scanner::graph` into the refresh.
+- `Scanner::graph` calls `multi_link_claude::scan(root)` once per build for the parents' `Transcript`s (a full parse, no
+  cache). 8.5 must measure it against G11's 2 s; a cached or per-file path needs the claude crate.
+- Text mode (no `--json`) is plain lines with no golden; it prints the same facts as the JSON.
+- **Readings added in review (not in PLAN.md's or design.md's wording; those files were outside the step):** see the 8.3
+  entry's "Readings added in review". The one that changes the picture: **no Claude part covers a run of its chain that is
+  still going**; a Claude part after a hand-off starts at the latest end of earlier still-going runs (with a return edge
+  there). A planner should copy all five into G2/G6 at the next PLAN.md edit.
+- Golden `step-phase8.txt` / `.styles.txt` are 8.4's target; do not edit them. A mismatch blamed on a key or the golden is
+  reported, not fixed.
+- 358 tests pass, 1 ignored (`real_counts`, opt-in), clippy clean, pinned `git diff` exit 0.
+
+**Before Step 8.3 (2026-11-06).** **Step 8.2 is committed; Step 8.3 is next** (Superpowers trial, rules in CLAUDE.md;
 stop and ask if Superpowers is not installed). Its baseline measures are in the 8.2 entry. What 8.3 needs:
 - Readers, on demand only: `claude::calls(root, transcript)`, `codex::calls(path)`, `codex::codex_turns(path)`, and
   `codex::read_details(path)` for both in one read. Types `model::{Call, CallKind, Calls, Turn}`; `Calls.skipped` holds
@@ -356,6 +375,123 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-07 — Step 8.3: Core: graph report, CLI `graph` — Claude (Superpowers trial)
+- Did: Built the step graph report per G1–G4, G6, G7. Report types are in `crates/model`. `crates/core/src/graph.rs` has a
+  pure `build` (owned and tagged hand-offs, chains, Codex runs from turns, Claude cuts and names, edges, calls in parts) and
+  `Scanner::graph` for the I/O: one `--since all` refresh, on-demand `claude::calls` / `codex::read_details` for the step's
+  parents, other in-repo parents that resume the same children, and their children only. It also has `commit_for_step`
+  (`git log`, exact `(Step <id>)`, real mode only). CLI `multi-link graph --repo R --step ID [--json]`.
+  How it ran (owner's trial, CLAUDE.md rules): Superpowers 7.0.0 `writing-plans` wrote a 6-task plan to the session
+  scratchpad (not the repo). `subagent-driven-development` with `test-driven-development` then ran each task as one
+  implementer subagent plus one task-reviewer subagent, then a final whole-branch review. Codex reviewed
+  `git diff main...trial/step-8.3`, 2 rounds. Branch `trial/step-8.3` in worktree `.claude/worktrees/step-8.3`, cut from
+  ddca184; 9 commits, then fast-forwarded into `main`. The branch and worktree are left in place for the owner.
+  **Readings added in review** (decided by the step session; PLAN.md and design.md were outside the step's files, so a
+  planner should copy these into G2/G6 at the next PLAN.md edit):
+  1. **No Claude part covers a run that is still going.** G2's bold rule ("a Codex run's interval belongs to Codex and no
+     Claude part covers it") and "kept only when no tagged run of the chain is still going" conflicted with the pinned
+     "G2 No interval" text ("the next Claude part starts at that same hand-off"). Taken literally, the pinned text lets a
+     Claude part overlap an earlier run that is still going. Chosen: a Claude part after any hand-off, with or without an
+     interval, starts at the latest of its usual start and the `to` of earlier interval runs of the chain still going
+     then, with `edge_in` `return` at that time. The part is dropped when `from ≥ to`; an open earlier run still means
+     no last part. Why: the bold rule is the invariant the screen depends on, and the pinned text describes the common
+     case where no run is going. No key changes. Codex contested the return edge after a no-interval hand-off. It then
+     accepted it under output-schema's "a Claude part that starts at a run's end": without it, that earlier run shows no
+     return anywhere.
+  2. Every Claude part's `from` is clamped to the chain start (the previous differently tagged run's end); a part that
+     starts there gets no return edge (that run is not this chain's).
+  3. With no last part, a read in no part counts as `waiting_reads` up to the latest run end of the chain, capped at the
+     next differently tagged hand-off.
+  4. A call exactly where two Claude parts meet belongs to the earlier part only; G3's `verify + commit` uses the same rule.
+  5. A run window also ends at a resume of the same child by another in-repo parent with no tagged hand-off (G4 "next
+     hand-off of the same child"). A resume from another repo does not cap it (the spec is silent).
+  `untagged_handoffs` stays exactly the schema's `from < at ≤ to`. An earlier ruling of mine moved unheld untagged
+  hand-offs onto the previous Claude part; Codex showed it contradicted the schema, and it was reverted.
+  **Trial measures (Step 8.2's baseline is in its entry):**
+  - Wall-clock: 1 h 40 min (20:08:54–21:49 PST, step session start to writing this entry; merge follows). Codex review
+    round 1 alone took 46 min 34 s (20:53:04–21:39:38); round 2 took 55 s.
+  - Tests added: 62 run by default (296 → 358).
+  - Implementer runs: 9 Claude subagents: 6 tasks, 1 task fix round (Task 4), 1 final-review fix wave, 1 Codex-review fix.
+  - Reviewer runs: 9 Claude subagents (6 task reviews, 1 Task 4 re-review, 1 final whole-branch review, 1 re-review of
+    its fixes) plus 2 Codex rounds.
+  - Findings from the independent (Codex) review: 7 in round 1, all medium; 6 accepted, 1 rejected with a reason. Round 2:
+    0 new; all 7 verdicted. Superpowers' own reviews found 4 Important (Task 3: 1, Task 4: 1, final: 2), plus Minors.
+  - Fix rounds: 3 (Task 4 ×1, final-review wave ×1, Codex ×1).
+  - Tokens, as printed by the harness per subagent run: implementers 1,106,287 and Claude reviewers 867,202. Codex
+    87,248 + 55,969 as printed by `codex exec`. The controller session's own tokens were not measured.
+  - Rough comparison only: the steps differ in size and kind (8.3 is the core of the phase; 8.2 was readers).
+- Changed: `crates/model/src/lib.rs`, `crates/model/tests/graph.rs`, `crates/core/src/graph.rs`, `crates/core/src/lib.rs`,
+  `crates/core/tests/graph.rs`, `crates/core/tests/graph_commit.rs`, `crates/cli/src/main.rs`, `crates/cli/tests/graph.rs`,
+  `PROGRESS.md`.
+- Verify (re-run by the step session in the worktree at dfc8264, with
+  `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"`): `cargo test --workspace` → exit 0. There are 44
+  result lines, all `ok`: 358 passed, 0 failed, 1 ignored (the existing opt-in `real_counts`). The result lines, counted
+  (`uniq -c`, timings cut):
+
+```text
+  11 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   2 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   2 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   3 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   4 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   3 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   2 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+   1 test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out
+   6 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+  `cargo test -p multi-link --test graph` → 7 passed, including `every_phase8_key_matches` (13 keys) and
+  `sentinels_never_in_output`. `cargo test -p multi-link-core --test graph_commit` → 1 passed (`newest_exact_step_commit`:
+  temp repo, `(Step 6.7)` vs `(Step 6.70)`). `cargo clippy --workspace --all-targets -- -D warnings` → exit 0.
+  `cargo fmt --all -- --check` → exit 0. `git diff --exit-code --diff-filter=MD e5f6c78 -- fixtures/expected/` → exit 0,
+  no output. `git diff --check main...HEAD` → exit 0.
+  Verify items and their tests (crates/core/tests/graph.rs unless named):
+  - G2 boundaries:
+    - burst start: `chain_starts_at_burst_start`
+    - chain split: `a_b_a_is_two_chains`
+    - no Claude part during a silent run: `no_claude_part_during_silent_run`
+    - parent silent at the return: `parent_silent_at_return_no_last_part`
+    - overlapping background runs: `overlapping_background_runs_are_neighbours`
+  - G3 names:
+    - no commit: `last_part_without_commit_is_review`
+    - a chain with no plan part: `no_plan_when_first_handoff_opens_burst`, `previous_run_still_going_leaves_no_plan`
+  - G4 two resumes in one burst: `two_resumes_in_one_burst_are_two_runs`
+  - A child file removed before reading: an injected reader returns NotFound for the 8201 rollout through
+    `Scanner::graph_with_reader` (a `#[doc(hidden)]` seam; `Scanner::graph` is unchanged), which gives `unavailable`. Also
+    `child_without_rollout_is_unavailable` and key 1.11.
+- Review: Superpowers task reviews, 6 approved; Task 4 needed 1 fix round, and the rest were clean. The final
+  whole-branch review (opus) said "with fixes": 2 Important, 5 Minor. Its fix wave was re-reviewed, 5 of 5 addressed.
+  Codex round 1 gave 7 medium findings:
+  - (1) a window past the next-step cap: accepted
+  - (2) untagged counted outside `from < at ≤ to`: accepted, my ruling reverted
+  - (3) commit naming vs placement: accepted
+  - (4) a return edge after a no-interval hand-off: rejected, reason above, which Codex accepted in round 2
+  - (5) parts before the chain start: accepted
+  - (6) no real file-removal test: accepted
+  - (7) thin text mode: accepted
+
+  Codex round 2: 7 of 7 verdicted, no new bugs, every changed file within the step's list. The step session re-ran
+  Verify (above) and it matches what the implementers reported.
+- Gotchas:
+  - `Scanner::graph` parses every Claude transcript (`claude::scan`) per build; it fails soft on a scan error. G11's cost
+    is 8.5's to measure.
+  - Untagged hand-offs made during a run count nowhere (schema rule).
+  - A resume from another repo, or by a parent the scan does not list, never caps a run window.
+  - `%h` can exceed 7 characters on an ambiguous hash.
+  - Text-mode `✓ committed` has no test, because fixture mode never has a commit.
+  - The extra-parents load in `Scanner::graph` has only a pure-build test: no fixture has two parents resuming one child.
+  - The worktree has the Superpowers scratch folder `.superpowers/sdd/` (self-ignored, never committed).
 
 ### 2026-11-06 — Step 8.2: Calls from both transcripts — Codex (review: Claude)
 - Did: Added on-demand owned calls for Claude main/subagent transcripts, deduplication and result joins; Codex calls
