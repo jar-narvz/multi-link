@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 mod support;
 
-use multi_link_model::GraphReport;
+use multi_link_model::{GraphCommit, GraphReport, Timestamp};
 use multi_link_tui::{GraphOptions, render_graph, theme::Theme};
 use ratatui::{
     buffer::Buffer,
@@ -112,6 +112,20 @@ fn empty_step_shows_the_sentence() {
         report.step.verify = verify;
         let buf = render(&report, &options, 120, 40);
         assert_eq!(
+            rendered_rows(&buf, 0..=0),
+            format!(
+                " repo-g › step 1.13  {}\n",
+                report.step.title.as_deref().unwrap()
+            )
+        );
+        assert_eq!(rendered_rows(&buf, 2..=2), golden_rows(2..=2));
+        assert_eq!(rendered_styles(&buf, 2..=2), golden_styles(2..=2));
+        for x in 0..120 {
+            if buf[(x, 1)].symbol() != " " {
+                assert_eq!(buf[(x, 1)].fg, options.theme.secondary);
+            }
+        }
+        assert_eq!(
             rendered_rows(&buf, 4..=4),
             format!("  {}\n", report.empty.as_deref().unwrap())
         );
@@ -140,6 +154,50 @@ fn empty_step_shows_the_sentence() {
                 .all(|cell| cell.bg == options.theme.screen)
         );
     }
+}
+
+#[test]
+fn commit_is_green_right_aligned_and_leaves_two_blanks_after_cut_title() {
+    let mut report = report("1.1");
+    report.commit = Some(GraphCommit {
+        hash: "abc1234".to_owned(),
+        at: Timestamp::parse("2026-11-06T16:20:00Z").unwrap(),
+    });
+    let options = golden_options();
+    let original_title = report.step.title.clone().unwrap();
+    for title in [original_title, "T".repeat(200)] {
+        let long_title = title.len() == 200;
+        report.step.title = Some(title);
+        let buf = render(&report, &options, 120, 40);
+        let row = rendered_rows(&buf, 0..=0);
+        let row = row.trim_end_matches('\n');
+        let commit = "✓ committed abc1234 · 08:20";
+        assert!(row.ends_with(commit));
+        assert_eq!(Span::raw(row).width(), 119);
+        assert_eq!(buf[(119, 0)].symbol(), " ");
+        let first = 119 - Span::raw(commit).width() as u16;
+        for x in first..119 {
+            assert_eq!(buf[(x, 0)].fg, options.theme.done, "column {x}");
+        }
+        if long_title {
+            let left = row.strip_suffix(commit).unwrap();
+            assert!(left.trim_end().ends_with('…'));
+            assert_eq!(left.chars().rev().take_while(|c| *c == ' ').count(), 2);
+            assert!(left.starts_with(" repo-g › step 1.1  T"));
+        }
+    }
+}
+
+#[test]
+fn zero_length_range_shows_at_least_one_second() {
+    let mut report = report("1.1");
+    let instant = Timestamp::parse("2026-11-06T16:05:26Z").unwrap();
+    for part in &mut report.parts {
+        part.from = Some(instant);
+        part.to = Some(instant);
+    }
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert!(rendered_rows(&buf, 1..=1).contains("· 1 s ·"));
 }
 
 #[test]

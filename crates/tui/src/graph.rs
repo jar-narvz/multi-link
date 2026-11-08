@@ -186,7 +186,7 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
         return String::new();
     };
     let date = view::datetime(from).to_offset(offset);
-    let seconds = (to.epoch_ms() - from.epoch_ms()).max(0) / 1000;
+    let seconds = ((to.epoch_ms() - from.epoch_ms()) / 1000).max(1);
     let length = if seconds < 60 {
         format!("{seconds} s")
     } else {
