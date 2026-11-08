@@ -1,10 +1,22 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.1 (2026-11-08, Codex, mode Codex loop) is committed: `.jsonl.zst` rollouts are read. Step 9.2 is
-next** (then 9.3 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7).
-Quota check output supplied for this run: `CODEX: OK 27%/23%`. Run `python3 -I tools/codex-quota.py` before
-any later `codex exec`. Step 9.0's committed Phase 9 rules, fixtures and answer keys remain binding.
+**Step 9.2 (2026-11-08, Codex, mode Codex loop) is committed: clean exits read from the transcript, reopened
+by entrypoint. Step 9.3 is next** (then 9.4 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7).
+Quota check at 9.2's start: `CODEX: OK` (primary 35%, secondary 24%). The 45 tests listed below as failing until 9.2
+now pass; the whole workspace is green again (537 passed, 0 failed, 1 ignored), so "tests clean" means all of them.
+Run `python3 -I tools/codex-quota.py` before any later `codex exec`.
+- **9.2 / R2–R3:** Own main-transcript `cost-state` after every turn gives `finished` / `transcript_exit`
+  when no session record exists, before hook waiting. Records and process-exit rules retain precedence.
+  Last own string `entrypoint` and app-record mappings reach CLI and TUI reopening through
+  `Scanner::open_resolver` / `open::Resolver`; no Session JSON key was added. CLI/sdk exits resume;
+  desktop exits need exactly one safe app mapping and cannot fork; missing/other entrypoints are unavailable.
+- **9.2 verification:** Phase 9 `check.sh 2`: all 32 lines `ok`; `cargo test --workspace`: 537 passed,
+  0 failed, 1 ignored. All 45 formerly failing tests and the five owned test updates pass. Clippy/fmt clean.
+  Real release counts at the same fixed clock: 241 Claude sessions in both runs; unknown 231 → 3,
+  finished 0 → 228; open actions resume 0 → 30, app_link 10 → 133, unavailable 231 → 78.
+  Full entrypoint/action splits, commands and actual output are in the 9.2 log below. Scratch archive baseline
+  is `531aeeb`; no agent-data writes, answer-key edits, staging or commits.
 - **9.1 / R1:** `multi_link_codex::open_rollout` is the common reader for discovery/scan and graph details;
   `rollout_paths` supplies both discovery paths. Pure-Rust `ruzstd` decodes `.jsonl.zst` with a 64 MiB
   decompressed limit; plain reads stay uncapped. Plain counterparts win, with metadata-id deduplication
@@ -45,7 +57,7 @@ What later steps need:
   `waiting`, last line before the window); `hook/overview.json` 12, repo-c `tier` `waiting` → `busy`, repo-c rows now
   `…0010`, 6358ec7e, 11c1f13c, 85a715ba. TUI goldens `home-hook{,-full}{,.styles}.txt` follow (`◆ 1 need you`, repo-c
   `2 working now`, no waiting card row; render of the key, deterministic). `home-full` is unchanged.
-- **Tests that fail until 9.2 (45, all from those key values; at 9.1: 488 pass, 1 ignored):** 42 only because `transcript_exit`
+- **Historical 9.1 failures, all resolved by 9.2 (45; at 9.1: 488 pass, 1 ignored):** 42 only because `transcript_exit`
   is not yet a `StateEvidence` value or the state differs from the code (they pass once 9.2 implements R2 and R3):
   cli `overview_json_matches_answer_key_and_text_has_one_line_per_repo`, `duration_units_and_offsets_use_the_same_options`,
   `phase_one_json_matches_answer_keys`, `hook_conflicts_are_stderr_only_for_sessions_links_and_overview`; claude
@@ -57,7 +69,7 @@ What later steps need:
   failed_refresh…, footer_prioritizes…, open_results_survive…, refresh_preserves_selected_full_id…); tui
   `home::{header_at_100_keeps_working_now_before_shared_checkouts, home_full_snapshot_100x80, home_hook_full_snapshot_100x80,
   home_snapshot_100x30, home_hook_snapshot_100x30, shared_checkout_warnings_have_a_red_header_and_card_row}`, `theme::no_color_preserves_home_and_timeline_glyphs_and_visible_tracks`.
-  **5 need a test edit in 9.2 (all inside 9.2's Files; found by a scratch oracle, see the 9.0 log):** 3 of the 45,
+  **5 owned test updates applied in 9.2 (all inside 9.2's Files; identified in 9.0):** 3 of the 45,
   cli `text_has_one_row_per_item_and_a_footer` (the `STATE` column widens to `finished`) and the two key-snapshot
   guards below, plus 2 that pass today and 9.2's code will break unless edited: cli
   `open_dry_run_transcript_only_claude_and_codex_are_unavailable_exit_three` (0d7faed4 → `app_session`, same command and
@@ -609,6 +621,180 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.2: Clean exit from the transcript; reopen by where it ran — Codex
+- Did: Implemented R2 using own main-transcript file order, with meta/local-command echoes excluded from
+  turns and tool results included. Inherited and subagent records do not set or clear the exit marker.
+  Last own string entrypoint is retained even on an unknown record (the record is still skipped/counted).
+  Session records retain precedence, including fixture-mode records; transcript exit precedes hook waiting.
+  Implemented R3 through cached internal reopening metadata for CLI and the TUI fresh-action path:
+  CLI/sdk resume, desktop uses exactly one safe app record, desktop fork is unavailable, unknown entrypoint
+  is unavailable, and process_exit retains its existing resume rule. No Session fields added.
+  Added one parser test and three core integration tests, covering every 92 fixture on cold/warm passes,
+  SIGKILL with Gone, entrypoint changes, mapping addition/removal, duplicate mappings and unsafe hosts.
+  Updated the five owned tests via CLI expectations, the core fixture table and the two guard snapshots.
+- Changed: `crates/claude/src/lib.rs`, `crates/model/src/lib.rs`,
+  `crates/core/src/{open,scanner,sessions}.rs`, `crates/core/tests/transcript_exit.rs`,
+  `crates/core/tests/{overview-before-phase5,keys-before-phase6}.json`,
+  `crates/cli/src/main.rs`, `crates/cli/tests/cli.rs`, `PROGRESS.md`.
+- Verify: All cargo commands below used
+  `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` first.
+  Initial `cargo test -p multi-link-core --test transcript_exit` failed on 92000001's
+  `unknown` / `no_signal` versus the key's `finished` / `transcript_exit` (1 passed, 1 failed).
+  A separate parser regression failed with `Some("cli")` versus `Some("sdk-cli")` for an unknown
+  own record's later entrypoint; moving entrypoint extraction before unknown-type skipping fixed it.
+  Final `fixtures/expected/phase9/check.sh 2` → exit 0, actual output:
+  ```text
+  ok   sessions.json (^9[1-2])
+  ok   links.json (^9[1-2])
+  ok   graph-1.1.json (^9[1-2])
+  ok   stderr unreadable: 1
+  ok   open open 92000001
+  ok   open open 92000002
+  ok   open open 92000003
+  ok   open open 92000004
+  ok   open open 92000005
+  ok   open open 92000006
+  ok   open open 92000007
+  ok   open open 92000008
+  ok   open open 92000009
+  ok   open open 92000010
+  ok   open open 92000011
+  ok   open open 92000012
+  ok   open open 92000013
+  ok   open open 92000014
+  ok   open fork 92000001
+  ok   open fork 92000002
+  ok   open fork 92000003
+  ok   open fork 92000004
+  ok   open fork 92000005
+  ok   open fork 92000006
+  ok   open fork 92000007
+  ok   open fork 92000008
+  ok   open fork 92000009
+  ok   open fork 92000010
+  ok   open fork 92000011
+  ok   open fork 92000012
+  ok   open fork 92000013
+  ok   open fork 92000014
+  ```
+  `cargo test --workspace` → exit 0; all 51 target summaries, actual output (537 passed, 0 failed,
+  1 ignored in total):
+  ```text
+  test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+  test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.60s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+  test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+  test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+  test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, final output:
+  ```text
+  Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.84s
+  ```
+  `cargo fmt --check` → no output, exit 0. `git diff --check` → no output, exit 0.
+  `python3 /tmp/multi-link-92-audit-snapshots.py` → actual output:
+  ```text
+  overview-before-phase5.json: authorized semantic changes only: {'state': 24, 'state_evidence': 24, 'tier': 1, 'repo-c row reorder': 1}
+  keys-before-phase6.json: authorized semantic changes only: {'state': 57, 'state_evidence': 57, 'tier': 1, 'repo-c row reorder': 1, 'window removal': 1}
+  ```
+  The audit compares parsed snapshots to HEAD, permits changes only for the 12 listed ids and the listed
+  hook repo-c tier/order and window removal, and rejects all other changes. The guard tests also pass.
+- Verify (real run, counts only): Baseline extracted without changing this checkout:
+  `mkdir -p /tmp/multi-link-92-before` then `git archive 531aeeb | tar -x -C /tmp/multi-link-92-before`.
+  Built with `cargo build --release --manifest-path /tmp/multi-link-92-before/Cargo.toml
+  --target-dir /tmp/multi-link-92-target-before` (exit 0); after build:
+  `cargo build --release --target-dir /tmp/multi-link-92-target-after` (exit 0).
+  Scratch Rust harnesses at `/tmp/multi-link-92-counts/{before,after}/` depend on the respective core/model
+  crates and serde_json, call `Scanner::sessions` with real repo mapping and `RealProcessProbe`,
+  `since: None`, fixed `now: 2026-11-08T22:48:58Z`, and compute open actions without executing them.
+  Before uses `open::action`; after uses `Scanner::open_resolver(...).action`. Entrypoints are read
+  from own main-transcript records. Only aggregate counts are printed, with no ids, paths or content.
+  Commands: `cargo run --release --manifest-path /tmp/multi-link-92-counts/before/Cargo.toml
+  --target-dir /tmp/multi-link-92-target-before` and the same command with both `before` replaced by `after`;
+  both exit 0. Output files: `/tmp/multi-link-92-counts-{before,after}.json`; aggregation saved to
+  `/tmp/multi-link-92-real-counts.txt`, actual output:
+  ```text
+  before: {"claude": 241, "open_actions": {"app_link": 10, "unavailable": 231}, "states": {"other": 10, "unknown": 231}, "unknown_by_entrypoint": {"claude-desktop": 195, "cli": 27, "missing": 4, "sdk-cli": 5}}
+    {"action": "app_link", "count": 10, "entrypoint": "claude-desktop", "reason": "", "state": "other"}
+    {"action": "unavailable", "count": 195, "entrypoint": "claude-desktop", "reason": "not_known_finished", "state": "unknown"}
+    {"action": "unavailable", "count": 27, "entrypoint": "cli", "reason": "not_known_finished", "state": "unknown"}
+    {"action": "unavailable", "count": 4, "entrypoint": "missing", "reason": "not_known_finished", "state": "unknown"}
+    {"action": "unavailable", "count": 5, "entrypoint": "sdk-cli", "reason": "not_known_finished", "state": "unknown"}
+  after: {"claude": 241, "open_actions": {"app_link": 133, "resume": 30, "unavailable": 78}, "states": {"finished": 228, "other": 10, "unknown": 3}, "unknown_by_entrypoint": {"cli": 2, "missing": 1}}
+    {"action": "app_link", "count": 123, "entrypoint": "claude-desktop", "reason": "", "state": "finished"}
+    {"action": "unavailable", "count": 72, "entrypoint": "claude-desktop", "reason": "app_session", "state": "finished"}
+    {"action": "resume", "count": 25, "entrypoint": "cli", "reason": "", "state": "finished"}
+    {"action": "unavailable", "count": 3, "entrypoint": "missing", "reason": "unknown_entrypoint", "state": "finished"}
+    {"action": "resume", "count": 5, "entrypoint": "sdk-cli", "reason": "", "state": "finished"}
+    {"action": "app_link", "count": 10, "entrypoint": "claude-desktop", "reason": "", "state": "other"}
+    {"action": "unavailable", "count": 2, "entrypoint": "cli", "reason": "not_known_finished", "state": "unknown"}
+    {"action": "unavailable", "count": 1, "entrypoint": "missing", "reason": "not_known_finished", "state": "unknown"}
+  ```
+  Release CLI cross-check: `/tmp/multi-link-92-target-after/release/multi-link sessions --since all
+  --now 2026-11-08T22:48:58Z --json` piped directly to a counts-only Python reducer → exit 0,
+  actual output `{"finished": 228, "idle": 10, "unknown": 3}`; stderr 0 bytes.
+  No app/terminal action executed. Agent directories were read only; all builds and helper files are in scratch.
+  Counts differ from Phase 9's historical 227 unknown because real sessions have accumulated; both measured
+  populations contain 241 Claude sessions. The 10 other-state desktop sessions keep their app-link behavior.
+- Review: Claude, round 1, no fix round needed. Code follows R2 (own main-record order; meta and
+  local-command echoes are not turns; `tool_result` is) and R3 (entrypoint + app mapping via an internal
+  resolver, no Session key; CLI and TUI both use it through `fresh_action` / `open_resolver`). Claude diffed both
+  guard snapshots against HEAD with its own parsed-JSON script: the only changes are the 12 listed ids'
+  state/evidence, hook repo-c tier and row order, and 11c1f13c gone from `hook/sessions-2h.json`, as listed.
+  No answer key or PLAN.md touched. Claude re-ran Verify: `check.sh 2` all 32 lines `ok`; `cargo test --workspace`
+  537 passed, 0 failed, 1 ignored; clippy and fmt clean. Same as pasted. Notes, not defects: `SessionEnd` joins the
+  enum early (R0 lists it; 9.4 produces it); the resolver-free `open::action` wrapper would say
+  `unknown_entrypoint` for a clean exit, so new callers must use `Scanner::open_resolver`.
+- Gotchas: `SessionEnd` is recognized as an exit-evidence enum/open decision input, but reading ended hook
+  records remains Step 9.4. A desktop session without exactly one safe mapping stays unavailable, with the
+  manual command shown. The conservative `open::action` wrapper has no reopening metadata; production CLI
+  and TUI paths use the resolver. All real counts are observations, not committed fixtures.
 
 ### 2026-11-08 — Step 9.1: Read compressed Codex rollouts — Codex
 - Did: Implemented R1 in mode **Codex loop**. Quota check output (supplied for this run):

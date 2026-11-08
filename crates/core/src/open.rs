@@ -1,13 +1,13 @@
 //! FR18 open: what `o` / `f` (and `multi-link open`) may do with one session.
 //!
-//! `action` is a pure function of a `Session` (output-schema "Open", design T7):
+//! `action` uses a `Session` and internal reopening metadata (schema "Open", T7):
 //! it only decides; the CLI and TUI execute. `Resume` needs positive exit
-//! evidence (`finished`, which only a working process probe produces), so a
+//! evidence (a gone process or a clean transcript exit), so a
 //! session that may still be running is never resumed.
 
 use std::{io, path::Path};
 
-use multi_link_model::{Harness, Session, State};
+use multi_link_model::{Harness, Session, State, StateEvidence};
 use serde::Serialize;
 
 use crate::{Options, Scanner};
@@ -41,6 +41,8 @@ pub enum Reason {
     ForkNeedsFinished,
     RunningWithoutAppLink,
     NotKnownFinished,
+    AppSession,
+    UnknownEntrypoint,
 }
 
 impl Reason {
@@ -52,6 +54,8 @@ impl Reason {
             Reason::ForkNeedsFinished => "fork_needs_finished",
             Reason::RunningWithoutAppLink => "running_without_app_link",
             Reason::NotKnownFinished => "not_known_finished",
+            Reason::AppSession => "app_session",
+            Reason::UnknownEntrypoint => "unknown_entrypoint",
         }
     }
 }
@@ -77,8 +81,44 @@ pub fn is_app_host_id(host: &str) -> bool {
     })
 }
 
+/// Internal reopening metadata; deliberately kept out of the Session JSON schema.
+#[derive(Debug, Default)]
+pub struct Resolver {
+    entrypoints: std::collections::HashMap<String, String>,
+    app_ids: std::collections::HashMap<String, Vec<String>>,
+}
+
+impl Resolver {
+    pub(crate) fn new(scan: multi_link_claude::ClaudeScan) -> Self {
+        Self {
+            entrypoints: scan
+                .transcripts
+                .into_iter()
+                .filter_map(|t| t.entrypoint.map(|entrypoint| (t.id, entrypoint)))
+                .collect(),
+            app_ids: scan.app_records.into_iter().fold(
+                std::collections::HashMap::new(),
+                |mut ids, record| {
+                    ids.entry(record.cli_session_id)
+                        .or_default()
+                        .push(record.app_id);
+                    ids
+                },
+            ),
+        }
+    }
+
+    pub fn action(&self, session: &Session, fork: bool) -> OpenAction {
+        resolved_action(session, fork, self)
+    }
+}
+
 /// The rule table of output-schema "Open", checked top to bottom.
 pub fn action(session: &Session, fork: bool) -> OpenAction {
+    Resolver::default().action(session, fork)
+}
+
+fn resolved_action(session: &Session, fork: bool, resolver: &Resolver) -> OpenAction {
     let id = &session.id;
     let unavailable = |reason, command: Option<String>| OpenAction::Unavailable {
         reason,
@@ -104,6 +144,27 @@ pub fn action(session: &Session, fork: bool) -> OpenAction {
     };
     match session.state {
         State::Finished if session.transcript.is_some() => {
+            if matches!(
+                session.state_evidence,
+                StateEvidence::TranscriptExit | StateEvidence::SessionEnd
+            ) {
+                match resolver.entrypoints.get(id).map(String::as_str) {
+                    Some("cli" | "sdk-cli") => {}
+                    Some("claude-desktop") => {
+                        if !fork
+                            && let Some(hosts) = resolver.app_ids.get(id)
+                            && let [host] = hosts.as_slice()
+                            && is_app_host_id(host)
+                        {
+                            return OpenAction::AppLink {
+                                url: format!("claude://code/continue?session={host}"),
+                            };
+                        }
+                        return unavailable(Reason::AppSession, claude_command());
+                    }
+                    _ => return unavailable(Reason::UnknownEntrypoint, claude_command()),
+                }
+            }
             let mut args = vec!["--resume".to_owned(), id.clone()];
             if fork {
                 args.push("--fork-session".to_owned());
@@ -184,7 +245,9 @@ pub fn fresh_action(
     fork: bool,
 ) -> io::Result<Option<OpenAction>> {
     Ok(match find(scanner, root, options, id)? {
-        Lookup::Found(session) if session.id == id => Some(action(&session, fork)),
+        Lookup::Found(session) if session.id == id => {
+            Some(scanner.open_resolver(root)?.action(&session, fork))
+        }
         _ => None,
     })
 }
@@ -585,7 +648,7 @@ mod tests {
     fn fixture_table_never_resumes_and_matches_schema_coverage() {
         const DESKTOP: [&str; 5] = ["6358ec7e", "1f47e9b3", "f8017fcd", "9d02a552", "bed52539"];
         const SYNTHETIC_BUSY: &str = "00000000-0000-4000-8000-000000000010";
-        const HOOK_WAITING: [&str; 2] = ["d1f3b188", "11c1f13c"];
+        const HOOK_WAITING: [&str; 1] = ["d1f3b188"];
         let hook_root = tempfile::tempdir().unwrap();
         copy_tree(&fixtures().join("sessions"), hook_root.path());
         copy_tree(&fixtures().join("hook"), hook_root.path());
@@ -597,15 +660,18 @@ mod tests {
             let output = Scanner::default()
                 .sessions(&root, &options(&FixtureProcessProbe))
                 .unwrap();
+            let resolver = Scanner::default().open_resolver(&root).unwrap();
             let sessions = output.report.sessions;
             assert_eq!(sessions.len(), if hook { 29 } else { 28 });
             let mut counts: BTreeMap<(bool, &str), usize> = BTreeMap::new();
             for session in &sessions {
                 let short = &session.id[..8];
-                // Fixture mode has no probe: upstream drift to `finished` must fail here.
-                assert_ne!(session.state, State::Finished, "{}", session.id);
+                // Transcript exit is positive evidence even without a process probe.
+                if session.state == State::Finished {
+                    assert_eq!(session.state_evidence, StateEvidence::TranscriptExit);
+                }
                 for fork in [false, true] {
-                    let action = action(session, fork);
+                    let action = resolver.action(session, fork);
                     assert!(
                         !matches!(action, OpenAction::Resume { .. }),
                         "{} fork={fork}",
@@ -613,6 +679,8 @@ mod tests {
                     );
                     let expected = if session.harness == Harness::Codex {
                         Some(Reason::CodexNotSupported)
+                    } else if session.state == State::Finished {
+                        Some(Reason::AppSession)
                     } else if DESKTOP.contains(&short) {
                         fork.then_some(Reason::ForkNeedsFinished)
                     } else if session.id == SYNTHETIC_BUSY
@@ -642,7 +710,7 @@ mod tests {
                 }
             }
             // Every named fixture is present, so the table exercised each row.
-            let waiting_rows = if hook { 2 } else { 0 };
+            let waiting_rows = if hook { 1 } else { 0 };
             for fork in [false, true] {
                 let (desktop_open, desktop_fork) = if fork { (0, 5) } else { (5, 0) };
                 assert_eq!(
@@ -661,7 +729,8 @@ mod tests {
                     1 + waiting_rows
                 );
                 assert_eq!(counts[&(fork, "codex_not_supported")], 9);
-                assert_eq!(counts[&(fork, "not_known_finished")], 13 - waiting_rows / 2);
+                assert_eq!(counts[&(fork, "not_known_finished")], 1);
+                assert_eq!(counts[&(fork, "app_session")], 12);
             }
         }
     }

@@ -25,6 +25,8 @@ string_enum!(State {
 });
 string_enum!(StateEvidence {
     ProcessExit,
+    TranscriptExit,
+    SessionEnd,
     SessionRecord,
     NoSignal,
     OpenTurn,

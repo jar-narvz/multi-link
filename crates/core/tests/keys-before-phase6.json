@@ -14,8 +14,8 @@
         "branch": "HEAD",
         "started_at": "2026-10-27T10:03:47.855Z",
         "last_activity": "2026-10-27T10:04:27.890Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-27T10:03:47.855Z",
@@ -38,8 +38,8 @@
         "branch": "main",
         "started_at": "2026-10-28T07:15:56.399Z",
         "last_activity": "2026-10-28T09:36:49.897Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-28T07:15:56.399Z",
@@ -62,8 +62,8 @@
         "branch": "main",
         "started_at": "2026-10-28T09:48:34.173Z",
         "last_activity": "2026-10-28T10:03:04.840Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-28T09:48:34.173Z",
@@ -219,8 +219,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:22.432Z",
         "last_activity": "2026-10-29T22:58:42.511Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:22.432Z",
@@ -267,8 +267,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:47.061Z",
         "last_activity": "2026-10-29T22:59:04.662Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:47.061Z",
@@ -291,8 +291,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:08.725Z",
         "last_activity": "2026-10-29T22:59:32.147Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:08.725Z",
@@ -341,8 +341,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:36.313Z",
         "last_activity": "2026-10-29T22:59:59.499Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:36.313Z",
@@ -389,8 +389,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:03.496Z",
         "last_activity": "2026-10-29T23:00:07.816Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:03.496Z",
@@ -413,8 +413,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:12.184Z",
         "last_activity": "2026-10-29T23:00:28.757Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.184Z",
@@ -437,8 +437,8 @@
         "branch": "wt",
         "started_at": "2026-10-29T23:00:12.201Z",
         "last_activity": "2026-10-29T23:00:29.712Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.201Z",
@@ -509,8 +509,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:33.781Z",
         "last_activity": "2026-10-29T23:00:53.156Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:33.781Z",
@@ -533,8 +533,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:35.769Z",
         "last_activity": "2026-10-29T23:00:52.046Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:35.769Z",
@@ -1379,8 +1379,8 @@
             "kind": "session",
             "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/repo-c",
             "branch": "main",
             "started_at": "2026-10-28T09:48:34.173Z",
@@ -1393,8 +1393,8 @@
             "kind": "session",
             "id": "85a715ba-8081-452e-aa8d-6e7a29e466f9",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/repo-c",
             "branch": "main",
             "started_at": "2026-10-28T07:15:56.399Z",
@@ -1489,8 +1489,8 @@
             "kind": "session",
             "id": "80cce3e4-bbbc-42cd-999b-856685f1b3f7",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T23:00:12.184Z",
@@ -1533,8 +1533,8 @@
             "kind": "session",
             "id": "ef72378c-eb71-4b07-9790-f9ddd68b1171",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T22:58:47.061Z",
@@ -1591,8 +1591,8 @@
             "kind": "session",
             "id": "bb792d9c-7f69-410b-a571-b6d97d3aaffa",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T22:58:22.432Z",
@@ -1650,8 +1650,8 @@
                 "kind": "session",
                 "id": "11bf1b58-17d9-48e6-988d-aa0cf951751d",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:33.781Z",
@@ -1694,8 +1694,8 @@
                 "kind": "session",
                 "id": "f4d83303-be58-4964-b60a-64470e01f0c7",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:35.769Z",
@@ -1738,8 +1738,8 @@
                 "kind": "session",
                 "id": "df403bfa-454f-4993-b67c-e44c6e7a9f7e",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:03.496Z",
@@ -1752,8 +1752,8 @@
                 "kind": "session",
                 "id": "07c80c2e-780f-462d-8e04-581cad43339f",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T22:59:36.313Z",
@@ -1796,8 +1796,8 @@
                 "kind": "session",
                 "id": "9d9a0ed8-8e46-4e39-b121-30428e14d052",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T22:59:08.725Z",
@@ -1869,8 +1869,8 @@
             "kind": "session",
             "id": "c86d374f-cab2-4f76-9b58-e59d5a43b09f",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a-wt",
             "branch": "wt",
             "started_at": "2026-10-29T23:00:12.201Z",
@@ -1983,8 +1983,8 @@
             "kind": "session",
             "id": "0d7faed4-bfd7-40bc-9d56-c3652efeb876",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/repo-d",
             "branch": "HEAD",
             "started_at": "2026-10-27T10:03:47.855Z",
@@ -3836,8 +3836,8 @@
         "branch": "HEAD",
         "started_at": "2026-10-27T10:03:47.855Z",
         "last_activity": "2026-10-27T10:04:27.890Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-27T10:03:47.855Z",
@@ -3860,8 +3860,8 @@
         "branch": "main",
         "started_at": "2026-10-28T07:15:56.399Z",
         "last_activity": "2026-10-28T09:36:49.897Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-28T07:15:56.399Z",
@@ -3884,8 +3884,8 @@
         "branch": "main",
         "started_at": "2026-10-28T09:48:34.173Z",
         "last_activity": "2026-10-28T10:03:04.840Z",
-        "state": "waiting",
-        "state_evidence": "hook",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-28T09:48:34.173Z",
@@ -4041,8 +4041,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:22.432Z",
         "last_activity": "2026-10-29T22:58:42.511Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:22.432Z",
@@ -4089,8 +4089,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:47.061Z",
         "last_activity": "2026-10-29T22:59:04.662Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:47.061Z",
@@ -4113,8 +4113,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:08.725Z",
         "last_activity": "2026-10-29T22:59:32.147Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:08.725Z",
@@ -4163,8 +4163,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:36.313Z",
         "last_activity": "2026-10-29T22:59:59.499Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:36.313Z",
@@ -4211,8 +4211,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:03.496Z",
         "last_activity": "2026-10-29T23:00:07.816Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:03.496Z",
@@ -4235,8 +4235,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:12.184Z",
         "last_activity": "2026-10-29T23:00:28.757Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.184Z",
@@ -4259,8 +4259,8 @@
         "branch": "wt",
         "started_at": "2026-10-29T23:00:12.201Z",
         "last_activity": "2026-10-29T23:00:29.712Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.201Z",
@@ -4331,8 +4331,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:33.781Z",
         "last_activity": "2026-10-29T23:00:53.156Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:33.781Z",
@@ -4355,8 +4355,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:35.769Z",
         "last_activity": "2026-10-29T23:00:52.046Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:35.769Z",
@@ -4774,8 +4774,8 @@
             "kind": "session",
             "id": "80cce3e4-bbbc-42cd-999b-856685f1b3f7",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T23:00:12.184Z",
@@ -4818,8 +4818,8 @@
             "kind": "session",
             "id": "ef72378c-eb71-4b07-9790-f9ddd68b1171",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T22:58:47.061Z",
@@ -4876,8 +4876,8 @@
             "kind": "session",
             "id": "bb792d9c-7f69-410b-a571-b6d97d3aaffa",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a",
             "branch": "main",
             "started_at": "2026-10-29T22:58:22.432Z",
@@ -4890,7 +4890,7 @@
       },
       {
         "repo": "/home/dev/repo-c",
-        "tier": "waiting",
+        "tier": "busy",
         "last_activity": "2026-10-29T23:13:30.000Z",
         "plan": {
           "convention": "missing",
@@ -4923,20 +4923,6 @@
         "rows": [
           {
             "kind": "session",
-            "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
-            "harness": "claude",
-            "state": "waiting",
-            "state_evidence": "hook",
-            "checkout": "/home/dev/repo-c",
-            "branch": "main",
-            "started_at": "2026-10-28T09:48:34.173Z",
-            "last_activity": "2026-10-28T10:03:04.840Z",
-            "handoffs": [],
-            "made": [],
-            "children": []
-          },
-          {
-            "kind": "session",
             "id": "00000000-0000-4000-8000-000000000010",
             "harness": "claude",
             "state": "busy",
@@ -4965,10 +4951,24 @@
           },
           {
             "kind": "session",
+            "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
+            "harness": "claude",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
+            "checkout": "/home/dev/repo-c",
+            "branch": "main",
+            "started_at": "2026-10-28T09:48:34.173Z",
+            "last_activity": "2026-10-28T10:03:04.840Z",
+            "handoffs": [],
+            "made": [],
+            "children": []
+          },
+          {
+            "kind": "session",
             "id": "85a715ba-8081-452e-aa8d-6e7a29e466f9",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/repo-c",
             "branch": "main",
             "started_at": "2026-10-28T07:15:56.399Z",
@@ -5054,8 +5054,8 @@
                 "kind": "session",
                 "id": "11bf1b58-17d9-48e6-988d-aa0cf951751d",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:33.781Z",
@@ -5098,8 +5098,8 @@
                 "kind": "session",
                 "id": "f4d83303-be58-4964-b60a-64470e01f0c7",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:35.769Z",
@@ -5142,8 +5142,8 @@
                 "kind": "session",
                 "id": "df403bfa-454f-4993-b67c-e44c6e7a9f7e",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T23:00:03.496Z",
@@ -5156,8 +5156,8 @@
                 "kind": "session",
                 "id": "07c80c2e-780f-462d-8e04-581cad43339f",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T22:59:36.313Z",
@@ -5200,8 +5200,8 @@
                 "kind": "session",
                 "id": "9d9a0ed8-8e46-4e39-b121-30428e14d052",
                 "harness": "claude",
-                "state": "unknown",
-                "state_evidence": "no_signal",
+                "state": "finished",
+                "state_evidence": "transcript_exit",
                 "checkout": "/home/dev/multi-link-sandbox/repo-b",
                 "branch": "main",
                 "started_at": "2026-10-29T22:59:08.725Z",
@@ -5273,8 +5273,8 @@
             "kind": "session",
             "id": "c86d374f-cab2-4f76-9b58-e59d5a43b09f",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/multi-link-sandbox/repo-a-wt",
             "branch": "wt",
             "started_at": "2026-10-29T23:00:12.201Z",
@@ -5387,8 +5387,8 @@
             "kind": "session",
             "id": "0d7faed4-bfd7-40bc-9d56-c3652efeb876",
             "harness": "claude",
-            "state": "unknown",
-            "state_evidence": "no_signal",
+            "state": "finished",
+            "state_evidence": "transcript_exit",
             "checkout": "/home/dev/repo-d",
             "branch": "HEAD",
             "started_at": "2026-10-27T10:03:47.855Z",
@@ -5446,30 +5446,6 @@
   "hook/sessions-2h.json": {
     "now": "2026-10-29T23:15:00.000Z",
     "sessions": [
-      {
-        "id": "11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43",
-        "harness": "claude",
-        "transcript": ".claude/projects/-home-dev-repo-c/11c1f13c-d13f-45b3-8ecd-9c35cb5a3b43.jsonl",
-        "record": null,
-        "host_session_id": null,
-        "cwd": "/home/dev/repo-c",
-        "repo": "/home/dev/repo-c",
-        "checkout": "/home/dev/repo-c",
-        "branch": "main",
-        "started_at": "2026-10-28T09:48:34.173Z",
-        "last_activity": "2026-10-28T10:03:04.840Z",
-        "state": "waiting",
-        "state_evidence": "hook",
-        "segments": [
-          {
-            "from": "2026-10-28T09:48:34.173Z",
-            "to": "2026-10-28T10:03:04.840Z",
-            "step": null,
-            "step_source": "unknown"
-          }
-        ],
-        "subagents": []
-      },
       {
         "id": "6358ec7e-ab3b-40b4-a75d-87f6da09cedc",
         "harness": "claude",
@@ -5567,8 +5543,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:22.432Z",
         "last_activity": "2026-10-29T22:58:42.511Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:22.432Z",
@@ -5615,8 +5591,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:58:47.061Z",
         "last_activity": "2026-10-29T22:59:04.662Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:58:47.061Z",
@@ -5639,8 +5615,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:08.725Z",
         "last_activity": "2026-10-29T22:59:32.147Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:08.725Z",
@@ -5689,8 +5665,8 @@
         "branch": "main",
         "started_at": "2026-10-29T22:59:36.313Z",
         "last_activity": "2026-10-29T22:59:59.499Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T22:59:36.313Z",
@@ -5737,8 +5713,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:03.496Z",
         "last_activity": "2026-10-29T23:00:07.816Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:03.496Z",
@@ -5761,8 +5737,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:12.184Z",
         "last_activity": "2026-10-29T23:00:28.757Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.184Z",
@@ -5785,8 +5761,8 @@
         "branch": "wt",
         "started_at": "2026-10-29T23:00:12.201Z",
         "last_activity": "2026-10-29T23:00:29.712Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:12.201Z",
@@ -5857,8 +5833,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:33.781Z",
         "last_activity": "2026-10-29T23:00:53.156Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:33.781Z",
@@ -5881,8 +5857,8 @@
         "branch": "main",
         "started_at": "2026-10-29T23:00:35.769Z",
         "last_activity": "2026-10-29T23:00:52.046Z",
-        "state": "unknown",
-        "state_evidence": "no_signal",
+        "state": "finished",
+        "state_evidence": "transcript_exit",
         "segments": [
           {
             "from": "2026-10-29T23:00:35.769Z",

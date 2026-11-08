@@ -46,6 +46,10 @@ pub struct Transcript {
     pub activity_timestamps: Vec<Timestamp>,
     pub asked: Option<String>,
     pub last_asked: Option<String>,
+    /// Last own main-record entrypoint, retained internally for reopening.
+    pub entrypoint: Option<String>,
+    /// An own cost-state follows every own main-transcript turn, in file order.
+    pub clean_exit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +221,78 @@ mod tests {
         let content: String = records.iter().map(|record| format!("{record}\n")).collect();
         fs::write(&path, content).unwrap();
         parse_file(root.path(), &path, false).unwrap()
+    }
+
+    #[test]
+    fn clean_exit_uses_own_main_record_order_and_last_entrypoint() {
+        use serde_json::json;
+        let user = json!({"type":"user", "message":{"content":"work"}, "entrypoint":"cli"});
+        let exit = json!({"type":"cost-state"});
+        for (tail, finished) in [
+            (json!({"type":"assistant"}), false),
+            (
+                json!({"type":"user", "message":{"content":"new work"}}),
+                false,
+            ),
+            (
+                json!({"type":"user", "message":{"content":[{"type":"tool_result"}]}}),
+                false,
+            ),
+            (
+                json!({"type":"user", "isMeta":true, "message":{"content":"meta"}}),
+                true,
+            ),
+            (
+                json!({"type":"assistant", "sessionId":"other", "entrypoint":"sdk-cli"}),
+                true,
+            ),
+        ] {
+            let parsed = parse_folder_records(&[user.clone(), exit.clone(), tail]);
+            assert_eq!(parsed.transcript.clean_exit, finished);
+            assert_eq!(parsed.transcript.entrypoint.as_deref(), Some("cli"));
+        }
+        let future = parse_folder_records(&[
+            user.clone(),
+            exit.clone(),
+            json!({"type":"future", "entrypoint":"sdk-cli"}),
+        ]);
+        assert_eq!(future.transcript.entrypoint.as_deref(), Some("sdk-cli"));
+        assert!(future.transcript.clean_exit);
+        for prefix in [
+            "<command-name>",
+            "<command-message>",
+            "<command-args>",
+            "<local-command-stdout>",
+            "<local-command-stderr>",
+            "<local-command-caveat>",
+        ] {
+            for content in [
+                json!(format!("  {prefix}exit")),
+                json!([{"type":"text","text":format!("  {prefix}exit")}]),
+            ] {
+                let parsed = parse_folder_records(&[
+                    user.clone(),
+                    exit.clone(),
+                    json!({"type":"user", "message":{"content":content}}),
+                ]);
+                assert!(parsed.transcript.clean_exit, "{prefix}");
+            }
+        }
+        let inherited_exit = parse_folder_records(&[
+            user.clone(),
+            json!({"type":"cost-state", "sessionId":"other"}),
+        ]);
+        assert!(!inherited_exit.transcript.clean_exit);
+        let parsed = parse_folder_records(&[
+            user,
+            json!({"type":"assistant", "entrypoint":"claude-desktop"}),
+            exit,
+        ]);
+        assert!(parsed.transcript.clean_exit);
+        assert_eq!(
+            parsed.transcript.entrypoint.as_deref(),
+            Some("claude-desktop")
+        );
     }
 
     #[test]
@@ -395,6 +471,8 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         activity_timestamps: Vec::new(),
         asked: None,
         last_asked: None,
+        entrypoint: None,
+        clean_exit: false,
     };
     let activity_id = if subagent {
         path.parent()
@@ -446,6 +524,12 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             transcript.activity_timestamps.extend(at);
         }
         if !subagent
+            && own_record
+            && let Some(entrypoint) = value["entrypoint"].as_str()
+        {
+            transcript.entrypoint = Some(entrypoint.to_owned());
+        }
+        if !subagent
             && value["type"] == "custom-title"
             && value["sessionId"].as_str() == Some(id)
             && let Some(title) = value["customTitle"].as_str()
@@ -480,6 +564,13 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
                 reason: SkipReason::UnknownType,
             });
             continue;
+        }
+        if !subagent && own_record {
+            if value["type"] == "cost-state" {
+                transcript.clean_exit = true;
+            } else if is_turn(&value) {
+                transcript.clean_exit = false;
+            }
         }
         // R8: inherited records update metadata freely until an own record sets home.
         // Path::starts_with compares whole components without filesystem access.
@@ -526,6 +617,38 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         invocations: calls,
         latest_timestamp,
     })
+}
+
+/// R2/R5: local command echoes and meta messages do not resume a session.
+pub fn is_turn(value: &Value) -> bool {
+    if value["type"] == "assistant" {
+        return true;
+    }
+    if value["type"] != "user" || value["isMeta"] == true {
+        return false;
+    }
+    let content = &value["message"]["content"];
+    let text = content
+        .as_str()
+        .or_else(|| {
+            content
+                .as_array()?
+                .iter()
+                .find(|block| block["type"] == "text")?["text"]
+                .as_str()
+        })
+        .unwrap_or_default()
+        .trim_start();
+    ![
+        "<command-name>",
+        "<command-message>",
+        "<command-args>",
+        "<local-command-stdout>",
+        "<local-command-stderr>",
+        "<local-command-caveat>",
+    ]
+    .iter()
+    .any(|prefix| text.starts_with(prefix))
 }
 
 fn prompt(content: &Value) -> Option<String> {

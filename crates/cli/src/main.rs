@@ -158,7 +158,7 @@ fn open(
             return Ok(EXIT_AMBIGUOUS);
         }
     };
-    let action = open::action(&session, args.fork);
+    let action = scanner.open_resolver(root)?.action(&session, args.fork);
     if args.dry_run {
         json(&mut io::stdout().lock(), &action)?;
     }

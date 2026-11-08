@@ -94,7 +94,7 @@ fn text_has_one_row_per_item_and_a_footer() {
     for (command, header, count, footer) in [
         (
             "sessions",
-            "ID        HARNESS  STATE    LAST_ACTIVITY             REPO",
+            "ID        HARNESS  STATE     LAST_ACTIVITY             REPO",
             28,
             "28 sessions, 4 skipped lines",
         ),
@@ -127,7 +127,7 @@ fn text_has_one_row_per_item_and_a_footer() {
                 assert_eq!(
                     *line,
                     format!(
-                        "{:<8}  {:<7}  {:<7}  {:<24}  {}",
+                        "{:<8}  {:<7}  {:<8}  {:<24}  {}",
                         &session["id"].as_str().unwrap()[..8],
                         session["harness"].as_str().unwrap(),
                         session["state"].as_str().unwrap(),
@@ -795,14 +795,14 @@ fn open_dry_run_transcript_only_claude_and_codex_are_unavailable_exit_three() {
         (
             "0d7faed4",
             false,
-            "not_known_finished",
+            "app_session",
             format!("claude --resume {claude}"),
             "/home/dev/repo-d",
         ),
         (
             "0d7faed4",
             true,
-            "not_known_finished",
+            "app_session",
             format!("claude --resume {claude} --fork-session"),
             "/home/dev/repo-d",
         ),

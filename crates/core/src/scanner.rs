@@ -428,6 +428,12 @@ impl Scanner {
         Ok(output)
     }
 
+    /// Resolve reopening metadata through the same file-key cache as sessions.
+    pub fn open_resolver(&mut self, root: &Path) -> io::Result<crate::open::Resolver> {
+        self.read_claude(root)
+            .map(|(claude, ..)| crate::open::Resolver::new(claude))
+    }
+
     pub fn sessions(&mut self, root: &Path, options: &Options<'_>) -> io::Result<SessionsOutput> {
         let inputs = self.read(root, options)?;
         self.assemble(options, inputs)
