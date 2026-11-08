@@ -490,3 +490,86 @@ pub fn quoted_string(text: &str) -> Option<String> {
     }
     None
 }
+
+string_enum!(PartStatus {
+    Done,
+    Working,
+    Stale,
+    Unlinked,
+    Ambiguous,
+    Unavailable
+});
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphReport {
+    pub now: Timestamp,
+    pub repo: String,
+    pub step: GraphStep,
+    pub commit: Option<GraphCommit>,
+    pub parts: Vec<Part>,
+    pub empty: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphStep {
+    pub id: String,
+    pub title: Option<String>,
+    pub verify: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GraphCommit {
+    pub hash: String,
+    pub at: Timestamp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Part {
+    pub chain: usize,
+    pub kind: String,
+    pub harness: Harness,
+    pub session: Option<String>,
+    pub from: Option<Timestamp>,
+    pub to: Option<Timestamp>,
+    pub status: Option<PartStatus>,
+    pub run_available: Option<bool>,
+    pub active_ms: i64,
+    pub stretches: usize,
+    pub asked: Option<String>,
+    pub said: Option<String>,
+    pub counts: Counts,
+    pub notable: Vec<Notable>,
+    pub waiting_reads: usize,
+    pub untagged_handoffs: usize,
+    pub edge_in: Option<Edge>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Counts {
+    pub reads: usize,
+    pub edits: usize,
+    pub runs: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Notable {
+    pub label: String,
+    pub ok: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Edge {
+    Handoff {
+        at: Timestamp,
+        #[serde(rename = "match")]
+        r#match: Match,
+        parent: String,
+        parent_part: Option<usize>,
+        gap_ms: Option<i64>,
+        candidates: usize,
+    },
+    Return {
+        at: Timestamp,
+    },
+}
