@@ -1371,3 +1371,180 @@ fn long_notables_cut_to_box_width_and_reserve_the_success_mark() {
         assert_eq!(buf[(52, y)].symbol(), "│");
     }
 }
+
+#[test]
+fn narrow_lists_every_part_in_order() {
+    for (id, expected, edges) in [
+        (
+            "1.1",
+            [
+                ("claude · plan", "08:05 · 17 s", "1 read · 1 run"),
+                (
+                    "codex · implement",
+                    "✓ done 08:09 · 3 min",
+                    "6 reads · 3 edits · 6 runs",
+                ),
+                ("claude · review", "08:09 · 53 s", "6 reads"),
+                (
+                    "codex · fix round 1",
+                    "✓ done 08:10 · 48 s",
+                    "3 reads · 2 edits · 2 runs",
+                ),
+                (
+                    "claude · verify + commit",
+                    "08:10 · 1 min",
+                    "4 reads · 1 edit · 3 runs",
+                ),
+            ],
+            [
+                &["handed step 1.1", "matched by time"][..],
+                &["back to claude"][..],
+                &["handed fix", "confirmed"][..],
+                &["back to claude"][..],
+            ],
+        ),
+        (
+            "1.2",
+            [
+                ("claude · plan", "07:00 · 20 s", "1 read"),
+                ("codex · implement", "no codex run found", ""),
+                ("claude · review", "07:00 · 2 min", "1 read"),
+                ("codex · fix round 1", "2 possible runs", ""),
+                ("claude · review", "07:03 · 1 min", "1 run"),
+            ],
+            [
+                &["handed step 1.2", "no run found"][..],
+                &[][..],
+                &["handed fix", "2 possible runs"][..],
+                &[][..],
+            ],
+        ),
+    ] {
+        let report = report(id);
+        for width in [119, 100, 80, 60] {
+            let buf = render(&report, &golden_options(), width, 40);
+            let rendered = text(&buf);
+            let rows: Vec<_> = rendered.lines().collect();
+            assert!(!rendered.contains('╭'), "{id}, width {width}: box corner");
+            let mut cursor = 4;
+            for (index, (title, subline, counts)) in expected.iter().enumerate() {
+                let found = (cursor..rows.len()).find(|&y| rows[y].contains(title));
+                assert!(found.is_some(), "{id}, width {width}: missing {title}");
+                let y = found.unwrap();
+                if index > 0 {
+                    for words in edges[index - 1] {
+                        assert!(
+                            rows[cursor..y]
+                                .iter()
+                                .any(|row| row.starts_with("  ") && row.contains(words)),
+                            "{id}, width {width}: edge {words:?} before part {index}"
+                        );
+                    }
+                }
+                assert!(
+                    rows.get(y + 1).is_some_and(|row| {
+                        row.contains(subline) && row.contains(counts)
+                    }),
+                    "{id}, width {width}: {title} must be followed by {subline:?} and {counts:?}"
+                );
+                cursor = y + 2;
+            }
+        }
+    }
+}
+
+#[test]
+fn narrow_footer_uses_up_down() {
+    for id in ["1.1", "1.2"] {
+        for width in [119, 100, 80, 60] {
+            let buf = render(&report(id), &golden_options(), width, 40);
+            assert!(
+                rendered_rows(&buf, 39..=39).starts_with(" ↑↓ move along the step"),
+                "{id}, width {width}: narrow footer"
+            );
+        }
+    }
+}
+
+#[test]
+fn narrow_cuts_no_words() {
+    let whole_token = |token: &str| {
+        let token = token.strip_prefix('“').unwrap_or(token);
+        token
+            .strip_suffix("…”")
+            .or_else(|| token.strip_suffix('…'))
+            .unwrap_or(token)
+            .to_owned()
+    };
+    for id in ["1.1", "1.2"] {
+        let report = report(id);
+        for selected in 0..report.parts.len() {
+            let options = GraphOptions {
+                selected,
+                ..golden_options()
+            };
+            let wide = text(&render(&report, &options, 120, 40));
+            let tokens: Vec<_> = wide.split_whitespace().map(whole_token).collect();
+            for width in [119, 100, 80, 60] {
+                let narrow = text(&render(&report, &options, width, 40));
+                for row in narrow.lines() {
+                    let mut row_tokens = row.split_whitespace().peekable();
+                    while let Some(token) = row_tokens.next() {
+                        assert!(
+                            token == "↑↓" || tokens.contains(&whole_token(token)),
+                            "{id}, selected {selected}, width {width}: cut/new token {token:?} in {row:?}"
+                        );
+                        if token.ends_with('…') || token.ends_with("…”") {
+                            assert!(
+                                row_tokens.peek().is_none(),
+                                "{id}, selected {selected}, width {width}: ellipsis before row end in {row:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn narrow_selected_part_is_highlighted() {
+    for id in ["1.1", "1.2"] {
+        let report = report(id);
+        for selected in 0..report.parts.len() {
+            let options = GraphOptions {
+                selected,
+                ..golden_options()
+            };
+            for width in [119, 100, 80, 60] {
+                let buf = render(&report, &options, width, 40);
+                let rendered = text(&buf);
+                // List entries are the harness/kind rows before the selected panel.
+                let title_rows: Vec<_> = rendered
+                    .lines()
+                    .enumerate()
+                    .filter(|(_, row)| {
+                        !row.contains("selected")
+                            && (row.contains("claude · ") || row.contains("codex · "))
+                    })
+                    .map(|(y, _)| y as u16)
+                    .collect();
+                assert_eq!(
+                    title_rows.len(),
+                    report.parts.len(),
+                    "{id}, selected {selected}, width {width}: one list title per part"
+                );
+                let y = title_rows[selected];
+                for row in [y, y + 1] {
+                    for x in 1..width - 1 {
+                        assert_eq!(
+                            buf[(x, row)].bg,
+                            options.theme.graph_selected,
+                            "{id}, selected {selected}, width {width}: background at {x},{row}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
