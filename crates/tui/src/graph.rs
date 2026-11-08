@@ -74,8 +74,8 @@ fn first_visible_slot(slots: &[usize], selected: usize, first_slot: usize) -> us
         .max(selected.saturating_sub(4))
 }
 
-/// Fixed board rows for now. An out-of-bounds row is the height sentinel,
-/// which the painter clips; short-screen drop rules can be added here later.
+/// Keep the lanes fixed, dropping the strip, legend, then panel detail as needed.
+/// An out-of-bounds row is the height sentinel, which the painter clips.
 struct Layout {
     header: [u16; 2],
     header_rule: u16,
@@ -84,8 +84,9 @@ struct Layout {
     codex_lane: u16,
     edges: u16,
     panel: u16,
-    strip: u16,
-    legend: u16,
+    panel_rows: u16,
+    strip: Option<u16>,
+    legend: Option<u16>,
     rule: u16,
     footer: u16,
 }
@@ -93,18 +94,22 @@ struct Layout {
 impl Layout {
     fn new(height: u16) -> Self {
         let row = |y: u16| y.min(height);
+        let codex_lane: u16 = 16;
+        let rule = height.saturating_sub(2);
+        let panel = row(27);
         Self {
             header: [row(0), row(1)],
             header_rule: row(2),
             scroll: row(3),
             claude_lane: row(4),
-            codex_lane: row(16),
-            edges: row(13),
-            panel: row(27),
-            strip: row(33),
-            legend: row(36),
-            rule: row(38),
-            footer: row(39),
+            codex_lane: row(codex_lane),
+            edges: row(codex_lane - 3),
+            panel,
+            panel_rows: rule.saturating_sub(panel).min(5),
+            strip: (height >= 40).then_some(33),
+            legend: (height >= 37).then(|| height - 4),
+            rule,
+            footer: height.saturating_sub(1),
         }
     }
 }
@@ -159,9 +164,13 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             );
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
-        panel(report, options, layout.panel, &mut paint);
-        strip(report, options, layout.strip, &mut paint);
-        legend(layout.legend, &mut paint);
+        panel(report, options, layout.panel, layout.panel_rows, &mut paint);
+        if let Some(y) = layout.strip {
+            strip(report, options, y, &mut paint);
+        }
+        if let Some(y) = layout.legend {
+            legend(y, &mut paint);
+        }
     }
     paint.rule(layout.rule);
     footer(options, layout.footer, &mut paint);
@@ -184,7 +193,7 @@ fn visible_x(slot: usize, first: usize) -> Option<u16> {
 }
 
 fn edge_x(slot: usize, first: usize, offset: u16, end: u16) -> Option<u16> {
-    // The source box can be left of the window while its edge is still visible.
+    // Only return edges can remain visible when their source box is left of the window.
     let x = slot_column(slot, first) + i64::from(offset);
     u16::try_from(x).ok().filter(|&x| x < end)
 }
@@ -505,7 +514,10 @@ fn match_words(confidence: Match, candidates: usize) -> String {
     }
 }
 
-fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
+fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint: &mut Paint<'_>) {
+    if rows == 0 {
+        return;
+    }
     let selected = options.selected;
     let Some(part) = report.parts.get(selected) else {
         return;
@@ -555,7 +567,9 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
     );
     if codex && available {
         for (dy, label, quote) in [(1, "asked", &part.asked), (3, "said", &part.said)] {
-            if let Some(quote) = quote {
+            if dy < rows
+                && let Some(quote) = quote
+            {
                 paint.write(12, y + dy, label, t.secondary, paint.end());
                 let until = paint.end().min(109);
                 let quote = quoted(quote, until.saturating_sub(19) as usize);
@@ -563,11 +577,13 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             }
         }
     }
-    if let Some(origin) = panel_origin(report, selected, options.offset) {
+    if rows > 2
+        && let Some(origin) = panel_origin(report, selected, options.offset)
+    {
         paint.write(12, y + 2, "from", t.secondary, paint.end());
         paint.write(19, y + 2, &origin, t.text, paint.end());
     }
-    if !codex && part.untagged_handoffs > 0 {
+    if rows > 3 && !codex && part.untagged_handoffs > 0 {
         paint.write(
             19,
             y + 3,
@@ -579,7 +595,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             t.secondary,
             paint.end(),
         );
-    } else if part.status == Some(PartStatus::Unlinked) {
+    } else if rows > 3 && part.status == Some(PartStatus::Unlinked) {
         paint.write(
             19,
             y + 3,
@@ -588,7 +604,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             paint.end(),
         );
     }
-    if available && part.session.is_some() {
+    if rows > 4 && available && part.session.is_some() {
         paint.line(
             12,
             y + 4,
