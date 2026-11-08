@@ -306,9 +306,7 @@ impl Scanner {
     }
 
     fn read_codex(&mut self, root: &Path) -> io::Result<Discovery> {
-        let mut paths = Vec::new();
-        rollout_paths(&root.join(".codex/sessions"), &mut paths)?;
-        paths.sort();
+        let paths = multi_link_codex::rollout_paths(&root.join(".codex/sessions"))?;
         let mut codex = Discovery::default();
         for path in paths {
             // Preserve partial skips even when a rollout read fails.
@@ -331,6 +329,7 @@ impl Scanner {
                 }
             }
         }
+        codex.prefer_plain();
         Ok(codex)
     }
 
@@ -509,28 +508,6 @@ fn children(path: &Path) -> io::Result<Vec<PathBuf>> {
         .collect::<io::Result<Vec<_>>>()?;
     paths.sort();
     Ok(paths)
-}
-
-fn rollout_paths(path: &Path, paths: &mut Vec<PathBuf>) -> io::Result<()> {
-    for child in children(path)? {
-        // A rollout moved or archived after read_dir must not fail the pass.
-        let kind = match fs::symlink_metadata(&child) {
-            Ok(meta) => meta.file_type(),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error),
-        };
-        if kind.is_dir() {
-            rollout_paths(&child, paths)?;
-        } else if kind.is_file()
-            && child
-                .file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|s| s.starts_with("rollout-") && s.ends_with(".jsonl"))
-        {
-            paths.push(child);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

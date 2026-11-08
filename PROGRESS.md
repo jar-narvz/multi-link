@@ -1,9 +1,19 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.0 (2026-11-08, Claude step) is committed: Phase 9's rules, synthetic fixtures and answer keys exist before
-any code. Step 9.1 is next** (then 9.2 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7). Mode: run
-`python3 -I tools/codex-quota.py` before every `codex exec` (at 9.0's end: 20% / 22%, `CODEX: OK`). What later steps need:
+**Step 9.1 (2026-11-08, Codex, mode Codex loop) is committed: `.jsonl.zst` rollouts are read. Step 9.2 is
+next** (then 9.3 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7).
+Quota check output supplied for this run: `CODEX: OK 27%/23%`. Run `python3 -I tools/codex-quota.py` before
+any later `codex exec`. Step 9.0's committed Phase 9 rules, fixtures and answer keys remain binding.
+- **9.1 / R1:** `multi_link_codex::open_rollout` is the common reader for discovery/scan and graph details;
+  `rollout_paths` supplies both discovery paths. Pure-Rust `ruzstd` decodes `.jsonl.zst` with a 64 MiB
+  decompressed limit; plain reads stay uncapped. Plain counterparts win, with metadata-id deduplication
+  for differently named copies. Failures count as `unreadable`; scanner file-key caching is retained.
+- **9.1 verification:** Phase 9 `check.sh 1`: all four lines `ok`. Workspace: 488 passed, exactly the 45
+  documented failures below, 1 ignored; newly failing tests: none. Excluding those 45: 488 passed, 0 failed,
+  1 ignored, 45 filtered out. Fmt and clippy clean. Real release run: 419 Codex sessions; 212 hand-offs =
+  54 unlinked, 121 heuristic, 28 exact, 9 ambiguous; both stderr empty. See the log for commands and baseline.
+What later steps need:
 - **Fixed clock and root:** `--root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z` (`--since all`; lanes use the
   TUI's 2 h window). Keys: `fixtures/expected/phase9/{sessions,links,open,graph-1.1,lanes}.json`. They are the *final*
   Phase 9 output. Every id's first two hex digits name its step (`91…`–`95…`).
@@ -35,7 +45,7 @@ any code. Step 9.1 is next** (then 9.2 → 9.5, then 9.6 / R7, which writes its 
   `waiting`, last line before the window); `hook/overview.json` 12, repo-c `tier` `waiting` → `busy`, repo-c rows now
   `…0010`, 6358ec7e, 11c1f13c, 85a715ba. TUI goldens `home-hook{,-full}{,.styles}.txt` follow (`◆ 1 need you`, repo-c
   `2 working now`, no waiting card row; render of the key, deterministic). `home-full` is unchanged.
-- **Tests that fail until 9.2 (45, all from those key values; 476 pass, 1 ignored):** 42 only because `transcript_exit`
+- **Tests that fail until 9.2 (45, all from those key values; at 9.1: 488 pass, 1 ignored):** 42 only because `transcript_exit`
   is not yet a `StateEvidence` value or the state differs from the code (they pass once 9.2 implements R2 and R3):
   cli `overview_json_matches_answer_key_and_text_has_one_line_per_repo`, `duration_units_and_offsets_use_the_same_options`,
   `phase_one_json_matches_answer_keys`, `hook_conflicts_are_stderr_only_for_sessions_links_and_overview`; claude
@@ -599,6 +609,97 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.1: Read compressed Codex rollouts — Codex
+- Did: Implemented R1 in mode **Codex loop**. Quota check output (supplied for this run):
+  `CODEX: OK 27%/23%`. Added pure-Rust `ruzstd` 0.8.3 and one shared Codex opener for both discovery
+  paths, single-file scan, calls and turns. Compressed frames are fully decoded and checksum-checked
+  before parsing, with a combined 64 MiB decompressed cap (including concatenated frames); plain input
+  remains streamed and uncapped. Plain counterparts take precedence before reading; parsed metadata ids
+  also prefer plain copies with different names. The core scanner uses the same discovery helper and
+  retains its file-key cache. Added eight tests for fixtures/graph, cap boundaries, corruption, duplicate
+  preference, and cache reuse/invalidation. PLAN.md, docs and all answer keys are unchanged.
+- Changed: `Cargo.toml`, `Cargo.lock`, `crates/codex/Cargo.toml`, `crates/codex/src/lib.rs`,
+  `crates/codex/tests/compressed.rs`, `crates/core/src/scanner.rs`, `crates/core/tests/compressed.rs`,
+  `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Before implementation, the two initial compressed regression
+  tests failed (missing compressed session and no parsed metadata); `check.sh 1` failed sessions, graph
+  and stderr while links already passed. Final `cargo test -p multi-link-codex -p multi-link-core --test compressed`
+  → exit 0, actual result lines (Codex, then core):
+  ```text
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.77s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  ```
+- Verify: `fixtures/expected/phase9/check.sh 1` from the repo root → exit 0, actual output:
+  ```text
+  ok   sessions.json (^9[1-1])
+  ok   links.json (^9[1-1])
+  ok   graph-1.1.json (^9[1-1])
+  ok   stderr unreadable: 1
+  ```
+- Verify: `cargo test --workspace --no-fail-fast` ran every target. The actual output ends with:
+  ```text
+  error: 12 targets failed:
+      `-p multi-link --test cli`
+      `-p multi-link-claude --test fixtures`
+      `-p multi-link-codex --test fixtures`
+      `-p multi-link-core --lib`
+      `-p multi-link-core --test hook`
+      `-p multi-link-core --test overview`
+      `-p multi-link-core --test phase6`
+      `-p multi-link-core --test sessions`
+      `-p multi-link-model --test model`
+      `-p multi-link-tui --lib`
+      `-p multi-link-tui --test home`
+      `-p multi-link-tui --test theme`
+  ```
+  Summing its per-target result lines: 488 passed, 45 failed, 1 ignored. Audited every failing name
+  against Current state's 45 (including its 16 `app::graph_tests::*` cases): **newly failing tests: none**.
+  Reran `cargo test --workspace --` with one `--skip <full test name>` for each of those 45;
+  actual audit/rerun output:
+  ```text
+  Known failures: 45; newly failing tests: none
+  Outside the documented 45: 488 passed; 0 failed; 1 ignored; 45 filtered out
+  cargo test exit: 0
+  ```
+  Full workspace output, exact failure list and clean rerun output are in
+  `/tmp/multi-link-91-{workspace,failure-audit,unblocked}.log` (outside git).
+- Verify: `cargo fmt --all` and `cargo fmt --all -- --check` → no output, exit 0.
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.60s
+  ```
+  `cargo build --release -p multi-link` → exit 0, actual final line:
+  ```text
+      Finished `release` profile [optimized] target(s) in 0.12s
+  ```
+- Verify: Copied the release binary into a fresh `$TMPDIR/multi-link-91-real-*` folder outside the repo,
+  then ran `./multi-link sessions --since all --json` and `./multi-link links --since all --json` with
+  that folder as cwd. Parsed stdout in memory and saved only counts and stderr to its `counts.txt`
+  (also `/tmp/multi-link-91-real-counts.log`). Actual output:
+  ```text
+  sessions exit: 0
+  Codex sessions: 419
+  sessions stderr: (empty)
+  links exit: 0
+  Hand-offs: 212
+  unlinked: 54; heuristic: 121; exact: 28; ambiguous: 9
+  links stderr: (empty)
+  ```
+  Before at `0d490ce` (measured by Claude with a release build of that commit): 216 Codex sessions; 211 hand-offs =
+  119 unlinked, 63 heuristic, 28 exact, 1 ambiguous; stderr empty. These are live-data measurements
+  at different times: the after run has one additional hand-off. No transcript content was saved in git.
+- Review: Claude (2026-11-08), no fix rounds. Diff stays inside 9.1's Files (`graph.rs` needed no change:
+  `read_details` itself now goes through `open_rollout`). No key, doc or PLAN.md change (`git diff --stat HEAD --
+  fixtures docs PLAN.md` empty). Re-ran Verify: `check.sh 1` → the same four `ok` lines, exit 0; clippy and
+  `fmt --check` exit 0; `cargo test --workspace --no-fail-fast` → 488 passed, 45 failed, 1 ignored, and every one of
+  the 45 failing names is in Current state's list (16 `app::graph_tests::*`). Notes, not defects: path-based
+  plain preference drops a `.zst` twin before reading, so a corrupt twin of a plain file is not counted
+  `unreadable` (R1 says read the plain one); a multi-frame stream with a skippable frame is untested.
+- Gotchas: Real data: ambiguous hand-offs rose 1 → 9 now that ~200 more rollouts are candidates for the 60 s
+  creation match; 9.7's count should look at them (likely parallel runs in one checkout). The workspace remains red only for the 45 expected 9.2 failures; no keys were changed to
+  hide them. A corrupt/oversize compressed file yields no partial rollout or graph details. As with
+  existing scanner readers, failed reads invalidate cache entries and are retried on later passes.
 
 ### 2026-11-08 — Step 9.0: Rules, fixtures and answer keys — Claude
 - Did: Wrote R0–R6 into `docs/design.md` ("Phase 9 decisions", decision 2's Exact sources gain the redirect file, the

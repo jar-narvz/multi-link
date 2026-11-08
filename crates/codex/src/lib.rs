@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    io::{self, BufRead},
+    io::{self, BufRead, BufReader, Cursor, Read},
     path::{Path, PathBuf},
 };
 
@@ -58,52 +58,120 @@ pub struct ReadFailure {
     pub error: io::Error,
 }
 
-/// Find rollout-*.jsonl recursively under root/.codex/sessions.
-/// Missing sessions directories are empty. Directory traversal errors are returned;
-/// individual file failures are collected in `unreadable` and scanning continues.
-/// Symlinks are not followed, avoiding cycles and reads outside the supplied tree.
-pub fn discover(root: &Path) -> io::Result<Discovery> {
+/// Find plain and compressed rollouts. Missing directories are empty; symlinks
+/// are not followed. A plain counterpart takes precedence before either is read.
+pub fn rollout_paths(directory: &Path) -> io::Result<Vec<PathBuf>> {
+    fn collect(directory: &Path, paths: &mut Vec<PathBuf>) -> io::Result<()> {
+        let entries = match fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let kind = match entry.file_type() {
+                Ok(kind) => kind,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error),
+            };
+            if kind.is_dir() {
+                collect(&entry.path(), paths)?;
+            } else if kind.is_file()
+                && entry.file_name().to_str().is_some_and(|name| {
+                    name.starts_with("rollout-")
+                        && (name.ends_with(".jsonl") || name.ends_with(".jsonl.zst"))
+                })
+            {
+                paths.push(entry.path());
+            }
+        }
+        Ok(())
+    }
     let mut paths = Vec::new();
-    collect_paths(&root.join(".codex/sessions"), &mut paths)?;
+    collect(directory, &mut paths)?;
+    let plain: std::collections::HashSet<_> = paths
+        .iter()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .cloned()
+        .collect();
+    paths.retain(|path| !is_compressed(path) || !plain.contains(&path.with_extension("")));
     paths.sort();
+    Ok(paths)
+}
+
+fn is_compressed(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "zst")
+}
+
+impl Discovery {
+    /// Metadata ids also deduplicate copies with different filenames or folders.
+    pub fn prefer_plain(&mut self) {
+        let plain: std::collections::HashSet<_> = self
+            .rollouts
+            .iter()
+            .filter(|r| !is_compressed(Path::new(&r.transcript)))
+            .map(|r| r.id.clone())
+            .collect();
+        self.rollouts
+            .retain(|r| !is_compressed(Path::new(&r.transcript)) || !plain.contains(&r.id));
+    }
+}
+
+/// Open JSONL for every Codex reader. Only compressed input is bounded: decode
+/// at most 64 MiB plus one detection byte, rejecting the entire file on failure.
+/// Validate every frame (including checksums) before handing any records out.
+pub fn open_rollout(path: &Path) -> io::Result<Box<dyn BufRead>> {
+    const LIMIT: usize = 64 * 1024 * 1024;
+    let mut source = BufReader::new(fs::File::open(path)?);
+    if !is_compressed(path) {
+        return Ok(Box::new(source));
+    }
+    let mut bytes = Vec::new();
+    loop {
+        let mut decoder = ruzstd::decoding::StreamingDecoder::new(&mut source)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let remaining = LIMIT + 1 - bytes.len();
+        decoder
+            .by_ref()
+            .take(remaining as u64)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > LIMIT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "rollout exceeds 64 MiB",
+            ));
+        }
+        if let Some(expected) = decoder.decoder.get_checksum_from_data()
+            && decoder.decoder.get_calculated_checksum() != Some(expected)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "rollout checksum mismatch",
+            ));
+        }
+        if source.fill_buf()?.is_empty() {
+            break;
+        }
+    }
+    Ok(Box::new(Cursor::new(bytes)))
+}
+
+/// Discover rollouts, collecting individual read/decode failures without a
+/// partial rollout. Directory traversal errors are returned to the caller.
+pub fn discover(root: &Path) -> io::Result<Discovery> {
     let mut result = Discovery::default();
-    for path in paths {
-        let transcript = relative_path(root, &path);
-        let parsed = JsonlReader::from_path(&path, &transcript)
-            .and_then(|reader| parse(reader, &transcript, &mut result.skipped));
-        match parsed {
+    for path in rollout_paths(&root.join(".codex/sessions"))? {
+        match parse_file(root, &path, &mut result.skipped) {
             Ok(Some(rollout)) => result.rollouts.push(rollout),
             Ok(None) => {}
             Err(error) => result.unreadable.push(ReadFailure {
-                file: transcript,
+                file: relative_path(root, &path),
                 error,
             }),
         }
     }
+    result.prefer_plain();
     Ok(result)
-}
-
-fn collect_paths(directory: &Path, paths: &mut Vec<PathBuf>) -> io::Result<()> {
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error),
-    };
-    for entry in entries {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            collect_paths(&entry.path(), paths)?;
-        } else if kind.is_file()
-            && entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| name.starts_with("rollout-") && name.ends_with(".jsonl"))
-        {
-            paths.push(entry.path());
-        }
-    }
-    Ok(())
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
@@ -287,7 +355,7 @@ pub fn parse_file(
 ) -> io::Result<Option<Rollout>> {
     let transcript = relative_path(root, path);
     parse(
-        JsonlReader::from_path(path, &transcript)?,
+        JsonlReader::new(open_rollout(path)?, &transcript),
         &transcript,
         skipped,
     )
@@ -334,7 +402,7 @@ pub fn read_details(
     let mut event_prompts = std::collections::HashSet::new();
     let mut outputs = std::collections::HashMap::new();
     let mut seen = std::collections::HashSet::new();
-    for record in JsonlReader::from_path(path, file.as_ref())? {
+    for record in JsonlReader::new(open_rollout(path)?, file.as_ref()) {
         let (line, value) = match record? {
             Ok(record) => record,
             Err(skip) => {
