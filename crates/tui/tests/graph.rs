@@ -404,3 +404,128 @@ fn exact_edge_is_solid_and_heuristic_dashed() {
         assert_eq!(words, label);
     }
 }
+
+#[test]
+fn panel_matches_golden() {
+    let buf = render(&report("1.1"), &golden_options(), 120, 40);
+    assert_eq!(rendered_rows(&buf, 26..=31), golden_rows(26..=31));
+    assert_eq!(rendered_styles(&buf, 26..=31), golden_styles(26..=31));
+}
+
+#[test]
+fn panel_for_claude_part() {
+    let options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    let buf = render(&report("1.1"), &options, 120, 40);
+    assert!(rendered_rows(&buf, 27..=27).starts_with(
+        "  selected  claude · plan · 81010000 · 08:05:26–08:05:43 · "
+    ));
+    assert_eq!(buf[(2, 27)].fg, options.theme.secondary);
+    assert_eq!(buf[(12, 27)].fg, options.theme.claude);
+    assert_eq!(buf[(12, 27)].modifier, Modifier::BOLD);
+    assert!(!rendered_rows(&buf, 28..=28).contains("asked"));
+    assert_eq!(
+        rendered_rows(&buf, 29..=29),
+        "            from   handed step 1.1 to codex at 08:05:43\n"
+    );
+    assert_eq!(
+        rendered_rows(&buf, 31..=31),
+        "            o open in Claude   f fork\n"
+    );
+}
+
+#[test]
+fn panel_for_part_without_run() {
+    let report = report("1.2");
+    for (selected, heading) in [
+        (1, "  selected  codex · implement · no codex run found\n"),
+        (3, "  selected  codex · fix round 1 · 2 possible runs\n"),
+    ] {
+        let options = GraphOptions {
+            selected,
+            ..golden_options()
+        };
+        let buf = render(&report, &options, 120, 40);
+        assert_eq!(rendered_rows(&buf, 27..=27), heading);
+        let panel = rendered_rows(&buf, 28..=30);
+        assert!(!panel.contains("asked"));
+        assert!(!panel.contains("said"));
+        if selected == 1 {
+            assert_eq!(
+                rendered_rows(&buf, 30..=30),
+                "                   (the rollout may be gone)\n"
+            );
+        }
+        assert_eq!(rendered_rows(&buf, 31..=31), "\n");
+    }
+}
+
+#[test]
+fn untagged_handoffs_line() {
+    let report = report("1.8");
+    let selected = report
+        .parts
+        .iter()
+        .position(|part| part.kind == "review" && part.untagged_handoffs == 1)
+        .unwrap();
+    let options = GraphOptions {
+        selected,
+        ..golden_options()
+    };
+    let buf = render(&report, &options, 120, 40);
+    assert_eq!(
+        rendered_rows(&buf, 30..=30),
+        "                   1 untagged hand-off here\n"
+    );
+    assert_eq!(buf[(19, 30)].fg, options.theme.secondary);
+}
+
+#[test]
+fn quote_cut_on_word_boundary_by_width() {
+    let mut report = report("1.1");
+    let asked = "日本 word ".repeat(40);
+    report.parts[1].asked = Some(asked.clone());
+    let buf = render(&report, &golden_options(), 120, 40);
+    let row = rendered_rows(&buf, 28..=28);
+    let row = row.trim_end_matches('\n');
+    assert!(row.starts_with("            asked  “"), "row: {row:?}");
+    assert!(row.ends_with("…”"), "row: {row:?}");
+    let last_column = (0..120)
+        .rfind(|&x| buf[(x, 28)].symbol() != " ")
+        .unwrap();
+    assert!(last_column <= 108, "last drawn column: {last_column}");
+    assert!(Span::raw(row).width() <= 109, "row: {row:?}");
+    let body = row
+        .strip_prefix("            asked  “")
+        .unwrap()
+        .strip_suffix("…”")
+        .unwrap()
+        .trim_end();
+    assert!(!body.is_empty());
+    assert!(
+        asked.strip_prefix(body).is_some_and(|rest| rest.starts_with(' ')),
+        "quote must end after a whole word: {body:?}"
+    );
+}
+
+#[test]
+fn selection_past_the_end_does_not_panic() {
+    let options = GraphOptions {
+        selected: 99,
+        ..golden_options()
+    };
+    let buf = render(&report("1.1"), &options, 120, 40);
+    assert!(rendered_rows(&buf, 27..=27).starts_with(
+        "  selected  claude · verify + commit · 81010000 · 08:10:42–08:12:14 · "
+    ));
+    assert_eq!(
+        rendered_rows(&buf, 29..=29),
+        "            from   no hand-offs\n"
+    );
+    assert_eq!(
+        rendered_rows(&buf, 31..=31),
+        "            o open in Claude   f fork\n"
+    );
+}
