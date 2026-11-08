@@ -1434,16 +1434,151 @@ Measured 2026-11-06 on real data (`links`/`sessions --since all`, at e5f6c78):
   form at 119 / 100 / 80 / 60 columns with no cut words, 39 and 30 rows, NO_COLOR, empty step sentence; the four
   6.1 goldens unchanged.
 
+**Phase 8 amendment (owner's real use, 2026-11-07).** The owner watched Step 8.4 run in `multi-link tui` and could not
+tell which row was which. Seen on real data (counts only, W10): three app-started sessions shared one label (their first
+prompt is the app's `Background (from the session that started this one): …` preamble); the working 8.4 session showed
+`stale since 22:33` (its record said `busy` with `statusUpdatedAt` unchanged for 10+ min during one long `codex exec`,
+and `activity_state` turns any busy record older than 300 s into `stale` without the probe); `codex exec resume --help`
+was linked as a hand-off; the header said `step 8.3` while 8.4 ran in a worktree. Steps 8.4a, 8.4b and 8.4c go between 8.4
+and 8.5. **They amend G0:** Session and SessionRow gain two additive keys (`title`, 8.4b; `started_by`, 8.4c), and
+existing values may change only where U3/U4 say so (and the overview tree only where `started_by` is non-null); every
+other committed JSON value stays equal. **They amend the whole-phase Verify:** the pinned `git diff --exit-code
+--diff-filter=MD e5f6c78 -- fixtures/expected/` holds through 8.4; from 8.4a on, each step instead shows that its
+changes to existing keys are only the lines its own rules name (8.4b: `title`; 8.4c: `started_by`). They also amend the phase's "no repo/home
+changes" line for exactly the rows U2/U5 change.
+
+### Step 8.4a — Busy is busy; help is not a hand-off (Codex)
+- Depends on: 8.4 (merged).
+- U3 **Busy is busy.** A Claude record with `status: busy` and a probed-`Alive` process is `busy` whatever the record's
+  age. `stale` stays for busy records older than 300 s whose process is `Unavailable`; `Gone` stays `finished`. No new
+  duration text (`state_since` and W5 unchanged).
+- U4 **Help is not a hand-off.** A recognised `codex exec …` / `codex [exec] resume …` segment is not an invocation
+  when `--help` or `-h` is an unquoted, unescaped word after `exec`/`resume` and before the first non-option word.
+  Option values (`-c v`, `-o p`, `-C d`, `-s m`, `--add-dir d`) are skipped as values; after `--` nothing is an option.
+  Other segments of the same command are still checked. (`codex --version` is already not recognised.)
+- Files: `crates/core/src/state.rs`, `crates/claude/src/invocation.rs`, `crates/core/tests/**`,
+  `crates/claude/tests/**`, `docs/output-schema.md` (U3, U4), `PROGRESS.md`.
+- Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings` clean; tests:
+  U3 through `FakeProcessProbe` (busy + Alive at 20 min → busy; busy + Unavailable at 6 min → stale; busy + Alive at
+  1 min → busy; Gone → finished); U4 `codex exec --help`, `codex exec resume --help`, `codex exec -C d --help` not
+  linked; `codex exec "use --help"`, `codex exec -o --help.txt "x"` (value) and `codex exec -- --help` linked;
+  `codex exec --help; codex exec "Step 1.2 …"` links the second. `git diff --exit-code fixtures/expected` (no committed
+  key changes). Real data, counts only: one scratch snapshot of `links --since all --json` and `sessions --json` taken
+  before, compared with the new build on the same `--now`; every difference listed and classified (help-only
+  invocation dropped, child reassigned, busy↔stale) in PROGRESS.
+
+### Step 8.4b — Rows named by title and place; header names the latest hand-off (Codex)
+- Depends on: 8.4a.
+- U1 **Title.** Claude transcripts carry `{"type":"custom-title","customTitle":…}` (undocumented; seen in 47 of the 60
+  most recent real transcripts, 2026-11-07). Session and SessionRow (children and merged members too) gain additive
+  `title`: the last own record (main file, `sessionId` equal to the session's) with a non-blank string, trimmed, control
+  characters removed; else null. Inherited, subagent and malformed records are ignored. Codex: null.
+- U2 **Label order.** `title` › step (by the existing placing-parent rule, `view.rs`) › `last_asked` › `asked` › the
+  harness's no-prompt text. Each prompt candidate is rejected on its own when it starts with the app's
+  `Background (from the session that started this one):` preamble, so a rejected `last_asked` falls through to `asked`.
+  The JSON prompts are unchanged. Supersedes P5's order (P5 kept otherwise).
+- U5 **Header names the latest hand-off.** When the repo's latest tagged hand-off names a step other than the latest
+  logged PROGRESS.md step, the header adds `· latest hand-off step <id>`. It never says "done" or "running". Data path:
+  the overview already holds the latest hand-off (`overview.rs`); no PLAN.md title is added.
+- U6 **Where it runs.** The place word on a row comes from the session's checkout, not the transcript's `gitBranch`:
+  Claude Code keeps the branch it started on (8.4: 220 of 220 records say `main` while 181 have `cwd` in
+  `.claude/worktrees/step-8.4`; undocumented). Main checkout → the branch, read through the memoised git (3.1), else
+  `gitBranch`; a linked worktree → `worktree <folder name>`. Codex rows the same, by their checkout. Folds in the
+  backlog's `@basename` item; the home screen's branch cell uses the same word. No JSON key changes (`branch` stays as
+  recorded).
+- Files: `crates/claude/src/lib.rs`, `crates/model/src/lib.rs`, `crates/model/tests/**`,
+  `crates/core/src/{sessions,overview,open,repo}.rs`, `crates/core/tests/**`, `crates/tui/src/{view,timeline,home}.rs`,
+  `crates/tui/tests/**`, `fixtures/**` (synthetic titles only, W10), `fixtures/expected/**` (only `title` added and the
+  rows named below), `docs/output-schema.md`, `docs/design.md` (label order), `README.md` (label wording), `PROGRESS.md`.
+- Verify: `cargo test --workspace` → all `ok`; clippy as in 8.4a; tests: U1 last title wins, blank/non-string/
+  inherited/subagent ignored, title change seen after a scanner refresh; U2 order, preamble rejected per candidate,
+  placing-parent rule kept for a Codex child with two parents; U6 main checkout shows the branch, a worktree session whose `gitBranch` says `main` shows `worktree <folder>`; U5 header with a newer-step hand-off, same step, no
+  tagged hand-off. JSON: every committed key equal except the added `title` (`git diff <8.4a commit> --
+  fixtures/expected | grep '^[-+] ' | grep -v '"title"'` prints nothing; 2026-11-08, same fix as 8.4c's point 8). Goldens: the 8.1 golden unchanged; the four 6.1 goldens change only in rows
+  whose fixture session gains a title or a header line, each listed in PROGRESS. W10 check over every committed file,
+  titles included. Real run in scratch only, counts only: rows labelled by title, by step, by prompt.
+
+### Step 8.4c — Sessions started by a session nest under it in the repo view (Codex)
+- Depends on: 8.4b. Owner asked 2026-11-07: sessions a coordinator session started (8.3, 8.4, design, spike) should
+  hang off it the way Codex runs hang off their Claude parent. Extends need 2 to Claude → Claude.
+- **Evidence (real data, 2026-11-08, counts only; undocumented app behaviour, an assumption until the fixture and the
+  real count below confirm it):** the desktop app keeps one record per app session at
+  `<home>/Library/Application Support/Claude/claude-code-sessions/<a>/<b>/local_<id>.json` (macOS). Seen: 135 records;
+  130 carry `cliSessionId`, all 130 equal a transcript file name under `~/.claude/projects/*/`; 63 carry
+  `spawnedFrom {sessionId: local_<parent>, taskId, name, title, sideSession, …}`, every parent has a record with a
+  `cliSessionId`. 4 of the 63 have `spawnedFrom.userFork: true` and those 4 include all 3 with `btw: true`, so **59 are
+  eligible**; 2 of the 59 have a parent that is itself an eligible child; 1 child has a different `cwd` from its parent
+  (not the same as a different repo). The record survives the session's exit (unlike `~/.claude/sessions/<pid>.json`).
+  The child's `local_<id>` never appears in its own transcript, so the earlier draft's evidence (the parent's
+  tool_result plus the live record's `hostSessionId`) worked only while the child ran.
+- S1 **Started-by link.** A new reader in the `claude` crate lists `<root>/Library/Application Support/Claude/
+  claude-code-sessions/*/*/local_*.json` (the same relative path in fixture mode, so a fixture root carries its own).
+  A record's identity is its string `cliSessionId`. C is started by P when C's record has `cliSessionId` = C's transcript
+  id, `spawnedFrom.sessionId` names a record whose `cliSessionId` = P's transcript id, both are listed Claude sessions,
+  P ≠ C, and `spawnedFrom.userFork` / `spawnedFrom.btw` are not `true` (a user fork and a side question are the user's
+  acts, not a session's). **Conflicts:** two records with one `cliSessionId` that name different parents, or two
+  records sharing one `sessionId`, give no link for the affected child. **Cycles:** an edge that closes a cycle is
+  dropped for every session on that cycle; those sessions stay top level. Always `exact`: no time or brief matching
+  (all 59 real eligible children resolve by record; a guess layer would add risk and no coverage). **Diagnostics:** an
+  absent directory or a missing parent record is normal (no link, no diagnostic); a malformed file or a wrong field type
+  is a bad record (existing diagnostic); a directory that exists but cannot be read is unreadable (existing diagnostic).
+  Never an error exit. Read on every refresh, cached by file key like the other reads.
+- S2 **Contract.** Session and SessionRow gain additive `started_by` (P's transcript id, or null). **Amends G0 (as
+  8.4b):** existing fixture roots have no app records, so their output equals 8.4b's except the added `started_by:
+  null`; the overview's `rows`/`children` structure, merge and ordering change only where `started_by` is non-null
+  (the new fixture root). A started-by link is not a `Link`: it is never in `links`, `handoffs`, `unparented` or any
+  Codex hand-off count, and G1 graphs ignore it.
+- S3 **Nesting in the repo view.** A Claude row whose `started_by` names a listed session in the **same repo group**
+  (by mapped repo, not `cwd`) is drawn under it as a child, to any depth (coordinator › step session › its Codex run;
+  coordinator › started › started), indented 2 columns per level. Cross-repo or parent not listed: the child stays top
+  level. Every session appears exactly once. Ordering among a parent's children: Codex children keep T11's key (placing
+  hand-off time); a started child's key is its `started_at`; ties by id. A parent's state and row order come from its own
+  state; only T11's quiet-merge eligibility looks at descendants recursively (a parent is quiet only when every
+  descendant is). The started child's connector is a separate ancestry mark, not a hand-off edge: solid `│` anchored at
+  the child's `started_at`, and the child's sub line reads `started by this session · HH:MM`. Waiting-bell detection,
+  selection, `o`/`f`, counts and quiet merge walk descendants recursively; a refresh that reparents a row keeps the
+  selection by session id. **Home is unchanged** (its attention cards stay flat by urgency; ancestry in home is a non-goal).
+- Non-goals: home layout; reading the app record's `title` (8.4b's U1 reads the transcript's `custom-title`); linking
+  forks or `btw` sessions; `local_<id>` jump or open changes; Windows/Linux app paths; step-graph changes (8.5's G9
+  amendment); a graph `started by` header (would need a new report key; not planned).
+- **Answer keys first:** the step session (Claude) writes the fixture root and its expected keys in the worktree before
+  the Codex hand-off; Codex does not edit them (a mismatch blamed on a key is reported, not fixed).
+- Files: `crates/claude/src/{lib,app_record}.rs`, `crates/claude/tests/**`, `crates/model/src/lib.rs`,
+  `crates/model/tests/**`, `crates/core/src/{scanner,sessions,overview,open}.rs`, `crates/core/tests/**`,
+  `crates/tui/src/{timeline,view,app}.rs`, `crates/tui/tests/**`, `crates/cli/tests/**`, `fixtures/sessions-started/**`
+  (new root, synthetic, W10), `fixtures/expected/started/**` (new keys), `fixtures/expected/**` (only the added
+  `started_by: null`), `docs/output-schema.md`, `docs/design.md` (S1–S3, need 2 mapping), `PROGRESS.md`.
+- Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings` clean. Fixture
+  root `sessions-started` (fixed `--now`, `--since all`): coordinator K started A (A has one exact Codex child) and B; A
+  started A2 (depth 3); a user fork F of K; a `btw` session; X whose parent record is missing; Y whose parent is in
+  another repo; Z with the same `cwd` as K but a different mapped repo; a duplicate `cliSessionId` naming two parents;
+  a two-record cycle; a self-link; a malformed record; a wrong-typed `spawnedFrom`; a record without `cliSessionId`.
+  Tests: K › A › (A's Codex child, A2) and K › B; F, btw, X, Y, Z, the conflict, the cycle and the self-link stay top
+  level; the malformed and wrong-typed records give bad-record diagnostics; an absent app dir gives none; `links`
+  JSON identical with and without the app dir; K's hand-off count unchanged; K is not quiet-merged while A2 is busy; a
+  waiting A2 rings the bell; select and open A2; one scanner across record added, changed and deleted, and unchanged
+  files reused from the cache; removing the app dir puts every row back at top level; `multi-link graph` for a phase8
+  step equals its key (G1 ignores `started_by`). Existing keys: `git diff <8.4b commit> -- fixtures/expected
+  ':!fixtures/expected/started' | grep '^[-+] ' | grep -v started_by` prints nothing. Goldens: the 8.1 golden, the four
+  6.1 goldens and every home golden unchanged. W10 scan over every new file, app records included. Real run in scratch,
+  counts only: sessions with `started_by`, nested vs top level (and why), compared with 63 / 59 / 4 / 2 above (numbers
+  move as sessions are added; record the new ones).
+
 ### Step 8.5 — TUI: `s`, moving along a step, refresh (Codex)
-- Depends on: 8.4.
+- Depends on: 8.4c.
 - App wiring and CLI loop per G9, G11.
+- **G9 amendment (owner, 2026-11-07, with 8.4c):** `s` on a lane with its own tagged hand-off opens its latest step
+  (unchanged). A lane with none whose **direct** started children (8.4c) have G1 graphs lists those steps (`started:
+  step 8.3, step 8.4`, by child `started_at`, one entry per repo+step) and opens the chosen one; children without a
+  graph are not listed; with none at all the footer stays `no step on this session`. Graph membership stays G1.
 - Files: `crates/tui/src/{app,timeline}.rs`, `crates/tui/tests/**`, `crates/cli/src/tui.rs`, `crates/cli/tests/**`,
   `fixtures/expected/tui/repo*.txt` (only the footer's `s` key; the 6.1 pair is unchanged if the key fits, else stop
   and say so), `PROGRESS.md`
 - Verify: `cargo test --workspace` → all `ok`, clippy clean; app tests: `s` with and without a step, `←→` at both ends,
   `[` `]` over steps with no graph, `esc` restores repo selection, `o`/`f` on a done, running, unlinked and ambiguous
   part, a refresh adding a part keeps the selection, a refresh error keeps the screen, an unchanged transcript
-  crossing the stale threshold changes the status, resize across 120 columns; the whole refresh on the largest real
+  crossing the stale threshold changes the status, resize across 120 columns; `s` on a coordinator lane in
+  `sessions-started` lists only its direct children's graphed steps, own tagged hand-off wins, none → footer; the whole refresh on the largest real
   step measured against G11 (milliseconds in PROGRESS); sentinel strings absent from renders.
 
 ### Step 8.6 — Real check, README, owner confirm (Claude)
@@ -1456,9 +1591,35 @@ Measured 2026-11-06 on real data (`links`/`sessions --since all`, at e5f6c78):
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
 ### Backlog (ordered, uncommitted)
-Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · `@basename` label for a worktree named like its repo · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 8.4c plan (Claude, Codex critique, read-only)
+The draft read the parent's `start_session` result plus the live record's `hostSessionId`; while planning, Claude
+found the desktop app's own per-session records (survive exit, `cliSessionId` + `spawnedFrom`) and rebuilt S1 on them.
+10 points, 8 accepted, 2 in part: 1 G0 amendment contradicts nesting (accepted: tree changes allowed only where
+`started_by` is non-null; whole-phase pinned diff amended from 8.4a on); 2 conflicts and cycles (accepted, rules and
+tests added); 3 `open.rs` builds a Session, `app.rs` bell walks one level (accepted, both added, recursion everywhere);
+4 home has no tree (accepted: home unchanged, ancestry in home a non-goal); 5 connector has no `Link.at` (accepted:
+separate ancestry mark at child `started_at`, sub line defined); 6 T11 ordering (accepted: Codex keys kept, started
+children by `started_at`, parent state its own, quiet eligibility recursive); 7 diagnostics boundaries (accepted;
+refresh tests trimmed to add/change/delete/cache reuse, root switching left out as not reachable from the TUI); 8
+executable checks and keys first (accepted: `git diff | grep` check, Claude writes keys before the Codex hand-off,
+W10, graph regression); 9 counts overlap (accepted: 59 eligible, 2 grandparents, cwd ≠ repo case); 10 graph part to
+8.5 (accepted in part: G9 amendment with precedence, direct children only, in 8.5's text and Verify; the `started
+by` graph header dropped, it would need a new report key).
+
+### 2026-11-07 — Steps 8.4a/8.4b plan (Claude, Codex critique, read-only)
+10 points, all accepted
+(2 in part): 1 split and explicit G0 amendment (accepted); 2 U5 time comparison not implementable, PROGRESS has dates
+only (accepted, comparison cut); 3 tags cannot prove done/running (accepted, wording is "latest hand-off"); 4 title must
+reach SessionRow, overview, open, model tests (accepted); 5 busy duration has no source (accepted, duration text cut);
+6 keep placing-parent rule, per-candidate preamble rejection (accepted); 7 U4 option boundary (accepted, defined;
+`--version` dropped as already unrecognised); 8 title ownership and malformed records (accepted; second real session
+confirmed as 47/60 transcripts instead of one fixture); 9 executable regression checks, `FakeProcessProbe` for Alive
+(accepted); 10 snapshot comparison, W10 for titles, extra files (accepted in part: CLAUDE.md is the coordinator's
+change, not the step's).
 
 ### 2026-11-06 — Phase 8 plan (Claude, Codex critique, read-only)
 Owner approved board 9 and did not answer what the view must answer, where it lives, or replay; Claude's defaults are

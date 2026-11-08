@@ -1,8 +1,30 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-07, latest).** **Step 8.4 is committed (hybrid mode, stopped after Task 5; see its entry); Step 8.5
-is next** (App wiring per G9, G11). What 8.5 needs:
+**Resume here (2026-11-08, latest).** **Steps 8.4a, 8.4b, 8.4c are planned (PLAN.md, between 8.4 and 8.5); Step 8.4a
+is next.** Order: 8.4a → 8.4b → 8.4c → 8.5 → 8.6 (owner check closes Phase 8). Mode: the Codex loop is the default;
+before every `codex exec` run `python3 -I tools/codex-quota.py` (CLAUDE.md, "Mode switch"; at planning: 78% / 16%,
+`CODEX: OK`). What the next steps need:
+- **Why the amendment:** the owner watched 8.4 run in `multi-link tui` and could not tell rows apart (shared preamble
+  labels, a busy session shown `stale`, `codex exec resume --help` linked, header on the wrong step). The phase intro
+  in PLAN.md now amends G0 and the whole-phase Verify: from 8.4a on, the pinned `git diff` is replaced by each step's
+  own "only these lines changed" check.
+- **8.4c's source is the desktop app's per-session records** (`~/Library/Application Support/Claude/
+  claude-code-sessions/*/*/local_*.json`: `cliSessionId`, `spawnedFrom`; undocumented, they survive exit). Found while
+  planning; counts in the step. In 8.4c the step session (Claude) writes the fixture and answer keys before the Codex
+  hand-off.
+- 8.5 gained a G9 amendment (`s` on a coordinator lane lists its direct started children's steps) and now depends on 8.4c.
+- Facts from 2026-11-07, not yet used by a step: Claude transcripts carry `custom-title` (47 of 60; 8.4b uses it) and
+  keep `gitBranch` at the start branch inside a worktree (8.4b's U6). Codex rollouts carry `rate_limits` (read by
+  `tools/codex-quota.py`). `codex exec resume --last` filters by cwd (`--all` disables it). Step 8.4's own graph: 16
+  parts, Codex calls misnamed `fix round 1–7`, 6 of 8 runs unlinked (wrapper script and a `cd`); a known limit for
+  8.6's README. The owner's installed `multi-link` binary predates the graph command.
+- Waiting on the owner, not blocking: `.claude/handoff/proposal-live-grid-and-pane-jump.md` (board 10, Q1–Q7, a Phase
+  9), `.claude/handoff/backlog-findings.md` (clean-exit resume, T10, resize key; draft steps, fixes untested), mockups
+  canvas https://claude.ai/artifact/FvyrvdUYqSnUdpYG7t9Uaj.
+
+**Step 8.4 (2026-11-07).** **Step 8.4 is committed (hybrid mode, stopped after Task 5; see its entry).** What 8.5
+needs from it:
 - Render API (crates/tui/src/graph.rs, re-exported from lib.rs): `render_graph(&GraphReport, &GraphOptions, Rect, &mut
   Buffer)`; `GraphOptions { selected, first_slot, theme, offset }` (Clone, Copy, Debug, PartialEq; Default = 0, 0,
   truecolor, UTC); `graph_slots(&report)`; `graph_first_slot(&report, selected, first_slot)`. For `←→` and a refresh that
