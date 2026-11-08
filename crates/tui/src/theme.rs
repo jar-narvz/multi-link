@@ -32,6 +32,10 @@ pub struct Theme {
     pub border: Color,
     pub done: Color,
     pub child: Color,
+    pub graph_selected: Color,
+    pub codex_box: Color,
+    pub claude_strip: Color,
+    pub codex_strip: Color,
 }
 
 impl Theme {
@@ -67,6 +71,10 @@ impl Theme {
             border: color(0x2A, 0x2F, 0x3A, 238),
             done: color(0x7C, 0xCB, 0x8E, 114),
             child: color(0x12, 0x15, 0x1B, 234),
+            graph_selected: color(0x1B, 0x21, 0x30, 235),
+            codex_box: color(0x12, 0x1A, 0x26, 234),
+            claude_strip: color(0x3A, 0x2A, 0x1F, 236),
+            codex_strip: color(0x1E, 0x2A, 0x3D, 236),
         }
     }
 
