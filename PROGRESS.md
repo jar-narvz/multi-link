@@ -409,7 +409,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   `untagged_handoffs` stays exactly the schema's `from < at ≤ to`. An earlier ruling of mine moved unheld untagged
   hand-offs onto the previous Claude part; Codex showed it contradicted the schema, and it was reverted.
   **Trial measures (Step 8.2's baseline is in its entry):**
-  - Wall-clock: 1 h 40 min (20:08:54–21:49 PST, step session start to writing this entry; merge follows). Codex review
+  - Wall-clock: 1 h 38 min 51 s (20:08:54–21:47:45 PST, step session start to committing this entry; merge follows). Codex review
     round 1 alone took 46 min 34 s (20:53:04–21:39:38); round 2 took 55 s.
   - Tests added: 62 run by default (296 → 358).
   - Implementer runs: 9 Claude subagents: 6 tasks, 1 task fix round (Task 4), 1 final-review fix wave, 1 Codex-review fix.
