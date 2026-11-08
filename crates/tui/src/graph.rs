@@ -1,7 +1,9 @@
 //! Board 9: a pure rendering of a step graph report.
 use std::collections::HashSet;
 
-use multi_link_model::{GraphReport, Harness, Timestamp};
+use multi_link_model::{
+    Counts, Edge, GraphReport, Harness, Match, Notable, Part, PartStatus, Timestamp,
+};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -73,7 +75,6 @@ struct Layout {
     header_rule: u16,
     scroll: u16,
     claude_lane: u16,
-    #[allow(dead_code)] // Reserved for the remaining graph rendering tasks.
     codex_lane: u16,
     #[allow(dead_code)]
     panel: u16,
@@ -146,6 +147,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
                 options.theme.secondary,
             );
         }
+        lanes(report, options, &layout, &slots, first, &mut paint);
         legend(layout.legend, &mut paint);
     }
     paint.rule(layout.rule);
@@ -156,6 +158,294 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             buf[(area.x + x, area.y + y)] = screen[(x, y)].clone();
         }
     }
+}
+
+fn visible_x(slot: usize, first: usize) -> Option<u16> {
+    slot.checked_sub(first)
+        .filter(|&slot| slot < 5)
+        .map(|slot| 1 + 22 * slot as u16)
+}
+
+fn lanes(
+    report: &GraphReport,
+    options: &GraphOptions,
+    layout: &Layout,
+    slots: &[usize],
+    first: usize,
+    paint: &mut Paint<'_>,
+) {
+    for (i, part) in report.parts.iter().enumerate() {
+        let Some(x) = visible_x(slots[i], first) else {
+            continue;
+        };
+        let y = if part.harness == Harness::Claude {
+            layout.claude_lane
+        } else {
+            layout.codex_lane
+        };
+        let selected = i == options.selected.min(report.parts.len() - 1);
+        let card = part_box(part, selected, options);
+        for dy in 0..9 {
+            for dx in 0..30 {
+                if x + dx < paint.end() && y + dy < paint.buf.area.height {
+                    paint.buf[(x + dx, y + dy)] = card[(dx, dy)].clone();
+                }
+            }
+        }
+        match &part.edge_in {
+            Some(Edge::Handoff { .. }) => {
+                handoff(part, &report.step.id, x + 4, options, paint);
+            }
+            Some(Edge::Return { at }) => {
+                // A return belongs to the preceding Codex box; do not draw an
+                // orphan edge when that box has scrolled out of the window.
+                if let Some(previous) = i.checked_sub(1)
+                    && report.parts[previous].harness == Harness::Codex
+                    && let Some(x) = visible_x(slots[previous], first)
+                {
+                    return_edge(x + 26, *at, options, paint);
+                }
+            }
+            None => {}
+        }
+    }
+}
+
+fn length(from: Timestamp, to: Timestamp) -> String {
+    let seconds = ((to.epoch_ms() - from.epoch_ms()) / 1000).max(1);
+    if seconds < 60 {
+        format!("{seconds} s")
+    } else {
+        format!("{} min", seconds / 60)
+    }
+}
+
+fn missing_run(part: &Part) -> String {
+    match part.status {
+        Some(PartStatus::Unlinked) => "no codex run found".to_owned(),
+        Some(PartStatus::Ambiguous) => {
+            let candidates = match part.edge_in {
+                Some(Edge::Handoff { candidates, .. }) => candidates,
+                _ => 0,
+            };
+            format!("{candidates} possible runs")
+        }
+        _ => "run unavailable".to_owned(),
+    }
+}
+
+fn counts_label(counts: &Counts) -> String {
+    [
+        (counts.reads, "read"),
+        (counts.edits, "edit"),
+        (counts.runs, "run"),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, name)| format!("{count} {name}{}", if count == 1 { "" } else { "s" }))
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
+/// A local card keeps clipping independent of the screen's dimensions.
+fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
+    let t = options.theme;
+    let codex = part.harness == Harness::Codex;
+    let missing = codex && (part.from.is_none() || part.to.is_none());
+    let color = if missing {
+        t.secondary
+    } else if codex {
+        t.codex
+    } else {
+        t.claude
+    };
+    let bg = if selected {
+        t.graph_selected
+    } else if codex && !missing {
+        t.codex_box
+    } else {
+        t.screen
+    };
+    let style = |fg| t.text_style(fg, bg);
+    let mut card = Buffer::empty(Rect::new(0, 0, 30, 9));
+    card.set_style(card.area, Style::default().bg(bg));
+    card.set_string(0, 0, format!("╭{}╮", "─".repeat(28)), style(color));
+    card.set_string(0, 8, format!("╰{}╯", "─".repeat(28)), style(color));
+    for y in 1..8 {
+        card.set_string(0, y, "│", style(color));
+        card.set_string(29, y, "│", style(color));
+    }
+    card.set_string(1, 3, "┄".repeat(28), style(t.border));
+    let harness = if codex { "codex" } else { "claude" };
+    let kind_style = if selected {
+        style(if missing { t.secondary } else { t.text }).add_modifier(Modifier::BOLD)
+    } else {
+        style(if missing { t.secondary } else { t.text })
+    };
+    card.set_line(
+        2,
+        1,
+        &Line::from(vec![
+            Span::styled("● ", style(color)),
+            Span::styled(harness, style(color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                cut(&format!(" · {}", part.kind), 27 - 2 - harness.len()),
+                kind_style,
+            ),
+        ]),
+        27,
+    );
+    box_subline(&mut card, part, options, bg, missing);
+    if !missing {
+        card.set_stringn(
+            2,
+            4,
+            cut(&counts_label(&part.counts), 27),
+            27,
+            style(t.text),
+        );
+        let count = if part.waiting_reads > 0 { 2 } else { 3 };
+        let start = part.notable.len().saturating_sub(count);
+        for (row, notable) in part.notable[start..].iter().enumerate() {
+            card.set_line(2, 5 + row as u16, &notable_line(notable, t, bg), 27);
+        }
+        if part.waiting_reads > 0 {
+            card.set_stringn(
+                2,
+                7,
+                cut(&format!("{} reads while codex ran", part.waiting_reads), 27),
+                27,
+                style(t.secondary),
+            );
+        }
+    }
+    card
+}
+
+fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions, bg: Color, missing: bool) {
+    let t = options.theme;
+    let style = |fg| t.text_style(fg, bg);
+    if missing {
+        card.set_stringn(2, 2, cut(&missing_run(part), 27), 27, style(t.secondary));
+        return;
+    }
+    let (Some(from), Some(to)) = (part.from, part.to) else {
+        return;
+    };
+    let duration = length(from, to);
+    let (label, color) = if part.harness == Harness::Claude {
+        (clock(from, options.offset, false), t.secondary)
+    } else {
+        match part.status {
+            Some(PartStatus::Done) => (
+                format!("✓ done {}", clock(to, options.offset, false)),
+                t.done,
+            ),
+            Some(PartStatus::Stale) => (
+                format!("stale since {}", clock(to, options.offset, false)),
+                t.warning,
+            ),
+            _ => ("working now".to_owned(), t.claude),
+        }
+    };
+    let suffix = if part.status == Some(PartStatus::Stale) {
+        String::new()
+    } else {
+        format!(" · {duration}")
+    };
+    card.set_line(
+        2,
+        2,
+        &Line::from(vec![
+            Span::styled(label, style(color)),
+            Span::styled(suffix, style(t.secondary)),
+        ]),
+        27,
+    );
+}
+
+fn notable_line(notable: &Notable, theme: Theme, bg: Color) -> Line<'static> {
+    let mark = match notable.ok {
+        Some(false) => Some((" ✗", theme.warning)),
+        Some(true)
+            if notable.label.starts_with("$ cargo ")
+                || notable.label == "$ pytest"
+                || notable.label == "$ npm test" =>
+        {
+            Some((" ✓", theme.done))
+        }
+        _ => None,
+    };
+    let label = cut(&notable.label, if mark.is_some() { 25 } else { 27 });
+    let style = |fg| theme.text_style(fg, bg);
+    let mut spans = if let Some(rest) = label.strip_prefix('▸') {
+        vec![
+            Span::styled("▸", style(theme.claude)),
+            Span::styled(rest.to_owned(), style(theme.text)),
+        ]
+    } else {
+        vec![Span::styled(label, style(theme.text))]
+    };
+    if let Some((mark, color)) = mark {
+        spans.push(Span::styled(mark, style(color)));
+    }
+    Line::from(spans)
+}
+
+fn handoff(part: &Part, step: &str, x: u16, options: &GraphOptions, paint: &mut Paint<'_>) {
+    let Some(Edge::Handoff {
+        at,
+        r#match: confidence,
+        candidates,
+        ..
+    }) = &part.edge_in
+    else {
+        return;
+    };
+    let t = options.theme;
+    let glyph = if *confidence == Match::Exact {
+        "│"
+    } else {
+        "╎"
+    };
+    for (y, glyph) in [(13, glyph), (14, glyph), (15, "▼")] {
+        paint.write(x, y, glyph, t.text, paint.end());
+    }
+    let label = if part.kind == "implement" {
+        format!("handed step {step}")
+    } else {
+        "handed fix".to_owned()
+    };
+    paint.write(x + 2, 13, &label, t.text, paint.end());
+    paint.write(
+        x + 2,
+        14,
+        &clock(*at, options.offset, true),
+        t.secondary,
+        paint.end(),
+    );
+    let words = match confidence {
+        Match::Exact => "confirmed".to_owned(),
+        Match::Heuristic => "matched by time".to_owned(),
+        Match::Ambiguous => format!("{candidates} possible runs"),
+        Match::Unlinked => "no run found".to_owned(),
+    };
+    paint.write(x + 2, 15, &words, t.secondary, paint.end());
+}
+
+fn return_edge(x: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
+    let color = options.theme.secondary;
+    for (y, glyph) in [(13, "▲"), (14, "│"), (15, "│")] {
+        paint.write(x, y, glyph, color, paint.end());
+    }
+    paint.write(x + 2, 13, "back to claude", color, paint.end());
+    paint.write(
+        x + 2,
+        14,
+        &clock(at, options.offset, true),
+        color,
+        paint.end(),
+    );
 }
 
 struct Paint<'a> {
