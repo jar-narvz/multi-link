@@ -1815,6 +1815,30 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
   with resume matching turned off (shown once in PROGRESS). Real run, counts only: unlinked hand-offs
   before/after, and step 8.7's parts (expected: both fix rounds linked, implement about 2 min).
 
+### Step 9.6a — A Claude session's folder ignores moves outside it (Codex)
+- Owner asked 2026-11-08 (screenshot): a session that ran one shell `cd` into its shared notes folder (outside the
+  repo, not a git repo) left multi-link on home, lost its parent nesting and showed as its own repo named after the
+  folder, branch `HEAD`. Cause: `crates/claude/src/lib.rs` keeps the newest record's `cwd` and `gitBranch`. Claude
+  Code lets a shell `cd` persist inside any of the session's working directories and stamps later records with it
+  (undocumented; seen once, session c205b4c0). The newest `cwd` must still win for worktrees: 8.4's sessions have
+  `cwd` in `<repo>/.claude/worktrees/step-8.4` and U6 shows them as `worktree step-8.4`.
+- **R8 Session folder.** The first record of the session's own with a `cwd` sets the session's home folder H. Own =
+  `sessionId` absent or equal to the id the parser already uses for activity (`activity_id`); a resumed session's
+  file opens with records inherited from the earlier session (fixture `85a715ba…`: inherited records in repo-f, its
+  own in repo-c, key says repo-c). Before H is set, every record updates `cwd` and `gitBranch` as today, so a file
+  of inherited records only is unchanged. After H is set, a record's `cwd`
+  counts only when it is H or inside H, compared by whole path components (`/r/repo-other` is not inside
+  `/r/repo`), no filesystem access. `Transcript.cwd` is the newest counted `cwd`. `gitBranch` is taken only from
+  records whose `cwd` counts or that have no `cwd`. Nothing else changes: per-call checkouts (`invocation.rs`) keep
+  their own record's `cwd`, and no JSON key changes.
+- Files: `crates/claude/src/lib.rs` (the rule and its unit tests), `crates/claude/tests/**`, `PROGRESS.md`
+- Verify: `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings` clean; every existing
+  answer key unchanged. New tests: H then a folder outside H then H's worktree → the worktree, branch from the
+  worktree record; H then outside only → H with H's branch; a sibling with H as a string prefix → ignored; a record
+  without `cwd` between them keeps today's branch update; the first `cwd` appearing after records without one is H.
+  Real run (release build, scratch only): `multi-link overview --json --since 2h` lists no repo under
+  `side-session-notes`, and session `c205b4c0` has `checkout` under `/Users/jarednarvaez/multi-link`.
+
 ### Step 9.7 — Real check, README, owner confirm (Claude)
 - Depends on: 9.6. Real counts before/after for every step (counts only, W10). Re-shoot `docs/img/**` for the
   12-hour clock and the new states. README: what `finished` now means and its evidence, the `.zst` reading, the
