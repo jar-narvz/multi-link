@@ -1,5 +1,5 @@
-//! Renders the home screen, one repo view, or a step graph with its colours to a standalone HTML page, for
-//! screenshots.
+//! Renders the home screen, one repo view, or a step graph with its colours to a standalone HTML
+//! page, for screenshots.
 //!
 //! The report comes from the CLI's JSON, so the same example covers a fixture and real `~`:
 //!
@@ -19,7 +19,8 @@
 //! `--repo` draws that repo's view instead (a full repo path, or a name that ends one): fitted range,
 //! folds on, imports hidden and the first lane selected, as the TUI opens it from the repo's title
 //! line. Pass the report's
-//! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would give it.
+//! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would
+//! give it.
 //! `--graph` draws a GraphReport instead; `--selected` is its zero-based part index (default 0).
 use std::{env, fmt::Write, fs, time::Duration};
 
@@ -180,7 +181,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--offset" => offset_arg = value.clone(),
             "--repo" if links.is_some() => repo_arg = Some(value.clone()),
             "--since" if links.is_some() => since = parse_since(value)?,
-            "--selected" if links.is_none() => selected = value.parse()?,
+            "--selected" if links.is_none() => {
+                selected = value
+                    .parse::<usize>()
+                    .map_err(|error| format!("--selected: {error}"))?;
+            }
             _ => return Err(format!("unknown flag {flag}").into()),
         }
     }
@@ -188,6 +193,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut buf = Buffer::empty(area);
     let Some(links) = links else {
         let report: GraphReport = serde_json::from_str(&fs::read_to_string(input)?)?;
+        if !report.parts.is_empty() && selected >= report.parts.len() {
+            return Err(format!(
+                "--selected: index {selected} is out of range for {} parts",
+                report.parts.len()
+            )
+            .into());
+        }
         let offset = if offset_arg == "local" {
             view::local_offset(report.now)
         } else {
