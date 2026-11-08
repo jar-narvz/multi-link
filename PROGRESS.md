@@ -1,7 +1,31 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-08, latest).** **Step 8.4c is committed (Claude-only mode, merged ff-only into `main`; branch
+**Resume here (2026-11-08, latest).** **Step 8.5 is committed (Claude-only mode, merged ff-only into `main`; branch
+`step/8.5` and worktree `.claude/worktrees/step-8.5` left in place); Step 8.6 closes Phase 8.** Run
+`python3 -I tools/codex-quota.py` first (at 8.5's start: 95% of the 5-hour window, `CODEX: LOW`, resets Sun 01:48;
+weekly 18%). What 8.6 needs from 8.5:
+- **How to reach a graph:** `multi-link tui` → `enter` on a repo → select a lane → `s`. Own tagged hand-off: its latest
+  step opens. A Codex lane uses its latest tagged incoming hand-off whose parent is in the same repo group. A coordinator
+  with none shows `started: step X, step Y · ←→ choose · enter opens step X · esc cancel` (direct started children,
+  all-time, from the worker's `Refresh.started_steps`). Otherwise footer `no step on this session`. In the graph: `←→`
+  (`↑↓` below 120 columns) move, `[ ]` walk `Refresh.graph_steps` (PLAN.md steps with a tagged hand-off from a Claude
+  session in the repo, then tagged ids not in PLAN.md by first hand-off), `o`/`f` open the part's session (footer words
+  `no codex run found` / `N possible runs` / `run unavailable` otherwise), `esc` back to the repo view.
+- For real renders without the TUI, `multi-link graph --repo R --step ID --json` plus the `home_html --graph` example
+  (Step 8.4 notes below) still work and give the same report the app draws.
+- **G11 (real data, release build, warm scanner):** the whole refresh with step 8.4's graph open (the largest real step:
+  25 tagged hand-offs, 51 parts) takes 229–236 ms (overview 32–33 ms + graph 160–164 ms + all-time pass 34–39 ms). The
+  first, cold refresh after start takes 6.4 s, almost all of it the overview's first parse (which predates Phase 8).
+  Before 8.5's fix the warm graph alone took 4.7–4.9 s.
+- **Known limits for the README (8.6):** a Codex lane whose Claude parent is outside the TUI window (default 2 h) says
+  `no step on this session` (review round 2, parked: needs a background hand-off whose parent goes quiet first);
+  rapid `[ ]` builds each intermediate graph (~230 ms each); with a graph open a refresh runs the all-time pass twice
+  (once inside `Scanner::graph`); the repo footer's `q quit` no longer draws at 101–109 columns; the `o`/`f` rule is
+  restated in `App::open_part` (same expression as the panel in graph.rs).
+- 519 tests pass, 1 ignored; clippy and fmt clean.
+
+**Step 8.4c (2026-11-08).** **Step 8.4c is committed (Claude-only mode, merged ff-only into `main`; branch
 `step/8.4c` and worktree `.claude/worktrees/step-8.4c` left in place); Step 8.5 is next.** Order: 8.5 → 8.6. Run
 `python3 -I tools/codex-quota.py` before every `codex exec` (at 8.4c's start: 95% of the 5-hour window, `CODEX: LOW`,
 resets Sun 01:48; weekly 18%). What 8.5 needs from 8.4c (its G9 amendment uses `started_by`):
@@ -482,6 +506,49 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.5: TUI: `s`, moving along a step, refresh — Claude (Superpowers)
+- Mode: Claude-only. `python3 -I tools/codex-quota.py` at the start → `primary: 95% of 300 min window, resets Sun
+  01:48` / `secondary: 18% of 10080 min window, resets Thu 00:53` / `CODEX: LOW -> Claude-only mode until the window
+  resets` (exit 1). Plan in the session scratchpad; implementer subagents (TDD) on `step/8.5`; one adversarial review
+  subagent per round given only `git diff main...step/8.5` and the step.
+- Did: measured G11 first: a warm `Scanner::graph` for real step 8.4 took 4.7–4.9 s, 4.5 s of it a fresh
+  `multi_link_claude::scan`; PLAN.md Files amended (core graph/scanner, tui graph.rs visibility; Review log). Core: the
+  graph reuses the scanner's file-key cache of parsed Claude files (`Scanner::claude_transcripts`, stats untouched).
+  Repo footer gains `s step` after `f fork`. App: `s` (own step / Codex incoming / coordinator picker / `no step on this
+  session`), graph mode with `←→`/`↑↓` by drawn width, `[ ]`, `o`/`f` with the panel's rule, `esc`, refresh keeping the
+  part by session and position, stale reports for another step ignored. CLI worker: `Effect::Graph` → `Request::Graph`,
+  immediate rebuild, graph + `graph_steps` on every refresh with a graph open, `started_steps` from an all-time pass on
+  every refresh.
+- Changed: `PLAN.md`, `crates/core/src/{graph,scanner}.rs`, `crates/tui/src/{app,graph,timeline}.rs`,
+  `crates/tui/tests/started.rs` (Refresh literal), `crates/cli/src/tui.rs`, `fixtures/expected/tui/repo-phase6.txt` and
+  `.styles.txt` (footer row 39 only), `PROGRESS.md`.
+- Verify (re-run by the step session on `step/8.5` at 8af1d20): `cargo test --workspace` → exit 0, 519 passed, 0
+  failed, 1 ignored; `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; `cargo fmt --all --check` → exit
+  0. `git diff --stat fda4e56 -- fixtures/expected` → only `repo-phase6.txt` (1 line) and `repo-phase6.styles.txt` (all
+  changed lines on row 39); every other answer key unchanged (`git diff --exit-code fda4e56 -- fixtures/expected
+  ':!…repo-phase6.txt' ':!…repo-phase6.styles.txt'` → exit 0); home and step goldens unchanged. Footer before/after:
+  `↑↓ select   o open   f fork   +/- zoom   …   q quit` → `↑↓ select   o open   f fork   s step   +/- zoom   …   q quit`,
+  `times UTC-8` at the same column, so the 6.1 pair fits. Tests the step names: app `graph_tests` (19: `s` with and
+  without a step, Codex lane, coordinator lists direct children only / own wins / none → footer, picker, arrows at both
+  ends, narrow + resize across 120, `[ ]` ends, stale report ignored, `esc` restores repo selection and window, `o`/`f`
+  on done/running/unlinked/ambiguous parts, refresh adding a part keeps the selection, refresh error keeps the screen,
+  empty graph, no `sentinel-` text in renders of all 13 phase8 reports); tui.rs (`graph_steps` order, phase8 graph
+  refresh equals its key, stale threshold: graph 1.5 part 2 `working` at 18:00 → `stale` at 18:06 with no file change,
+  coordinator end to end on `fixtures/sessions-started`, `started_steps` rules incl. a child outside the 2 h window);
+  scanner `warm_graph_parses_no_claude_file_again` (`Some(0)` warm, `Some(1)` after one touched file; fails with the fix
+  reverted). G11 on real data (scratch bench, release, same calls as the worker's refresh): step 8.4 (largest: 25 tagged
+  hand-offs, 51 parts) warm whole refresh 229–236 ms; cold first 6.4 s (overview's first parse). Real data stayed in
+  scratch.
+- Review: round 1 (adversarial subagent): 0 Critical, 2 Important, 7 Minor. Fixed: coordinator list used the windowed
+  overview (now all-time `started_steps`), cache test passed with the fix reverted, `s` during an open check, Codex
+  lane step from another repo. Parked with rulings: rapid `[ ]` builds intermediate graphs, keys before the first graph
+  after a failed refresh, double all-time pass, `q quit` hidden at 101–109 columns. Round 2: all four ADDRESSED; one
+  new Important parked (CLAUDE.md caps review at 2 rounds): a Codex lane whose parent is outside the window says `no
+  step on this session`. PLAN.md Review log has both rounds.
+- Gotchas: core fills `SessionRow.handoffs` only for Codex rows; a Claude lane's tagged hand-offs come from the links
+  report. The `repo-phase6` golden test has no update path; the footer row was edited by hand.
+
 
 ### 2026-11-08 — Step 8.4c: Sessions started by a session nest under it in the repo view — Claude (Superpowers)
 - Mode: Claude-only. `python3 -I tools/codex-quota.py` → `primary: 95% of 300 min window, resets Sun 01:48`,

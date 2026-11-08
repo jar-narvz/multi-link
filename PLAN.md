@@ -1602,6 +1602,17 @@ Hook reads the background task output path (T10) · Lost key on resize: crosster
 
 ## Review log
 
+### 2026-11-08 — Step 8.5 review rounds 1–2 (Claude, adversarial subagents, Claude-only mode)
+Round 1, 0 Critical / 2 Important / 7 Minor. Accepted and fixed: the coordinator list read the overview's windowed
+`children`, so children quiet for 2 h vanished (fix: the worker sends all-time `started_steps`, same rule); the cache test
+passed with the fix reverted (fix: counter is `Option`, warm `Some(0)`, one touched file `Some(1)`); `s` during a pending
+open; a Codex lane took a step from another repo's parent. Rejected (parked, reasons in PROGRESS): rapid `[ ]` builds each
+intermediate graph (~230 ms, last wins); keys before the first graph after a failed refresh (`esc` works, error shows);
+the all-time pass runs twice with a graph open (35 ms; removing it needs a core API change); `q quit` hidden at 101–109
+columns (the footer already cuts from the end below 120). Round 2: the four fixes ADDRESSED; one new Important parked at
+the 2-round cap: the Codex-lane fix checks the windowed group, so a Codex lane whose parent is outside the window says
+`no step on this session`. For 8.6's README as a known limit; a later fix sends per-Codex-id steps from the worker.
+
 ### 2026-11-08 — Step 8.5 Files amendment (Claude, during the step, Claude-only mode)
 G11 measured first: warm `Scanner::graph` 4.7 s on real step 8.4, 4.5 s of it a fresh `multi_link_claude::scan`. 8.3's
 entry had flagged this ("a cached or per-file path needs the claude crate"). Fix in core instead: reuse the scanner's
