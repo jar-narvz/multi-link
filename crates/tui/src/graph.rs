@@ -276,9 +276,24 @@ fn counts_label(counts: &Counts) -> String {
     ]
     .into_iter()
     .filter(|(count, _)| *count > 0)
-    .map(|(count, name)| format!("{count} {name}{}", if count == 1 { "" } else { "s" }))
+    .map(|(count, name)| plural(count, name))
     .collect::<Vec<_>>()
     .join(" · ")
+}
+
+fn short_id(id: &str) -> String {
+    id.chars().take(8).collect()
+}
+
+fn plural(n: usize, word: &str) -> String {
+    let suffix = if n == 1 {
+        ""
+    } else if word.ends_with("ch") {
+        "es"
+    } else {
+        "s"
+    };
+    format!("{n} {word}{suffix}")
 }
 
 /// A local card keeps clipping independent of the screen's dimensions.
@@ -525,6 +540,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
     let t = options.theme;
     let codex = part.harness == Harness::Codex;
     let available = !codex || has_run(part);
+    let session = part.session.as_deref().filter(|id| !id.is_empty());
     let harness = if codex { "codex" } else { "claude" };
     paint.rule(y.saturating_sub(1));
     paint.write(2, y, "selected", t.secondary, paint.end());
@@ -532,11 +548,8 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
     if !available {
         detail.push_str(&format!(" · {}", missing_run(part)));
     } else {
-        if let Some(session) = &part.session {
-            detail.push_str(&format!(
-                " · {}",
-                session.chars().take(8).collect::<String>()
-            ));
+        if let Some(session) = session {
+            detail.push_str(&format!(" · {}", short_id(session)));
         }
         if let (Some(from), Some(to)) = (part.from, part.to) {
             detail.push_str(&format!(
@@ -546,10 +559,9 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
             ));
         }
         detail.push_str(&format!(
-            " · active about {} min in {} stretch{}",
+            " · active about {} min in {}",
             view::minutes(part.active_ms),
-            part.stretches,
-            if part.stretches == 1 { "" } else { "es" }
+            plural(part.stretches, "stretch")
         ));
     }
     paint.line(
@@ -568,7 +580,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
     if codex && available {
         for (dy, label, quote) in [(1, "asked", &part.asked), (3, "said", &part.said)] {
             if dy < rows
-                && let Some(quote) = quote
+                && let Some(quote) = quote.as_deref().filter(|text| !text.is_empty())
             {
                 paint.write(12, y + dy, label, t.secondary, paint.end());
                 let until = paint.end().min(109);
@@ -578,7 +590,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
         }
     }
     if rows > 2
-        && let Some(origin) = panel_origin(report, selected, options.offset)
+        && let Some(origin) = panel_origin(report, part, selected, options.offset)
     {
         paint.write(12, y + 2, "from", t.secondary, paint.end());
         paint.write(19, y + 2, &origin, t.text, paint.end());
@@ -588,9 +600,8 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
             19,
             y + 3,
             &format!(
-                "{} untagged hand-off{} here",
-                part.untagged_handoffs,
-                if part.untagged_handoffs == 1 { "" } else { "s" }
+                "{} here",
+                plural(part.untagged_handoffs, "untagged hand-off")
             ),
             t.secondary,
             paint.end(),
@@ -604,7 +615,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
             paint.end(),
         );
     }
-    if rows > 4 && available && part.session.is_some() {
+    if rows > 4 && available && session.is_some() {
         paint.line(
             12,
             y + 4,
@@ -622,8 +633,12 @@ fn panel(report: &GraphReport, options: &GraphOptions, y: u16, rows: u16, paint:
     }
 }
 
-fn panel_origin(report: &GraphReport, selected: usize, offset: UtcOffset) -> Option<String> {
-    let part = &report.parts[selected];
+fn panel_origin(
+    report: &GraphReport,
+    part: &Part,
+    selected: usize,
+    offset: UtcOffset,
+) -> Option<String> {
     if part.harness == Harness::Claude {
         let last = report
             .parts
@@ -665,7 +680,7 @@ fn panel_origin(report: &GraphReport, selected: usize, offset: UtcOffset) -> Opt
     else {
         return None;
     };
-    let mut origin = format!("claude {}", parent.chars().take(8).collect::<String>());
+    let mut origin = format!("claude {}", short_id(parent));
     if let Some(parent) = parent_part.and_then(|index| report.parts.get(index)) {
         origin.push_str(&format!(" · {}", parent.kind));
     }
@@ -680,30 +695,43 @@ fn panel_origin(report: &GraphReport, selected: usize, offset: UtcOffset) -> Opt
     Some(origin)
 }
 
-/// Keep whole words within the display width, including quotes and ellipsis.
 fn quoted(text: &str, width: usize) -> String {
     if width < 2 {
         return String::new();
     }
-    if Span::raw(text).width() + 2 <= width {
-        return format!("“{text}”");
+    format!("“{}”", cut_words(text, width - 2))
+}
+
+/// Keep the latest whole-word boundary that fits, or cut an over-long word.
+fn cut_words(text: &str, width: usize) -> String {
+    let text = without_controls(text);
+    if Span::raw(&text).width() <= width {
+        return text;
     }
-    if width < 3 {
-        return "“”".to_owned();
+    if width == 0 {
+        return String::new();
     }
     let mut end = 0;
+    let mut used = 0;
     for (index, ch) in text.char_indices() {
-        if ch.is_whitespace() && Span::raw(&text[..index]).width() <= width - 3 {
+        if ch.is_whitespace() {
             end = index;
         }
-        if Span::raw(&text[..index + ch.len_utf8()]).width() > width - 3 {
+        let mut bytes = [0; 4];
+        let encoded: &str = ch.encode_utf8(&mut bytes);
+        used += Span::raw(encoded).width();
+        if used >= width {
             break;
         }
     }
     if end == 0 {
-        return format!("“{}”", cut(text, width - 2));
+        return cut(&text, width);
     }
-    format!("“{}…”", text[..end].trim_end())
+    format!("{}…", text[..end].trim_end())
+}
+
+fn without_controls(text: &str) -> String {
+    text.chars().filter(|ch| !ch.is_control()).collect()
 }
 
 fn return_edge(x: u16, y: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
@@ -764,11 +792,11 @@ impl Paint<'_> {
     }
 }
 
-/// Cut by character and display width, not at word boundaries. Quotes need
-/// a separate word-boundary cutter. Keep an ellipsis even for a long word.
+/// Cut by character and display width, keeping an ellipsis for a long word.
 fn cut(text: &str, width: usize) -> String {
-    if Span::raw(text).width() <= width {
-        return text.to_owned();
+    let text = without_controls(text);
+    if Span::raw(&text).width() <= width {
+        return text;
     }
     if width == 0 {
         return String::new();
@@ -824,19 +852,18 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
         .iter()
         .filter(|p| p.kind.starts_with("fix round "))
         .count();
-    let plural = |n| if n == 1 { "" } else { "s" };
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     format!(
-        "{} {} · {}–{} · {length} · {sessions} claude session{} · {runs} codex run{} · {fixes} fix round{}",
+        "{} {} · {}–{} · {length} · {} · {} · {}",
         MONTHS[date.month() as usize - 1],
         date.day(),
         clock(from, offset, false),
         clock(to, offset, false),
-        plural(sessions),
-        plural(runs),
-        plural(fixes)
+        plural(sessions, "claude session"),
+        plural(runs, "codex run"),
+        plural(fixes, "fix round")
     )
 }
 

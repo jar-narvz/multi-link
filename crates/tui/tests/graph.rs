@@ -31,6 +31,74 @@ fn golden_options() -> GraphOptions {
     }
 }
 
+#[test]
+fn panel_empty_quotes_are_absent() {
+    let mut report = report("1.1");
+    report.parts[1].asked = Some(String::new());
+    report.parts[1].said = Some(String::new());
+    let buf = render(&report, &golden_options(), 120, 40);
+    assert_eq!(rendered_rows(&buf, 28..=28), "\n");
+    assert_eq!(rendered_rows(&buf, 30..=30), "\n");
+}
+
+#[test]
+fn panel_empty_session_is_rendered_like_no_session() {
+    for selected in [0, 1] {
+        let mut report = report("1.1");
+        let options = GraphOptions {
+            selected,
+            ..golden_options()
+        };
+        report.parts[selected].session = None;
+        let absent = render(&report, &options, 120, 40);
+        report.parts[selected].session = Some(String::new());
+        let empty = render(&report, &options, 120, 40);
+        assert_eq!(
+            rendered_rows(&empty, 27..=27),
+            rendered_rows(&absent, 27..=27)
+        );
+        assert_eq!(rendered_rows(&empty, 31..=31), "\n");
+    }
+}
+
+#[test]
+fn quote_controls_are_removed_before_measuring_width() {
+    let mut report = report("1.1");
+    let quote = format!("\u{1b}[31m{} tail", "x".repeat(100));
+    report.parts[1].asked = Some(quote.clone());
+    report.parts[1].said = Some(quote);
+    let buf = render(&report, &golden_options(), 120, 40);
+    for (y, label) in [(28, "asked"), (30, "said ")] {
+        let row = rendered_rows(&buf, y..=y);
+        assert_eq!(
+            row,
+            format!("            {label}  “[31m{}…”\n", "x".repeat(83))
+        );
+        assert!(!row.contains('\u{1b}'));
+        assert_eq!(buf[(108, y as u16)].symbol(), "”");
+        assert_eq!(buf[(109, y as u16)].symbol(), " ");
+    }
+}
+
+#[test]
+fn title_controls_are_removed_before_width_cutting() {
+    let mut report = report("1.1");
+    report.step.title = Some("T".repeat(200));
+    let plain = render(&report, &golden_options(), 120, 40);
+    report.step.title = Some(format!("\u{1b}[31m{}", "T".repeat(200)));
+    let controlled = render(&report, &golden_options(), 120, 40);
+    report.step.title = Some(format!("[31m{}", "T".repeat(200)));
+    let stripped = render(&report, &golden_options(), 120, 40);
+    assert_ne!(
+        rendered_rows(&plain, 0..=0),
+        rendered_rows(&stripped, 0..=0)
+    );
+    assert_eq!(
+        rendered_rows(&controlled, 0..=0),
+        rendered_rows(&stripped, 0..=0)
+    );
+}
+
 fn render(report: &GraphReport, options: &GraphOptions, w: u16, h: u16) -> Buffer {
     let mut buf = Buffer::empty(Rect::new(0, 0, w, h));
     render_graph(report, options, buf.area, &mut buf);
