@@ -9,7 +9,7 @@ fn fixtures() -> PathBuf {
 }
 
 #[test]
-fn session_preserves_all_twenty_one_keys_and_nulls() {
+fn session_preserves_all_twenty_two_keys_and_nulls() {
     let instant = Timestamp::from_epoch_ms(0).unwrap();
     let session = Session {
         id: "session".into(),
@@ -31,11 +31,12 @@ fn session_preserves_all_twenty_one_keys_and_nulls() {
         asked: None,
         last_asked: None,
         title: None,
+        started_by: None,
         imported: false,
         state_since: None,
     };
     let value = serde_json::to_value(session).unwrap();
-    assert_eq!(value.as_object().unwrap().len(), 21);
+    assert_eq!(value.as_object().unwrap().len(), 22);
     assert_eq!(
         value,
         json!({
@@ -45,7 +46,7 @@ fn session_preserves_all_twenty_one_keys_and_nulls() {
             "started_at": "1970-01-01T00:00:00.000Z",
             "last_activity": "1970-01-01T00:00:00.000Z",
             "state": "unknown", "state_evidence": "no_signal",
-            "segments": [], "subagents": [], "activity": [], "asked": null, "last_asked": null, "title": null, "imported": false, "state_since": null
+            "segments": [], "subagents": [], "activity": [], "asked": null, "last_asked": null, "title": null, "started_by": null, "imported": false, "state_since": null
         })
     );
     assert_eq!(

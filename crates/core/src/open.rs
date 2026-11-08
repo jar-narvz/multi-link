@@ -243,6 +243,7 @@ mod tests {
             asked: None,
             last_asked: None,
             title: None,
+            started_by: None,
             imported: false,
             state_since: None,
         }

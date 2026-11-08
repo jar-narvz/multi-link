@@ -23,7 +23,14 @@ fn strip(value: &mut Value) {
             {
                 map.remove("title");
             }
-            for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
+            for field in [
+                "activity",
+                "asked",
+                "last_asked",
+                "imported",
+                "state_since",
+                "started_by",
+            ] {
                 map.remove(field);
             }
             map.values_mut().for_each(strip);

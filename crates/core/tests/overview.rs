@@ -98,7 +98,14 @@ fn older_keys_only_add_made_and_hook() {
                 {
                     object.remove("title");
                 }
-                for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
+                for field in [
+                    "activity",
+                    "asked",
+                    "last_asked",
+                    "imported",
+                    "state_since",
+                    "started_by",
+                ] {
                     object.remove(field);
                 }
                 object.remove("hook");

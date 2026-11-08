@@ -104,6 +104,7 @@ pub fn build(
             asked: session.asked.clone(),
             last_asked: session.last_asked.clone(),
             title: session.title.clone(),
+            started_by: session.started_by.clone(),
             imported: session.imported,
             state_since: session.state_since,
             children,
@@ -404,6 +405,7 @@ mod tests {
             asked: None,
             last_asked: None,
             title: None,
+            started_by: None,
             imported: false,
             state_since: None,
         }

@@ -1,7 +1,11 @@
 //! Read-only discovery of Claude transcripts and live-session records.
 
+mod app_record;
 mod invocation;
 
+pub use app_record::{
+    AppRecord, AppRecordRead, AppRecordScan, app_record_paths, read_app_record, scan_app_records,
+};
 pub use invocation::{Invocation, Launch, invocations, recognise};
 
 use std::{
@@ -19,6 +23,9 @@ pub struct ClaudeScan {
     pub records: Vec<SessionRecord>,
     /// Omitted session-record files, as sorted root-relative paths (no line number).
     pub bad_records: Vec<String>,
+    /// Desktop-app session records (8.4c). Filled by the core scanner, which caches them
+    /// per file; `scan` leaves it empty.
+    pub app_records: Vec<AppRecord>,
     pub skipped: Vec<Skipped>,
 }
 

@@ -102,6 +102,8 @@ pub struct Session {
     pub asked: Option<String>,
     pub last_asked: Option<String>,
     pub title: Option<String>,
+    /// Transcript id of the Claude session that started this one (8.4c S1); None otherwise.
+    pub started_by: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
 }
@@ -266,6 +268,8 @@ pub struct SessionRow {
     pub asked: Option<String>,
     pub last_asked: Option<String>,
     pub title: Option<String>,
+    /// Transcript id of the Claude session that started this one (8.4c S1); None otherwise.
+    pub started_by: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
     pub children: Vec<SessionRow>,

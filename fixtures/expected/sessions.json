@@ -21,6 +21,7 @@
       "asked": null,
       "last_asked": null,
       "title": "<name>",
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -44,6 +45,7 @@
       "asked": null,
       "last_asked": null,
       "title": "<name>",
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -67,6 +69,7 @@
       "asked": null,
       "last_asked": null,
       "title": "<name>",
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -90,6 +93,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -113,6 +117,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T00:00:02.000Z"
     },
@@ -136,6 +141,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -159,6 +165,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -182,6 +189,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -205,6 +213,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -228,6 +237,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -251,6 +261,7 @@
       "asked": "CASE-exec: <prompt>",
       "last_asked": "CASE-exec: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -274,6 +285,7 @@
       "asked": "CASE-exec: <prompt>",
       "last_asked": "CASE-resume: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T22:58:58.954Z"
     },
@@ -297,6 +309,7 @@
       "asked": "CASE-resume: <prompt>",
       "last_asked": "CASE-resume: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -320,6 +333,7 @@
       "asked": "CASE-plugin: <prompt>",
       "last_asked": "CASE-plugin: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -343,6 +357,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T22:59:25.940Z"
     },
@@ -366,6 +381,7 @@
       "asked": "CASE-bg: <prompt>",
       "last_asked": "CASE-bg: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -389,6 +405,7 @@
       "asked": "CASE-bg: <prompt>",
       "last_asked": "CASE-bg: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T22:59:47.841Z"
     },
@@ -412,6 +429,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -435,6 +453,7 @@
       "asked": "CASE-par-main: <prompt>",
       "last_asked": "CASE-par-main: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -458,6 +477,7 @@
       "asked": "CASE-par-wt: <prompt>",
       "last_asked": "CASE-par-wt: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -481,6 +501,7 @@
       "asked": "CASE-par-main: <prompt>",
       "last_asked": "CASE-par-main: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T23:00:25.273Z"
     },
@@ -504,6 +525,7 @@
       "asked": "CASE-par-wt: <prompt>",
       "last_asked": "CASE-par-wt: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T23:00:24.795Z"
     },
@@ -527,6 +549,7 @@
       "asked": "CASE-amb-1: <prompt>",
       "last_asked": "CASE-amb-1: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -550,6 +573,7 @@
       "asked": "CASE-amb-2: <prompt>",
       "last_asked": "CASE-amb-2: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     },
@@ -573,6 +597,7 @@
       "asked": "CASE-amb-1: <prompt>",
       "last_asked": "CASE-amb-1: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T23:00:45.703Z"
     },
@@ -596,6 +621,7 @@
       "asked": "CASE-amb-2: <prompt>",
       "last_asked": "CASE-amb-2: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T23:00:46.985Z"
     },
@@ -619,6 +645,7 @@
       "asked": "CASE-manual: <prompt>",
       "last_asked": "CASE-manual: <prompt>",
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": "2026-10-29T23:01:21.437Z"
     },
@@ -642,6 +669,7 @@
       "asked": null,
       "last_asked": null,
       "title": null,
+      "started_by": null,
       "imported": false,
       "state_since": null
     }

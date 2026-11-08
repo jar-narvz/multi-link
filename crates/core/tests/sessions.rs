@@ -227,7 +227,7 @@ fn merge_uses_transcript_fields_latest_record_and_bypasses_since() {
                 "repo":"/transcript-cwd", "checkout":"/transcript-cwd", "branch":"main",
                 "started_at":"2026-10-29T19:00:00.000Z", "last_activity":"2026-10-29T20:00:00.000Z",
                 "state":"busy", "state_evidence":"session_record", "subagents":[],
-                "activity":[], "asked":null, "last_asked":null, "title":null, "imported":false, "state_since":null,
+                "activity":[], "asked":null, "last_asked":null, "title":null, "started_by":null, "imported":false, "state_since":null,
                 "segments":[{"from":"2026-10-29T19:00:00.000Z", "to":"2026-10-29T20:00:00.000Z", "step":null, "step_source":"unknown"}]
             }]
         })

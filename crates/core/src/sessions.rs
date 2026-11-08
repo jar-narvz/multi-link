@@ -1,13 +1,13 @@
 //! Session assembly without hand-off discovery or linking.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     io,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use multi_link_claude::SessionRecord;
+use multi_link_claude::{AppRecord, SessionRecord};
 use multi_link_codex::ReadFailure;
 use multi_link_model::{
     Harness, Segment, Session, SessionsReport, State, StateEvidence, StepSource, Timestamp,
@@ -125,6 +125,7 @@ pub(crate) fn assemble(
             asked: transcript.asked,
             last_asked: transcript.last_asked,
             title: transcript.title,
+            started_by: None,
             imported: false,
             state_since,
         });
@@ -137,6 +138,7 @@ pub(crate) fn assemble(
             asked: None,
             last_asked: None,
             title: None,
+            started_by: None,
             imported: false,
             id: record.session_id,
             harness: Harness::Claude,
@@ -162,6 +164,7 @@ pub(crate) fn assemble(
             asked: rollout.asked,
             last_asked: rollout.last_asked,
             title: None,
+            started_by: None,
             imported: rollout.imported,
             state_since: if state == State::Unknown
                 && state_evidence == StateEvidence::TurnsComplete
@@ -195,6 +198,17 @@ pub(crate) fn assemble(
                 .is_none_or(|window| within_window(options.now, session.last_activity, window))
     });
     sessions.sort_by(|a, b| (a.started_at, &a.id).cmp(&(b.started_at, &b.id)));
+    let listed: HashSet<&str> = sessions
+        .iter()
+        .filter(|session| session.harness == Harness::Claude)
+        .map(|session| session.id.as_str())
+        .collect();
+    let started = started_by_links(&claude.app_records, &listed);
+    for session in &mut sessions {
+        if session.harness == Harness::Claude {
+            session.started_by = started.get(session.id.as_str()).cloned();
+        }
+    }
     let mut skipped = claude.skipped;
     skipped.extend(codex.skipped);
     skipped.extend(hooks.skipped);
@@ -210,6 +224,81 @@ pub(crate) fn assemble(
         incomplete,
         unreadable: codex.unreadable,
     })
+}
+
+/// S1: which listed Claude session started which. Returns child transcript id to parent
+/// transcript id. Uses only the desktop app's records; a link needs no guessing, so it is
+/// always exact. Rules, in order:
+/// - a record is eligible when it names a parent (`spawnedFrom.sessionId`) and is neither a
+///   user fork nor a `btw` side question (those are the user's acts);
+/// - one app id on two records makes the parent unresolvable, so children naming it get no
+///   link;
+/// - two eligible records of one child naming different parents give that child no link;
+/// - both ends must be listed Claude sessions and differ (a self-link is dropped);
+/// - every session on a cycle loses its edge (sessions pointing into a cycle keep theirs).
+pub(crate) fn started_by_links(
+    app_records: &[AppRecord],
+    listed: &HashSet<&str>,
+) -> HashMap<String, String> {
+    let mut by_app_id: HashMap<&str, Vec<&AppRecord>> = HashMap::new();
+    for record in app_records {
+        by_app_id.entry(&record.app_id).or_default().push(record);
+    }
+    // The parent a record names, as a comparable key: the parent's transcript id when the
+    // parent record is unique, else the raw app id (unresolvable).
+    let resolve = |app_id: &str| -> Result<&str, ()> {
+        match by_app_id.get(app_id).map(Vec::as_slice) {
+            Some([only]) => Ok(only.cli_session_id.as_str()),
+            _ => Err(()),
+        }
+    };
+    let mut named: BTreeMap<&str, Vec<Result<&str, &str>>> = BTreeMap::new();
+    for record in app_records {
+        if record.user_fork || record.btw {
+            continue;
+        }
+        let Some(parent) = record.parent_app_id.as_deref() else {
+            continue;
+        };
+        named
+            .entry(&record.cli_session_id)
+            .or_default()
+            .push(resolve(parent).map_err(|()| parent));
+    }
+    let mut edges: HashMap<&str, &str> = HashMap::new();
+    for (child, mut parents) in named {
+        parents.sort();
+        parents.dedup();
+        if let [Ok(parent)] = parents.as_slice()
+            && parent != &child
+            && listed.contains(child)
+            && listed.contains(parent)
+        {
+            edges.insert(child, parent);
+        }
+    }
+    // Each child has at most one parent, so a node is on a cycle exactly when walking up
+    // from it returns to it.
+    let on_cycle: HashSet<&str> = edges
+        .keys()
+        .copied()
+        .filter(|start| {
+            let mut at = *start;
+            for _ in 0..edges.len() {
+                match edges.get(at) {
+                    Some(next) if next == start => return true,
+                    Some(next) => at = next,
+                    None => return false,
+                }
+            }
+            false
+        })
+        .collect();
+    edges
+        .into_iter()
+        .filter(|(child, _)| !on_cycle.contains(child))
+        .map(|(child, parent)| (child.to_owned(), parent.to_owned()))
+        .collect()
 }
 
 /// Output-schema Session `record`: the session is `finished` only when every
@@ -346,5 +435,101 @@ mod phase6_tests {
                 to: t(900)
             }]
         );
+    }
+}
+
+#[cfg(test)]
+mod started_by_tests {
+    use super::*;
+
+    fn rec(app: &str, cli: &str, parent: Option<&str>) -> AppRecord {
+        AppRecord {
+            app_id: app.into(),
+            cli_session_id: cli.into(),
+            parent_app_id: parent.map(str::to_owned),
+            user_fork: false,
+            btw: false,
+        }
+    }
+
+    fn links(records: &[AppRecord], listed: &[&str]) -> Vec<(String, String)> {
+        let listed: HashSet<&str> = listed.iter().copied().collect();
+        let mut out: Vec<_> = started_by_links(records, &listed).into_iter().collect();
+        out.sort();
+        out
+    }
+
+    fn pair(a: &str, b: &str) -> (String, String) {
+        (a.to_owned(), b.to_owned())
+    }
+
+    #[test]
+    fn a_chain_links_every_edge() {
+        let records = [
+            rec("la", "a", None),
+            rec("lb", "b", Some("la")),
+            rec("lc", "c", Some("lb")),
+        ];
+        assert_eq!(
+            links(&records, &["a", "b", "c"]),
+            [pair("b", "a"), pair("c", "b")]
+        );
+    }
+
+    #[test]
+    fn unlisted_ends_self_links_and_flags_give_no_link() {
+        let mut fork = rec("lf", "f", Some("la"));
+        fork.user_fork = true;
+        let mut side = rec("ls", "s", Some("la"));
+        side.btw = true;
+        let records = [
+            rec("la", "a", None),
+            rec("lb", "b", Some("la")),
+            rec("lx", "x", Some("la")),
+            rec("lself", "self", Some("lself")),
+            fork,
+            side,
+        ];
+        // `b` is not listed; `x` is listed but its parent is not.
+        assert_eq!(
+            links(&records, &["a", "x", "self", "f", "s"]),
+            [pair("x", "a")]
+        );
+        assert_eq!(links(&records, &["x", "self", "f", "s"]), []);
+    }
+
+    #[test]
+    fn conflicts_and_shared_app_ids_give_no_link() {
+        let records = [
+            rec("la", "a", None),
+            rec("lb", "b", None),
+            rec("ld", "d", Some("la")),
+            rec("ld2", "d", Some("lb")),
+            // Same app id on two records: a child naming it has no resolvable parent.
+            rec("dup", "p", None),
+            rec("dup", "q", None),
+            rec("lv", "v", Some("dup")),
+        ];
+        assert_eq!(links(&records, &["a", "b", "d", "p", "q", "v"]), []);
+    }
+
+    #[test]
+    fn two_records_naming_the_same_parent_agree() {
+        let records = [
+            rec("la", "a", None),
+            rec("ld", "d", Some("la")),
+            rec("ld2", "d", Some("la")),
+        ];
+        assert_eq!(links(&records, &["a", "d"]), [pair("d", "a")]);
+    }
+
+    #[test]
+    fn a_cycle_loses_every_edge_but_a_tail_into_it_keeps_its_own() {
+        let records = [
+            rec("l1", "c1", Some("l2")),
+            rec("l2", "c2", Some("l1")),
+            rec("lt", "t", Some("l1")),
+        ];
+        assert_eq!(links(&records, &["c1", "c2", "t"]), [pair("t", "c1")]);
     }
 }

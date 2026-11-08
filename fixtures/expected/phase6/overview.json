@@ -61,6 +61,7 @@
           "asked": "Draft the release notes, then wait for my review before you publish.",
           "last_asked": "Draft the release notes, then wait for my review before you publish.",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": "2026-11-02T00:41:00.000Z",
           "children": []
@@ -100,6 +101,7 @@
           "asked": "Plan the home screen sentences and hand the next step to codex.",
           "last_asked": "Plan the home screen sentences and hand the next step to codex.",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": [
@@ -139,6 +141,7 @@
               "asked": "Read AGENTS.md, then do Step 6.3 in PLAN.md.",
               "last_asked": "Read AGENTS.md, then do Step 6.3 in PLAN.md.",
               "title": null,
+              "started_by": null,
               "imported": false,
               "state_since": "2026-11-03T05:31:00.000Z",
               "children": []
@@ -161,6 +164,7 @@
           "asked": null,
           "last_asked": null,
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -181,6 +185,7 @@
           "asked": null,
           "last_asked": null,
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -206,6 +211,7 @@
           "asked": "Summarise the failing tests in the CI log.",
           "last_asked": "Summarise the failing tests in the CI log.",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": "2026-11-03T05:44:00.000Z",
           "children": []
@@ -253,6 +259,7 @@
           "asked": "Where do we stand now, and what is left?",
           "last_asked": "Where do we stand now, and what is left?",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -327,6 +334,7 @@
           "asked": "Let's pick back up. Where do we stand after the scheduled runs?",
           "last_asked": "Let's pick back up. Where do we stand after the scheduled runs?",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": [
@@ -371,6 +379,7 @@
               "asked": "Run the unit tests and fix the date parser.",
               "last_asked": "Run the unit tests and fix the date parser.",
               "title": null,
+              "started_by": null,
               "imported": false,
               "state_since": "2026-11-03T06:24:40.000Z",
               "children": []
@@ -398,6 +407,7 @@
           "asked": "Can we recheck the export at 9?",
           "last_asked": "Can we recheck the export at 9?",
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -418,6 +428,7 @@
           "asked": null,
           "last_asked": null,
           "title": null,
+          "started_by": null,
           "imported": true,
           "state_since": null,
           "children": []
@@ -452,6 +463,7 @@
           "asked": null,
           "last_asked": null,
           "title": null,
+          "started_by": null,
           "imported": true,
           "state_since": null,
           "children": []
@@ -486,6 +498,7 @@
           "asked": null,
           "last_asked": null,
           "title": null,
+          "started_by": null,
           "imported": false,
           "state_since": null,
           "children": []

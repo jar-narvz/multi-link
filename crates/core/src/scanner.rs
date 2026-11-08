@@ -8,7 +8,7 @@ use std::{
     time::SystemTime,
 };
 
-use multi_link_claude::{ClaudeScan, ParsedFile, SessionRecord, SubagentFile};
+use multi_link_claude::{AppRecordRead, ClaudeScan, ParsedFile, SessionRecord, SubagentFile};
 use multi_link_codex::{Discovery, ReadFailure, Rollout};
 use multi_link_model::{HookSummary, OverviewReport, RepoSteps, Skipped, Timestamp};
 
@@ -106,6 +106,7 @@ pub struct Scanner {
     root: Option<PathBuf>,
     claude: Cache<ParsedFile>,
     records: Cache<Option<SessionRecord>>,
+    app_records: Cache<AppRecordRead>,
     codex: Cache<(Option<Rollout>, Vec<Skipped>)>,
     hooks: Cache<crate::hook::Records>,
     hook_summary: HookSummary,
@@ -119,6 +120,8 @@ type ClaudeInputs = (
     ClaudeScan,
     Vec<multi_link_claude::Invocation>,
     HashMap<String, Option<Timestamp>>,
+    // App-record directories that exist but could not be listed.
+    Vec<ReadFailure>,
 );
 
 struct Inputs {
@@ -141,11 +144,13 @@ impl Scanner {
         self.diagnostics.clear();
         self.claude.prune();
         self.records.prune();
+        self.app_records.prune();
         self.codex.prune();
         self.hooks.prune();
         self.outputs.prune();
-        let (claude, invocations, latest) = self.read_claude(root)?;
+        let (claude, invocations, latest, app_unreadable) = self.read_claude(root)?;
         let mut codex = self.read_codex(root)?;
+        codex.unreadable.extend(app_unreadable);
         let hooks = self.read_hooks(root, options, &mut codex);
         self.hook_summary = hooks.summary();
         let waiting = claude
@@ -244,6 +249,28 @@ impl Scanner {
                 _ => claude.bad_records.push(relative(root, &path)),
             }
         }
+        // Desktop-app records (8.4c S1): cached per file like the reads above. An
+        // absent directory is silent; a directory that cannot be listed is unreadable.
+        let (app_paths, app_failures) = multi_link_claude::app_record_paths(root);
+        let app_unreadable = app_failures
+            .into_iter()
+            .map(|(file, error)| ReadFailure { file, error })
+            .collect();
+        for path in app_paths {
+            let read = match self.app_records.read(&path, &mut self.stats, || {
+                Ok(multi_link_claude::read_app_record(&path))
+            }) {
+                Ok(read) => read,
+                // Deleted between listing and reading: nothing to report.
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(_) => AppRecordRead::Bad,
+            };
+            match read {
+                AppRecordRead::Record(record) => claude.app_records.push(record),
+                AppRecordRead::Ignored => {}
+                AppRecordRead::Bad => claude.bad_records.push(relative(root, &path)),
+            }
+        }
         claude
             .transcripts
             .sort_by(|a, b| a.transcript.cmp(&b.transcript));
@@ -252,7 +279,7 @@ impl Scanner {
         invocations.sort_by(|a, b| {
             (a.at, &a.parent, &a.invocation).cmp(&(b.at, &b.parent, &b.invocation))
         });
-        Ok((claude, invocations, latest))
+        Ok((claude, invocations, latest, app_unreadable))
     }
 
     fn read_codex(&mut self, root: &Path) -> io::Result<Discovery> {
