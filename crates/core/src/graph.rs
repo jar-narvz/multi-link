@@ -8,7 +8,8 @@ use std::{
 };
 
 use multi_link_model::{
-    Call, GraphCommit, GraphReport, GraphStep, Harness, Link, RepoSteps, Session, Timestamp, Turn,
+    Activity, Call, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness, Link, Match, Part,
+    PartStatus, RepoSteps, Session, Timestamp, Turn,
 };
 
 use crate::{Options, RepoMode, Scanner, overview::plan_folder};
@@ -53,15 +54,220 @@ fn owned(
             .is_some_and(|calls| calls.iter().any(|call| call.id == link.invocation))
 }
 
+/// Time order of hand-offs: `(at, invocation)`, then parent so the order is
+/// total across parents.
+fn order(link: &Link) -> (Timestamp, &str, &str) {
+    (link.at, link.invocation.as_str(), link.parent.as_str())
+}
+
+/// A Codex run: the child's turns that start in its hand-off's window (G4).
+/// `turns` is empty exactly when the run has no interval (unlinked,
+/// ambiguous or unavailable).
+struct Run<'a> {
+    status: PartStatus,
+    session: Option<String>,
+    turns: Vec<&'a Turn>,
+}
+
+/// One tagged hand-off of a chain and the run it launched.
+struct Hop<'a> {
+    link: &'a Link,
+    run: Run<'a>,
+}
+
+/// One chain (G2): a parent's hand-offs tagged with the step, in time order,
+/// with no hand-off tagged another step between them. Claude parts (Task 4)
+/// are cut around these hops; `build` flattens chains into parts.
+struct Chain<'a> {
+    hops: Vec<Hop<'a>>,
+}
+
+/// Chains of step `id`, ordered by first hand-off across parents. `owned` is
+/// every owned hand-off of any step, sorted by `order`.
+fn chains<'a>(input: &GraphInput<'a>, owned: &[&'a Link], id: &str) -> Vec<Chain<'a>> {
+    let mut parents: Vec<&str> = owned.iter().map(|l| l.parent.as_str()).collect();
+    parents.sort_unstable();
+    parents.dedup();
+    let mut groups: Vec<Vec<&'a Link>> = Vec::new();
+    for parent in parents {
+        let mut current: Option<Vec<&'a Link>> = None;
+        for &link in owned.iter().filter(|l| l.parent == parent) {
+            match link.step.as_deref() {
+                Some(step) if step == id => current.get_or_insert_with(Vec::new).push(link),
+                // A hand-off tagged another step ends the chain (pinned G2).
+                Some(_) => groups.extend(current.take()),
+                // An untagged hand-off never starts, ends or splits a chain.
+                None => {}
+            }
+        }
+        groups.extend(current);
+    }
+    groups.sort_by(|a, b| order(a[0]).cmp(&order(b[0])));
+    groups
+        .into_iter()
+        .map(|links| Chain {
+            hops: links
+                .into_iter()
+                .map(|link| Hop {
+                    link,
+                    run: run(input, owned, link),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+/// The run of one hand-off (G4, pinned G4 Status). Its window is from `at` to
+/// the next owned hand-off with the same child, of any parent and any step,
+/// half-open; unbounded when there is none.
+fn run<'a>(input: &GraphInput<'a>, owned: &[&'a Link], link: &Link) -> Run<'a> {
+    let no_run = |status, session: Option<&str>| Run {
+        status,
+        session: session.map(str::to_string),
+        turns: Vec::new(),
+    };
+    match link.r#match {
+        Match::Unlinked => return no_run(PartStatus::Unlinked, None),
+        Match::Ambiguous => return no_run(PartStatus::Ambiguous, None),
+        Match::Exact | Match::Heuristic => {}
+    }
+    let Some(child) = link.child.as_deref() else {
+        return no_run(PartStatus::Unavailable, None);
+    };
+    let next = owned
+        .iter()
+        .filter(|l| l.child.as_deref() == Some(child) && order(l) > order(link))
+        .map(|l| l.at)
+        .min();
+    let mut turns: Vec<&'a Turn> = input
+        .codex
+        .get(child)
+        .map(|details| {
+            details
+                .turns
+                .iter()
+                .filter(|t| t.start >= link.at && next.is_none_or(|next| t.start < next))
+                .collect()
+        })
+        .unwrap_or_default();
+    turns.sort_by_key(|t| t.start);
+    let Some(last) = turns.last() else {
+        // No session, an unreadable rollout, or no turn in the window.
+        return no_run(PartStatus::Unavailable, Some(child));
+    };
+    let status = if last.completed_at.is_some() {
+        PartStatus::Done
+    } else if input.now.epoch_ms() - last.last_record_at.epoch_ms() > STALE_MS {
+        PartStatus::Stale
+    } else {
+        PartStatus::Working
+    };
+    Run {
+        status,
+        session: Some(child.to_string()),
+        turns,
+    }
+}
+
+/// The State rule's silence threshold (pinned G4 Status).
+const STALE_MS: i64 = 300_000;
+
+/// A turn's end: `task_complete`, or its last record while open.
+fn turn_end(turn: &Turn) -> Timestamp {
+    turn.completed_at.unwrap_or(turn.last_record_at)
+}
+
+/// One stretch per non-empty burst ∩ turn, single records included; returns
+/// `(active_ms, stretches)`.
+fn stretches(bursts: &[Activity], turns: &[&Turn]) -> (i64, usize) {
+    let mut active_ms = 0;
+    let mut count = 0;
+    for burst in bursts {
+        for turn in turns {
+            let from = burst.from.max(turn.start);
+            let to = burst.to.min(turn_end(turn));
+            if from <= to {
+                active_ms += to.epoch_ms() - from.epoch_ms();
+                count += 1;
+            }
+        }
+    }
+    (active_ms, count)
+}
+
+/// The Codex part of a hop at `position` among its chain's Codex parts (G3).
+fn codex_part(input: &GraphInput<'_>, chain: usize, position: usize, hop: &Hop<'_>) -> Part {
+    let Hop { link, run } = hop;
+    let first = run.turns.first();
+    let last = run.turns.last();
+    let from = first.map(|t| t.start);
+    let bursts = run
+        .session
+        .as_deref()
+        .and_then(|child| {
+            input
+                .sessions
+                .iter()
+                .find(|s| s.id == child && s.harness == Harness::Codex)
+        })
+        .map_or(&[][..], |s| s.activity.as_slice());
+    let (active_ms, stretches) = stretches(bursts, &run.turns);
+    Part {
+        chain,
+        kind: match position {
+            0 => "implement".to_string(),
+            n => format!("fix round {n}"),
+        },
+        harness: Harness::Codex,
+        session: run.session.clone(),
+        from,
+        to: last.map(|t| turn_end(t)),
+        status: Some(run.status),
+        run_available: Some(!run.turns.is_empty()),
+        active_ms,
+        stretches,
+        asked: first.and_then(|t| t.prompt.clone()),
+        said: last
+            .filter(|t| t.completed_at.is_some())
+            .and_then(|t| t.last_agent_message.clone()),
+        counts: Counts::default(),
+        notable: Vec::new(),
+        waiting_reads: 0,
+        untagged_handoffs: 0,
+        edge_in: Some(Edge::Handoff {
+            at: link.at,
+            r#match: link.r#match,
+            parent: link.parent.clone(),
+            // Task 4 fills this when Claude parts exist.
+            parent_part: None,
+            gap_ms: from.map(|from| from.epoch_ms() - link.at.epoch_ms()),
+            candidates: link.candidates.len(),
+        }),
+    }
+}
+
 pub fn build(input: &GraphInput<'_>) -> GraphReport {
     let id = &input.step.id;
-    let tagged = input
+    let mut owned_links: Vec<&Link> = input
         .links
         .iter()
         .filter(|link| owned(link, input.repo, input.sessions, input.claude_calls))
-        .filter(|link| link.step.as_deref() == Some(id.as_str()))
-        .count();
-    let empty = (tagged == 0).then(|| {
+        .collect();
+    owned_links.sort_by(|a, b| order(a).cmp(&order(b)));
+    let chains = chains(input, &owned_links, id);
+    let parts = chains
+        .iter()
+        .enumerate()
+        .flat_map(|(index, chain)| {
+            chain
+                .hops
+                .iter()
+                .enumerate()
+                .map(move |(position, hop)| codex_part(input, index, position, hop))
+        })
+        .collect();
+    // A chain exists exactly when an owned hand-off has this step (G1).
+    let empty = chains.is_empty().then(|| {
         format!("no hand-offs tagged step {id} (a Claude-only step, or its prompt did not name it)")
     });
     GraphReport {
@@ -69,7 +275,7 @@ pub fn build(input: &GraphInput<'_>) -> GraphReport {
         repo: input.repo.to_string(),
         step: input.step.clone(),
         commit: input.commit.clone(),
-        parts: Vec::new(),
+        parts,
         empty,
     }
 }
