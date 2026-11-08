@@ -1626,10 +1626,183 @@ changes" line for exactly the rows U2/U5 change.
   `git diff --exit-code ddd91f8 -- fixtures/expected ':!fixtures/expected/tui' crates/cli crates/core crates/model`
   → exit 0. Axis labels never hide each other (7.3's tests still pass with the wider labels).
 
+### Phase 9 — Truthful states and links (Release 1.6)
+Need (design needs 1 and 2): the screens already exist, but much of what they say is "unknown". A session that
+ended should say so and be reopenable; a hand-off whose Codex run is still on disk should find it. Owner chose
+these fixes over the live grid on 2026-11-08. No new screen.
+Measured 2026-11-08 on real data (`links` / `sessions --since all`, at 6a2c306):
+- 206 hand-offs: 118 unlinked, 59 matched by time, 28 exact (`resume_arg` 16, `stdout` 10, `thread_ready` 2),
+  1 ambiguous.
+- 227 Claude sessions `unknown` / `no_signal`, 10 with a live record. 212 Codex `unknown` / `turns_complete`.
+- `~/.codex/sessions` holds 202 `rollout-*.jsonl.zst` (folders 2026-10-16 to 10-30) beside 212 plain `.jsonl`.
+  Each is a standard zstd frame (magic `28 b5 2f fd`) holding the same JSONL (`session_meta` first). multi-link
+  reads only `.jsonl`, so "Codex rollouts disappear" (Phase 8) is mostly this. Who compresses them (Codex
+  0.164.0 itself, presumably) was not checked; nothing in `~/.codex/config.toml` mentions it.
+- From `.claude/handoff/backlog-findings.md` (2026-11-07, sandbox on Claude Code 2.1.319 plus real data):
+  - Every clean exit (`/exit`, Ctrl-C, SIGTERM, SIGHUP) deletes `~/.claude/sessions/<pid>.json` and writes a
+    `cost-state` record to the transcript after the last turn. SIGKILL keeps the record, which is today's
+    `process_exit`. On real data the rule marked 204 of 205 pre-existing `unknown` sessions as exited, and 0 of
+    10 live transcripts had a `cost-state`. `SessionEnd` (a documented hook event) fired for every clean mode.
+  - Of 37 hook-era hand-offs, 36 have `child: null`. 32 redirect Codex's stdout to a file (`> f 2>&1`), so the
+    `session id:` line never reaches the hook. 4 pipe through `tail`/`head` (not recoverable).
+- Every field above is undocumented except the `SessionEnd` event. All counts move as sessions are added.
+
+Decisions (amend design.md in 9.0):
+- **R0 Contract.** Additive only. `state_evidence` gains `transcript_exit` and `session_end`; link `evidence`
+  gains `redirect_file`; Session gains nothing else. Every committed JSON value stays equal except where a fixture
+  added in 9.0 says otherwise. Answer keys are Claude's: 9.0 writes every new key and every existing key a phase
+  rule changes (with the list of changed values in PROGRESS), and later steps never edit keys; a key that looks
+  wrong is a stop for Claude to fix. Each step's Verify compares parsed JSON (`diff <(jq -S . key) <(… --json | jq
+  -S .)`) using `cargo run -q -p multi-link --` with 9.0's fixed `--now`, never the installed binary.
+- **R1 Compressed rollouts.** `rollout-*.jsonl.zst` is read like `.jsonl` (same parser after decompressing),
+  with the pure-Rust `ruzstd` crate (no C build step, no new tool to install). One opener in the codex crate
+  serves every reader: discovery in both the codex crate and the core scanner, `scan`, and `read_details` (graph
+  calls and turns). The same id in both forms → read the plain one. Decompressed size is capped at 64 MiB for
+  `.zst` only (plain reads unchanged); a file over the cap or that fails to decode is counted where Codex failures
+  are counted today (`unreadable`), never an error exit. Cached by file key like other reads.
+- **R2 Clean exit from the transcript.** No live session record and the last `cost-state` comes after the last
+  `assistant` record and after the last user turn (not meta, not a local command echo) → `finished` /
+  `transcript_exit`. A turn after it → today's rule. A live record always wins (it says the process lives).
+  Why trust an undocumented marker: it is positive evidence (P1), it was right on 10/10 live and on all four clean
+  sandbox modes, and if it changes, sessions fall back to `unknown`, never to a wrong `finished`.
+- **R3 Reopening an exited session.** `finished` from `transcript_exit` or `session_end` opens like
+  `process_exit` today, but by where it ran (the transcript's last `entrypoint`): `cli` or `sdk-cli` →
+  `claude --resume <id>` in the cwd; `claude-desktop` → the app link `claude://code/continue?session=local_<id>`
+  when exactly one app record (8.4c reader) maps the transcript id to a `local_<id>`; no mapping, two mappings,
+  or a missing or other entrypoint → `unavailable` with the command shown. Why: resuming a desktop session in a
+  terminal makes two writers if the app reopens it. The entrypoint and the mapping reach `open` through an
+  internal core resolver, not new Session keys (R0).
+- **R4 Hand-off child from the redirect file.** When the launch segment of a recognised `codex exec` redirects
+  stdout (`>`, `>>`, `1>`, `&>`, `&>>`, `>|`, with or without `2>&1`) to a literal path, that file is read like
+  the task output file today (64 KiB, the hook's 25 s poll; the core reads it while it exists). A relative path
+  resolves against the payload or record `cwd`, and only when no `cd` (or subshell) comes before the launch
+  segment in that command; exactly one stdout redirect on the segment, else none is read. Safe reads: open
+  non-blocking, `fstat` the opened file and require a regular file (a FIFO, device or directory → no read), then
+  check that the opened file's canonical path is under that `cwd` or the system temp dir (`$TMPDIR`, `/tmp`,
+  `/private/tmp`); read at most 64 KiB. Any other path, a `$VAR` or a quoted expansion → no read. Exact only when
+  the file holds exactly one `session id:` line (`redirect_file`; with `>>` an older run's id may be there too,
+  so two or more → no exact); otherwise today's rules. Order:
+  stdout → thread_ready → task_output → redirect_file. Fixture mode reads it root-relative, as P9 does.
+  Amends design decision 2 (Exact) to list this source.
+- **R5 `SessionEnd` hook record.** The hook gains `SessionEnd` → one record `{"kind":"ended","reason":…}`.
+  Order of state evidence for a Claude session: live record → `process_exit` → `session_end` → `transcript_exit`
+  → today's rules. An `ended` record counts only when no transcript turn and no later hook record comes after its
+  `at` (a resumed session clears it, including when the async record lands late). Reason `clear` ends the old id
+  only. The snippet change needs the owner to re-merge it into
+  `~/.claude/settings.json` (stop-and-ask at 9.6).
+- **R6 A Codex lane's step looks all-time.** A Codex lane whose Claude parent is outside the TUI window takes its
+  step from the worker's all-time hand-offs (per Codex id), so it no longer says `no step on this session`. The
+  rules of `own_step` stay: the parent must belong to the lane's repo group, and the latest tagged hand-off wins.
+
+Non-goals: the lost key on resize (wait for upstream crossterm-rs/crossterm#1154; rare, and a vendored fork costs
+more than it fixes); T10 as first written (read the task path from the transcript: about 0 of 37 gain); linking
+`codex exec resume --last` fix rounds (backlog: needs its own evidence study); pipes to `tail`/`head`; the live
+grid and pane jump; deciding who compresses rollouts; Windows/Linux paths.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings`
+clean; `git diff --stat 6a2c306 -- fixtures/expected` lists only `phase9/` and the existing keys 9.0 listed in
+PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
+
+### Step 9.0 — Rules, fixtures and answer keys (Claude)
+- Depends on: 8.7. R0–R6 into `docs/design.md` (and decision 2's Exact sources), the new enum values into
+  `docs/output-schema.md`. Synthetic fixtures (W10) and Claude-written answer keys for every later step, before
+  any code: a `.zst` rollout (and one with the same id in plain form, one corrupt); a clean-exit `cli` transcript,
+  a clean-exit desktop transcript with an app record and one without, a transcript with a turn after its
+  `cost-state`, a SIGKILL session with its record; a redirected hand-off with its log holding the id, one whose
+  log has no id, one redirected outside cwd and temp, one to `$VAR`; a `SessionEnd` hook record (exit and
+  `clear`, and exit → resume → turn); a Codex lane whose parent is outside a 2 h window, one with a newer cross-repo
+  parent. Fixed `--now` and file names recorded in PROGRESS. Existing fixtures that already hold a `cost-state`
+  after the last turn get their keys updated here, each changed value listed in PROGRESS.
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase9/**`, `fixtures/expected/**` (new
+  `phase9/` keys and only the listed existing values), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` except tests that compare changed existing keys, which are listed
+  by name in PROGRESS and must pass by 9.2; every new fixture file is synthetic (W10 scan); each later step's Verify
+  names a key that exists.
+
+### Step 9.1 — Read compressed Codex rollouts (Codex)
+- Depends on: 9.0. R1.
+- Files: workspace `Cargo.toml`, `Cargo.lock`, `crates/codex/Cargo.toml`, `crates/codex/src/**`,
+  `crates/codex/tests/**`, `crates/core/src/{scanner,graph}.rs` (discovery and `read_details` callers only),
+  `crates/core/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean; `multi-link sessions --root fixtures/sessions-phase9 --now <9.0 now> --since all
+  --json` equals its 9.0 key for the `.zst`, duplicate and corrupt cases (corrupt counted, exit 0); `graph --json`
+  on a step whose Codex run is only in `.zst` equals its key (calls and turns read); every other committed key
+  unchanged. Real run in scratch, counts only: Codex sessions and unlinked hand-offs before/after
+  (118 unlinked at 6a2c306).
+
+### Step 9.2 — Clean exit from the transcript; reopen by where it ran (Codex)
+- Depends on: 9.1. R2, R3.
+- Files: `crates/claude/src/{lib,app_record}.rs`, `crates/claude/tests/**`, `crates/model/src/lib.rs`,
+  `crates/core/src/{state,open,scanner,sessions}.rs`, `crates/core/tests/**`, `crates/cli/src/main.rs` (only to
+  pass the resolver to `open`), `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean; `sessions --json` on the 9.0 root: clean cli and desktop → `finished
+  transcript_exit`, turn after `cost-state` → `unknown no_signal`, live record → its record state (fixture mode
+  trusts records); SIGKILL → `finished process_exit` in a core test with `FakeProcessProbe::Gone`;
+  `open --dry-run`: cli and sdk-cli → `resume`, desktop with one app record → app link, desktop with none or two →
+  `unavailable` with the command; all equal their 9.0 keys. Real run, counts only: Claude `unknown` before/after
+  (227 at 6a2c306), split by entrypoint and by open action.
+
+### Step 9.3 — Hand-off child from the redirect file (Codex)
+- Depends on: 9.2. R4.
+- Files: `crates/claude/src/invocation.rs`, `crates/claude/tests/**`, `crates/model/src/lib.rs`
+  (`LinkEvidence::RedirectFile`), `crates/hook/src/lib.rs`, `crates/hook/tests/**`,
+  `crates/core/src/{link,hook}.rs` (the hook reader accepts `redirect_file`), `crates/core/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean; `links --json` on the 9.0 root: redirected with id → `exact redirect_file`; no
+  id, two ids (`>>`), outside cwd/temp, `$VAR`, after a `cd`, two redirects → never exact; with the log removed →
+  never exact unless a persisted hook record says `redirect_file`; hook and core tests for a FIFO (returns at once,
+  no read), a symlink escaping to `$HOME`, and an oversized log; hook unit tests for each redirect form; equal to
+  their 9.0 keys. Real run, counts only: exact links before/after (28 at 6a2c306; old logs are
+  mostly gone, so expect a small gain now and the hook to help from here on).
+
+### Step 9.4 — `SessionEnd` hook record (Codex)
+- Depends on: 9.3. R5.
+- Files: `crates/hook/src/lib.rs`, `crates/hook/tests/**`, `crates/cli/src/hook.rs`, `crates/cli/tests/**`,
+  `crates/core/src/{hook,state,sessions}.rs`, `crates/core/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean; the 9.0 `SessionEnd` fixtures → `finished session_end` (exit) and the `clear`
+  case as its key says; exit → resume → turn → not `session_end`; precedence tests (live record, `process_exit`,
+  `session_end`, `transcript_exit`, and against hook `waiting` evidence); the printed
+  snippet includes `SessionEnd` with the same `async`/`timeout` shape. Sandbox PTY `/exit` in
+  `~/multi-link-sandbox/repo-a` with the new snippet in its `settings.local.json` → one `ended` line with reason
+  `prompt_input_exit`.
+
+### Step 9.5 — Codex lane's step from all-time hand-offs (Codex)
+- Depends on: 9.4. R6.
+- Files: `crates/core/src/{scanner,overview}.rs` (only if the worker's data comes from there), `crates/tui/src/app.rs`,
+  `crates/cli/src/tui.rs`, `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean; a worker-to-App test (not a prefilled map) on the 9.0 fixture: `s` on the Codex
+  lane whose parent is outside the 2 h window opens its tagged step; with an older same-repo parent and a newer
+  cross-repo one, the same-repo step opens; a Codex lane with no tagged incoming hand-off still says `no step on
+  this session`; goldens unchanged.
+
+### Step 9.6 — Real check, README, owner confirm (Claude)
+- Depends on: 9.5. Real counts before/after for every step (counts only, W10). Re-shoot `docs/img/**` for the
+  12-hour clock and the new states. README: what `finished` now means and its evidence, the `.zst` reading, the
+  redirect rule and its path limit, and that all of it rests on undocumented formats. Then stop and ask the owner
+  to re-merge the hook snippet that `multi-link hook install --scope user` prints into `~/.claude/settings.json`,
+  reinstall, and confirm the need.
+- Files: `docs/phase9-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Verify: whole-phase Verify; W10 scan over every committed file; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Phase 9 plan critique (Codex, read-only, Codex loop)
+10 points; 8 accepted, 2 in part. Accepted: (1) `SessionEnd` must not outlive a resume: an `ended` record counts
+only with no later turn or hook record, and `process_exit` stays ahead of it (R5). (2) Redirect reads: regular
+files only via `fstat` on the opened file (a FIFO would hang the refresh), containment checked on the opened file
+(R4). (4) `core/src/sessions.rs` added to 9.2 and 9.4. (5) 9.3 adds `model` (`RedirectFile`) and `core/src/hook.rs`
+(the reader rejects unknown evidence, so persisted links would be lost). (6) The opener had no entrypoint or app
+mapping: an internal core resolver, no Session keys; `sdk-cli` resumes, unknown/ambiguous → `unavailable` (R3).
+(7) One `.zst` opener for discovery, `scan` and `read_details`; failures go to `unreadable`; the cap is `.zst`
+only; `Cargo.lock` added (R1, 9.1). (8) Fixture mode trusts records, so SIGKILL is a core test with
+`FakeProcessProbe::Gone`. (10) R6 keeps `own_step`'s same-repo and latest-tagged rules, tested worker to App.
+In part: (3) `>>` reuse and multiple redirects: exact needs exactly one `session id:` line and one stdout
+redirect, and a relative path after `cd` is not read; full shell semantics (subshell redirects, `exec >`) are
+not modelled, they simply give no exact link. (9) Verify now compares parsed JSON with `cargo run` and a fixed
+`--now`, and only Claude edits keys; an explicit per-value allowlist is kept as 9.0's PROGRESS list plus
+`git diff --stat`, not a generated diff tool, because the existing key tests already fail on any other change.
 
 ### 2026-11-08 — Step 8.7 Files amendment (Claude, during the step, Codex loop)
 Codex stopped twice, both times correctly. (1) My hand-off said "regenerate goldens only via the existing update
