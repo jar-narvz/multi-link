@@ -1494,8 +1494,10 @@ changes" line for exactly the rows U2/U5 change.
   inherited/subagent ignored, title change seen after a scanner refresh; U2 order, preamble rejected per candidate,
   placing-parent rule kept for a Codex child with two parents; U6 main checkout shows the branch, a worktree session whose `gitBranch` says `main` shows `worktree <folder>`; U5 header with a newer-step hand-off, same step, no
   tagged hand-off. JSON: every committed key equal except the added `title` (`git diff <8.4a commit> --
-  fixtures/expected | grep '^[-+] ' | grep -v '"title"'` prints nothing; 2026-11-08, same fix as 8.4c's point 8). Goldens: the 8.1 golden unchanged; the four 6.1 goldens change only in rows
-  whose fixture session gains a title or a header line, each listed in PROGRESS. W10 check over every committed file,
+  fixtures/expected ':!fixtures/expected/tui' | grep '^[-+] ' | grep -v '"title"'` prints nothing; 2026-11-08, same fix as 8.4c's point 8; the
+  `tui` text goldens are excluded because the goldens rule below covers them, amended 2026-11-08 when the hook
+  fixture's titled session changed `home-hook*.txt`). Goldens: the 8.1 golden unchanged; the four 6.1 goldens and the
+  other home goldens change only in rows whose fixture session gains a title or a header line, each listed in PROGRESS. W10 check over every committed file,
   titles included. Real run in scratch only, counts only: rows labelled by title, by step, by prompt.
 
 ### Step 8.4c — Sessions started by a session nest under it in the repo view (Codex)
@@ -1594,6 +1596,14 @@ changes" line for exactly the rows U2/U5 change.
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 8.4b Verify amendment (Claude, during the step)
+Codex's run showed the key check (`git diff c45fbcd -- fixtures/expected | grep …`) also reads the TUI text goldens
+in `fixtures/expected/tui/`. The hook fixture has one session with a (scrubbed) `custom-title`, so U2 changes row 14
+of `home-hook.txt` / `home-hook-full.txt` and their style files, which the grep then flags. The check's purpose is
+JSON keys ("every committed key equal except the added `title`"); text goldens have their own rule. Amended: the grep
+excludes `fixtures/expected/tui`, and the goldens rule now names the other home goldens too (changed rows listed in
+PROGRESS). No goal or differentiator change, so no owner stop.
 
 ### 2026-11-08 — Step 8.4c plan (Claude, Codex critique, read-only)
 The draft read the parent's `start_session` result plus the live record's `hostSessionId`; while planning, Claude

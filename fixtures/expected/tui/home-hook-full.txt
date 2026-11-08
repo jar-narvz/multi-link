@@ -12,7 +12,7 @@
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
  │ ◆ repo-c  no PLAN.md                                                1 waiting · 2 working now  │
  │                                                                                                │
- │ ◆ claude    claude · no prompt                       waiting on you · since Oct 28       main  │
+ │ ◆ claude    <name>                                   waiting on you · since Oct 28       main  │
  │ ● claude    claude · no prompt                       working now                               │
  │ ● claude    claude · no prompt                       working now                               │
  │   ⚠ shared checkout: repo-c                                                                    │

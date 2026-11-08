@@ -18,6 +18,11 @@ fn options(root: &Path) -> Options<'static> {
 fn strip(value: &mut Value) {
     match value {
         Value::Object(map) => {
+            if map.get("kind").and_then(Value::as_str) == Some("session")
+                || map.contains_key("transcript")
+            {
+                map.remove("title");
+            }
             for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
                 map.remove(field);
             }
@@ -264,4 +269,53 @@ fn latest_prompt_reaches_overview_after_cached_transcript_changes() {
             }
         }
     }
+}
+
+#[test]
+fn titles_are_owned_cleaned_and_refreshed_without_changing_prompts() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let path = root.join(".claude/projects/synthetic/owner.jsonl");
+    let mut lines = vec![
+        json!({"type":"user","sessionId":"owner","cwd":"/synthetic","timestamp":"2026-11-03T06:01:00Z","message":{"content":"Synthetic prompt"}}),
+        json!({"type":"custom-title","sessionId":"owner","customTitle":"Synthetic first"}),
+        json!({"type":"custom-title","sessionId":"owner","customTitle":"  Synthetic\n\tfinal\u{007f}  "}),
+        json!({"type":"custom-title","sessionId":"inherited","customTitle":"Synthetic inherited"}),
+        json!({"type":"custom-title","sessionId":"owner","customTitle":" \n "}),
+        json!({"type":"custom-title","sessionId":"owner","customTitle":42}),
+        json!({"type":"custom-title","customTitle":"Synthetic missing owner"}),
+    ];
+    write_lines(&path, &lines);
+    let subagent = root.join(".claude/projects/synthetic/owner/subagents/agent-child.jsonl");
+    write_lines(
+        &subagent,
+        &[json!({"type":"custom-title","sessionId":"owner","customTitle":"Synthetic subagent"})],
+    );
+    let parsed = multi_link_claude::parse_file(root, &subagent, true).unwrap();
+    assert_eq!(parsed.transcript.title, None);
+    use std::io::Write;
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .unwrap()
+        .write_all(b"{\"type\":\"custom-title\",\"customTitle\":\"broken\"\n")
+        .unwrap();
+    let mut scanner = Scanner::default();
+    let first = scanner.sessions(root, &options(root)).unwrap();
+    assert_eq!(first.report.skipped.len(), 1);
+    assert_eq!(
+        first.report.skipped[0].reason,
+        multi_link_model::SkipReason::InvalidJson
+    );
+    let session = &first.report.sessions[0];
+    assert_eq!(session.title.as_deref(), Some("Syntheticfinal"));
+    assert_eq!(session.asked.as_deref(), Some("Synthetic prompt"));
+    assert_eq!(session.last_asked, session.asked);
+    lines.push(json!({"type":"custom-title","sessionId":"owner","customTitle":"Synthetic refreshed title"}));
+    write_lines(&path, &lines);
+    let second = scanner.sessions(root, &options(root)).unwrap();
+    assert_eq!(
+        second.report.sessions[0].title.as_deref(),
+        Some("Synthetic refreshed title")
+    );
 }

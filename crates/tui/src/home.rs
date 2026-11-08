@@ -123,8 +123,26 @@ pub fn fit(text: &str, width: usize) -> String {
     }
     format!("{prefix}…")
 }
+#[cfg(test)]
 pub(crate) fn plan(g: &RepoGroup) -> String {
-    match g.plan.convention {
+    let (base, suffix) = plan_parts(g);
+    base + suffix.as_deref().unwrap_or("")
+}
+/// U5: the header fitted to `width` cells, cutting the step title before the hand-off suffix.
+pub(crate) fn plan_fit(g: &RepoGroup, width: usize) -> String {
+    let (base, suffix) = plan_parts(g);
+    let Some(suffix) = suffix else {
+        return fit(&base, width);
+    };
+    let whole = format!("{base}{suffix}");
+    let suffix_width = Span::raw(suffix.as_str()).width();
+    if Span::raw(whole.as_str()).width() <= width || suffix_width + 2 > width {
+        return fit(&whole, width);
+    }
+    fit(&base, width - suffix_width) + &suffix
+}
+fn plan_parts(g: &RepoGroup) -> (String, Option<String>) {
+    let label = match g.plan.convention {
         Convention::Missing => "no PLAN.md".into(),
         Convention::Unsupported => "PLAN.md not in the step format".into(),
         Convention::Supported => g.plan.latest_step.as_ref().map_or_else(
@@ -137,7 +155,17 @@ pub(crate) fn plan(g: &RepoGroup) -> String {
                 )
             },
         ),
+    };
+    if let Some(step) = g
+        .latest_tagged_handoff
+        .as_ref()
+        .or(g.latest_handoff.as_ref())
+        .and_then(|l| l.step.as_deref())
+        && g.plan.latest_step.as_ref().map(|s| s.id.as_str()) != Some(step)
+    {
+        return (label, Some(format!(" · latest hand-off step {step}")));
     }
+    (label, None)
 }
 fn glyph(s: State) -> &'static str {
     match s {
@@ -482,14 +510,14 @@ fn draw_counts_and_plan(
     }
     let rw = spans_width(&counts) as u16;
     let rx = w.saturating_sub(4 + rw);
-    let wording = plan(g);
     if rx > px + 3 {
         let fg = if g.plan.latest_step.is_some() {
             t.text
         } else {
             t.secondary
         };
-        write(body, px, y, &wording, rx - px - 2, fg, bg);
+        let width = rx - px - 2;
+        write(body, px, y, &plan_fit(g, usize::from(width)), width, fg, bg);
     }
     if rx > px {
         draw_spans(body, rx, y, counts, rw);
@@ -546,14 +574,33 @@ fn box_rows(buf: &mut Buffer, y: u16, inside: u16, border: Color, bg: Color) {
     }
 }
 fn session_branch(row: &SessionRow, w: u16, phrase_width: u16) -> String {
-    let branch = if w >= 80 {
-        row.branch.as_deref().unwrap_or("")
-    } else {
-        ""
-    };
+    let branch = if w >= 80 { view::place(row) } else { "" };
     // Three label cells retain a quoted ellipsis; only then may the branch shrink.
     let branch_budget = w.saturating_sub(4 + 20 + phrase_width + 2);
-    fit(branch, usize::from((w / 6).min(branch_budget)))
+    let width = usize::from((w / 6).min(branch_budget));
+    place_fit(branch, width)
+}
+/// U6: a worktree place keeps its folder name when cut (`worktree x` › `wt x` › `wt x…`).
+pub(crate) fn place_fit(place: &str, width: usize) -> String {
+    let Some(folder) = place.strip_prefix("worktree ") else {
+        return fit(place, width);
+    };
+    if Span::raw(place).width() <= width {
+        return place.into();
+    }
+    let short = format!("wt {folder}");
+    if Span::raw(short.as_str()).width() <= width || width < 5 {
+        return fit(&short, width);
+    }
+    let mut out = String::new();
+    for ch in short.chars() {
+        let next = format!("{out}{ch}");
+        if Span::raw(next.as_str()).width() + 1 > width {
+            break;
+        }
+        out = next;
+    }
+    out + "…"
 }
 fn status_column(
     w: u16,
@@ -860,4 +907,83 @@ fn footer_spans(keys: &[(&str, &str)], t: Theme) -> Vec<Span<'static>> {
         spans.push(segment(format!(" {words}"), t.secondary, t.screen, false));
     }
     spans
+}
+
+#[cfg(test)]
+mod amendment_tests {
+    use super::*;
+
+    #[test]
+    fn header_names_different_handoff_without_claiming_progress() {
+        let report: OverviewReport = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase6/overview.json"
+        ))
+        .unwrap();
+        let mut group = report
+            .repos
+            .into_iter()
+            .find(|g| g.latest_handoff.is_some())
+            .unwrap();
+        group.plan = multi_link_model::Plan {
+            convention: Convention::Supported,
+            latest_step: Some(multi_link_model::LatestStep {
+                id: "8.4a".into(),
+                title: None,
+                entry: None,
+            }),
+        };
+        group.latest_handoff.as_mut().unwrap().step = Some("8.4b".into());
+        assert_eq!(plan(&group), "step 8.4a · latest hand-off step 8.4b");
+        group.latest_handoff.as_mut().unwrap().step = Some("8.4a".into());
+        assert_eq!(plan(&group), "step 8.4a");
+        group.latest_handoff.as_mut().unwrap().step = None;
+        assert_eq!(plan(&group), "step 8.4a");
+        let mut tagged = group.latest_handoff.clone().unwrap();
+        tagged.step = Some("8.4b".into());
+        group.latest_tagged_handoff = Some(tagged);
+        assert_eq!(plan(&group), "step 8.4a · latest hand-off step 8.4b");
+        group.latest_tagged_handoff = None;
+        group.latest_handoff = None;
+        assert_eq!(plan(&group), "step 8.4a");
+    }
+
+    #[test]
+    fn header_cuts_the_step_title_before_the_handoff_suffix() {
+        let report: OverviewReport = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase6/overview.json"
+        ))
+        .unwrap();
+        let mut group = report.repos.into_iter().next().unwrap();
+        group.plan = multi_link_model::Plan {
+            convention: Convention::Supported,
+            latest_step: Some(multi_link_model::LatestStep {
+                id: "8.4a".into(),
+                title: Some("A long synthetic step title that will not fit in the header".into()),
+                entry: None,
+            }),
+        };
+        let mut tagged = serde_json::from_str::<multi_link_model::LinksReport>(include_str!(
+            "../../../fixtures/expected/links-tagged.json"
+        ))
+        .unwrap()
+        .links
+        .remove(0);
+        tagged.step = Some("8.4b".into());
+        group.latest_tagged_handoff = Some(tagged);
+        let fitted = plan_fit(&group, 50);
+        assert!(fitted.ends_with(" · latest hand-off step 8.4b"), "{fitted}");
+        assert!(fitted.starts_with("step 8.4a"), "{fitted}");
+        assert!(Span::raw(fitted.as_str()).width() <= 50, "{fitted}");
+        assert_eq!(plan_fit(&group, 200), plan(&group));
+        assert!(Span::raw(plan_fit(&group, 10).as_str()).width() <= 10);
+    }
+
+    #[test]
+    fn worktree_place_keeps_its_folder_when_cut() {
+        assert_eq!(place_fit("worktree step-8.4b", 30), "worktree step-8.4b");
+        assert_eq!(place_fit("worktree step-8.4b", 16), "wt step-8.4b");
+        assert_eq!(place_fit("worktree step-8.4b", 9), "wt step-…");
+        assert_eq!(place_fit("main", 16), "main");
+        assert!(Span::raw(place_fit("worktree step-8.4b", 3).as_str()).width() <= 3);
+    }
 }

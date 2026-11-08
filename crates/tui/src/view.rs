@@ -144,6 +144,9 @@ pub fn home_label(group: &RepoGroup, row: &SessionRow) -> String {
 }
 
 fn session_label_for(row: &SessionRow, parent: Option<&str>) -> String {
+    if let Some(title) = &row.title {
+        return title.clone();
+    }
     let step = if row.harness == Harness::Claude {
         row.made.first().map(String::as_str)
     } else {
@@ -154,8 +157,8 @@ fn session_label_for(row: &SessionRow, parent: Option<&str>) -> String {
     } else if let Some(prompt) = row
         .last_asked
         .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .or_else(|| row.asked.as_deref().filter(|s| !s.trim().is_empty()))
+        .filter(|s| prompt_label(s))
+        .or_else(|| row.asked.as_deref().filter(|s| prompt_label(s)))
     {
         format!("“{prompt}”")
     } else {
@@ -200,4 +203,15 @@ pub fn outcome(link: &Link, report: &OverviewReport) -> String {
             .into()
         }
     }
+}
+
+fn prompt_label(s: &str) -> bool {
+    !s.trim().is_empty()
+        && !s
+            .trim_start()
+            .starts_with("Background (from the session that started this one):")
+}
+
+pub fn place(row: &SessionRow) -> &str {
+    row.place.as_deref().or(row.branch.as_deref()).unwrap_or("")
 }

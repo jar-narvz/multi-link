@@ -195,3 +195,28 @@ fn future_clocks_keep_the_local_date_rule() {
         "22:08"
     );
 }
+
+#[test]
+fn title_precedes_step_and_each_background_candidate_is_rejected() {
+    let report = phase6();
+    let mut row = view::sessions(&report.repos[0]).next().unwrap().clone();
+    row.title = Some("Synthetic release review".into());
+    row.made = vec!["8.4b".into()];
+    assert_eq!(view::session_label(&row), "Synthetic release review");
+    row.title = None;
+    assert_eq!(view::session_label(&row), "step 8.4b");
+    row.made.clear();
+    row.last_asked =
+        Some("Background (from the session that started this one): synthetic context".into());
+    row.asked = Some("Synthetic first prompt".into());
+    assert_eq!(view::session_label(&row), "“Synthetic first prompt”");
+    row.asked = row.last_asked.clone();
+    assert_eq!(view::session_label(&row), "claude · no prompt");
+    row.last_asked = Some("Synthetic latest prompt".into());
+    assert_eq!(view::session_label(&row), "“Synthetic latest prompt”");
+    row.place = Some("worktree step-8.4b".into());
+    row.branch = Some("main".into());
+    assert_eq!(view::place(&row), "worktree step-8.4b");
+    assert_eq!(serde_json::to_value(&row).unwrap()["branch"], "main");
+    assert!(serde_json::to_value(&row).unwrap().get("place").is_none());
+}

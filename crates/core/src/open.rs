@@ -242,6 +242,7 @@ mod tests {
             activity: Vec::new(),
             asked: None,
             last_asked: None,
+            title: None,
             imported: false,
             state_since: None,
         }

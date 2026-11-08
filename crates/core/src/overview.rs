@@ -1,5 +1,5 @@
 //! The home screen's data (output-schema "overview", design T2, T5, T11).
-//! Pure: built from one refresh's listed sessions and links plus a plan lookup.
+//! Built from one refresh's listed sessions and links, a plan lookup, and memoised checkout display metadata.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -89,6 +89,7 @@ pub fn build(
         };
         handoffs.sort_by_key(|link| key(link));
         SessionRow {
+            place: crate::repo::place(repo_mode, session),
             id: session.id.clone(),
             harness: session.harness,
             state: session.state,
@@ -102,6 +103,7 @@ pub fn build(
             activity: session.activity.clone(),
             asked: session.asked.clone(),
             last_asked: session.last_asked.clone(),
+            title: session.title.clone(),
             imported: session.imported,
             state_since: session.state_since,
             children,
@@ -231,6 +233,11 @@ pub fn build(
                 .collect();
 
             RepoGroup {
+                latest_tagged_handoff: group_links
+                    .iter()
+                    .filter(|l| l.step.is_some())
+                    .max_by_key(|l| key(l))
+                    .map(|l| (*l).clone()),
                 repo: repo.to_owned(),
                 tier,
                 last_activity,
@@ -396,6 +403,7 @@ mod tests {
             activity: Vec::new(),
             asked: None,
             last_asked: None,
+            title: None,
             imported: false,
             state_since: None,
         }
@@ -450,6 +458,58 @@ mod tests {
             },
             &mut missing,
         )
+    }
+
+    #[test]
+    fn header_metadata_keeps_latest_tagged_link_and_titles_reach_children_and_merges() {
+        let mut parent = claude("parent", "/repo", State::Idle, 1);
+        parent.title = Some("Synthetic parent".into());
+        let mut child = codex("child", "/repo", State::Unknown, 2);
+        child.title = Some("Synthetic child".into());
+        let mut tagged = link("parent", "child", 3);
+        tagged.step = Some("8.4b".into());
+        let untagged = link("parent", "child", 4);
+        let report = run(vec![parent, child], vec![tagged, untagged]);
+        let group = &report.repos[0];
+        assert_eq!(group.latest_handoff.as_ref().unwrap().step, None);
+        assert_eq!(
+            group
+                .latest_tagged_handoff
+                .as_ref()
+                .unwrap()
+                .step
+                .as_deref(),
+            Some("8.4b")
+        );
+        let Row::Session(parent) = &group.rows[0] else {
+            panic!("parent")
+        };
+        assert_eq!(parent.title.as_deref(), Some("Synthetic parent"));
+        assert_eq!(parent.children[0].title.as_deref(), Some("Synthetic child"));
+        let sessions = (0..4)
+            .map(|i| {
+                let mut session = claude(&format!("quiet{i}"), "/repo", State::Idle, i);
+                session.title = Some(format!("Synthetic quiet {i}"));
+                session
+            })
+            .collect();
+        let report = run(sessions, vec![]);
+        let Row::Merged(merged) = &report.repos[0].rows[0] else {
+            panic!("merged")
+        };
+        assert_eq!(
+            merged
+                .rows
+                .iter()
+                .map(|r| r.title.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                "Synthetic quiet 3",
+                "Synthetic quiet 2",
+                "Synthetic quiet 1",
+                "Synthetic quiet 0"
+            ]
+        );
     }
 
     fn ids(rows: &[Row]) -> Vec<String> {

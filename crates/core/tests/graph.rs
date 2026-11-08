@@ -42,6 +42,7 @@ fn session(id: &str, harness: Harness, repo: &str, bursts: &[(&str, &str)]) -> S
         activity,
         asked: None,
         last_asked: None,
+        title: None,
         imported: false,
         state_since: None,
     }

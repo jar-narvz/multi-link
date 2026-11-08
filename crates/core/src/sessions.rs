@@ -124,6 +124,7 @@ pub(crate) fn assemble(
             activity: activity(transcript.activity_timestamps, options.now, options.since),
             asked: transcript.asked,
             last_asked: transcript.last_asked,
+            title: transcript.title,
             imported: false,
             state_since,
         });
@@ -135,6 +136,7 @@ pub(crate) fn assemble(
             activity: Vec::new(),
             asked: None,
             last_asked: None,
+            title: None,
             imported: false,
             id: record.session_id,
             harness: Harness::Claude,
@@ -159,6 +161,7 @@ pub(crate) fn assemble(
             activity: activity(rollout.activity_timestamps, options.now, options.since),
             asked: rollout.asked,
             last_asked: rollout.last_asked,
+            title: None,
             imported: rollout.imported,
             state_since: if state == State::Unknown
                 && state_evidence == StateEvidence::TurnsComplete

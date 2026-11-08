@@ -116,6 +116,7 @@ must equal `fixtures/expected/overview.json` (parsed); the Hook variant has its 
 | `subagents` | string[] | Claude: `agentId`s of `<id>/subagents/agent-<agentId>.jsonl` files. A subagent is part of its parent session, never a session of its own. Codex: `[]`. |
 | `activity` | `{"from": timestamp, "to": timestamp}`[] | Phase 6, design W1: recorded activity as bursts, oldest first. See Phase 6 fields. |
 | `asked` | string \| null | Phase 6, design W3: the session's first prompt. See Phase 6 fields. |
+| `title` | string \| null | U1: last own main-file Claude custom title, trimmed with controls removed; otherwise null. Codex and record-only sessions: null. |
 | `last_asked` | string \| null | Step 7.5, design P5: the latest eligible prompt. |
 | `imported` | bool | Phase 6, design W2: a Codex Desktop import. Always `false` for Claude. |
 | `state_since` | timestamp \| null | Phase 6, design W5: when the current `state` began, from the evidence `state` used. |
@@ -158,7 +159,7 @@ data on 2026-11-01 and are assumptions (design W2).
   excluding `isMeta: true`, `isCompactSummary: true` and text starting `[Request interrupted by user`.
   Codex uses the last non-imported `user_message` string; if none supplies a string, the last eligible
   X4 response-item user message. All-import rollouts and record-only sessions yield `null`.
-  `asked` retains its existing value and meaning. Labels prefer the latest step, then `last_asked`,
+  `asked` retains its existing value and meaning. Labels prefer `title`, then the latest step, then `last_asked`,
   then `asked`, then the harness's no-prompt fallback. Cache refresh re-parses changed transcripts.
 - **`state_since` (W5).** `waiting` or `stale` with `state_evidence` `session_record`: the record's
   `statusUpdatedAt`; `waiting` by `hook`: the `at` of the hook record that made it waiting; Codex `unknown` /
@@ -581,7 +582,7 @@ ascending.
 A Row is a SessionRow (`"kind": "session"`) or a MergedRow (`"kind": "merged"`).
 
 SessionRow: `{"kind": "session", "id", "harness", "state", "state_evidence", "checkout", "branch",
-"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "last_asked", "imported",
+"started_at", "last_activity", "handoffs": Link[], "made": string[], "activity", "asked", "last_asked", "title", "imported",
 "state_since", "children": SessionRow[]}` (Phase 6 fields and P5: Session → Phase 6 fields). The plain fields are copied
 from the Session. `handoffs`: for a Codex row, **every** listed link whose `child` is this id, ordered by
 (`at`, `invocation`), Link objects copied unchanged; `[]` for a Claude row. `children`: Codex rows placed
@@ -921,3 +922,15 @@ Fixture coverage (`--root fixtures/sessions`, probe off, so no `resume`): the fi
 Codex → `codex_not_supported`; with `fork`, the desktop records → `fork_needs_finished`. Hook variant:
 d1f3b188 (`waiting`, `entrypoint: cli`, no `hostSessionId`) and 11c1f13c (`waiting` / `hook`) →
 `running_without_app_link`. `resume` and `no_transcript` are unit tests with `FakeProcessProbe`.
+
+### Step 8.4b presentation amendment
+`title` comes from the last non-blank string `customTitle` in an own (`sessionId == id`), main-file
+`custom-title` record. Remove control characters, trim outer whitespace, and ignore empty results,
+non-strings, malformed records, inherited records and subagent records. It is copied to SessionRow,
+including children and merged members, and refreshed when a transcript changes.
+Labels prefer title › placing/made step › `last_asked` › `asked` › harness no-prompt text.
+Reject each prompt candidate beginning with the app's `Background (from the session that started this one):`
+preamble independently; JSON prompts stay unchanged. The placing-parent rule for Codex is unchanged.
+The repo header adds `· latest hand-off step <id>` when the latest tagged hand-off differs from the latest
+logged step. Place words show the memoised current main branch (recorded branch as fallback) or
+`worktree <folder>` for a linked checkout. Place is display metadata excluded from JSON; `branch` stays recorded.

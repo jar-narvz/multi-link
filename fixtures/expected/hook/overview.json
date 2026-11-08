@@ -58,6 +58,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": "2026-10-30T06:08:12.305Z",
           "children": []
@@ -77,6 +78,7 @@
           "activity": [{"from": "2026-10-29T23:01:12.554Z", "to": "2026-10-29T23:01:21.437Z"}],
           "asked": "CASE-manual: <prompt>",
           "last_asked": "CASE-manual: <prompt>",
+          "title": null,
           "imported": false,
           "state_since": "2026-10-29T23:01:21.437Z",
           "children": []
@@ -96,6 +98,7 @@
           "activity": [{"from": "2026-10-29T23:00:12.184Z", "to": "2026-10-29T23:00:28.757Z"}],
           "asked": "CASE-par-main: <prompt>",
           "last_asked": "CASE-par-main: <prompt>",
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": [
@@ -129,6 +132,7 @@
               "activity": [{"from": "2026-10-29T23:00:16.626Z", "to": "2026-10-29T23:00:25.273Z"}],
               "asked": "CASE-par-main: <prompt>",
               "last_asked": "CASE-par-main: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": "2026-10-29T23:00:25.273Z",
               "children": []
@@ -150,6 +154,7 @@
           "activity": [{"from": "2026-10-29T22:58:47.061Z", "to": "2026-10-29T22:59:04.662Z"}],
           "asked": "CASE-resume: <prompt>",
           "last_asked": "CASE-resume: <prompt>",
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": [
@@ -197,6 +202,7 @@
               "activity": [{"from": "2026-10-29T22:58:27.430Z", "to": "2026-10-29T22:58:58.954Z"}],
               "asked": "CASE-exec: <prompt>",
               "last_asked": "CASE-resume: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": "2026-10-29T22:58:58.954Z",
               "children": []
@@ -218,6 +224,7 @@
           "activity": [{"from": "2026-10-29T22:58:22.432Z", "to": "2026-10-29T22:58:42.511Z"}],
           "asked": "CASE-exec: <prompt>",
           "last_asked": "CASE-exec: <prompt>",
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -272,6 +279,7 @@
           "activity": [{"from": "2026-10-28T09:48:33.814Z", "to": "2026-10-28T10:03:04.840Z"}],
           "asked": null,
           "last_asked": null,
+          "title": "<name>",
           "imported": false,
           "state_since": "2026-10-28T10:03:11.004Z",
           "children": []
@@ -291,6 +299,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -310,6 +319,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -329,6 +339,7 @@
           "activity": [{"from": "2026-10-28T08:29:27.092Z", "to": "2026-10-28T08:29:27.092Z"}, {"from": "2026-10-28T08:35:30.983Z", "to": "2026-10-28T08:41:09.118Z"}, {"from": "2026-10-28T08:51:50.353Z", "to": "2026-10-28T08:52:33.955Z"}, {"from": "2026-10-28T09:00:08.859Z", "to": "2026-10-28T09:21:57.197Z"}, {"from": "2026-10-28T09:30:09.336Z", "to": "2026-10-28T09:36:49.897Z"}],
           "asked": null,
           "last_asked": null,
+          "title": "<name>",
           "imported": false,
           "state_since": null,
           "children": []
@@ -362,6 +373,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -426,6 +438,7 @@
               "activity": [{"from": "2026-10-29T23:00:33.781Z", "to": "2026-10-29T23:00:53.156Z"}],
               "asked": "CASE-amb-1: <prompt>",
               "last_asked": "CASE-amb-1: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": null,
               "children": [
@@ -459,6 +472,7 @@
                   "activity": [{"from": "2026-10-29T23:00:38.200Z", "to": "2026-10-29T23:00:45.703Z"}],
                   "asked": "CASE-amb-1: <prompt>",
                   "last_asked": "CASE-amb-1: <prompt>",
+                  "title": null,
                   "imported": false,
                   "state_since": "2026-10-29T23:00:45.703Z",
                   "children": []
@@ -480,6 +494,7 @@
               "activity": [{"from": "2026-10-29T23:00:35.769Z", "to": "2026-10-29T23:00:52.046Z"}],
               "asked": "CASE-amb-2: <prompt>",
               "last_asked": "CASE-amb-2: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": null,
               "children": [
@@ -513,6 +528,7 @@
                   "activity": [{"from": "2026-10-29T23:00:39.464Z", "to": "2026-10-29T23:00:46.985Z"}],
                   "asked": "CASE-amb-2: <prompt>",
                   "last_asked": "CASE-amb-2: <prompt>",
+                  "title": null,
                   "imported": false,
                   "state_since": "2026-10-29T23:00:46.985Z",
                   "children": []
@@ -534,6 +550,7 @@
               "activity": [{"from": "2026-10-29T23:00:03.496Z", "to": "2026-10-29T23:00:07.816Z"}],
               "asked": null,
               "last_asked": null,
+              "title": null,
               "imported": false,
               "state_since": null,
               "children": []
@@ -553,6 +570,7 @@
               "activity": [{"from": "2026-10-29T22:59:36.313Z", "to": "2026-10-29T22:59:59.499Z"}],
               "asked": "CASE-bg: <prompt>",
               "last_asked": "CASE-bg: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": null,
               "children": [
@@ -586,6 +604,7 @@
                   "activity": [{"from": "2026-10-29T22:59:40.726Z", "to": "2026-10-29T22:59:47.841Z"}],
                   "asked": "CASE-bg: <prompt>",
                   "last_asked": "CASE-bg: <prompt>",
+                  "title": null,
                   "imported": false,
                   "state_since": "2026-10-29T22:59:47.841Z",
                   "children": []
@@ -607,6 +626,7 @@
               "activity": [{"from": "2026-10-29T22:59:08.725Z", "to": "2026-10-29T22:59:32.147Z"}],
               "asked": "CASE-plugin: <prompt>",
               "last_asked": "CASE-plugin: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": null,
               "children": [
@@ -640,6 +660,7 @@
                   "activity": [{"from": "2026-10-29T22:59:19.993Z", "to": "2026-10-29T22:59:25.940Z"}],
                   "asked": null,
                   "last_asked": null,
+                  "title": null,
                   "imported": false,
                   "state_since": "2026-10-29T22:59:25.940Z",
                   "children": []
@@ -690,6 +711,7 @@
           "activity": [{"from": "2026-10-29T23:00:12.201Z", "to": "2026-10-29T23:00:29.712Z"}],
           "asked": "CASE-par-wt: <prompt>",
           "last_asked": "CASE-par-wt: <prompt>",
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": [
@@ -723,6 +745,7 @@
               "activity": [{"from": "2026-10-29T23:00:16.670Z", "to": "2026-10-29T23:00:24.795Z"}],
               "asked": "CASE-par-wt: <prompt>",
               "last_asked": "CASE-par-wt: <prompt>",
+              "title": null,
               "imported": false,
               "state_since": "2026-10-29T23:00:24.795Z",
               "children": []
@@ -758,6 +781,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -791,6 +815,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -810,6 +835,7 @@
           "activity": [],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -829,6 +855,7 @@
           "activity": [{"from": "2026-10-27T10:03:47.855Z", "to": "2026-10-27T10:04:27.890Z"}],
           "asked": null,
           "last_asked": null,
+          "title": "<name>",
           "imported": false,
           "state_since": null,
           "children": []
@@ -862,6 +889,7 @@
           "activity": [{"from": "2026-10-29T00:00:00.000Z", "to": "2026-10-29T00:00:03.000Z"}],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": null,
           "children": []
@@ -881,6 +909,7 @@
           "activity": [{"from": "2026-10-29T00:00:01.000Z", "to": "2026-10-29T00:00:02.000Z"}],
           "asked": null,
           "last_asked": null,
+          "title": null,
           "imported": false,
           "state_since": "2026-10-29T00:00:02.000Z",
           "children": []

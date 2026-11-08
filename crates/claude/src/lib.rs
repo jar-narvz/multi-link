@@ -31,6 +31,7 @@ pub struct Transcript {
     pub transcript: String,
     pub cwd: Option<String>,
     pub branch: Option<String>,
+    pub title: Option<String>,
     pub started_at: Option<Timestamp>,
     pub last_activity: Option<Timestamp>,
     pub subagents: Vec<String>,
@@ -247,6 +248,7 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
         transcript: relative_path(root, path),
         cwd: None,
         branch: None,
+        title: None,
         started_at: None,
         last_activity: None,
         subagents: Vec::new(),
@@ -302,6 +304,17 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             .is_none_or(|id| id == activity_id)
         {
             transcript.activity_timestamps.extend(at);
+        }
+        if !subagent
+            && value["type"] == "custom-title"
+            && value["sessionId"].as_str() == Some(id)
+            && let Some(title) = value["customTitle"].as_str()
+        {
+            let title: String = title.chars().filter(|c| !c.is_control()).collect();
+            let title = title.trim();
+            if !title.is_empty() {
+                transcript.title = Some(title.to_owned());
+            }
         }
         if !subagent
             && value["type"] == "user"

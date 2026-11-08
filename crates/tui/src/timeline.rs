@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 use crate::{
-    home::{basename, fit, plan},
+    home::{basename, fit, plan_fit},
     theme::Theme,
     view,
 };
@@ -614,8 +614,8 @@ impl RepoScene<'_> {
         p.text(
             Span::raw(&title).width() as u16 + 3,
             0,
-            &fit(
-                &plan(group),
+            &plan_fit(
+                group,
                 usize::from(rx.saturating_sub(Span::raw(&title).width() as u16 + 5)),
             ),
             rx.saturating_sub(Span::raw(&title).width() as u16 + 3),
@@ -813,10 +813,12 @@ impl RepoScene<'_> {
                 })
                 .unwrap_or_default()
         } else {
-            let mut sub = r
-                .branch
-                .as_ref()
-                .map_or_else(String::new, |b| format!("{b} · "));
+            let place = view::place(r);
+            let mut sub = if place.is_empty() {
+                String::new()
+            } else {
+                format!("{place} · ")
+            };
             sub += &view::status(r, report.now, o.offset);
             if let Some(l) = links.links.iter().find(|l| {
                 l.r#match == Match::Ambiguous && l.candidates.iter().any(|c| c.id == r.id)

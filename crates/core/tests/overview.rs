@@ -93,6 +93,11 @@ fn older_keys_only_add_made_and_hook() {
     fn remove_added(value: &mut Value) {
         match value {
             Value::Object(object) => {
+                if object.get("kind").and_then(Value::as_str) == Some("session")
+                    || object.contains_key("transcript")
+                {
+                    object.remove("title");
+                }
                 for field in ["activity", "asked", "last_asked", "imported", "state_since"] {
                     object.remove(field);
                 }

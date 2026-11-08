@@ -1,7 +1,29 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-08, latest).** **Step 8.4a is committed (Codex loop, review clean, no fix round); Step 8.4b
+**Resume here (2026-11-08, latest).** **Step 8.4b is committed (started in the Codex loop; Codex quota went LOW
+mid-step, so the review fixes and both reviews ran Claude-only); Step 8.4c is next.** Order: 8.4c → 8.5 → 8.6. Run
+`python3 -I tools/codex-quota.py` before every `codex exec` (at 8.4b's end: 95% of the 5-hour window, `CODEX: LOW`,
+resets Sun 01:48; weekly 18%). If still LOW, 8.4c runs in Claude-only mode. What 8.4c needs from 8.4b:
+- `title: Option<String>` sits on `Transcript` (claude crate), `Session` and `SessionRow` (model), between `last_asked`
+  and `imported`. 8.4c's `started_by` is a second additive key; its key check is `git diff <8.4b commit> --
+  fixtures/expected ':!fixtures/expected/started' …` and should also exclude `fixtures/expected/tui` if a home golden
+  changes (8.4b's amendment, PLAN.md Review log; 8.4c's goldens rule says every home golden unchanged, so it may not).
+- Display-only fields, `#[serde(skip)]`: `SessionRow.place` (U6, from `core::repo::place`, memoised git per checkout,
+  refreshed when `.git/HEAD` changes; `None` in fixture mode) and `RepoGroup.latest_tagged_handoff` (U5). A report
+  loaded back from JSON loses both; the TUI's `view::place` then falls back to `branch`.
+- TUI helpers in home.rs: `plan_fit(group, width)` (cuts the step title before ` · latest hand-off step <id>`),
+  `place_fit(place, width)` (`worktree x` › `wt x` › `wt x…`). Row label: `view::session_label_for` (title first).
+- Real data at `--now 2026-11-08T23:00:00Z --since all`, 411 overview rows: labels before (8.4a) 212 prompt / 91 step /
+  108 no-prompt; after 179 title / 40 step / 92 prompt / 100 no-prompt; 61 rows have a preamble prompt; 11 rows run in
+  a linked worktree.
+- Known limits (review nits, not fixed): at header widths ~30–38 `plan_fit` can leave `… · latest hand-off step X`
+  (step id lost); the suffix also shows when no step is logged (`no PLAN.md · latest hand-off step X`, untested);
+  the removed-worktree fallback is path-based (`.claude/worktrees/<name>` anywhere in the cwd); control characters in
+  a title are removed, not replaced by a space (U1 literal); `.git` as a file never refreshes the memoised branch.
+- 447 tests pass, 1 ignored; clippy and fmt clean.
+
+**Step 8.4a (2026-11-08).** **Step 8.4a is committed (Codex loop, review clean, no fix round); Step 8.4b
 is next.** Order: 8.4b → 8.4c → 8.5 → 8.6 (owner check closes Phase 8). Mode: the Codex loop is the default; before
 every `codex exec` run `python3 -I tools/codex-quota.py` (CLAUDE.md, "Mode switch"; at 8.4a hand-off: 81% / 16%,
 `CODEX: OK`). What 8.4b needs from 8.4a:
@@ -434,6 +456,110 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.4b: Rows named by title and place; header names the latest hand-off — Codex, then Claude (Claude-only after quota LOW)
+- Did: Implemented U1 own/main-file title parsing (last non-blank string, controls removed, trimmed), title
+  propagation to sessions and overview rows, U2 title/step/prompt ordering with per-candidate background-preamble
+  rejection, U5 latest-tagged-hand-off header wording, and U6 checkout place words on repo/home rows. Added tests
+  for title ownership, blank/non-string/malformed/inherited/subagent cases, scanner refresh, children/merged rows,
+  header differences and an untagged newer link, prompt fallback, recorded-branch preservation, real temporary git
+  main/worktree mapping for both harnesses, and a changed main branch. Existing two-parent Codex placing test passes.
+  Updated docs and the title-only JSON answers. Kept original scrubbed `<name>` title placeholders; no real titles
+  or prompts were read or added.
+- Mode: Codex loop. Owner reported `python3 -I tools/codex-quota.py` printed `CODEX: OK`, 84% of the 5-hour window,
+  17% weekly. This is the supplied hand-off preflight, not a command rerun by this agent.
+- Changed:
+  - `PROGRESS.md`
+  - `README.md`
+  - `crates/claude/src/lib.rs`
+  - `crates/core/src/open.rs`
+  - `crates/core/src/overview.rs`
+  - `crates/core/src/repo.rs`
+  - `crates/core/src/sessions.rs`
+  - `crates/core/tests/graph.rs`
+  - `crates/core/tests/overview.rs`
+  - `crates/core/tests/phase6.rs`
+  - `crates/core/tests/sessions.rs`
+  - `crates/model/src/lib.rs`
+  - `crates/model/tests/model.rs`
+  - `crates/tui/src/home.rs`
+  - `crates/tui/src/timeline.rs`
+  - `crates/tui/src/view.rs`
+  - `crates/tui/tests/view.rs`
+  - `docs/design.md`
+  - `docs/output-schema.md`
+  - `fixtures/expected/hook/overview.json`
+  - `fixtures/expected/hook/sessions-2h.json`
+  - `fixtures/expected/hook/sessions.json`
+  - `fixtures/expected/overview.json`
+  - `fixtures/expected/phase4/overview.json`
+  - `fixtures/expected/phase5/overview.json`
+  - `fixtures/expected/phase6/overview.json`
+  - `fixtures/expected/phase6/sessions.json`
+  - `fixtures/expected/sessions.json`
+  - Claude, in review: `PLAN.md` (Verify amendment), `crates/core/src/repo.rs`, `crates/tui/src/{home,timeline}.rs`,
+    `fixtures/expected/tui/home-hook{,-full}{.txt,.styles.txt}`
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 101, home snapshot target fails (decisive
+  output below); `cargo test --workspace --no-fail-fast` → exit 101, same two failures, every other target passed.
+  Actual full-run result tally: `Test totals: 443 passed; 2 failed; 1 ignored.` Actual failure output:
+  ```text
+  failures:
+      home_hook_full_snapshot_100x80
+      home_hook_snapshot_100x30
+
+  test result: FAILED. 16 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+  error: test failed, to rerun pass `-p multi-link-tui --test home`
+  ```
+  Full-run final output:
+  ```text
+  error: 1 target failed:
+      `-p multi-link-tui --test home`
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, final actual output:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.77s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `git diff c45fbcd -- fixtures/expected | grep '^[-+] ' | grep -v '"title"'` → **no output** (final grep exit 1,
+  meaning no selected lines). Independent recursive JSON comparison against c45fbcd, stripping `title` only from
+  Session/SessionRow objects (retaining PLAN titles), printed:
+  ```text
+  PASS: 28 committed expected JSON files preserve every existing key and value; only Session/SessionRow title ignored.
+  ```
+- Verify (golden rows): **no changed rows in any of the four 6.1 goldens**:
+  `home-phase6.txt`: none; `home-phase6.styles.txt`: none; `repo-phase6.txt`: none;
+  `repo-phase6.styles.txt`: none. 8.1 `step-phase8.txt` and `step-phase8.styles.txt` are also unchanged.
+  `git diff --exit-code c45fbcd --` with those six paths → no output, exit 0.
+- Review (Claude, 2026-11-08): Codex's run left 2 failing hook snapshots: the key check's grep also read
+  `fixtures/expected/tui`. Claude amended PLAN.md (Review log "Step 8.4b Verify amendment": the grep excludes
+  `fixtures/expected/tui`; home goldens fall under the goldens rule) and regenerated `home-hook.txt`,
+  `home-hook-full.txt` and their style files: **only row 14 changes** (`claude · no prompt` → the fixture's scrubbed
+  `<name>` title, same colours). Before a fix round, `python3 -I tools/codex-quota.py` → `primary: 95% … CODEX: LOW`
+  (exit 1), so the rest of the step ran Claude-only (CLAUDE.md mode switch). Round 1 (fresh adversarial Claude
+  subagent, diff + step only): 3 should-fix, all fixed by Claude: the home branch cell cut `worktree step-8.4b` to
+  `worktree…` (new `place_fit`: `wt <folder>`, then char cut); the U5 suffix was the first thing `fit` dropped
+  behind a real PLAN title (new `plan_fit` cuts the title first; home and repo-view headers); a removed
+  `.claude/worktrees/<name>` cwd fell back to `main` (now `worktree <name>`). Tests added for each. Nits recorded as
+  known limits in Current state. Round 2 (new subagent, the fixes only): no blockers, nits only. Claude re-ran Verify:
+  `cargo test --workspace` → 447 passed, 0 failed, 1 ignored; `cargo clippy --workspace --all-targets -- -D warnings`
+  → exit 0; `cargo fmt --all -- --check` → exit 0; `git diff c45fbcd -- fixtures/expected ':!fixtures/expected/tui' |
+  grep '^[-+] ' | grep -v '"title"'` → no output; `git diff --stat c45fbcd -- fixtures/expected/tui` → only the four
+  hook files (4 insertions, 16 deletions); 8.1 golden and the four 6.1 goldens unchanged. W10: added lines scanned
+  for home paths, emails, keys and session UUIDs → none; fixture titles are `null` or `<name>` only. Real run in
+  scratch, counts only (`overview --json --since all --now 2026-11-08T23:00:00Z`, 8.4a binary vs this build, 411
+  rows): before 212 prompt / 91 step / 108 no-prompt; after 179 title / 40 step / 92 prompt / 100 no-prompt.
+- Gotchas: (Codex, before review) **Verification conflict, not a pass.** `home-hook.txt` and `home-hook-full.txt` would change row 14
+  (0-based) from the old `claude · no prompt` label to the existing `<name>` title; their corresponding style files
+  would change that same row's runs. Those goldens are left untouched: changing them would make the exact required
+  pipeline print non-title lines. No fixture records were blanked or otherwise changed to evade this conflict.
+  Asked the owner whether to keep this blocker or exclude TUI goldens from the JSON key check; no answer yet.
+  `SessionRow.place` and `RepoGroup.latest_tagged_handoff` are Rust-only display metadata (`serde(skip)`), preserving
+  the recorded JSON branch and latest_handoff. Main-branch git results (including failure) are memoised per checkout,
+  refreshed when `.git/HEAD` contents change; linked worktrees use checkout basename. Fixture mode performs no git
+  display lookups. Real-data count/render run intentionally left to Claude. Nothing staged or committed; pre-existing
+  untracked `.claude/` untouched. Earlier verification runs caught missing title answers and legacy test key stripping;
+  those were fixed without removing existing PLAN-title coverage.
 
 ### 2026-11-08 — Step 8.4a: Busy is busy; help is not a hand-off — Codex
 - Did: Implemented U3: confirmed-live Claude busy records stay busy at any age; unavailable probes retain

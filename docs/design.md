@@ -691,7 +691,7 @@ P2–P4 are presentation rules for the following steps. P5 adds latest-prompt la
   record, also skipping `isMeta: true`, `isCompactSummary: true` and text starting
   `[Request interrupted by user`. Codex takes the last non-imported `user_message` string, or, if none,
   the last X4-eligible response-item user message. Normalize and truncate as W3. Screen labels use
-  latest made/placing step › `last_asked` › `asked` › harness `· no prompt`. Changed transcripts are
+  custom `title` › latest made/placing step › `last_asked` › `asked` › harness `· no prompt`. Changed transcripts are
   re-parsed by the cache on refresh. The selected line and session opening stay unchanged.
 
 No new screens. The four pinned Phase 6 text/style goldens remain unchanged. Other Claude
@@ -917,3 +917,12 @@ Later decisions (step convention, print-only hook install, autonomy gaps) are in
 ### Sources
 
 [zoetrope](https://github.com/furkankly/zoetrope) · [c9watch](https://github.com/minchenlee/c9watch) · [repo-sessions](https://github.com/gblacher2/repo-sessions) · [agtrace](https://github.com/lanegrid/agtrace) (READMEs read 2026-10-29)
+
+### Phase 8 row amendment (U1, U2, U5, U6)
+Claude titles use the last non-blank own main-file `custom-title.customTitle` string, with controls
+removed and outer whitespace trimmed. Inherited and subagent titles do not name the session; Codex has no title.
+Labels prefer title, placing/made step, latest prompt, first prompt, then the harness's no-prompt wording.
+Each prompt candidate starting with `Background (from the session that started this one):` is skipped independently.
+The repo header appends `· latest hand-off step <id>` when its latest tagged hand-off differs from the logged step.
+Place words use checkout identity: a linked worktree shows `worktree <folder>`; the main checkout uses its
+memoised git branch, falling back to recorded `gitBranch`. These display values never replace JSON `branch`.

@@ -101,6 +101,7 @@ pub struct Session {
     pub activity: Vec<Activity>,
     pub asked: Option<String>,
     pub last_asked: Option<String>,
+    pub title: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
 }
@@ -201,6 +202,9 @@ pub struct HookSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepoGroup {
+    /// Latest tagged hand-off for header wording; excluded from the JSON contract.
+    #[serde(skip)]
+    pub latest_tagged_handoff: Option<Link>,
     pub repo: String,
     pub tier: Tier,
     pub last_activity: Timestamp,
@@ -245,6 +249,9 @@ pub enum Row {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename = "session")]
 pub struct SessionRow {
+    /// Display-only checkout place; never changes the recorded JSON branch.
+    #[serde(skip)]
+    pub place: Option<String>,
     pub id: String,
     pub harness: Harness,
     pub state: State,
@@ -258,6 +265,7 @@ pub struct SessionRow {
     pub activity: Vec<Activity>,
     pub asked: Option<String>,
     pub last_asked: Option<String>,
+    pub title: Option<String>,
     pub imported: bool,
     pub state_since: Option<Timestamp>,
     pub children: Vec<SessionRow>,
