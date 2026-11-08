@@ -226,6 +226,43 @@ fn long_title_and_verify_are_cut_not_overlapped() {
 }
 
 #[test]
+fn default_footer_uses_the_shared_utc_label() {
+    let buf = render(&report("1.1"), &GraphOptions::default(), 120, 40);
+    assert!(
+        rendered_rows(&buf, 39..=39)
+            .trim_end()
+            .ends_with("times UTC")
+    );
+}
+
+#[test]
+fn long_repo_name_is_cut_before_the_step_label() {
+    let mut report = report("1.1");
+    report.repo = format!("/x/{}", "r".repeat(200));
+    let buf = render(&report, &golden_options(), 120, 40);
+    let row = rendered_rows(&buf, 0..=0);
+    let (basename, rest) = row.split_once(" › step 1.1").unwrap();
+    assert!(basename.starts_with(" r"));
+    assert!(basename.ends_with('…'));
+    assert!(rest.starts_with("  "));
+    assert!(Span::raw(row.trim_end()).width() <= 119);
+}
+
+#[test]
+fn verify_is_omitted_without_room_for_a_character_and_ellipsis() {
+    let mut report = report("1.13");
+    report.step.verify = Some("V".repeat(200));
+    // Empty reports have no summary: widths 21/22/23 leave 19/20/21 cells
+    // inside the margins, so the command gets zero/one/two cells.
+    for width in [21, 22] {
+        let buf = render(&report, &golden_options(), width, 40);
+        assert_eq!(rendered_rows(&buf, 1..=1), "\n", "width {width}");
+    }
+    let buf = render(&report, &golden_options(), 23, 40);
+    assert_eq!(rendered_rows(&buf, 1..=1), " Verify  V… (reported)\n");
+}
+
+#[test]
 fn graph_theme_roles() {
     let truecolor = Theme::from_env(Some("truecolor"), None);
     assert_eq!(truecolor.graph_selected, Color::Rgb(0x1B, 0x21, 0x30));

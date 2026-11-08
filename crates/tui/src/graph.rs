@@ -54,12 +54,52 @@ pub fn graph_slots(report: &GraphReport) -> Vec<usize> {
 /// Move only far enough to show the selected part in the five-slot window.
 pub fn graph_first_slot(report: &GraphReport, selected: usize, first_slot: usize) -> usize {
     let slots = graph_slots(report);
+    first_visible_slot(&slots, selected, first_slot)
+}
+
+fn first_visible_slot(slots: &[usize], selected: usize, first_slot: usize) -> usize {
     let Some(&last) = slots.last() else { return 0 };
     let selected = slots[selected.min(slots.len() - 1)];
     first_slot
         .min(last.saturating_sub(4))
         .min(selected)
         .max(selected.saturating_sub(4))
+}
+
+/// Fixed board rows for now. An out-of-bounds row is the height sentinel,
+/// which the painter clips; short-screen drop rules can be added here later.
+struct Layout {
+    header: [u16; 2],
+    header_rule: u16,
+    scroll: u16,
+    claude_lane: u16,
+    #[allow(dead_code)] // Reserved for the remaining graph rendering tasks.
+    codex_lane: u16,
+    #[allow(dead_code)]
+    panel: u16,
+    #[allow(dead_code)]
+    strip: u16,
+    legend: u16,
+    rule: u16,
+    footer: u16,
+}
+
+impl Layout {
+    fn new(height: u16) -> Self {
+        let row = |y: u16| y.min(height);
+        Self {
+            header: [row(0), row(1)],
+            header_rule: row(2),
+            scroll: row(3),
+            claude_lane: row(4),
+            codex_lane: row(16),
+            panel: row(27),
+            strip: row(33),
+            legend: row(36),
+            rule: row(38),
+            footer: row(39),
+        }
+    }
 }
 
 /// Render in local coordinates, then copy into the caller's clipped area.
@@ -70,34 +110,46 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
     }
     let mut screen = Buffer::empty(Rect::new(0, 0, area.width, area.height));
     screen.set_style(screen.area, Style::default().bg(options.theme.screen));
+    let layout = Layout::new(area.height);
     let mut paint = Paint {
         buf: &mut screen,
         theme: options.theme,
     };
-    header(report, options, &mut paint);
-    paint.rule(2);
+    header(report, options, &layout, &mut paint);
+    paint.rule(layout.header_rule);
     if let Some(empty) = &report.empty {
-        paint.write(2, 4, empty, options.theme.secondary);
+        paint.write(
+            2,
+            layout.claude_lane,
+            empty,
+            options.theme.secondary,
+            paint.end(),
+        );
     } else {
-        let first = graph_first_slot(report, options.selected, options.first_slot);
         let slots = graph_slots(report);
+        let first = first_visible_slot(&slots, options.selected, options.first_slot);
         let earlier = slots.iter().filter(|&&slot| slot < first).count();
         let later = slots.iter().filter(|&&slot| slot >= first + 5).count();
         if earlier > 0 {
             paint.write(
                 1,
-                3,
+                layout.scroll,
                 &format!("‹ {earlier} earlier"),
                 options.theme.secondary,
+                paint.end(),
             );
         }
         if later > 0 {
-            paint.right(3, &format!("{later} later ›"), options.theme.secondary);
+            paint.right(
+                layout.scroll,
+                &format!("{later} later ›"),
+                options.theme.secondary,
+            );
         }
-        legend(&mut paint);
+        legend(layout.legend, &mut paint);
     }
-    paint.rule(38);
-    footer(options, &mut paint);
+    paint.rule(layout.rule);
+    footer(options, layout.footer, &mut paint);
     options.theme.apply_no_color(&mut screen);
     for y in 0..area.height {
         for x in 0..area.width {
@@ -117,9 +169,10 @@ impl Paint<'_> {
         self.buf.area.width.saturating_sub(1)
     }
 
-    fn line(&mut self, x: u16, y: u16, line: Line<'_>, width: u16) {
-        if y < self.buf.area.height && x < self.end() {
-            self.buf.set_line(x, y, &line, width.min(self.end() - x));
+    fn line(&mut self, x: u16, y: u16, line: Line<'_>, until: u16) {
+        let until = until.min(self.end());
+        if y < self.buf.area.height && x < until {
+            self.buf.set_line(x, y, &line, until - x);
         }
     }
 
@@ -127,19 +180,14 @@ impl Paint<'_> {
         Span::styled(text.into(), self.theme.text_style(color, self.theme.screen))
     }
 
-    fn write(&mut self, x: u16, y: u16, text: &str, color: Color) {
-        self.line(
-            x,
-            y,
-            Line::from(self.span(text, color)),
-            self.end().saturating_sub(x),
-        );
+    fn write(&mut self, x: u16, y: u16, text: &str, color: Color, until: u16) {
+        self.line(x, y, Line::from(self.span(text, color)), until);
     }
 
     fn right(&mut self, y: u16, text: &str, color: Color) {
         let text = cut(text, self.end().saturating_sub(1) as usize);
         let x = self.end().saturating_sub(Span::raw(&text).width() as u16);
-        self.write(x, y, &text, color);
+        self.write(x, y, &text, color, self.end());
     }
 
     fn rule(&mut self, y: u16) {
@@ -148,11 +196,13 @@ impl Paint<'_> {
             y,
             &"─".repeat(self.end().saturating_sub(1) as usize),
             self.theme.border,
+            self.end(),
         );
     }
 }
 
-/// Cut by display width, keeping an ellipsis even for a single long word.
+/// Cut by character and display width, not at word boundaries. Quotes need
+/// a separate word-boundary cutter. Keep an ellipsis even for a long word.
 fn cut(text: &str, width: usize) -> String {
     if Span::raw(text).width() <= width {
         return text.to_owned();
@@ -161,21 +211,28 @@ fn cut(text: &str, width: usize) -> String {
         return String::new();
     }
     let mut prefix = String::new();
+    let mut used = 0;
     for ch in text.chars() {
-        let end = prefix.len();
-        prefix.push(ch);
-        if Span::raw(&prefix).width() >= width {
-            prefix.truncate(end);
+        let mut bytes = [0; 4];
+        let encoded: &str = ch.encode_utf8(&mut bytes);
+        let cells = Span::raw(encoded).width();
+        if used + cells >= width {
             break;
         }
+        used += cells;
+        prefix.push(ch);
     }
     prefix.push('…');
     prefix
 }
 
-fn clock(at: Timestamp, offset: UtcOffset) -> String {
+fn clock(at: Timestamp, offset: UtcOffset, with_seconds: bool) -> String {
     let at = view::datetime(at).to_offset(offset);
-    format!("{:02}:{:02}", at.hour(), at.minute())
+    let mut label = format!("{:02}:{:02}", at.hour(), at.minute());
+    if with_seconds {
+        label.push_str(&format!(":{:02}", at.second()));
+    }
+    label
 }
 
 fn summary(report: &GraphReport, offset: UtcOffset) -> String {
@@ -210,47 +267,62 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
         .filter(|p| p.kind.starts_with("fix round "))
         .count();
     let plural = |n| if n == 1 { "" } else { "s" };
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
     format!(
         "{} {} · {}–{} · {length} · {sessions} claude session{} · {runs} codex run{} · {fixes} fix round{}",
-        &date.month().to_string()[..3],
+        MONTHS[date.month() as usize - 1],
         date.day(),
-        clock(from, offset),
-        clock(to, offset),
+        clock(from, offset, false),
+        clock(to, offset, false),
         plural(sessions),
         plural(runs),
         plural(fixes)
     )
 }
 
-fn header(report: &GraphReport, options: &GraphOptions, paint: &mut Paint<'_>) {
+fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
     let t = options.theme;
     let commit = report.commit.as_ref().map(|commit| {
         format!(
             "✓ committed {} · {}",
             commit.hash,
-            clock(commit.at, options.offset)
+            clock(commit.at, options.offset, false)
         )
     });
     let mut title_end = paint.end();
     if let Some(commit) = commit {
         title_end = title_end.saturating_sub(Span::raw(&commit).width() as u16 + 2);
-        paint.right(0, &commit, t.done);
+        paint.right(layout.header[0], &commit, t.done);
     }
     let bold = t.text_style(t.text, t.screen).add_modifier(Modifier::BOLD);
+    let step = format!("step {}", report.step.id);
+    let suffix_width = Span::raw(format!(" › {step}  ")).width();
+    // Keep one cell for the title (or its ellipsis) when it is present.
+    let title_min = usize::from(
+        report
+            .step
+            .title
+            .as_ref()
+            .is_some_and(|title| !title.is_empty()),
+    );
+    let repo_width =
+        usize::from(title_end.saturating_sub(1)).saturating_sub(suffix_width + title_min);
     let prefix = Line::from(vec![
-        Span::styled(basename(&report.repo).to_owned(), bold),
+        Span::styled(cut(basename(&report.repo), repo_width), bold),
         paint.span(" › ", t.secondary),
-        Span::styled(format!("step {}", report.step.id), bold),
+        Span::styled(step, bold),
         paint.span("  ", t.text),
     ]);
     let title_x = 1usize.saturating_add(prefix.width());
-    paint.line(1, 0, prefix, title_end.saturating_sub(1));
+    paint.line(1, layout.header[0], prefix, title_end);
     if title_x < usize::from(title_end) {
         let title = cut(
             report.step.title.as_deref().unwrap_or(""),
             usize::from(title_end) - title_x,
         );
-        paint.write(title_x as u16, 0, &title, t.text);
+        paint.write(title_x as u16, layout.header[0], &title, t.text, title_end);
     }
     let left = if report.parts.is_empty() {
         String::new()
@@ -258,7 +330,7 @@ fn header(report: &GraphReport, options: &GraphOptions, paint: &mut Paint<'_>) {
         summary(report, options.offset)
     };
     let left = cut(&left, paint.end().saturating_sub(1) as usize);
-    paint.write(1, 1, &left, t.secondary);
+    paint.write(1, layout.header[1], &left, t.secondary, paint.end());
     if let Some(verify) = &report.step.verify {
         let start = if left.is_empty() {
             1
@@ -266,15 +338,21 @@ fn header(report: &GraphReport, options: &GraphOptions, paint: &mut Paint<'_>) {
             1 + Span::raw(&left).width() as u16 + 2
         };
         let available = paint.end().saturating_sub(start) as usize;
-        let fixed = Span::raw("Verify   (reported)").width();
-        if available >= fixed {
+        let prefix = "Verify  ";
+        let suffix = " (reported)";
+        let fixed = Span::raw(prefix).width() + Span::raw(suffix).width();
+        if available >= fixed + 2 {
             let command = cut(verify, available - fixed);
-            paint.right(1, &format!("Verify  {command} (reported)"), t.secondary);
+            paint.right(
+                layout.header[1],
+                &format!("{prefix}{command}{suffix}"),
+                t.secondary,
+            );
         }
     }
 }
 
-fn legend(paint: &mut Paint<'_>) {
+fn legend(y: u16, paint: &mut Paint<'_>) {
     let t = paint.theme;
     let mut spans = Vec::new();
     for (i, (glyph, words, color)) in [
@@ -294,10 +372,10 @@ fn legend(paint: &mut Paint<'_>) {
         spans.push(paint.span(glyph, color));
         spans.push(paint.span(words, t.secondary));
     }
-    paint.line(1, 36, Line::from(spans), paint.end().saturating_sub(1));
+    paint.line(1, y, Line::from(spans), paint.end());
 }
 
-fn footer(options: &GraphOptions, paint: &mut Paint<'_>) {
+fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let t = paint.theme;
     let mut spans = Vec::new();
     for (i, (key, words)) in [
@@ -317,17 +395,10 @@ fn footer(options: &GraphOptions, paint: &mut Paint<'_>) {
         spans.push(paint.span(key, t.text));
         spans.push(paint.span(words, t.secondary));
     }
-    let seconds = options.offset.whole_seconds();
-    let sign = if seconds < 0 { "-" } else { "+" };
-    let seconds = seconds.unsigned_abs();
-    let zone = if seconds.is_multiple_of(3600) {
-        format!("times UTC{sign}{}", seconds / 3600)
-    } else {
-        format!("times UTC{sign}{}:{:02}", seconds / 3600, seconds / 60 % 60)
-    };
-    let width = paint
+    let zone = format!("times {}", view::offset_label(options.offset));
+    let until = paint
         .end()
         .saturating_sub(Span::raw(&zone).width() as u16 + 3);
-    paint.line(1, 39, Line::from(spans), width.saturating_sub(1));
-    paint.right(39, &zone, t.secondary);
+    paint.line(1, y, Line::from(spans), until);
+    paint.right(y, &zone, t.secondary);
 }
