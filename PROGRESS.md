@@ -1,7 +1,6 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-<<<<<<< HEAD
 **Step 9.0 (2026-11-08, Claude step) is committed: Phase 9's rules, synthetic fixtures and answer keys exist before
 any code. Step 9.1 is next** (then 9.2 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7). Mode: run
 `python3 -I tools/codex-quota.py` before every `codex exec` (at 9.0's end: 20% / 22%, `CODEX: OK`). What later steps need:
@@ -60,14 +59,13 @@ any code. Step 9.1 is next** (then 9.2 → 9.5, then 9.6 / R7, which writes its 
   because 9.0's Files did not include them. `cli::open_lookup_no_match_ambiguous_and_old_ids` keeps passing under R3.
 - **9.1's "tests clean"** therefore means: every test outside the 45 passes. The hook variant no longer has a
   `waiting`/`hook` row; the Phase 9 root carries it (92000012) plus the precedence case (92000011).
-=======
-**Step 9.6a (2026-11-08, Codex) is done on branch `step/9.6a` (worktree `.claude/worktrees/step-9.6a`), reviewed and verified; not yet merged into main.**
+
+**Step 9.6a (2026-11-08, Codex) is merged into main (merge commit 226f5e3, which also carries Step 9.0's R7 docs).**
 R8 sets home from the first known record with cwd belonging to the session (sessionId absent or equal to
 activity_id). Before home exists, inherited records retain the previous metadata behavior; afterward,
 outside cwd/branch metadata is ignored. Session `85a715ba…` keeps repo-c as its unchanged answer key requires.
 Workspace tests: 525 passed, 0 failed, 1 ignored; clippy/fmt clean. The worktree release real run passes both
-requested checks (log below). All answer keys and PLAN.md remain untouched by Codex. Nothing staged or committed.
->>>>>>> step/9.6a
+requested checks (log below). All answer keys and PLAN.md remain untouched by Codex.
 
 **Phase 8 is closed (2026-11-08): the owner confirmed the step graph on real data** ("it looks good", then "Yes, close
 Phase 8"), after reinstalling with Step 8.7. Nothing after Phase 8 is planned in PLAN.md yet. Candidates, in the
@@ -602,7 +600,6 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 ## Log (newest first)
 
-<<<<<<< HEAD
 ### 2026-11-08 — Step 9.0: Rules, fixtures and answer keys — Claude
 - Did: Wrote R0–R6 into `docs/design.md` ("Phase 9 decisions", decision 2's Exact sources gain the redirect file, the
   Finished state row, Opening, the open question on finding a finished desktop session's `local_` id, the timeline)
@@ -653,7 +650,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   docs-only commit adds R7 to the Phase 9 decisions table, `resume_turn` to R0, decision 2 and the Link `evidence`
   row (the only value allowed on a `heuristic` link), and the resume-`--last` candidate rule to the schema. No R7
   fixtures or keys (Step 9.6 writes those). (5) Fixture `92000010`'s id ends `…9200000a` (hex), so its file name differs from its case number.
-=======
+
 ### 2026-11-08 — Step 9.6a: A Claude session's folder ignores moves outside it — Codex
 - Did: Implemented amended R8: the first own known-record string cwd sets home, using the parser's existing
   activity_id ownership test. Before home is set all known records update metadata as before. Afterward,
@@ -749,7 +746,6 @@ session c205b4c0 checkout: ~/multi-link/.claude/worktrees/step-9.6a
   own record with cwd does. Files containing only inherited records keep the previous newest-record behavior.
   PLAN.md was already modified by Claude and remains untouched by Codex. This replaces the original step
   log entry and blocked Current state; no second entry was added.
->>>>>>> step/9.6a
 
 ### 2026-11-08 — Phase 8 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 8.6 answer and closed Phase 8.
