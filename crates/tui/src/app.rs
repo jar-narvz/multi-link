@@ -424,7 +424,7 @@ impl App {
             return "loading sessions… · q quit".into();
         };
         let help = if self.timeline.is_some() {
-            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · q quit"
+            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · s step · q quit"
         } else {
             "↑↓ move · enter repo view · o open session · q quit"
         };
@@ -537,7 +537,7 @@ mod tests {
         app.update(Event::Key(KeyCode::Char('t')));
         assert_eq!(
             rendered_footer(&app, 200),
-            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · q quit · bad records: 2 · incomplete: 1"
+            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · s step · q quit · bad records: 2 · incomplete: 1"
         );
         app.update(Event::Refresh(Err("denied".into())));
         assert_eq!(
@@ -556,7 +556,7 @@ mod tests {
         app.update(Event::Refresh(Ok(report())));
         assert_eq!(
             app.footer_text(),
-            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · q quit"
+            "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · s step · q quit"
         );
     }
 

@@ -1092,6 +1092,7 @@ impl RepoScene<'_> {
                 ("↑↓", "select"),
                 ("o", "open"),
                 ("f", "fork"),
+                ("s", "step"),
                 ("+/-", "zoom"),
                 ("z", if o.fold { "unfold idle" } else { "fold idle" }),
                 ("i", "imports"),

@@ -37,4 +37,4 @@
  █ claude active   █ codex active   │ confirmed link   ╎ matched by time   ◆ waiting on you   ≈ idle folded   ✓ done
 
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ↑↓ select   o open   f fork   +/- zoom   z unfold idle   i imports   esc home   q quit                     times UTC-8
+ ↑↓ select   o open   f fork   s step   +/- zoom   z unfold idle   i imports   esc home   q quit            times UTC-8
