@@ -176,6 +176,23 @@ fn task_path(p: &Value) -> Option<PathBuf> {
     Some(scratch.parent()?.join("tasks").join(format!("{id}.output")))
 }
 
+fn task_output_child(path: &Path) -> io::Result<Option<String>> {
+    let file = match OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK)
+        .open(path)
+    {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        result => result?,
+    };
+    if !file.metadata()?.is_file() {
+        return Ok(None);
+    }
+    let mut bytes = Vec::new();
+    file.take(64 * 1024).read_to_end(&mut bytes)?;
+    Ok(child(&String::from_utf8_lossy(&bytes), false).map(|(id, _)| id))
+}
+
 /// Returns the number of lines appended (0, 1, or 2). Missing task files are
 /// retried; other I/O errors are returned. Polling reads at most 64 KiB per try.
 pub fn record_and_write(
@@ -196,24 +213,43 @@ pub fn record_and_write(
     if r.kind != "handoff" || r.child.is_some() {
         return Ok(1);
     }
-    let Some(path) = task_path(&p) else {
+    let task = task_path(&p);
+    let mut launch =
+        multi_link_claude::recognise(p["tool_input"]["command"].as_str().unwrap_or_default());
+    if task.is_none()
+        && launch
+            .as_ref()
+            .is_none_or(|launch| launch.stdout_redirect.is_none())
+    {
         return Ok(1);
-    };
+    }
     while clock.monotonic().saturating_sub(start) < POLL_LIMIT {
-        match File::open(&path) {
-            Ok(file) => {
-                let mut bytes = Vec::new();
-                file.take(64 * 1024).read_to_end(&mut bytes)?;
-                if let Some((id, _)) = child(&String::from_utf8_lossy(&bytes), false) {
-                    r.child = Some(id);
-                    r.child_evidence = Some("task_output".into());
-                    r.at = clock.now();
-                    write(&r, env)?;
-                    return Ok(2);
-                }
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
+        let task_child = task
+            .as_deref()
+            .map(task_output_child)
+            .transpose()?
+            .flatten()
+            .map(|id| (id, "task_output"));
+        let observed =
+            task_child.or_else(
+                || match launch.as_ref()?.redirect_child(Path::new(&r.cwd), None) {
+                    Ok(child) => child.map(|id| (id, "redirect_file")),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+                    Err(_) => {
+                        launch = None;
+                        None
+                    }
+                },
+            );
+        if let Some((id, evidence)) = observed {
+            r.child = Some(id);
+            r.child_evidence = Some(evidence.into());
+            r.at = clock.now();
+            write(&r, env)?;
+            return Ok(2);
+        }
+        if task.is_none() && launch.is_none() {
+            return Ok(1);
         }
         let remaining = POLL_LIMIT.saturating_sub(clock.monotonic().saturating_sub(start));
         clock.sleep(POLL_INTERVAL.min(remaining));

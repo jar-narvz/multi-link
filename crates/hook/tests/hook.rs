@@ -463,3 +463,174 @@ fn child_parser_requires_uuid_and_session_line_and_prefers_stdout() {
     assert_eq!(r.child.as_deref(), Some(CHILD));
     assert_eq!(r.child_evidence.as_deref(), Some("stdout"));
 }
+
+fn check_redirect_form(operator: &str) {
+    for suffix in ["", " 2>&1"] {
+        for space in ["", " "] {
+            let tmp = TempDir::new().unwrap();
+            let log = tmp.path().join("run.log");
+            fs::write(&log, format!("session id: {CHILD}\n")).unwrap();
+            let mut p = payload();
+            p["cwd"] = json!(tmp.path());
+            p["tool_response"]["stdout"] = json!("");
+            p["tool_input"]["command"] = json!(format!(
+                "codex exec 'test' {operator}{space}{}{suffix}",
+                log.display()
+            ));
+            assert_eq!(
+                record_and_write(&bytes(&p), &env(tmp.path()), &mut Fake::new(tmp.path())).unwrap(),
+                2,
+                "{operator}{space}{suffix}"
+            );
+            let records = lines(tmp.path());
+            assert_eq!(records[0]["child"], Value::Null);
+            assert_eq!(records[1]["child"], CHILD);
+            assert_eq!(records[1]["child_evidence"], "redirect_file");
+        }
+    }
+}
+
+macro_rules! redirect_form_test {
+    ($name:ident, $operator:literal) => {
+        #[test]
+        fn $name() {
+            check_redirect_form($operator);
+        }
+    };
+}
+redirect_form_test!(redirect_truncate, ">");
+redirect_form_test!(redirect_append, ">>");
+redirect_form_test!(redirect_stdout_descriptor, "1>");
+redirect_form_test!(redirect_both_streams, "&>");
+redirect_form_test!(redirect_both_streams_append, "&>>");
+redirect_form_test!(redirect_clobber, ">|");
+
+#[test]
+fn redirect_polling_refuses_fifo_home_escape_and_oversized_logs() {
+    // This synthetic home lives outside system temp, under the checkout, so a
+    // symlink from the allowed temp log really escapes both allowed roots.
+    let home = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let tmp = TempDir::new().unwrap();
+    let log = tmp.path().join("run.log");
+    let mut p = payload();
+    p["cwd"] = json!(tmp.path());
+    p["tool_response"]["stdout"] = json!("");
+    p["tool_input"]["command"] = json!(format!("codex exec x >> {}", log.display()));
+    let run = || {
+        let mut clock = Fake::new(home.path());
+        let count = record_and_write(&bytes(&p), &env(home.path()), &mut clock).unwrap();
+        assert_eq!(count, 1);
+        let records = lines(home.path());
+        assert!(records.iter().all(|r| r["child"].is_null()));
+        fs::remove_file(home.path().join(format!(".multi-link/hook/{PARENT}.jsonl"))).unwrap();
+    };
+    fs::write(&log, format!("session id: {CHILD}\n{}", "x".repeat(65536))).unwrap();
+    run();
+    fs::write(&log, format!("session id: {CHILD}\nsession id: invalid\n")).unwrap();
+    run();
+    fs::remove_file(&log).unwrap();
+    let private = home.path().join("private.log");
+    fs::write(&private, format!("session id: {CHILD}\n")).unwrap();
+    symlink(&private, &log).unwrap();
+    run();
+    fs::remove_file(&log).unwrap();
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&log)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut clock = Fake::new(home.path());
+        let count = record_and_write(&bytes(&p), &env(home.path()), &mut clock).unwrap();
+        send.send((count, lines(home.path()), clock.elapsed))
+            .unwrap();
+    });
+    let (count, records, elapsed) = receive
+        .recv_timeout(Duration::from_secs(1))
+        .expect("FIFO must not block");
+    assert_eq!(count, 1);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["child"], Value::Null);
+    assert_eq!(
+        elapsed,
+        Duration::ZERO,
+        "unsafe files must not enter the poll loop"
+    );
+}
+
+#[test]
+fn redirect_poll_observes_later_id_after_first_null_record() {
+    let tmp = TempDir::new().unwrap();
+    let log = tmp.path().join("run.log");
+    let mut p = payload();
+    p["cwd"] = json!(tmp.path());
+    p["tool_response"]["stdout"] = json!("");
+    p["tool_input"]["command"] = json!(format!("codex exec x > {}", log.display()));
+    let mut clock = Fake::new(tmp.path());
+    clock.task = Some(log);
+    assert_eq!(
+        record_and_write(&bytes(&p), &env(tmp.path()), &mut clock).unwrap(),
+        2
+    );
+    assert_eq!(clock.elapsed, Duration::from_secs(3));
+    assert!(clock.first_checked.get());
+    assert_eq!(lines(tmp.path())[1]["child_evidence"], "redirect_file");
+}
+
+#[test]
+fn oversized_redirect_truncating_forms_observe_prefix_append_forms_refuse() {
+    for (operator, expected) in [
+        (">", 2),
+        ("1>", 2),
+        ("&>", 2),
+        (">|", 2),
+        (">>", 1),
+        ("&>>", 1),
+    ] {
+        let tmp = TempDir::new().unwrap();
+        let log = tmp.path().join("run.log");
+        fs::write(
+            &log,
+            format!(
+                "session id: {CHILD}\n{}\nsession id: {PARENT}\n",
+                "x".repeat(65536)
+            ),
+        )
+        .unwrap();
+        let mut p = payload();
+        p["cwd"] = json!(tmp.path());
+        p["tool_response"]["stdout"] = json!("");
+        p["tool_input"]["command"] = json!(format!("codex exec x {operator} {}", log.display()));
+        let mut clock = Fake::new(tmp.path());
+        assert_eq!(
+            record_and_write(&bytes(&p), &env(tmp.path()), &mut clock).unwrap(),
+            expected,
+            "{operator}"
+        );
+        let records = lines(tmp.path());
+        if expected == 2 {
+            assert_eq!(records[1]["child"], CHILD);
+            assert_eq!(records[1]["child_evidence"], "redirect_file");
+        } else {
+            assert_eq!(records[0]["child"], Value::Null);
+            assert_eq!(clock.elapsed, Duration::ZERO);
+        }
+    }
+}
+
+#[test]
+fn background_non_missing_task_open_error_is_returned_after_first_record() {
+    let tmp = TempDir::new().unwrap();
+    let (p, task) = background(tmp.path());
+    // A symlink loop gives ELOOP on open on both macOS and Linux, even as root.
+    symlink(&task, &task).unwrap();
+    let mut clock = Fake::new(tmp.path());
+    assert!(record_and_write(&bytes(&p), &env(tmp.path()), &mut clock).is_err());
+    assert_eq!(clock.elapsed, Duration::ZERO);
+    let records = lines(tmp.path());
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["child"], Value::Null);
+}

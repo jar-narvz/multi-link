@@ -707,3 +707,107 @@ fn heredoc_subshell_handoff_links_by_time_and_keeps_directory_guard() {
         );
     }
 }
+
+#[test]
+fn phase9_redirect_cases_match_claudes_keys() {
+    let root = fixtures().join("sessions-phase9");
+    let mut opts = options(None);
+    opts.now = Timestamp::parse("2026-11-09T12:00:00Z").unwrap();
+    let actual = links_report(&root, &opts).unwrap().report;
+    let key: Value =
+        serde_json::from_slice(&fs::read(fixtures().join("expected/phase9/links.json")).unwrap())
+            .unwrap();
+    let actual = serde_json::to_value(actual).unwrap();
+    let select = |v: &Value| {
+        v["links"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|link| link["parent"].as_str().unwrap().starts_with("93"))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(select(&actual), select(&key));
+    assert_eq!(select(&actual).len(), 14);
+}
+
+#[test]
+fn redirect_safe_reads_refuse_fifo_escape_and_oversized_logs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    fs::create_dir_all(root.join("tmp")).unwrap();
+    fs::create_dir_all(root.join("home/repo")).unwrap();
+    let path = root.join("tmp/run.log");
+    call(root, C, RECENT, "codex exec x >> /tmp/run.log", "");
+    let read = || report(root).links[0].child.clone();
+    fs::write(&path, format!("session id: {A}\n")).unwrap();
+    assert_eq!(read().as_deref(), Some(A));
+    let header = format!("session id: {A}\n");
+    fs::write(
+        &path,
+        format!("{header}{}", "x".repeat(65536 - header.len())),
+    )
+    .unwrap();
+    assert_eq!(read().as_deref(), Some(A), "exactly 64 KiB is allowed");
+    for text in [
+        format!("session id: {A}\nsession id: {A}\n"),
+        format!("session id: {A}\nsession id: invalid\n"),
+        format!("session id: {A}\n{}", "x".repeat(65536)),
+    ] {
+        fs::write(&path, text).unwrap();
+        assert_eq!(read(), None);
+    }
+    fs::remove_file(&path).unwrap();
+    fs::write(root.join("home/private.log"), format!("session id: {A}\n")).unwrap();
+    std::os::unix::fs::symlink(root.join("home/private.log"), &path).unwrap();
+    assert_eq!(read(), None);
+    fs::remove_file(&path).unwrap();
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let (send, receive) = std::sync::mpsc::channel();
+    let root = root.to_owned();
+    std::thread::spawn(move || {
+        send.send(report(&root).links[0].child.clone()).unwrap();
+    });
+    assert_eq!(
+        receive
+            .recv_timeout(Duration::from_secs(1))
+            .expect("FIFO must not block"),
+        None
+    );
+}
+
+#[test]
+fn oversized_redirect_reads_truncating_prefix_but_refuses_append() {
+    let tmp = tempfile::tempdir().unwrap();
+    fs::create_dir_all(tmp.path().join("tmp")).unwrap();
+    fs::write(
+        tmp.path().join("tmp/run.log"),
+        format!("session id: {A}\n{}\nsession id: {B}\n", "x".repeat(65536)),
+    )
+    .unwrap();
+    for (operator, child, evidence) in [
+        (">", Some(A), Some(LinkEvidence::RedirectFile)),
+        ("1>", Some(A), Some(LinkEvidence::RedirectFile)),
+        ("&>", Some(A), Some(LinkEvidence::RedirectFile)),
+        (">|", Some(A), Some(LinkEvidence::RedirectFile)),
+        (">>", None, None),
+        ("&>>", None, None),
+    ] {
+        call(
+            tmp.path(),
+            C,
+            RECENT,
+            &format!("codex exec x {operator} /tmp/run.log"),
+            "",
+        );
+        let actual = report(tmp.path());
+        assert_eq!(actual.links[0].child.as_deref(), child, "{operator}");
+        assert_eq!(actual.links[0].evidence, evidence, "{operator}");
+    }
+}

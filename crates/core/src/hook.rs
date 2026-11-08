@@ -97,7 +97,10 @@ fn parse(value: &Value, stem: &str, line: usize) -> Option<Record> {
                 && notification.is_none()
                 && match (child, evidence) {
                     (None, None) => true,
-                    (Some(id), Some("stdout" | "thread_ready" | "task_output")) => uuid(id),
+                    (
+                        Some(id),
+                        Some("stdout" | "thread_ready" | "task_output" | "redirect_file"),
+                    ) => uuid(id),
                     _ => false,
                 }
         }

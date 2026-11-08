@@ -151,6 +151,14 @@ fn exact_evidence(
             return Ok(Some((id, LinkEvidence::TaskOutput)));
         }
     }
+    if let Some(launch) = multi_link_claude::recognise(&invocation.command)
+        && let Ok(Some(id)) = launch.redirect_child(
+            Path::new(&invocation.checkout),
+            (mode == RepoMode::Fixture).then_some(root),
+        )
+    {
+        return Ok(Some((id, LinkEvidence::RedirectFile)));
+    }
     Ok(None)
 }
 

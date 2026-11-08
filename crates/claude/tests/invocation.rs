@@ -514,3 +514,129 @@ fn shell_groups_heredocs_and_wrappers() {
         Some("6.6")
     );
 }
+
+#[test]
+fn redirect_targets_are_literal_and_on_the_launch_segment() {
+    for (command, expected) in [
+        (
+            "echo hi > /tmp/other; codex exec x > logs/run",
+            Some("logs/run"),
+        ),
+        ("codex exec x > 'logs/a b' 2>&1", Some("logs/a b")),
+        ("cd sub && codex exec x > logs/run", None),
+        ("pushd sub; codex exec x > logs/run", None),
+        ("(codex exec x > logs/run)", None),
+        ("cd sub; codex exec x > /tmp/run", Some("/tmp/run")),
+        ("codex exec x > /tmp/a > /tmp/b", None),
+        ("codex exec x > /tmp/a 1>&2", None),
+        ("codex exec x 2> /tmp/error", None),
+        ("codex exec x > \"$S/run\"", None),
+        ("codex exec x > '$S/run'", None),
+        ("codex exec x > `pwd`/run", None),
+        ("codex exec x > /tmp/*.log", None),
+        ("codex exec x > \"$(pwd)/run\"", None),
+        ("codex exec x 'prompt > /tmp/fake'", None),
+        ("codex exec x; echo hi > /tmp/other", None),
+    ] {
+        assert_eq!(
+            multi_link_claude::recognise(command)
+                .unwrap()
+                .stdout_redirect
+                .as_deref(),
+            expected,
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn earlier_unquoted_directory_words_refuse_relative_redirects() {
+    for (prefix, suffix) in [
+        ("{ cd sub &&", "; }"),
+        ("if cd sub; then", "; fi"),
+        ("! cd sub;", ""),
+        ("time cd sub;", ""),
+        ("'cd' sub;", ""),
+        ("echo cd;", ""),
+        ("echo pushd;", ""),
+        ("codex exec --help cd;", ""),
+    ] {
+        let relative = format!("{prefix} codex exec x > out.log{suffix}");
+        assert_eq!(
+            recognise(&relative).unwrap().stdout_redirect,
+            None,
+            "{relative}"
+        );
+        let absolute = format!("{prefix} codex exec x > /tmp/out.log{suffix}");
+        assert_eq!(
+            recognise(&absolute).unwrap().stdout_redirect.as_deref(),
+            Some("/tmp/out.log"),
+            "{absolute}"
+        );
+    }
+    for prefix in ["echo 'cd';", "echo \"pushd\";", r"echo c\d;"] {
+        let command = format!("{prefix} codex exec x > out.log");
+        assert_eq!(
+            recognise(&command).unwrap().stdout_redirect.as_deref(),
+            Some("out.log"),
+            "{command}"
+        );
+    }
+}
+
+#[test]
+fn redirect_outside_roots_is_refused_before_open_and_missing_is_retriable() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join("home/repo")).unwrap();
+    std::fs::create_dir_all(root.path().join("tmp")).unwrap();
+    let fifo = root.path().join("home/private.fifo");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let launch = recognise("codex exec x > /home/private.fifo").unwrap();
+    // This specific containment error must precede open/fstat's non-regular error.
+    assert_eq!(
+        launch
+            .redirect_child(std::path::Path::new("/home/repo"), Some(root.path()))
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    std::os::unix::fs::symlink("/dev/null", root.path().join("tmp/device")).unwrap();
+    let launch = recognise("codex exec x > /tmp/device").unwrap();
+    assert_eq!(
+        launch
+            .redirect_child(std::path::Path::new("/home/repo"), Some(root.path()))
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    let launch = recognise("codex exec x > /tmp/missing").unwrap();
+    assert_eq!(
+        launch
+            .redirect_child(std::path::Path::new("/home/repo"), Some(root.path()))
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::NotFound
+    );
+}
+
+#[test]
+fn redirect_hard_links_are_refused_until_only_one_link_remains() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join("tmp")).unwrap();
+    std::fs::create_dir_all(root.path().join("home/repo")).unwrap();
+    let private = root.path().join("home/private.log");
+    let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    std::fs::write(&private, format!("session id: {id}\n")).unwrap();
+    std::fs::hard_link(&private, root.path().join("tmp/run.log")).unwrap();
+    let launch = recognise("codex exec x > /tmp/run.log").unwrap();
+    let read = || launch.redirect_child(std::path::Path::new("/home/repo"), Some(root.path()));
+    assert!(read().is_err(), "multiple links must never supply a child");
+    std::fs::remove_file(private).unwrap();
+    assert_eq!(read().unwrap().as_deref(), Some(id));
+}

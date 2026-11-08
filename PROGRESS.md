@@ -1,10 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.2 (2026-11-08, Codex, mode Codex loop) is committed: clean exits read from the transcript, reopened
-by entrypoint. Step 9.3 is next** (then 9.4 → 9.5, then 9.6 / R7, which writes its own keys first, then 9.7).
-Quota check at 9.2's start: `CODEX: OK` (primary 35%, secondary 24%). The 45 tests listed below as failing until 9.2
-now pass; the whole workspace is green again (537 passed, 0 failed, 1 ignored), so "tests clean" means all of them.
+**Step 9.3 (2026-11-08, Codex, mode Codex loop) is committed: hand-off child from the redirect file (R4).
+Step 9.4 is next** (then 9.5 → 9.6 / R7, which writes its own keys first, then 9.7). Claude reviewed one round
+(5 findings, all fixed) and re-ran Verify: `check.sh 3` 32 `ok`, workspace 554 passed / 0 failed / 1 ignored.
+Quota check supplied for 9.3: `primary 44%, secondary 25%, CODEX: OK`.
+- **9.3 / R4:** Shared launch-segment redirect parsing and descriptor-based safe reads serve both hook
+  and core. Non-blocking open, regular-file fstat, opened-object path containment, 64 KiB cap, exactly
+  one `session id:` line in the bounded read. Round 1 adds pre-open containment and nlink == 1;
+  truncating forms read a 64 KiB prefix, append forms refuse oversized logs before/after reading.
+  Relative targets refuse earlier cd/pushd/subshell; expansions and multiple
+  stdout redirects are refused. Hook writes null first, polls up to 25 s, appends at most one child;
+  unsafe files stop immediately. Persisted `redirect_file` records remain usable after log removal.
+- **9.3 verification (round 1):** 554 passed, 0 failed, 1 ignored; Phase 9 `check.sh 3`: all 32 lines `ok`;
+  clippy/fmt clean. Real release exact links: 28 at `6a2c306` → 38 (10 `redirect_file`), counts only
+  from scratch, no agent-data writes. No answer-key edits, staging or commits. Full commands below.
 Run `python3 -I tools/codex-quota.py` before any later `codex exec`.
 - **9.2 / R2–R3:** Own main-transcript `cost-state` after every turn gives `finished` / `transcript_exit`
   when no session record exists, before hook waiting. Records and process-exit rules retain precedence.
@@ -621,6 +631,288 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.3: Hand-off child from the redirect file — Codex
+- Did: Implemented R4, mode **Codex loop**. Quota check: `primary 44%, secondary 25%, CODEX: OK`.
+  Recognise the launch segment's `>`, `>>`, `1>`, `&>`, `&>>`, `>|`, glued/spaced targets and optional
+  `2>&1`. Require one stdout redirect and a literal target; relative targets refuse earlier cd, pushd
+  or subshell independently of the existing heuristic's `dir_moved` flag. Quoted/escaped prompt text
+  cannot create a redirect operator; expansions/globs are refused.
+  Shared `Launch::redirect_child` opens with O_NONBLOCK, fstats the opened descriptor, refuses non-regular
+  files and hard links, checks canonical cwd/temp containment before opening and on the opened descriptor,
+  and reads at most 64 KiB. Truncating forms may supply an id from a larger log's bounded prefix; append
+  forms refuse oversized files before/after reading. macOS uses descriptor F_GETPATH; Linux uses /proc/self/fd. No validation reopens
+  the target pathname. Fixture lookup is root-relative with only fixture cwd/tmp/private/tmp allowed;
+  real mode also accepts absolute TMPDIR. Exactly one `session id:` line is required, including invalid
+  and repeated lines in the count within the bounded read. Oversized append logs are refused even with
+  an id in the initial bytes (round 1 corrected the initial refusal for truncating forms).
+  Core reads redirects after task_output and before persisted hook evidence, without caching log content.
+  Hook writes the first null record before polling and at most one update, respects stdout/thread/task
+  precedence, polls missing/unfinished logs for at most 25 s, and immediately stops on an unsafe redirect.
+  Task-output opens in the hook also use O_NONBLOCK plus fstat to avoid blocking on special files.
+- Changed: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`,
+  `crates/model/src/lib.rs`, `crates/hook/src/lib.rs`, `crates/hook/tests/hook.rs`,
+  `crates/core/src/link.rs`, `crates/core/src/hook.rs`, `crates/core/tests/links.rs`, `PROGRESS.md`.
+- Verify (red → green): Initial core 93-key comparison failed (0 passed, 1 failed); initial hook redirect
+  forms test failed (expected 2 records, observed 1). Both passed after implementation. A stricter FIFO
+  hook regression then failed with simulated elapsed `25s` vs `0ns`; unsafe files now stop immediately,
+  and the FIFO test asserts zero clock advance plus a real one-second receive deadline. Core's FIFO test
+  runs the actual links report under the same deadline. Both suites exercise symlinks escaping to home,
+  oversized logs and duplicate/invalid id lines; the core also checks exactly 64 KiB remains readable.
+  Six separately named hook redirect tests each cover spaced/glued targets, with/without `2>&1`.
+  A delayed-id test proves first-null-before-poll, child update at 3 s, and no third record.
+  All 14 `93…` cases compare parsed JSON directly with Claude's unchanged key, including gone-log hook
+  persistence, missing-log heuristic, background redirect and no-rollout exact evidence.
+- Verify: `fixtures/expected/phase9/check.sh 3` → exit 0, actual stdout (only ok lines):
+  ```text
+ok   sessions.json (^9[1-3])
+ok   links.json (^9[1-3])
+ok   graph-1.1.json (^9[1-3])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+  ```
+- Verify: `cargo test --workspace` → all 51 result blocks ok. Full output:
+  `/tmp/ml93-workspace-final.log`. Actual per-target result lines, in output order:
+  ```text
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Actual reducer output from those result lines:
+  ```text
+workspace result blocks: 51
+passed: 548 ; failed: 0 ; ignored: 1
+non-ok result blocks: 0
+  ```
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, no warnings/errors;
+  full output `/tmp/ml93-clippy-final.log`, final line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.45s
+  ```
+  `cargo fmt --check` → no output, exit 0; `git diff --check` → no output, exit 0.
+  All cargo commands used `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` first.
+- Verify (real release, counts only): Extracted baseline with `git archive 6a2c306 | tar -x -C
+  /tmp/multi-link-93-before` after creating that scratch directory. Built with
+  `cargo build --release --manifest-path /tmp/multi-link-93-before/Cargo.toml
+  --target-dir /tmp/multi-link-93-target-before` → exit 0, actual final line:
+  ```text
+    Finished `release` profile [optimized] target(s) in 19.07s
+  ```
+  After: `cargo build --release --target-dir /tmp/multi-link-93-target-after` → exit 0:
+  ```text
+    Finished `release` profile [optimized] target(s) in 19.05s
+  ```
+  `/tmp/ml93-counts.py` ran each release binary's `links --since all --now <same fixed clock> --json`
+  with cwd a fresh scratch folder. Stdout was parsed in memory; only aggregate counts were saved to
+  `/tmp/ml93-real-counts.log`. Actual output:
+  ```text
+fixed now: 2026-11-08T23:04:29Z
+before exit: 0
+before hand-offs: 214
+before matches: {"ambiguous": 1, "exact": 28, "heuristic": 66, "unlinked": 119}
+before exact evidence: {"resume_arg": 16, "stdout": 10, "thread_ready": 2}
+before stderr bytes: 0
+after exit: 0
+after hand-offs: 214
+after matches: {"ambiguous": 9, "exact": 30, "heuristic": 121, "unlinked": 54}
+after exact evidence: {"redirect_file": 2, "resume_arg": 16, "stdout": 10, "thread_ready": 2}
+after stderr bytes: 0
+  ```
+  Exact links 28 → 30; both new exact observations are redirect_file. Baseline non-exact classifications
+  also predate R1, so their changes are not attributed to this step. No transcripts/ids/content saved.
+- Review round 1 (Claude, 2026-11-08): All five findings addressed, with regression tests; re-review pending.
+  1. `Launch::stdout_append` preserves the redirect mode. Truncating `>`, `1>`, `&>`, `>|` read only the
+     first 64 KiB even for a larger log; `>>` and `&>>` refuse size > 64 KiB both before and after reading.
+     New core and hook tests cover all six operators, with an id first and another id beyond the read cap.
+     Existing oversized-refusal tests now explicitly exercise append mode.
+  2. Canonicalize the target and require allowed-root containment before opening, preserving NotFound
+     for hook retries. Keep O_NONBLOCK, fstat and opened-path containment after open. A new test asserts
+     the pre-open PermissionDenied error for an outside FIFO and a symlink to /dev/null; a missing target
+     still returns NotFound. The post-open unsafe-file error is distinct, so this tests precheck order.
+  3. Earlier segments scan all words for unquoted cd/pushd, including help-only segments, while retaining
+     the original first-command directory detection (including a quoted builtin name). Relative redirects
+     are refused for brace/if, !, time and arbitrary earlier word positions; absolute paths remain usable.
+     A narrow unquoted `then` branch introducer is recognised before the existing launch wrappers so the
+     same-line if form's absolute redirect is supported. Quoted/escaped arguments to echo do not flag cd.
+  4. Opened metadata must have nlink == 1, checked before and after the bounded read. A new fs::hard_link
+     test refuses the log with two names, then reads its id after removing the other name.
+  5. Restored propagation of non-NotFound task-file open/read/metadata errors, matching the existing
+     record_and_write doc comment. A new symlink-loop task-file test requires an error after the first
+     null record, with no polling time. The task reader retains O_NONBLOCK and regular-file fstat.
+  Red evidence: all six added test functions failed before their fixes (three claude, one core, two hook);
+  extra cases caught help-only and quoted-first-command regressions before the directory scan was finalised.
+  Initial workspace verification failed in cli `sentinels_never_in_output` at graph.rs:30 with ENOENT
+  spawning the debug CLI while the key runner's cargo run rebuilt that same binary. The isolated unchanged
+  test passed (1 passed, 0 failed) once the key runner finished; final workspace checks run without a
+  concurrent debug CLI build. Initial failure output: /tmp/ml93-r1-workspace.log; isolated rerun:
+  /tmp/ml93-r1-graph-rerun.log.
+- Verify (round 1 final): `fixtures/expected/phase9/check.sh 3` → exit 0, stdout only these 32 ok lines
+  (full capture `/tmp/ml93-r1-keys-final.log`):
+  ```text
+ok   sessions.json (^9[1-3])
+ok   links.json (^9[1-3])
+ok   graph-1.1.json (^9[1-3])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+  ```
+  `cargo test --workspace` → exit 0, full output `/tmp/ml93-r1-workspace-final.log`;
+  actual reducer output (summed from every per-target result line):
+  ```text
+cargo test --workspace exit: 0
+workspace result blocks: 51
+passed: 554; failed: 0; ignored: 1
+non-ok result blocks: 0
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, no warnings/errors;
+  full output `/tmp/ml93-r1-clippy-final.log`, actual final line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.52s
+  ```
+  `cargo fmt --check` → exit 0, no output (`/tmp/ml93-r1-fmt-final.log`).
+  `git diff --check` → exit 0, no output. All cargo commands use the required Rust PATH export.
+  Round 1 changed only `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`,
+  `crates/core/tests/links.rs`, `crates/hook/src/lib.rs`, `crates/hook/tests/hook.rs`, `PROGRESS.md`.
+- Verify (round 1 real release, counts only): Rebuilt the completed source with
+  `cargo build --release --target-dir /tmp/multi-link-93-target-after` → exit 0, actual final line:
+  ```text
+    Finished `release` profile [optimized] target(s) in 5.18s
+  ```
+  Ran `/tmp/ml93-counts.py` again, using the archived `6a2c306` release baseline and the new release
+  binary from fresh scratch cwd, same fixed `--now`, `links --since all --json`; only counts retained.
+  Actual output `/tmp/ml93-r1-real-counts-final.log`:
+  ```text
+fixed now: 2026-11-08T23:15:45Z
+before exit: 0
+before hand-offs: 215
+before matches: {"ambiguous": 1, "exact": 28, "heuristic": 66, "unlinked": 120}
+before exact evidence: {"resume_arg": 16, "stdout": 10, "thread_ready": 2}
+before stderr bytes: 0
+after exit: 0
+after hand-offs: 215
+after matches: {"ambiguous": 9, "exact": 38, "heuristic": 116, "unlinked": 52}
+after exact evidence: {"redirect_file": 10, "resume_arg": 16, "stdout": 10, "thread_ready": 2}
+after stderr bytes: 0
+  ```
+  Exact links 28 → 38 (10 redirect_file); initial implementation's earlier 28 → 30 run remains above
+  as historical evidence, not the round 1 result. No agent-data writes or transcript content retained.
+- Review: Claude (2026-11-08), 1 round, 5 findings, all fixed and re-reviewed clean: (1) oversized log was refused;
+  R4 says cap at 64 KiB, so truncating forms read the prefix while `>>`/`&>>` over 64 KiB stay refused (an older
+  run's id alone in the prefix would be a wrong exact); (2) open came before containment, so `/dev/…` could be
+  opened: canonical pre-check added, opened-fd check kept; (3) `cd` after `{`, `if`, `!`, `time` was missed: any
+  earlier unquoted `cd`/`pushd` word now counts; (4) hard links could pass F_GETPATH containment: `nlink == 1`;
+  (5) hook doc comment vs error handling. Claude re-ran Verify: `check.sh 3` → 32 `ok`, 0 other lines;
+  `cargo test --workspace` → 554 passed, 0 failed, 1 ignored; clippy `-D warnings` and `fmt --check` clean;
+  `git diff --stat -- fixtures PLAN.md docs` empty. Matches the pasted output. Files all inside 9.3's list.
+  Codex's own notes: No answer keys or PLAN.md edits;
+  no staging, commits, agent-data writes or network calls from project code. Existing untracked
+  `.claude/` was present before this step and was left untouched.
+- Gotchas: Old logs may already be gone; only persisted hook evidence can retain exactness then.
+  Unsafe redirect failures are silent/no evidence; missing files and readable logs without one unique
+  id retain bounded polling. No settings snippet change is needed for R4. An initial focused run caught
+  subshell handling changing the old heuristic flag; the redirect restriction is now tracked separately,
+  and the original invocation tests pass unchanged.
 
 ### 2026-11-08 — Step 9.2: Clean exit from the transcript; reopen by where it ran — Codex
 - Did: Implemented R2 using own main-transcript file order, with meta/local-command echoes excluded from

@@ -1,4 +1,5 @@
-//! Recognition only: result text is preserved for the linker, never interpreted.
+//! Narrow launch recognition and safe redirect evidence reads.
+//! Transcript result text is preserved for the linker.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -17,6 +18,8 @@ pub struct Launch {
     pub form: InvocationForm,
     pub resume_id: Option<String>,
     pub dir_moved: bool,
+    pub stdout_redirect: Option<String>,
+    pub stdout_append: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,11 +42,20 @@ pub struct Invocation {
 /// interpreter. Only the explicitly supported wrappers are removed; nothing expands.
 pub fn recognise(command: &str) -> Option<Launch> {
     let mut dir_moved = false;
+    let mut redirect_dir_moved = false;
     for segment in segments(command) {
         let offset = wrapper_offset(&segment.tokens);
         let tokens = &segment.tokens[offset..];
+        let segment_moves = matches!(
+            tokens.first().map(|word| word.text.as_str()),
+            Some("cd" | "pushd")
+        ) || segment
+            .tokens
+            .iter()
+            .any(|word| !word.quoted_or_escaped && matches!(word.text.as_str(), "cd" | "pushd"));
         let words: Vec<_> = tokens.iter().map(|word| word.text.as_str()).collect();
         if help_only(tokens) {
+            redirect_dir_moved |= segment_moves;
             continue;
         }
         let (form, resume_id) = match words.as_slice() {
@@ -58,18 +70,181 @@ pub fn recognise(command: &str) -> Option<Launch> {
             }
             _ => {
                 dir_moved |= words.first() == Some(&"cd");
+                redirect_dir_moved |= segment_moves;
                 continue;
             }
         };
+        redirect_dir_moved |= segment.after_subshell;
         let changes_directory = words.first() == Some(&"codex") && changes_directory(tokens);
         return Some(Launch {
             step: multi_link_plan::step_tag(&command[segment.span]),
             form,
             resume_id,
             dir_moved: dir_moved || changes_directory,
+            stdout_redirect: redirect_target(tokens, redirect_dir_moved),
+            stdout_append: tokens
+                .iter()
+                .any(|word| word.redirect && matches!(word.text.as_str(), ">>" | "&>>")),
         });
     }
     None
+}
+
+/// Only literal, unambiguous stdout targets can supply evidence. Descriptor
+/// duplication (2>&1) does not redirect stdout; all other stdout operators count.
+fn redirect_target(tokens: &[Word], dir_moved: bool) -> Option<String> {
+    let redirects: Vec<_> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| w.redirect && !w.text.starts_with('2'))
+        .collect();
+    let [(index, operator)] = redirects.as_slice() else {
+        return None;
+    };
+    if !matches!(
+        operator.text.as_str(),
+        ">" | ">>" | "1>" | "&>" | "&>>" | ">|"
+    ) {
+        return None;
+    }
+    let target = tokens.get(index + 1)?;
+    if target.redirect
+        || target.text.is_empty()
+        || target
+            .text
+            .contains(['$', '`', '*', '?', '[', ']', '~', '<', '>'])
+        || (dir_moved && !Path::new(&target.text).is_absolute())
+    {
+        return None;
+    }
+    Some(target.text.clone())
+}
+
+impl Launch {
+    /// Read redirect evidence directly each time (never through a path cache).
+    /// Fixture roots replace absolute paths and do not consult the environment.
+    /// NotFound may be retried; other errors refuse the file without polling.
+    pub fn redirect_child(
+        &self,
+        cwd: &Path,
+        fixture_root: Option<&Path>,
+    ) -> io::Result<Option<String>> {
+        let Some(target) = self.stdout_redirect.as_deref() else {
+            return Ok(None);
+        };
+        let target = Path::new(target);
+        let (cwd, path, mut allowed) = if let Some(root) = fixture_root {
+            let cwd = root.join(cwd.strip_prefix("/").unwrap_or(cwd));
+            let path = if target.is_absolute() {
+                root.join(target.strip_prefix("/").map_err(io::Error::other)?)
+            } else {
+                cwd.join(target)
+            };
+            (cwd, path, vec![root.join("tmp"), root.join("private/tmp")])
+        } else {
+            let path = if target.is_absolute() {
+                target.to_owned()
+            } else {
+                cwd.join(target)
+            };
+            let mut allowed = vec![
+                std::path::PathBuf::from("/tmp"),
+                std::path::PathBuf::from("/private/tmp"),
+            ];
+            if let Some(temp) = std::env::var_os("TMPDIR") {
+                let temp = std::path::PathBuf::from(temp);
+                if temp.is_absolute() {
+                    allowed.push(temp);
+                }
+            }
+            (cwd.to_owned(), path, allowed)
+        };
+        allowed.push(cwd);
+        let text = read_redirect(&path, &allowed, self.stdout_append)?;
+        let mut lines = text
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("session id:"));
+        let Some(id) = lines.next() else {
+            return Ok(None);
+        };
+        let id = id.trim();
+        if lines.next().is_some() || !uuid_shaped(id) {
+            return Ok(None);
+        }
+        Ok(Some(id.to_ascii_lowercase()))
+    }
+}
+
+fn read_redirect(path: &Path, allowed: &[std::path::PathBuf], append: bool) -> io::Result<String> {
+    use std::{
+        fs::OpenOptions,
+        io::Read,
+        os::unix::fs::{MetadataExt, OpenOptionsExt},
+    };
+    let allowed: Vec<_> = allowed
+        .iter()
+        .filter_map(|base| base.canonicalize().ok())
+        .collect();
+    // Refuse known outside paths before open: opening a device can itself have
+    // side effects. This precheck does not replace descriptor validation below.
+    let canonical = path.canonicalize()?;
+    if !allowed.iter().any(|base| canonical.starts_with(base)) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "redirect outside allowed roots",
+        ));
+    }
+    #[cfg(target_os = "macos")]
+    const O_NONBLOCK: i32 = 4;
+    #[cfg(not(target_os = "macos"))]
+    const O_NONBLOCK: i32 = 0x800;
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK)
+        .open(path)?;
+    // metadata() is fstat on this opened descriptor, not a path-based stat.
+    // Append logs may hide another run beyond the cap; truncating redirects
+    // hold one run, so their first 64 KiB can still supply evidence.
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.nlink() != 1 || (append && metadata.len() > 64 * 1024) {
+        return Err(io::Error::other("unsafe redirect file"));
+    }
+    let canonical = opened_path(&file).ok_or_else(|| io::Error::other("no opened file path"))?;
+    if !allowed.iter().any(|base| canonical.starts_with(base)) {
+        return Err(io::Error::other("unsafe redirect file"));
+    }
+    let mut bytes = Vec::new();
+    (&file).take(64 * 1024).read_to_end(&mut bytes)?;
+    let metadata = file.metadata()?;
+    if metadata.nlink() != 1 || (append && metadata.len() > 64 * 1024) {
+        return Err(io::Error::other("unsafe redirect file"));
+    }
+    String::from_utf8(bytes).map_err(io::Error::other)
+}
+
+// Resolve the opened object, so replacing a pathname cannot redirect validation
+// to a different object from the one whose contents we read.
+fn opened_path(file: &std::fs::File) -> Option<std::path::PathBuf> {
+    use std::os::fd::AsRawFd;
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        unsafe extern "C" {
+            fn fcntl(fd: i32, cmd: i32, ...) -> i32;
+        }
+        let mut buffer = [0u8; 1024];
+        // SAFETY: F_GETPATH (50) writes at most MAXPATHLEN (1024) bytes into
+        // this live buffer; the descriptor is owned by file for the call.
+        if unsafe { fcntl(file.as_raw_fd(), 50, buffer.as_mut_ptr()) } == -1 {
+            return None;
+        }
+        let end = buffer.iter().position(|b| *b == 0)?;
+        Some(Path::new(std::ffi::OsStr::from_bytes(&buffer[..end])).to_owned())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())).ok()
+    }
 }
 
 /// Help is an option only before the prompt/id, outside quoting and escaping.
@@ -113,11 +288,12 @@ fn help_only(words: &[Word]) -> bool {
     false
 }
 
-/// Skip only the narrow wrapper grammar, including stacked wrappers.
+/// Skip the branch introducer and narrow wrapper grammar, including stacked wrappers.
 fn wrapper_offset(words: &[Word]) -> usize {
     let mut offset = 0;
     loop {
         match words.get(offset).map(|word| word.text.as_str()) {
+            Some("then") if !words[offset].quoted_or_escaped => offset += 1,
             Some("nohup") => offset += 1,
             Some("env") => {
                 offset += 1;
@@ -202,6 +378,7 @@ fn uuid_shaped(text: &str) -> bool {
 struct Segment {
     tokens: Vec<Word>,
     span: std::ops::Range<usize>,
+    after_subshell: bool,
 }
 
 #[derive(Default)]
@@ -210,6 +387,7 @@ struct Word {
     // Quoting/escaping is removed from text, but literal $PWD must stay distinct.
     expandable_dollar: bool,
     quoted_or_escaped: bool,
+    redirect: bool,
 }
 
 fn segments(command: &str) -> Vec<Segment> {
@@ -220,6 +398,7 @@ fn segments(command: &str) -> Vec<Segment> {
     let mut quote = None;
     let mut chars = command.char_indices().peekable();
     let mut segment_start = 0;
+    let mut after_subshell = false;
     let mut heredocs = Vec::new();
     while let Some((index, ch)) = chars.next() {
         // Keep substitutions opaque even inside double quotes. Their quotes and
@@ -269,6 +448,52 @@ fn segments(command: &str) -> Vec<Segment> {
             heredocs.push((delimiter, tabs));
             continue;
         }
+        // Preserve shell redirection operators separately from words, including
+        // glued targets and descriptor duplication. Quoted operators stay text.
+        if quote.is_none()
+            && (ch == '>' || (ch == '&' && chars.peek().is_some_and(|(_, c)| *c == '>')))
+        {
+            let descriptor = if started
+                && !word.quoted_or_escaped
+                && word.text.bytes().all(|b| b.is_ascii_digit())
+            {
+                std::mem::take(&mut word.text)
+            } else {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                }
+                String::new()
+            };
+            word = Word::default();
+            started = false;
+            let mut operator = descriptor;
+            operator.push(ch);
+            if ch == '&' {
+                chars.next();
+                operator.push('>');
+            }
+            if let Some(&(_, next)) = chars.peek()
+                && matches!(next, '>' | '|' | '&')
+            {
+                chars.next();
+                operator.push(next);
+                if next == '&' {
+                    while let Some(&(_, digit)) = chars.peek() {
+                        if !digit.is_ascii_digit() && digit != '-' {
+                            break;
+                        }
+                        chars.next();
+                        operator.push(digit);
+                    }
+                }
+            }
+            words.push(Word {
+                text: operator,
+                redirect: true,
+                ..Word::default()
+            });
+            continue;
+        }
         if ch == '\\'
             && quote != Some('\'')
             && let Some(&(_, next)) = chars.peek()
@@ -314,7 +539,9 @@ fn segments(command: &str) -> Vec<Segment> {
                 segments.push(Segment {
                     tokens: std::mem::take(&mut words),
                     span: segment_start..index,
+                    after_subshell,
                 });
+                after_subshell |= ch == '(';
                 segment_start = segment_end;
                 if ch == '\n' {
                     for (delimiter, tabs) in heredocs.drain(..) {
@@ -353,6 +580,7 @@ fn segments(command: &str) -> Vec<Segment> {
         segments.push(Segment {
             tokens: words,
             span: segment_start..command.len(),
+            after_subshell,
         });
     }
     segments
