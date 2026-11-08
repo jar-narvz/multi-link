@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 mod support;
 
-use multi_link_model::{GraphCommit, GraphReport, Timestamp};
+use multi_link_model::{GraphCommit, GraphReport, Notable, PartStatus, Timestamp};
 use multi_link_tui::{GraphOptions, graph_first_slot, graph_slots, render_graph, theme::Theme};
 use ratatui::{
     buffer::Buffer,
@@ -419,9 +419,10 @@ fn panel_for_claude_part() {
         ..golden_options()
     };
     let buf = render(&report("1.1"), &options, 120, 40);
-    assert!(rendered_rows(&buf, 27..=27).starts_with(
-        "  selected  claude · plan · 81010000 · 08:05:26–08:05:43 · "
-    ));
+    assert!(
+        rendered_rows(&buf, 27..=27)
+            .starts_with("  selected  claude · plan · 81010000 · 08:05:26–08:05:43 · ")
+    );
     assert_eq!(buf[(2, 27)].fg, options.theme.secondary);
     assert_eq!(buf[(12, 27)].fg, options.theme.claude);
     assert_eq!(buf[(12, 27)].modifier, Modifier::BOLD);
@@ -492,9 +493,7 @@ fn quote_cut_on_word_boundary_by_width() {
     let row = row.trim_end_matches('\n');
     assert!(row.starts_with("            asked  “"), "row: {row:?}");
     assert!(row.ends_with("…”"), "row: {row:?}");
-    let last_column = (0..120)
-        .rfind(|&x| buf[(x, 28)].symbol() != " ")
-        .unwrap();
+    let last_column = (0..120).rfind(|&x| buf[(x, 28)].symbol() != " ").unwrap();
     assert!(last_column <= 108, "last drawn column: {last_column}");
     assert!(Span::raw(row).width() <= 109, "row: {row:?}");
     let body = row
@@ -505,7 +504,9 @@ fn quote_cut_on_word_boundary_by_width() {
         .trim_end();
     assert!(!body.is_empty());
     assert!(
-        asked.strip_prefix(body).is_some_and(|rest| rest.starts_with(' ')),
+        asked
+            .strip_prefix(body)
+            .is_some_and(|rest| rest.starts_with(' ')),
         "quote must end after a whole word: {body:?}"
     );
 }
@@ -517,9 +518,10 @@ fn selection_past_the_end_does_not_panic() {
         ..golden_options()
     };
     let buf = render(&report("1.1"), &options, 120, 40);
-    assert!(rendered_rows(&buf, 27..=27).starts_with(
-        "  selected  claude · verify + commit · 81010000 · 08:10:42–08:12:14 · "
-    ));
+    assert!(
+        rendered_rows(&buf, 27..=27)
+            .starts_with("  selected  claude · verify + commit · 81010000 · 08:10:42–08:12:14 · ")
+    );
     assert_eq!(
         rendered_rows(&buf, 29..=29),
         "            from   no hand-offs\n"
@@ -528,4 +530,162 @@ fn selection_past_the_end_does_not_panic() {
         rendered_rows(&buf, 31..=31),
         "            o open in Claude   f fork\n"
     );
+}
+
+fn assert_colored_text(buf: &Buffer, x: u16, y: u16, expected: &str, color: Color) {
+    for (offset, ch) in expected.chars().enumerate() {
+        let cell = &buf[(x + offset as u16, y)];
+        assert_eq!(
+            cell.symbol(),
+            ch.to_string(),
+            "text at {},{y}",
+            x + offset as u16
+        );
+        if ch != ' ' {
+            assert_eq!(cell.fg, color, "colour at {},{y}", x + offset as u16);
+        }
+    }
+}
+
+#[test]
+fn return_edge_remains_visible_after_its_codex_box_scrolls_off() {
+    let options = GraphOptions {
+        selected: 7,
+        ..golden_options()
+    };
+    let report = report("1.12");
+    assert_eq!(graph_first_slot(&report, 7, 0), 4);
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 5, 13, "▲", options.theme.secondary);
+    assert_colored_text(&buf, 7, 13, "back to claude", options.theme.secondary);
+    assert_colored_text(&buf, 5, 14, "│", options.theme.secondary);
+    assert_colored_text(&buf, 5, 15, "│", options.theme.secondary);
+}
+
+#[test]
+fn edges_keep_their_columns_when_scrolled_one_slot() {
+    let options = GraphOptions {
+        selected: 3,
+        first_slot: 1,
+        ..golden_options()
+    };
+    let buf = render(&report("1.3"), &options, 120, 40);
+    assert_colored_text(&buf, 27, 13, "▲", options.theme.secondary);
+    assert_colored_text(&buf, 29, 13, "back to claude", options.theme.secondary);
+    assert_colored_text(&buf, 5, 13, "│", options.theme.text);
+}
+
+#[test]
+fn working_subline_splits_orange_status_and_grey_duration() {
+    let options = golden_options();
+    let buf = render(&report("1.5"), &options, 120, 40);
+    assert_colored_text(&buf, 69, 18, "working now", options.theme.claude);
+    assert_colored_text(&buf, 80, 18, " · 6 min", options.theme.secondary);
+}
+
+#[test]
+fn stale_subline_names_the_run_start_in_red() {
+    let mut report = report("1.1");
+    report.parts[3].status = Some(PartStatus::Stale);
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 69, 18, "stale since 08:09", options.theme.warning);
+    assert_eq!(buf[(86, 18)].symbol(), " ");
+}
+
+#[test]
+fn failed_notables_are_red_and_unavailable_runs_keep_confirmed_edges() {
+    let options = golden_options();
+    let failed = render(&report("1.3"), &options, 120, 40);
+    assert_colored_text(&failed, 38, 22, "✗", options.theme.warning);
+    assert_colored_text(&failed, 82, 21, "✗", options.theme.warning);
+    let unavailable = render(&report("1.11"), &options, 120, 40);
+    assert_colored_text(
+        &unavailable,
+        25,
+        18,
+        "run unavailable",
+        options.theme.secondary,
+    );
+    assert_colored_text(&unavailable, 27, 13, "│", options.theme.text);
+    assert_colored_text(&unavailable, 27, 14, "│", options.theme.text);
+    assert_colored_text(&unavailable, 29, 15, "confirmed", options.theme.secondary);
+}
+
+#[test]
+fn waiting_reads_reserve_the_last_row_after_two_newest_notables() {
+    let mut report = report("1.1");
+    report.parts[0].notable = vec![
+        Notable {
+            label: "edit oldest.rs".into(),
+            ok: None,
+        },
+        Notable {
+            label: "$ git diff".into(),
+            ok: Some(true),
+        },
+        Notable {
+            label: "$ cargo test".into(),
+            ok: Some(true),
+        },
+    ];
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 3, 9, "$ git diff", options.theme.text);
+    assert_colored_text(&buf, 3, 10, "$ cargo test", options.theme.text);
+    assert_colored_text(&buf, 16, 10, "✓", options.theme.done);
+    assert_colored_text(
+        &buf,
+        3,
+        11,
+        "6 reads while codex ran",
+        options.theme.secondary,
+    );
+    assert!(!rendered_rows(&buf, 4..=12).contains("oldest.rs"));
+}
+
+#[test]
+fn second_chain_first_handoff_uses_step_wording() {
+    let options = GraphOptions {
+        selected: 4,
+        ..golden_options()
+    };
+    let buf = render(&report("1.4"), &options, 120, 40);
+    assert_colored_text(&buf, 95, 13, "handed step 1.4", options.theme.text);
+    assert!(!rendered_rows(&buf, 13..=13).contains("handed fix"));
+}
+
+#[test]
+fn long_notables_cut_to_box_width_and_reserve_the_success_mark() {
+    let mut report = report("1.1");
+    report.parts[1].notable = vec![
+        Notable {
+            label: format!("edit {}", "e".repeat(55)),
+            ok: None,
+        },
+        Notable {
+            label: format!("$ cargo test {}", "t".repeat(60)),
+            ok: Some(true),
+        },
+    ];
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(
+        &buf,
+        25,
+        21,
+        &format!("edit {}…", "e".repeat(21)),
+        options.theme.text,
+    );
+    assert_colored_text(
+        &buf,
+        25,
+        22,
+        &format!("$ cargo test {}…", "t".repeat(11)),
+        options.theme.text,
+    );
+    assert_colored_text(&buf, 51, 22, "✓", options.theme.done);
+    for y in [21, 22] {
+        assert_eq!(buf[(52, y)].symbol(), "│");
+    }
 }

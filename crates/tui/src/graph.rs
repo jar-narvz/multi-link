@@ -166,6 +166,12 @@ fn visible_x(slot: usize, first: usize) -> Option<u16> {
         .map(|slot| 1 + 22 * slot as u16)
 }
 
+fn edge_x(slot: usize, first: usize, offset: u16, end: u16) -> Option<u16> {
+    // The source box can be left of the window while its edge is still visible.
+    let x = 1 + 22 * (slot as i128 - first as i128) + i128::from(offset);
+    u16::try_from(x).ok().filter(|&x| x < end)
+}
+
 fn lanes(
     report: &GraphReport,
     options: &GraphOptions,
@@ -175,35 +181,34 @@ fn lanes(
     paint: &mut Paint<'_>,
 ) {
     for (i, part) in report.parts.iter().enumerate() {
-        let Some(x) = visible_x(slots[i], first) else {
-            continue;
-        };
-        let y = if part.harness == Harness::Claude {
-            layout.claude_lane
-        } else {
-            layout.codex_lane
-        };
-        let selected = i == options.selected.min(report.parts.len() - 1);
-        let card = part_box(part, selected, options);
-        for dy in 0..9 {
-            for dx in 0..30 {
-                if x + dx < paint.end() && y + dy < paint.buf.area.height {
-                    paint.buf[(x + dx, y + dy)] = card[(dx, dy)].clone();
+        if let Some(x) = visible_x(slots[i], first) {
+            let y = if part.harness == Harness::Claude {
+                layout.claude_lane
+            } else {
+                layout.codex_lane
+            };
+            let selected = i == options.selected.min(report.parts.len() - 1);
+            let card = part_box(part, selected, options);
+            for dy in 0..9 {
+                for dx in 0..30 {
+                    if x + dx < paint.end() && y + dy < paint.buf.area.height {
+                        paint.buf[(x + dx, y + dy)] = card[(dx, dy)].clone();
+                    }
                 }
             }
         }
         match &part.edge_in {
             Some(Edge::Handoff { .. }) => {
-                handoff(part, &report.step.id, x + 4, options, paint);
+                if let Some(x) = edge_x(slots[i], first, 4, paint.end()) {
+                    handoff(part, &report.step.id, x, options, paint);
+                }
             }
             Some(Edge::Return { at }) => {
-                // A return belongs to the preceding Codex box; do not draw an
-                // orphan edge when that box has scrolled out of the window.
                 if let Some(previous) = i.checked_sub(1)
                     && report.parts[previous].harness == Harness::Codex
-                    && let Some(x) = visible_x(slots[previous], first)
+                    && let Some(x) = edge_x(slots[previous], first, 26, paint.end())
                 {
-                    return_edge(x + 26, *at, options, paint);
+                    return_edge(x, *at, options, paint);
                 }
             }
             None => {}
@@ -342,7 +347,7 @@ fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions, bg: Color
                 t.done,
             ),
             Some(PartStatus::Stale) => (
-                format!("stale since {}", clock(to, options.offset, false)),
+                format!("stale since {}", clock(from, options.offset, false)),
                 t.warning,
             ),
             _ => ("working now".to_owned(), t.claude),
