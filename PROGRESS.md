@@ -1,7 +1,33 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-07, latest).** **Step 8.3 is committed (Superpowers trial, done); Step 8.4 is next** (**hybrid
+**Resume here (2026-11-07, latest).** **Step 8.4 is committed (hybrid mode, stopped after Task 5; see its entry); Step 8.5
+is next** (App wiring per G9, G11). What 8.5 needs:
+- Render API (crates/tui/src/graph.rs, re-exported from lib.rs): `render_graph(&GraphReport, &GraphOptions, Rect, &mut
+  Buffer)`; `GraphOptions { selected, first_slot, theme, offset }` (Clone, Copy, Debug, PartialEq; Default = 0, 0,
+  truecolor, UTC); `graph_slots(&report)`; `graph_first_slot(&report, selected, first_slot)`. For `←→` and a refresh that
+  keeps the selection, store the slot `graph_first_slot` returns back into `first_slot`. The narrow list (< 120 columns)
+  recomputes its scroll from `selected` on each render, so `↑↓` only changes `selected`.
+- Theme gains `graph_selected`, `codex_box`, `claude_strip`, `codex_strip` (G8 palette additions, truecolor and 256).
+- The footer already reads `←→ move along the step   [ ] prev / next step   o open   f fork   esc repo view   q quit`
+  (`↑↓` below 120 columns; when hints must be cut, `esc` and `q` are kept before `[ ]`, `o`, `f`). `o`/`f` are drawn only
+  for a part with a run and a non-empty session; 8.5 must apply the same rule to the keys.
+- **Render readings decided in review (beyond PLAN.md/design.md wording; those files were outside the step):** edges draw
+  only into a visible box (a return may start left of the window); strip row 34 uses the earliest `from` / latest `to`,
+  like row 1; too many parts for 1 cell + gap each: the strip keeps its title and times, no cells; short screens: the last
+  two rows are always rule + footer, the panel's first line sits just above the rule while a row is free below the header,
+  the legend stays while it fits, above 40 rows the 40-row layout stays; narrow: keeps ` (reported)`, edge glyphs `╎ │ ▲`,
+  rules and a right-aligned `times UTC±H`; empty `asked`/`said`/session count as absent; a negative gap drops `started …
+  after the call`; `stale since HH:MM` shows the run's `to` (last record), as the repo view does. A planner should copy
+  these into G8/G10 at the next PLAN.md edit.
+- `example_draws_graph_html` runs the example binary next to the test binary; a full `cargo test` builds it, a filtered
+  `cargo test --test graph` may run a stale one (said in the test).
+- `cargo run -p multi-link-tui --example home_html -- --graph REPORT.json OUT.html [--size WxH] [--offset …]
+  [--selected N]` renders a graph report to HTML (for 8.6's images).
+- 438 tests pass, 1 ignored (`real_counts`, opt-in), clippy and `cargo fmt --check -p multi-link-tui` clean, pinned
+  `git diff` exit 0, golden unchanged.
+
+**Before Step 8.4 (2026-11-07).** **Step 8.3 is committed (Superpowers trial, done); Step 8.4 is next** (**hybrid
 mode**, CLAUDE.md, owner 2026-11-07: Claude splits tasks and reviews, Codex writes each task test-first behind a
 red/green gate, Claude commits on `step/8.4`; Superpowers is installed for Claude Code and Codex). What 8.4 needs:
 - The report: `multi-link graph --repo R --step ID [--json]`; types `model::{GraphReport, GraphStep, GraphCommit, Part,
@@ -376,6 +402,81 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-07 — Step 8.4: TUI: step graph render to board 9 — Codex (hybrid)
+- Did: `crates/tui/src/graph.rs`, a pure render of `GraphReport` per G8 and G10: header, scroll hints, slots and boxes,
+  hand-off and return edges, selection panel, `where the time went` strip, legend, footer; short screens (strip, then
+  legend, then panel down to its first line); the list form below 120 columns; NO_COLOR keeps every glyph and word; the
+  empty step. Four theme roles. `home_html --graph`. No App wiring.
+  How it ran (hybrid mode, CLAUDE.md): Superpowers `writing-plans` split the step into 7 tasks in the session scratchpad
+  (header/footer/empty; boxes/edges/scroll; panel; strip + full golden; short screens + NO_COLOR; narrow list; example).
+  Branch `step/8.4` in worktree `.claude/worktrees/step-8.4`, cut from 9f66465. Per task: `codex exec` wrote the failing
+  tests, Claude ran the red gate and committed `(red, Step 8.4)`, `codex exec resume` wrote the code, Claude ran the green
+  gate (filter, full `cargo test`, clippy, red assertions unchanged, fixtures unchanged) and committed. Claude subagents
+  reviewed spec then code quality; fixes went back to Codex and re-passed the green gate. Tasks 1–5 got both reviews (with
+  re-reviews); then the owner stopped hybrid mode (Gotchas), so Task 6 had its spec review and one fix round, Task 7 one
+  combined review and one fix round, and their re-reviews and Task 6's quality review were stopped unfinished. A fresh
+  Claude subagent reviewed `git diff main...step/8.4`: APPROVED with 6 findings; 4 fixed in one Codex round. 27 commits,
+  fast-forwarded into `main`; branch and worktree left in place.
+- Changed: `crates/tui/src/{graph,lib,theme}.rs`, `crates/tui/tests/graph.rs`, `crates/tui/examples/home_html.rs`, `PROGRESS.md`
+- Verify (Claude, after the last fix, at c6c18dc): `cargo test --workspace` → 46 `test result: ok` lines, 438 passed, 0
+  failed, 1 ignored; `cargo clippy --workspace --all-targets -- -D warnings` → `Finished dev profile`, no warnings;
+  `phase8_render_equals_golden` (whole text and styles vs `step-phase8.txt` / `.styles.txt`) → `1 passed`; `git diff
+  --exit-code --diff-filter=MD e5f6c78 -- fixtures/expected/` → exit 0; `git diff --exit-code main -- fixtures/` → exit 0
+  (the four 6.1 goldens and the 8.1 golden unchanged). Tests named by the step all exist (slot rule with same-harness
+  neighbours, 7 parts scrolled at each end, unlinked and ambiguous, `│` vs `╎`, 1-second strip part, list at 119/100/80/60
+  with no cut words, 39 and 30 rows, NO_COLOR, empty step). No golden mismatch was blamed on a key or the golden.
+- Review: Claude. Gates per task (red / green; no gate failed, 0 gate failures in all):
+  - Task 1 header/footer/empty: red pass (fails on the missing `render_graph` and theme fields) / green pass; 2 fix rounds
+    (spec 3 of 4 findings sent, 1 moved to Task 2; quality 8 of 9, 1 rejected), each re-passed green; re-review approved.
+  - Task 2 boxes/edges/scroll: red pass (5 assertion failures) / green pass; 2 fix rounds (spec 5 of 8 sent, 2 notes
+    rejected, 1 kept; quality 9 of 9); re-review approved.
+  - Task 3 panel: red pass (6) / green pass; 2 fix rounds (spec 9 of 10; quality 8 of 9, 1 moved to Task 6); re-review approved.
+  - Task 4 strip + full golden: red pass (4) / green pass, the full golden matched on the first green run; 1 fix round
+    (spec 5 of 5); quality approved with 4 low notes, none sent; re-review approved.
+  - Task 5 short screens + NO_COLOR: red pass (2 assertion failures; the NO_COLOR and tiny-buffer tests passed on arrival)
+    / green pass; 2 fix rounds (spec 7 of 8, 1 rejected; quality 7 of 10 plus 1 spacing note from the spec re-review);
+    spec re-review approved; quality re-review stopped unfinished.
+  - Task 6 narrow list: red pass (4) / green pass; 1 fix round (spec 9 of 9, run as two Codex calls: Codex stopped to ask
+    before changing 3 earlier assertions those decisions contradicted; Claude approved exactly those 3); spec re-review and
+    quality review stopped unfinished.
+  - Task 7 example: red pass (1) / green pass; 1 fix round (combined review 6 of 7, 1 rejected); re-review stopped unfinished.
+  - Final review: APPROVED, 6 findings, 4 fixed (stale time, empty-session count, narrow footer keeps `esc`/`q`,
+    `GraphOptions` derives), 2 not changed (lanes clipped under ~26 rows is the decided behaviour; the example test needs a
+    full `cargo test`, noted in Current state).
+  **Measures (real numbers only):**
+  - Wall-clock: 1 h 20 min 33 s (22:34:07–23:54:40 PST, step session start to writing this entry; merge follows).
+  - Tests added: 80, all in `crates/tui/tests/graph.rs` (358 → 438 passed).
+  - Implementer runs: 28 `codex exec` calls (7 red, 7 green, 14 fix calls; one fix call was wasted on a missing findings
+    file, one continued a stopped fix). Codex time from the per-call timer: 3 289 s in all.
+  - Reviewer runs: 22 Claude subagents started: 18 finished (13 spec/quality reviews, 4 re-reviews, 1 final review), 4
+    stopped unfinished when hybrid mode ended.
+  - Findings: 98 raised by the reviewers that finished (counted from their reports, notes included); 81 sent to Codex and
+    fixed, the rest rejected with a reason, moved to a later task, or low notes left as they are.
+  - Fix rounds: 14 Codex fix calls over 8 review targets (7 tasks + the final review); no task or the final review went
+    past 2 rounds.
+  - Gate failures: 0 red, 0 green.
+  - Tokens: the 27 Codex logs that survive print `tokens used`, 2 371 575 in total (the wasted call's log was
+    overwritten). Resumed calls may count the session's earlier context again, so this is an upper bound per call. Claude
+    subagent tokens not summed (not measured).
+- Gotchas:
+  - **Hybrid mode was stopped mid-step after Task 5** (owner, via the coordinator, 2026-11-07): to save Codex usage, with
+    the 5-hour window at 70%. Tasks 6 and 7 were already implemented test-first behind the gates when the message came, so
+    no single hand-off call was needed; the per-task two-stage reviews stopped there, and the final review plus at most 2
+    Codex fix rounds finished the step.
+  - **Hand-offs must name the step on the `codex exec` command line** (coordinator, mid-step): multi-link recognises a
+    hand-off only when `codex exec …` appears in the command itself and reads the step from that text. The first calls
+    went through a `codex.sh` wrapper with the prompt in a file, so they show as untagged (`step: null`) and the resume
+    calls as "GREEN half…". From Task 1's quality fix on, every call was a direct `codex exec` naming `Step 8.4`.
+  - `codex exec resume` takes no `-s` / `--add-dir`: the sandbox and the writable `~/.cargo`, `~/.rustup` roots were passed
+    with `-c sandbox_mode=…` and `-c sandbox_workspace_write.writable_roots=[…]`. With tasks overlapping, resumes used the
+    session id, not `--last`.
+  - Red and green halves overlapped other tasks' reviews to save wall-clock, so later tasks' fixes landed on top of earlier
+    tasks' code; each fix call was told to keep every test passing.
+  - Review decisions sometimes changed behaviour an earlier task's test pinned. Codex correctly stopped and asked rather
+    than edit assertions; the gate rule "red assertions unchanged" needs an explicit "unless Claude approves" path.
+  - One reviewer subagent ran `git checkout --detach` in the worktree by mistake and put it back at once (branch clean);
+    later prompts said never to check out there.
 
 ### 2026-11-07 — Step 8.3: Core: graph report, CLI `graph` — Claude (Superpowers trial)
 - Did: Built the step graph report per G1–G4, G6, G7. Report types are in `crates/model`. `crates/core/src/graph.rs` has a
