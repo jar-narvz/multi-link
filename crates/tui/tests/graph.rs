@@ -254,11 +254,147 @@ fn strip_without_room_for_labels() {
         }
     }
     assert_eq!(widths.len(), 40);
+    assert_eq!(
+        widths,
+        [
+            1, 2, 1, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 1,
+            2, 1, 2, 1, 1, 2, 1, 2, 1, 1, 1,
+        ]
+    );
     assert_eq!(widths.iter().sum::<u16>(), 55);
     assert_eq!(x, 117, "strip must end at column 116");
     assert_eq!(buf[(22, 33)].bg, options.theme.screen);
     assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
     assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+}
+
+fn assert_strip_segments(buf: &Buffer, expected: &[(u16, Color)], screen: Color) {
+    let mut x = 23;
+    assert_eq!(buf[(22, 33)].bg, screen);
+    for (width, background) in expected {
+        for _ in 0..*width {
+            assert_eq!(buf[(x, 33)].bg, *background, "strip fill at {x}");
+            x += 1;
+        }
+        assert_eq!(buf[(x, 33)].bg, screen, "strip gap at {x}");
+        assert_eq!(buf[(x, 33)].symbol(), " ");
+        x += 1;
+    }
+    assert_eq!(x, 118, "last filled cell must be column 116");
+}
+
+#[test]
+fn strip_with_too_many_parts_keeps_title_and_times_only() {
+    let mut report = report("1.1");
+    report.parts = report.parts.iter().cloned().cycle().take(60).collect();
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 2, 33, "where the time went", options.theme.secondary);
+    for y in 33..=34 {
+        for x in 23..120 {
+            assert_eq!(buf[(x, y)].bg, options.theme.screen);
+            if y == 33 || x > 116 {
+                assert_eq!(buf[(x, y)].symbol(), " ", "cell {x},{y}");
+            }
+        }
+    }
+    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+}
+
+#[test]
+fn strip_times_cover_all_parts_and_skip_missing_timestamps() {
+    let mut report = report("1.1");
+    report.parts[0].from = Some(Timestamp::parse("2026-11-06T16:00:00Z").unwrap());
+    report.parts[0].to = Some(Timestamp::parse("2026-11-06T16:20:00Z").unwrap());
+    report.parts[4].from = Some(Timestamp::parse("2026-11-06T16:05:00Z").unwrap());
+    report.parts[4].to = Some(Timestamp::parse("2026-11-06T16:10:00Z").unwrap());
+    let options = golden_options();
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 23, 34, "08:00", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:20", options.theme.secondary);
+
+    report.parts[0].from = None;
+    report.parts[4].to = None;
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
+    assert_colored_text(&buf, 112, 34, "08:20", options.theme.secondary);
+}
+
+#[test]
+fn strip_zero_length_parts_share_extra_cells_equally() {
+    let mut report = report("1.1");
+    for part in &mut report.parts {
+        part.to = part.from;
+    }
+    let options = golden_options();
+    let t = options.theme;
+    let buf = render(&report, &options, 120, 40);
+    // Label minima total 47; split the 43 extra cells as 9, 9, 9, 8, 8.
+    assert_strip_segments(
+        &buf,
+        &[
+            (15, t.claude_strip),
+            (20, t.graph_selected),
+            (17, t.claude_strip),
+            (13, t.codex_strip),
+            (25, t.claude_strip),
+        ],
+        t.screen,
+    );
+}
+
+#[test]
+fn strip_without_labels_shares_extra_cells_by_length() {
+    let mut report = report("1.1");
+    report.parts.truncate(3);
+    for (index, part) in report.parts.iter_mut().enumerate() {
+        part.kind = "long label ".repeat(4);
+        part.to = Some(
+            Timestamp::from_epoch_ms(part.from.unwrap().epoch_ms() + (index as i64 + 1) * 1_000)
+                .unwrap(),
+        );
+    }
+    let options = golden_options();
+    let t = options.theme;
+    let buf = render(&report, &options, 120, 40);
+    // Three one-cell minima leave 89 cells in a 1:2:3 ratio. Remainders
+    // award the last two cells to the first and second parts.
+    assert_strip_segments(
+        &buf,
+        &[
+            (16, t.claude_strip),
+            (31, t.graph_selected),
+            (45, t.claude_strip),
+        ],
+        t.screen,
+    );
+    for x in 23..=116 {
+        assert_eq!(buf[(x, 33)].symbol(), " ", "no label at {x}");
+    }
+}
+
+#[test]
+fn strip_unlinked_part_keeps_label_minimum_and_selected_claude_colour() {
+    let options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    let t = options.theme;
+    let buf = render(&report("1.2"), &options, 120, 40);
+    assert_strip_segments(
+        &buf,
+        &[
+            (10, t.graph_selected),
+            (11, t.codex_strip),
+            (43, t.claude_strip),
+            (5, t.codex_strip),
+            (21, t.claude_strip),
+        ],
+        t.screen,
+    );
+    assert_colored_text(&buf, 24, 33, "plan", t.claude);
+    assert_colored_text(&buf, 35, 33, "implement", t.codex);
 }
 
 #[test]

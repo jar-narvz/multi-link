@@ -959,6 +959,26 @@ fn strip_widths(parts: &[Part], labels: &[&str], span: usize) -> Option<(Vec<usi
 fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
     let t = options.theme;
     paint.write(2, y, "where the time went", t.secondary, paint.end());
+    // The time range describes the whole report, even when parts overlap or
+    // there are too many parts to draw with a cell and a gap each.
+    if let Some(from) = report.parts.iter().filter_map(|part| part.from).min() {
+        paint.write(
+            23,
+            y + 1,
+            &clock(from, options.offset, false),
+            t.secondary,
+            117,
+        );
+    }
+    if let Some(to) = report.parts.iter().filter_map(|part| part.to).max() {
+        paint.write(
+            112,
+            y + 1,
+            &clock(to, options.offset, false),
+            t.secondary,
+            117,
+        );
+    }
     let labels: Vec<_> = report
         .parts
         .iter()
@@ -998,24 +1018,6 @@ fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
             );
         }
         x += width as u16 + 1;
-    }
-    if let Some(from) = report.parts.first().and_then(|part| part.from) {
-        paint.write(
-            23,
-            y + 1,
-            &clock(from, options.offset, false),
-            t.secondary,
-            117,
-        );
-    }
-    if let Some(to) = report.parts.last().and_then(|part| part.to) {
-        paint.write(
-            112,
-            y + 1,
-            &clock(to, options.offset, false),
-            t.secondary,
-            117,
-        );
     }
 }
 
