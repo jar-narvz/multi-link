@@ -1955,3 +1955,131 @@ fn continue_label_after_first() {
     // The other step's hand-off is in no 1.1 part's notable.
     assert!(!labels.iter().any(|(_, l)| l.contains("2.0")));
 }
+
+#[test]
+fn no_last_part_window_ends_at_latest_run_end() {
+    // Run 1 (h1) ends at 10:30, after run 2 (h2, the last run) ends at 10:06,
+    // and the parent is silent after 10:05:30: no last part. The chain's
+    // window ends at the latest run end, so a read after run 2 but before
+    // run 1 ends is a waiting read of the last Claude part before it.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T10:00:00Z", "2026-11-06T10:05:30Z")],
+    ));
+    for c in ["c1", "c2"] {
+        w.sessions.push(codex_session(
+            c,
+            &[("2026-11-06T10:01:01Z", "2026-11-06T10:30:00Z")],
+        ));
+    }
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.1"),
+        "2026-11-06T10:01:00Z",
+        Match::Exact,
+        Some("c1"),
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.1"),
+        "2026-11-06T10:05:00Z",
+        Match::Exact,
+        Some("c2"),
+    );
+    w.rollout(
+        "c1",
+        vec![done_turn(
+            "2026-11-06T10:01:01Z",
+            "2026-11-06T10:30:00Z",
+            "go",
+            "ok",
+        )],
+    );
+    w.rollout(
+        "c2",
+        vec![done_turn(
+            "2026-11-06T10:05:01Z",
+            "2026-11-06T10:06:00Z",
+            "fix",
+            "ok",
+        )],
+    );
+    for (id, at) in [
+        ("r1", "2026-11-06T10:20:00Z"), // after run 2, before run 1 ends
+        ("r2", "2026-11-06T10:30:01Z"), // after the chain
+    ] {
+        p1_call(&mut w, call(id, at, CallKind::Read, None, None));
+    }
+    let report = w.build("/repo", "1.1");
+    let last = report
+        .parts
+        .iter()
+        .rev()
+        .find(|p| p.harness == Harness::Claude)
+        .unwrap();
+    assert_eq!(
+        report.parts.last().unwrap().harness,
+        Harness::Codex,
+        "no last part"
+    );
+    assert_eq!(last.waiting_reads, 1);
+    assert_eq!(
+        report.parts.iter().map(|p| p.waiting_reads).sum::<usize>(),
+        1
+    );
+}
+
+#[test]
+fn call_at_meeting_instant_goes_to_earlier_part() {
+    // A no-interval hand-off at 15:03:00 splits two Claude parts that meet at
+    // that instant; a non-hand-off call exactly there is counted once, in the
+    // earlier part.
+    let mut w = World::new();
+    w.sessions.push(claude_session(
+        "p1",
+        "/repo",
+        &[("2026-11-06T15:00:00Z", "2026-11-06T15:04:00Z")],
+    ));
+    w.hand_off(
+        "p1",
+        "h1",
+        Some("1.2"),
+        "2026-11-06T15:00:20Z",
+        Match::Unlinked,
+        None,
+    );
+    w.hand_off(
+        "p1",
+        "h2",
+        Some("1.2"),
+        "2026-11-06T15:03:00Z",
+        Match::Ambiguous,
+        None,
+    );
+    p1_call(
+        &mut w,
+        call(
+            "e1",
+            "2026-11-06T15:03:00Z",
+            CallKind::Edit,
+            None,
+            Some(true),
+        ),
+    );
+    let report = w.build("/repo", "1.2");
+    let claude_parts: Vec<_> = report
+        .parts
+        .iter()
+        .filter(|p| p.harness == Harness::Claude)
+        .collect();
+    assert_eq!(claude_parts.len(), 3);
+    assert_eq!(claude_parts[1].to, claude_parts[2].from);
+    assert_eq!(
+        claude_parts.iter().map(|p| counts(p).1).collect::<Vec<_>>(),
+        vec![0, 1, 0]
+    );
+}

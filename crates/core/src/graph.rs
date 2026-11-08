@@ -5,6 +5,7 @@ use std::{
     collections::{HashMap, HashSet},
     io,
     path::Path,
+    process::Command,
 };
 
 use multi_link_model::{
@@ -658,9 +659,36 @@ pub fn build(input: &GraphInput<'_>) -> GraphReport {
     }
 }
 
-/// Newest commit whose subject holds exactly `(Step <step>)`. Stub until Task 6.
-pub fn commit_for_step(_repo: &Path, _step: &str) -> Option<GraphCommit> {
-    None
+/// Newest commit whose subject holds exactly `(Step <step>)` (a substring, so
+/// `(Step 1.10)` never matches `1.1`). Runs `git` with `GIT_*` removed, as
+/// `RepoMode::map` does; any failure is `None`.
+pub fn commit_for_step(repo: &Path, step: &str) -> Option<GraphCommit> {
+    let mut command = Command::new("git");
+    for (name, _) in std::env::vars_os() {
+        if name.as_encoded_bytes().starts_with(b"GIT_") {
+            command.env_remove(name);
+        }
+    }
+    let output = command
+        .arg("-C")
+        .arg(repo)
+        .args(["log", "--abbrev=7", "--format=%h%x1f%cI%x1f%s"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = std::str::from_utf8(&output.stdout).ok()?;
+    let marker = format!("(Step {step})");
+    text.lines().find_map(|line| {
+        let mut fields = line.splitn(3, '\u{1f}');
+        let (hash, at, subject) = (fields.next()?, fields.next()?, fields.next()?);
+        subject.contains(&marker).then_some(())?;
+        Some(GraphCommit {
+            hash: hash.to_string(),
+            at: Timestamp::parse(at).ok()?,
+        })
+    })
 }
 
 impl Scanner {
