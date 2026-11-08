@@ -15,6 +15,19 @@ use time::UtcOffset;
 use crate::{home::basename, theme::Theme, view};
 
 const BOX_HEIGHT: u16 = 9;
+const CLAUDE_LANE: u16 = 4;
+const EDGE_ROWS: u16 = 3;
+const CODEX_LANE: u16 = CLAUDE_LANE + BOX_HEIGHT + EDGE_ROWS;
+const LANES_END: u16 = CODEX_LANE + BOX_HEIGHT;
+const PANEL: u16 = LANES_END + 2;
+const PANEL_ROWS: u16 = 5;
+const STRIP: u16 = PANEL + PANEL_ROWS + 1;
+const STRIP_ROWS: u16 = 2;
+const LEGEND: u16 = STRIP + STRIP_ROWS + 1;
+const FOOTER_ROWS: u16 = 2;
+const FULL_HEIGHT: u16 = LEGEND + 2 + FOOTER_ROWS;
+const MIN_PANEL_HEIGHT: u16 = PANEL + 1 + FOOTER_ROWS;
+const MIN_LEGEND_HEIGHT: u16 = PANEL + PANEL_ROWS + 2 + FOOTER_ROWS;
 
 #[derive(Clone, Copy)]
 pub struct GraphOptions {
@@ -75,7 +88,7 @@ fn first_visible_slot(slots: &[usize], selected: usize, first_slot: usize) -> us
 }
 
 /// Keep the lanes fixed, dropping the strip, legend, then panel detail as needed.
-/// An out-of-bounds row is the height sentinel, which the painter clips.
+/// Body rows retain their coordinates and are clipped above the bottom rule.
 struct Layout {
     header: [u16; 2],
     header_rule: u16,
@@ -94,25 +107,29 @@ struct Layout {
 
 impl Layout {
     fn new(height: u16) -> Self {
-        let row = |y: u16| y.min(height);
-        let codex_lane: u16 = 16;
-        let rule = height.saturating_sub(2);
-        let panel = row(if height < 30 { 25 } else { 27 });
+        let rule = height.saturating_sub(FOOTER_ROWS);
+        let compact = height < MIN_PANEL_HEIGHT;
+        let panel = if compact { LANES_END } else { PANEL };
         let panel_rows = rule
             .saturating_sub(panel)
-            .min(if height < 30 { 1 } else { 5 });
+            .min(if compact { 1 } else { PANEL_ROWS });
+        let legend = (height >= MIN_LEGEND_HEIGHT).then(|| {
+            // Keep a blank before the rule whenever the full panel leaves room.
+            let blank = u16::from(height > MIN_LEGEND_HEIGHT);
+            LEGEND.min(height - FOOTER_ROWS - 1 - blank)
+        });
         Self {
-            header: [row(0), row(1)],
-            header_rule: row(2),
-            scroll: row(3),
-            claude_lane: row(4),
-            codex_lane: row(codex_lane),
-            edges: row(codex_lane - 3),
+            header: [0, 1],
+            header_rule: CLAUDE_LANE - 2,
+            scroll: CLAUDE_LANE - 1,
+            claude_lane: CLAUDE_LANE,
+            codex_lane: CODEX_LANE,
+            edges: CODEX_LANE - EDGE_ROWS,
             panel,
             panel_rows,
-            panel_rule: (panel_rows > 0 && height >= 30).then(|| panel - 1),
-            strip: (height >= 40).then_some(33),
-            legend: (height >= 36).then(|| 36.min(height - 3)),
+            panel_rule: (panel_rows > 0 && !compact).then(|| panel - 1),
+            strip: (height >= FULL_HEIGHT).then_some(STRIP),
+            legend,
             rule,
             footer: height.saturating_sub(1),
         }
@@ -146,13 +163,6 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
         paint.write(2, y, empty, options.theme.secondary, paint.end());
     } else if area.width < 120 {
         list(report, options, &layout, &mut paint);
-        panel(report, options, &layout, &mut paint);
-        if let Some(y) = layout.strip {
-            strip(report, options, y, &mut paint);
-        }
-        if let Some(y) = layout.legend {
-            legend(y, &mut paint);
-        }
     } else {
         let slots = graph_slots(report);
         let first = first_visible_slot(&slots, options.selected, options.first_slot);
@@ -175,6 +185,8 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             );
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
+    }
+    if report.empty.is_none() {
         panel(report, options, &layout, &mut paint);
         if let Some(y) = layout.strip {
             strip(report, options, y, &mut paint);
@@ -183,7 +195,11 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
             legend(y, &mut paint);
         }
     }
-    paint.bottom = area.height;
+    let mut paint = Paint {
+        buf: &mut screen,
+        theme: options.theme,
+        bottom: area.height,
+    };
     paint.clear_row(layout.rule);
     paint.clear_row(layout.footer);
     paint.rule(layout.rule);
@@ -285,10 +301,7 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
     for (dy, (x, line, bg)) in rows.into_iter().skip(first).take(room).enumerate() {
         let y = layout.claude_lane + dy as u16;
         if let Some(bg) = bg {
-            paint.buf.set_style(
-                Rect::new(1, y, paint.end().saturating_sub(1), 1),
-                Style::default().bg(bg),
-            );
+            paint.fill(Rect::new(1, y, paint.end().saturating_sub(1), 1), bg);
         }
         paint.line(x, y, line, paint.end());
     }
@@ -644,7 +657,8 @@ fn match_words(confidence: Match, candidates: usize) -> String {
 fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
     let y = layout.panel;
     let rows = layout.panel_rows;
-    if rows == 0 {
+    let visible = |dy| dy < rows;
+    if !visible(0) {
         return;
     }
     let selected = options.selected;
@@ -695,7 +709,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &
     );
     if codex && available {
         for (dy, label, quote) in [(1, "asked", &part.asked), (3, "said", &part.said)] {
-            if dy < rows
+            if visible(dy)
                 && let Some(quote) = quote.as_deref().filter(|text| !text.is_empty())
             {
                 paint.write(12, y + dy, label, t.secondary, paint.end());
@@ -705,13 +719,13 @@ fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &
             }
         }
     }
-    if rows > 2
+    if visible(2)
         && let Some(origin) = panel_origin(report, part, selected, options.offset)
     {
         paint.write(12, y + 2, "from", t.secondary, paint.end());
         paint.write(19, y + 2, &origin, t.text, paint.end());
     }
-    if rows > 3 && !codex && part.untagged_handoffs > 0 {
+    if visible(3) && !codex && part.untagged_handoffs > 0 {
         paint.write(
             19,
             y + 3,
@@ -722,7 +736,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &
             t.secondary,
             paint.end(),
         );
-    } else if rows > 3 && part.status == Some(PartStatus::Unlinked) {
+    } else if visible(3) && part.status == Some(PartStatus::Unlinked) {
         paint.write(
             19,
             y + 3,
@@ -731,7 +745,7 @@ fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &
             paint.end(),
         );
     }
-    if rows > 4 && available && session.is_some() {
+    if visible(4) && available && session.is_some() {
         paint.line(
             12,
             y + 4,
@@ -872,6 +886,12 @@ struct Paint<'a> {
 }
 
 impl Paint<'_> {
+    fn fill(&mut self, area: Rect, bg: Color) {
+        let clip = Rect::new(0, 0, self.buf.area.width, self.bottom);
+        self.buf
+            .set_style(area.intersection(clip), Style::default().bg(bg));
+    }
+
     // Exclusive right edge, preserving the screen's outer blank column.
     fn end(&self) -> u16 {
         self.buf.area.width.saturating_sub(1)

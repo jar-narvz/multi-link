@@ -535,6 +535,11 @@ fn thirty_nine_rows_drop_the_strip() {
     assert!(!text(&short).contains("where the time went"));
     assert!(text(&short).contains(rendered_rows(&full, 36..=36).trim_end()));
     assert_eq!(
+        rendered_rows(&short, 35..=35),
+        rendered_rows(&full, 36..=36)
+    );
+    assert_eq!(rendered_rows(&short, 36..=36), "\n");
+    assert_eq!(
         rendered_rows(&short, 38..=38),
         rendered_rows(&full, 39..=39)
     );
@@ -1493,9 +1498,8 @@ fn narrow_lists_every_part_in_order() {
                     }
                 }
                 assert!(
-                    rows.get(y + 1).is_some_and(|row| {
-                        row.contains(subline) && row.contains(counts)
-                    }),
+                    rows.get(y + 1)
+                        .is_some_and(|row| { row.contains(subline) && row.contains(counts) }),
                     "{id}, width {width}: {title} must be followed by {subline:?} and {counts:?}"
                 );
                 cursor = y + 2;
@@ -1730,5 +1734,17 @@ fn shrinking_screens_drop_strip_then_legend_then_panel_lines() {
             height >= 36,
             "height {height}"
         );
+    }
+}
+
+#[test]
+fn ten_rows_keep_rule_and_footer_on_the_last_two_rows() {
+    let report = report("1.1");
+    let options = golden_options();
+    let full = render(&report, &options, 120, 40);
+    let short = render(&report, &options, 120, 10);
+    for x in 0..120 {
+        assert_eq!(short[(x, 8)], full[(x, 38)], "rule cell {x}");
+        assert_eq!(short[(x, 9)], full[(x, 39)], "footer cell {x}");
     }
 }
