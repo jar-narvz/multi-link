@@ -5,7 +5,7 @@ Step 8.6 compares the step graph (G0–G11, `PLAN.md` → Phase 8, `docs/design.
 private mockup canvas, <https://claude.ai/artifact/R5Bh9iX6bsn3jSu8F8D58C>. It was drawn from real step 6.7 and
 shows real prompts, so it is described here, not pictured (W10). The real renders show prompts too; they stayed in
 scratch storage and are described in words and counts only. The owner's check is still open (see
-[Owner check](#owner-check-stop-and-ask--waiting)).
+[Owner check](#owner-check-stop-and-ask--confirmed)).
 
 **Most important findings on real data (release build at 0ec1283, `--now 2026-11-09T00:00:00Z`):**
 1. Real step 6.7 draws board 9's layout: the same 5 parts in the same slots, the same edge glyphs, words and clock
@@ -198,7 +198,7 @@ Step 8.4a allows: from 8.4a on, each step checked that only its own keys changed
 session ids (only this repo's commit hashes and synthetic fixture ids), no `/Users/` path, no secrets. The image is
 the synthetic fixture. Board 9 and the real renders stay out of the repo.
 
-## Owner check (stop-and-ask) — waiting
+## Owner check (stop-and-ask) — confirmed
 
 Need (design need 4): "for one PLAN.md step I can follow who did what, in what order, how many fix rounds it took
 and how it ended, across Claude and Codex, without opening transcripts." To check (the installed binary predates the
@@ -212,4 +212,4 @@ multi-link tui
 Then `enter` on a repo, select a lane, and press `s`. Use `←→` to move along parts, `[ ]` for the previous or next
 step, and `esc` to go back.
 
-Owner's answer: _waiting._
+Owner's answer (2026-11-08, after reinstalling and running `multi-link tui` with Step 8.7's 12-hour clock): "it looks good", then "Yes, close Phase 8". Phase 8 is closed.

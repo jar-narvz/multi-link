@@ -1260,7 +1260,7 @@ screens; one additive JSON key (`last_asked`, Step 7.5); W0–W10 stay in force 
   Codex sessions in `sessions --since all`, those with `last_asked` null (must equal `asked` null except
   for explained cases), and those where `last_asked` ≠ `asked`.
 
-### Phase 8 — Step graph (Release 1.5)
+### Phase 8 — Step graph (Release 1.5) — closed 2026-11-08 (owner confirmed)
 Need (design need 4): for one PLAN.md step I can follow who did what, in what order, how many fix rounds it took
 and how it ended, across Claude and Codex, without opening transcripts. The owner approved **board 9** on the
 mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C) on 2026-11-06: board 3's step graph drawn on the

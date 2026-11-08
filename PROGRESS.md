@@ -1,13 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 8 is closed (2026-11-08): the owner confirmed the step graph on real data** ("it looks good", then "Yes, close
+Phase 8"), after reinstalling with Step 8.7. Nothing after Phase 8 is planned in PLAN.md yet. Candidates, in the
+coordinator's recommended order (owner to choose): fixes (clean-exit resume from `.claude/handoff/backlog-findings.md`,
+T10 redirect-file child, the 8.5 Codex-lane window limit, reading `.zst` rollouts, re-shooting `docs/img/**` for the
+12-hour clock); then the live grid (`.claude/handoff/proposal-live-grid-and-pane-jump.md`, needs board 10 and Q3/Q4/Q6);
+then the pane jump only if the owner runs `claude` in tmux or Herdr (Q1). `main` is not pushed (the owner pushes).
+
 **Step 8.7 (2026-11-08, Codex loop) is committed: every TUI clock is 12-hour (`9:05pm`, `8:05:43am`, `12:00am`).**
 One helper, `view::clock_label(at, with_seconds)`, feeds `view::clock`, `RepoScene::clock` (axis ticks, header ranges)
 and `graph::clock`. JSON and CLI text are unchanged (UTC). All 8 TUI golden pairs were regenerated at this step's commit;
 later steps pin them there. Wider labels drop some axis ticks under P4 and cut two long lines (see the 8.7 log entry).
-`docs/img/**` predates 8.7 (README says so). Phase 8's owner check below is still pending.
+`docs/img/**` predates 8.7 (README says so).
 
-**Resume here (2026-11-08, latest). Step 8.6 is committed; Phase 8 is NOT closed: waiting on the owner.** 8.6 ran in
+**Step 8.6 (2026-11-08). Step 8.6 is committed; the owner check it asked for is now done (Phase 8 closed, above).** 8.6 ran in
 the main checkout as a Claude step (no Codex, no worktree). The owner must reinstall (`cargo install --path crates/cli
 --force`; the installed binary predates the graph), run `multi-link tui`, press `s` on a repo-view lane and confirm
 the step graph meets need 4. Record the answer in `docs/phase8-check.md` → "Owner check" and here. A "no" with notes
@@ -526,6 +533,15 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Phase 8 close: owner confirm — Claude (coordinator)
+- Did: recorded the owner's Step 8.6 answer and closed Phase 8.
+- Changed: `docs/phase8-check.md` (Owner check → confirmed), `PLAN.md` (Phase 8 heading marked closed), `PROGRESS.md`.
+- Verify: the owner's words, after reinstalling (`cargo install --path crates/cli --force`) and running the TUI:
+  "it looks good", then "Yes, close Phase 8". Tests at HEAD 956d965: 521 passed, 0 failed; clippy clean.
+- Review: no code change.
+- Gotchas: `~/.cargo/bin` is not on the owner's terminal PATH (no zsh startup file adds it); run
+  `~/.cargo/bin/multi-link` or add it to `~/.zshrc`.
 
 ### 2026-11-08 — Step 8.7: TUI: 12-hour clock on screen — Codex
 - Did: Shared `view::clock_label` drives view/repo/graph clocks, with lowercase suffixes and optional seconds;
