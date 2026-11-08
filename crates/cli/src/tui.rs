@@ -130,25 +130,24 @@ fn refresh(
     .map(|(name, count)| format!("{name}: {count}"))
     .collect::<Vec<_>>()
     .join(" · ");
+    // One all-time pass per refresh, whatever the TUI's window: started children that went
+    // quiet long ago still count for `s` (G9 amendment), and G2 step lists are all-time.
+    let all = Options {
+        state_dir: options.state_dir.clone(),
+        since: None,
+        ..*options
+    };
+    let (sessions, links) = scanner.refresh(root, &all)?;
+    let sessions = &sessions.report.sessions;
+    let links = &links.report.links;
+    let started_steps = started_steps(sessions, links);
     let (graph, graph_steps) = match graph {
         None => (None, Vec::new()),
         Some((repo, step)) => {
-            let report = scanner.graph(root, options, repo, step, &mut plans)?;
-            // G2: the step list is all-time, like the graph, whatever the TUI's window.
-            let all = Options {
-                state_dir: options.state_dir.clone(),
-                since: None,
-                ..*options
-            };
-            let (sessions, links) = scanner.refresh(root, &all)?;
             let plan = multi_link_core::overview::plan_folder(root, options.repo_mode, repo)
                 .map(|folder| plans(&folder));
-            let steps = graph_steps(
-                &sessions.report.sessions,
-                &links.report.links,
-                repo,
-                plan.as_ref(),
-            );
+            let steps = graph_steps(sessions, links, repo, plan.as_ref());
+            let report = scanner.graph(root, options, repo, step, &mut plans)?;
             (Some(report), steps)
         }
     };
@@ -158,7 +157,53 @@ fn refresh(
         diagnostics,
         graph,
         graph_steps,
+        started_steps,
     }))
+}
+
+/// Steps a Claude session's direct started children reached (G9 amendment), keyed by the
+/// parent's id. A child is a listed Claude session whose `started_by` is a listed Claude session
+/// of the same repo (8.4c S3: cross-repo children are not children). Each child gives its own
+/// latest tagged hand-off (max `at`, ties by later position) as (child repo, step); children in
+/// `started_at` then id order; one entry per (repo, step), the first kept; untagged children
+/// skipped. Direct children only.
+fn started_steps(sessions: &[Session], links: &[Link]) -> HashMap<String, Vec<(String, String)>> {
+    let claude: HashMap<&str, &Session> = sessions
+        .iter()
+        .filter(|s| s.harness == Harness::Claude)
+        .map(|s| (s.id.as_str(), s))
+        .collect();
+    let mut latest: HashMap<&str, (Timestamp, usize, &str)> = HashMap::new();
+    for (i, link) in links.iter().enumerate() {
+        if let Some(step) = link.step.as_deref() {
+            let entry = latest
+                .entry(link.parent.as_str())
+                .or_insert((link.at, i, step));
+            if (link.at, i) > (entry.0, entry.1) {
+                *entry = (link.at, i, step);
+            }
+        }
+    }
+    let mut children: Vec<(&str, &Session)> = claude
+        .values()
+        .filter_map(|child| {
+            let parent = claude.get(child.started_by.as_deref()?)?;
+            (parent.repo == child.repo).then_some((parent.id.as_str(), *child))
+        })
+        .collect();
+    children.sort_by(|a, b| (a.1.started_at, &a.1.id).cmp(&(b.1.started_at, &b.1.id)));
+    let mut map: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for (parent, child) in children {
+        let Some((_, _, step)) = latest.get(child.id.as_str()) else {
+            continue;
+        };
+        let entry = (child.repo.clone(), step.to_string());
+        let entries = map.entry(parent.to_string()).or_default();
+        if !entries.contains(&entry) {
+            entries.push(entry);
+        }
+    }
+    map
 }
 
 /// Steps `[` `]` walk in a repo (G9): ids tagged on hand-offs whose parent is a listed Claude
@@ -557,6 +602,99 @@ mod tests {
     }
 
     #[test]
+    fn started_steps_are_direct_same_repo_children_by_start() {
+        use multi_link_model::Harness;
+        let root = fixtures().join("sessions-phase8");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let (sessions, links) = Scanner::default()
+            .refresh(&root, &fixture_options(&probe, "2026-11-06T18:00:00Z"))
+            .unwrap();
+        let template = sessions
+            .report
+            .sessions
+            .iter()
+            .find(|s| s.harness == Harness::Claude)
+            .unwrap()
+            .clone();
+        let session = |id: &str, repo: &str, by: Option<&str>, started: &str| {
+            let mut s = template.clone();
+            s.id = id.into();
+            s.repo = repo.into();
+            s.started_by = by.map(Into::into);
+            s.started_at = started.parse().unwrap();
+            s.last_activity = s.started_at;
+            s
+        };
+        let mut codex = session("x1", "/r", Some("k"), "2026-11-06T09:01:00Z");
+        codex.harness = Harness::Codex;
+        let sessions = vec![
+            session("k", "/r", None, "2026-11-06T09:00:00Z"),
+            // Started after b: listed second. Quiet for days: no window applies here.
+            session("a", "/r", Some("k"), "2026-11-06T09:10:00Z"),
+            session("b", "/r", Some("k"), "2026-11-06T09:05:00Z"),
+            // Grandchild of k (started by a).
+            session("a2", "/r", Some("a"), "2026-11-06T09:20:00Z"),
+            // Another repo's child is not a child (8.4c S3).
+            session("o", "/other", Some("k"), "2026-11-06T09:02:00Z"),
+            // No tagged hand-off: skipped.
+            session("d", "/r", Some("k"), "2026-11-06T09:03:00Z"),
+            // Same step as b: deduped, b (earlier start) kept.
+            session("e", "/r", Some("k"), "2026-11-06T09:30:00Z"),
+            // Same start as e, later id.
+            session("f", "/r", Some("k"), "2026-11-06T09:30:00Z"),
+            // Parent not listed.
+            session("g", "/r", Some("gone"), "2026-11-06T09:00:00Z"),
+            codex,
+        ];
+        let template = links.report.links[0].clone();
+        let link = |parent: &str, step: Option<&str>, at: &str| {
+            let mut l = template.clone();
+            l.parent = parent.into();
+            l.step = step.map(Into::into);
+            l.at = at.parse().unwrap();
+            l
+        };
+        let links = vec![
+            link("a", Some("2.0"), "2026-11-06T09:15:00Z"),
+            link("a", Some("2.1"), "2026-11-06T09:16:00Z"),
+            link("a", None, "2026-11-06T09:17:00Z"),
+            link("b", Some("3.1"), "2026-11-06T09:06:00Z"),
+            link("a2", Some("9.9"), "2026-11-06T09:21:00Z"),
+            link("o", Some("7.7"), "2026-11-06T09:03:00Z"),
+            link("d", None, "2026-11-06T09:04:00Z"),
+            link("e", Some("3.1"), "2026-11-06T09:31:00Z"),
+            link("f", Some("4.0"), "2026-11-06T09:31:00Z"),
+            link("g", Some("5.0"), "2026-11-06T09:01:00Z"),
+            link("k", Some("1.0"), "2026-11-06T09:01:00Z"),
+        ];
+        let entry = |step: &str| ("/r".to_string(), step.to_string());
+        let map = started_steps(&sessions, &links);
+        assert_eq!(map["k"], [entry("3.1"), entry("2.1"), entry("4.0")]);
+        assert_eq!(map["a"], [entry("9.9")]);
+        assert_eq!(map.len(), 2, "{map:?}");
+    }
+
+    #[test]
+    fn started_steps_include_children_outside_the_tui_window() {
+        // sessions-started at 12:00 with the TUI's 2 h window: K (84c00001) and its child A
+        // (84c00002, tagged 2.1, quiet since 09:30) are not in the overview, but K's entry is
+        // still there; K's cross-repo child in repo-o is not.
+        const K: &str = "84c00001-0000-4000-8000-000000008401";
+        let root = fixtures().join("sessions-started");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let options = fixture_options(&probe, "2026-11-08T12:00:00Z");
+        let report = refresh(&mut Scanner::default(), &root, &options, None).unwrap();
+        let listed = report.overview.repos.iter().any(|group| {
+            multi_link_tui::view::sessions(group).any(|row| row.id.starts_with("84c00002"))
+        });
+        assert!(!listed, "A must be outside the window for this test");
+        assert_eq!(
+            report.started_steps.get(K).map(Vec::as_slice),
+            Some(&[("/home/dev/repo-k".to_string(), "2.1".to_string())][..])
+        );
+    }
+
+    #[test]
     fn graph_refresh_on_phase8_fixture() {
         let root = fixtures().join("sessions-phase8");
         let probe = multi_link_core::FixtureProcessProbe;
@@ -617,7 +755,9 @@ mod tests {
     fn coordinator_s_end_to_end() {
         // sessions-started: coordinator K (84c00001) started A (84c00002, hand-off tagged 2.1)
         // and B (84c00003, none); A started the grandchild A2. The committed fixture has no
-        // other tagged hand-off, so the picker lists exactly A's step.
+        // other tagged hand-off, so the worker's `started_steps` for K is exactly A's step, and
+        // the picker lists it. (K itself is quiet since 09:04, so the overview needs `--since
+        // all` for its lane to be listed; the child entries are all-time either way.)
         const K: &str = "84c00001-0000-4000-8000-000000008401";
         let root = fixtures().join("sessions-started");
         let probe = multi_link_core::FixtureProcessProbe;
@@ -673,6 +813,10 @@ mod tests {
                 .trim_end()
                 .to_string()
         };
+        assert_eq!(
+            app.report.as_ref().unwrap().started_steps.get(K),
+            Some(&vec![graph_target("/home/dev/repo-k", "2.1")])
+        );
         assert!(app.update(Event::Key(KeyCode::Char('s'))).is_empty());
         assert_eq!(
             footer(&app),

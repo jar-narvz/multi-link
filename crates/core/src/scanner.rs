@@ -114,9 +114,9 @@ pub struct Scanner {
     repos: HashMap<String, crate::RepoPaths>,
     pub stats: ParseStats,
     pub diagnostics: Vec<String>,
-    /// Files `claude_transcripts` had to parse (cache misses), last call only.
+    /// Files the last `claude_transcripts` call had to parse (cache misses); None until it runs.
     #[cfg(test)]
-    graph_parsed: usize,
+    graph_parsed: Option<usize>,
 }
 
 type ClaudeInputs = (
@@ -298,7 +298,7 @@ impl Scanner {
         let result = self.read_claude(root);
         #[cfg(test)]
         {
-            self.graph_parsed = self.stats.files - stats.files;
+            self.graph_parsed = Some(self.stats.files - stats.files);
         }
         self.stats = stats;
         self.diagnostics = diagnostics;
@@ -586,16 +586,35 @@ mod tests {
                 )
                 .unwrap()
         };
+        // `graph_parsed` is Some only when the graph went through `claude_transcripts` (the
+        // cached path); a fresh `multi_link_claude::scan` would leave it None.
         let first = graph(&mut scanner);
         assert!(!first.parts.is_empty());
         // The refresh inside `graph` already cached every file.
-        assert_eq!(scanner.graph_parsed, 0);
+        assert_eq!(scanner.graph_parsed, Some(0));
+        scanner.graph_parsed = None;
         let second = graph(&mut scanner);
         assert_eq!(first, second);
         assert_eq!(
-            scanner.graph_parsed, 0,
-            "a warm graph parses no Claude file"
+            scanner.graph_parsed,
+            Some(0),
+            "a warm graph reads transcripts from the cache"
         );
+        // The counter counts real cache misses: touch exactly one transcript and read again
+        // without a refresh in between. A full parse would count every transcript.
+        let transcript = root
+            .path()
+            .join(".claude/projects/-home-dev-repo-g/81010000-0000-4000-8000-000000008101.jsonl");
+        fs::File::options()
+            .write(true)
+            .open(&transcript)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
+            .unwrap();
+        scanner.graph_parsed = None;
+        let transcripts = scanner.claude_transcripts(root.path()).unwrap();
+        assert!(transcripts.len() > 1);
+        assert_eq!(scanner.graph_parsed, Some(1));
     }
 
     #[test]

@@ -182,6 +182,7 @@ fn refresh(overview: OverviewReport) -> Result<Box<Refresh>, String> {
         diagnostics: String::new(),
         graph: None,
         graph_steps: Vec::new(),
+        started_steps: Default::default(),
     }))
 }
 fn open(app: &mut App) -> Vec<Effect> {

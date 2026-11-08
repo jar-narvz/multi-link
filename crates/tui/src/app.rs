@@ -3,7 +3,7 @@ use std::{cell::Cell, collections::HashSet};
 
 use crossterm::event::KeyCode;
 use multi_link_model::{
-    GraphReport, Harness, Link, LinksReport, OverviewReport, SessionRow, State,
+    GraphReport, Harness, Link, LinksReport, OverviewReport, RepoGroup, SessionRow, State,
 };
 use ratatui::{buffer::Buffer, layout::Rect};
 
@@ -20,6 +20,9 @@ pub struct Refresh {
     pub graph: Option<GraphReport>,
     /// Step ids `[` `]` walk for that graph's repo, in G9 order; empty when none is open.
     pub graph_steps: Vec<String>,
+    /// Per Claude session id: (repo, step) of each direct started child's latest tagged
+    /// hand-off, all-time, in the order `s` lists them (G9 amendment).
+    pub started_steps: std::collections::HashMap<String, Vec<(String, String)>>,
 }
 
 pub enum Event {
@@ -324,7 +327,10 @@ impl App {
                     self.imports = !self.imports;
                     self.restore_selection(selected.as_ref(), self.selection);
                 }
-                KeyCode::Char('s') if self.timeline.is_some() => return self.step_key(),
+                // An open check owns the footer until `Opened`; a picker would be hidden (review #5).
+                KeyCode::Char('s') if self.timeline.is_some() && !self.opening => {
+                    return self.step_key();
+                }
                 KeyCode::Char('z') if self.timeline.is_some() => self.unfold = !self.unfold,
                 KeyCode::Char('0') if self.timeline.is_some() => {
                     let window = Self::report_window(
@@ -369,13 +375,22 @@ impl App {
         let Some(view) = self.view() else {
             return Vec::new();
         };
-        let links = self.report.as_ref().map_or(&[][..], |r| &r.links.links[..]);
+        let Some(report) = self.report.as_ref() else {
+            return Vec::new();
+        };
         let found = match self.targets(&view).get(self.selection) {
-            Some((repo, Target::Session(row))) => match own_step(row, links) {
-                Some(step) => Ok((repo.to_string(), step)),
-                None if row.harness == Harness::Claude => Err(started_steps(repo, row, links)),
-                None => Err(Vec::new()),
-            },
+            Some((repo, Target::Session(row))) => {
+                let group = view.repos.iter().find(|g| g.repo == *repo);
+                match group.and_then(|group| own_step(group, row, &report.links.links)) {
+                    Some(step) => Ok((repo.to_string(), step)),
+                    None if row.harness == Harness::Claude => Err(report
+                        .started_steps
+                        .get(&row.id)
+                        .cloned()
+                        .unwrap_or_default()),
+                    None => Err(Vec::new()),
+                }
+            }
             _ => Err(Vec::new()),
         };
         match found {
@@ -680,39 +695,29 @@ impl App {
 }
 
 /// A lane's latest tagged hand-off step: a Claude lane's own hand-offs (it is the parent), a
-/// Codex lane's incoming ones (it is the child). Latest = max `at`, ties by later position.
-fn own_step(row: &SessionRow, links: &[Link]) -> Option<String> {
+/// Codex lane's incoming ones (it is the child) whose parent is a session of the lane's repo
+/// group, as overview placement and the G1 graph require. Latest = max `at`, ties by later
+/// position.
+fn own_step(group: &RepoGroup, row: &SessionRow, links: &[Link]) -> Option<String> {
+    let in_group: HashSet<&str> = match row.harness {
+        Harness::Claude => HashSet::new(),
+        Harness::Codex => crate::view::sessions(group)
+            .map(|s| s.id.as_str())
+            .collect(),
+    };
     links
         .iter()
         .enumerate()
         .filter(|(_, link)| match row.harness {
             Harness::Claude => link.parent == row.id,
-            Harness::Codex => link.child.as_deref() == Some(row.id.as_str()),
+            Harness::Codex => {
+                link.child.as_deref() == Some(row.id.as_str())
+                    && in_group.contains(link.parent.as_str())
+            }
         })
         .filter_map(|(i, link)| Some((link.at, i, link.step.clone()?)))
         .max_by_key(|(at, i, _)| (*at, *i))
         .map(|(_, _, step)| step)
-}
-
-/// Direct started (Claude) children in `started_at` then id order, each with its own latest
-/// tagged step; one entry per repo + step, children without one skipped.
-fn started_steps(repo: &str, row: &SessionRow, links: &[Link]) -> Vec<(String, String)> {
-    let mut children: Vec<&SessionRow> = row
-        .children
-        .iter()
-        .filter(|c| c.harness == Harness::Claude)
-        .collect();
-    children.sort_by(|a, b| (a.started_at, &a.id).cmp(&(b.started_at, &b.id)));
-    let mut entries: Vec<(String, String)> = Vec::new();
-    for child in children {
-        if let Some(step) = own_step(child, links) {
-            let entry = (repo.to_string(), step);
-            if !entries.contains(&entry) {
-                entries.push(entry);
-            }
-        }
-    }
-    entries
 }
 
 fn waiting_ids(report: &OverviewReport) -> HashSet<String> {
@@ -740,6 +745,7 @@ mod tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            started_steps: Default::default(),
         })
     }
     fn state(report: &mut Refresh, state: State) {
@@ -949,6 +955,7 @@ mod phase6_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            started_steps: Default::default(),
         })
     }
     fn app() -> App {
@@ -1127,6 +1134,7 @@ mod repo_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            started_steps: Default::default(),
         })
     }
     fn app() -> App {
@@ -1352,6 +1360,7 @@ mod graph_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            started_steps: Default::default(),
         })
     }
     fn started() -> Box<Refresh> {
@@ -1362,6 +1371,7 @@ mod graph_tests {
             diagnostics: String::new(),
             graph: None,
             graph_steps: Vec::new(),
+            started_steps: Default::default(),
         })
     }
     fn graph(key: &str, repo: &str, step: &str) -> GraphReport {
@@ -1536,6 +1546,17 @@ mod graph_tests {
         }
     }
 
+    /// What the worker sends for K: its direct started children's steps, all-time.
+    fn started_of_k(refresh: &mut Refresh, steps: &[(&str, &str)]) {
+        refresh.started_steps.insert(
+            "84c00001-0000-4000-8000-000000008401".into(),
+            steps
+                .iter()
+                .map(|(repo, step)| (repo.to_string(), step.to_string()))
+                .collect(),
+        );
+    }
+
     fn coordinator(r: Box<Refresh>) -> App {
         let mut app = App::default();
         app.update(Event::Refresh(Ok(r)));
@@ -1545,25 +1566,17 @@ mod graph_tests {
 
     #[test]
     fn s_on_coordinator_lists_direct_started_children_steps() {
+        // The picker lists exactly the worker's entries for K, in order; the overview's
+        // `children` (2 h window, one repo) are not consulted.
         let mut r = started();
-        // A2 is a grandchild of K (started by A): never listed.
         handoff(&mut r, A2, "9.9", "2026-11-08T09:30:00Z");
-        // B started after A: listed second, even with an earlier hand-off.
-        handoff(&mut r, B, "3.1", "2026-11-08T09:11:00Z");
+        handoff(&mut r, B, "3.3", "2026-11-08T09:11:00Z");
+        started_of_k(&mut r, &[(REPO_K, "2.1"), (REPO_K, "3.1")]);
         let mut app = coordinator(r);
         assert!(key(&mut app, KeyCode::Char('s')).is_empty());
         assert_eq!(
             row(&draw(&app, 120, 40), 39),
             "started: step 2.1, step 3.1 · ←→ choose · enter opens step 2.1 · esc cancel"
-        );
-        // One entry per repo + step.
-        let mut r = started();
-        handoff(&mut r, B, "2.1", "2026-11-08T09:40:00Z");
-        let mut app = coordinator(r);
-        key(&mut app, KeyCode::Char('s'));
-        assert_eq!(
-            app.footer_text(),
-            "started: step 2.1 · ←→ choose · enter opens step 2.1 · esc cancel"
         );
     }
 
@@ -1571,6 +1584,7 @@ mod graph_tests {
     fn own_tagged_handoff_wins_over_children() {
         let mut r = started();
         handoff(&mut r, K, "5.0", "2026-11-08T09:01:00Z");
+        started_of_k(&mut r, &[(REPO_K, "2.1")]);
         let mut app = coordinator(r);
         assert_eq!(
             key(&mut app, KeyCode::Char('s')),
@@ -1581,19 +1595,100 @@ mod graph_tests {
 
     #[test]
     fn coordinator_with_no_graphed_children_says_no_step() {
-        let mut r = started();
-        for link in &mut r.links.links {
-            link.step = None;
+        // A (K's child in the overview) has a tagged hand-off, but the worker sent no entry
+        // for K (missing, then empty): no step.
+        for entries in [None, Some(&[][..])] {
+            let mut r = started();
+            if let Some(entries) = entries {
+                started_of_k(&mut r, entries);
+            }
+            assert!(r.links.links.iter().any(|l| l.step.is_some()));
+            let mut app = coordinator(r);
+            assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+            assert!(app.picker.is_none() && app.graph.is_none());
+            assert_eq!(app.footer_text(), "no step on this session");
         }
+    }
+
+    #[test]
+    fn picker_opens_the_childs_repo() {
+        let mut r = started();
+        started_of_k(&mut r, &[("/home/dev/repo-o", "6.1")]);
         let mut app = coordinator(r);
+        key(&mut app, KeyCode::Char('s'));
+        assert_eq!(
+            key(&mut app, KeyCode::Enter),
+            [Effect::Graph(Some((
+                "/home/dev/repo-o".into(),
+                "6.1".into()
+            )))]
+        );
+    }
+
+    #[test]
+    fn s_while_open_check_pending_does_nothing() {
+        let mut r = tagged();
+        started_of_k(&mut r, &[(REPO_K, "2.1")]);
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO, "bb792d9c");
+        assert!(matches!(
+            key(&mut app, KeyCode::Char('o')).as_slice(),
+            [Effect::FreshOpen { .. }]
+        ));
+        assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+        assert!(app.graph.is_none() && app.picker.is_none());
+        assert_eq!(app.footer_text(), "checking current session…");
+        // A coordinator lane does not open its picker either.
+        let mut r = started();
+        started_of_k(&mut r, &[(REPO_K, "2.1")]);
+        let mut app = coordinator(r);
+        assert!(matches!(
+            key(&mut app, KeyCode::Char('o')).as_slice(),
+            [Effect::FreshOpen { .. }]
+        ));
         assert!(key(&mut app, KeyCode::Char('s')).is_empty());
         assert!(app.picker.is_none());
+        assert_eq!(app.footer_text(), "checking current session…");
+        // Once the check is answered, `s` works again.
+        app.update(Event::Opened(String::new()));
+        assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+        assert!(app.picker.is_some());
+    }
+
+    #[test]
+    fn codex_lane_ignores_handoffs_from_another_repo() {
+        let mut r = base();
+        let other = r
+            .overview
+            .repos
+            .iter()
+            .find(|g| g.repo != REPO)
+            .and_then(|g| crate::view::sessions(g).next())
+            .unwrap()
+            .id
+            .clone();
+        for link in &mut r.links.links {
+            if link
+                .child
+                .as_deref()
+                .is_some_and(|c| c.starts_with("01a189e2"))
+            {
+                link.parent = other.clone();
+                link.step = Some("1.4".into());
+            }
+        }
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(r)));
+        repo_view(&mut app, REPO, "01a189e2");
+        assert!(key(&mut app, KeyCode::Char('s')).is_empty());
+        assert!(app.graph.is_none() && app.picker.is_none());
         assert_eq!(app.footer_text(), "no step on this session");
     }
 
     fn picker_app() -> App {
         let mut r = started();
-        handoff(&mut r, B, "3.1", "2026-11-08T09:11:00Z");
+        started_of_k(&mut r, &[(REPO_K, "2.1"), (REPO_K, "3.1")]);
         let mut app = coordinator(r);
         key(&mut app, KeyCode::Char('s'));
         assert!(app.picker.is_some());
@@ -2020,6 +2115,7 @@ mod graph_tests {
                 diagnostics: self.diagnostics.clone(),
                 graph: self.graph.clone(),
                 graph_steps: self.graph_steps.clone(),
+                started_steps: self.started_steps.clone(),
             })
         }
     }
