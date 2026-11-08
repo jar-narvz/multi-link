@@ -7,7 +7,7 @@
  │ ◆ claude    “Draft the release notes, then wait for my…”       waiting on you · since Nov 1                  main  │
  │ ● claude    step 6.3                                           working now · for 5 min                       main  │
  │   4 other sessions, 2 active in the last 2h · enter shows all                                                      │
- │   last hand-off  21:25 · claude handed step 6.3 to codex · codex done                                              │
+ │   last hand-off  9:25pm · claude handed step 6.3 to codex · codex done                                             │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -18,7 +18,7 @@
  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-r  idle · last active 1 min ago · claude handed work to codex at 22:23, codex done                          │
+ │ ○ repo-r  idle · last active 1 min ago · claude handed work to codex at 10:23pm, codex done                        │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
    quiet repo-t (only Codex Desktop imports) · repo-s (last active Oct 30)

@@ -1,7 +1,7 @@
- Sessions in repo-r  step 2.4 Fix the date parser                                          last 2h · active 21:23–22:24
+ Sessions in repo-r  step 2.4 Fix the date parser                                       last 2h · active 9:23pm–10:24pm
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  session                                          21:25            21:30         42m               22:20    22:25 now
+  session                                          9:25pm           9:30pm        42m                      10:25pm now
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
                                                    │                │            ≈ ≈ ≈              │
 ▌ claude “Let's pick back up. Where do…”           │             ████████████████≈ ≈ ≈██████████████████████████████
@@ -13,7 +13,7 @@
   claude “Can we recheck the export at 9?”  ██████████████████      │            ≈ ≈ ≈              │
     main · idle · last active 57 min ago           │                │            ≈ ≈ ≈              │
                                                    │                │            ≈ ≈ ≈              │
-  ▸ 1 Codex Desktop import at 22:13 hidden (copies of Claude chats, not runs)
+  ▸ 1 Codex Desktop import at 10:13pm hidden (copies of Claude chats, not runs)
 
 
 
@@ -28,7 +28,7 @@
 
 
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  selected  claude 60110000 · started 21:29 · active about 12 min in 2 stretches · handed work to codex at 22:23
+  selected  claude 60110000 · started 9:29pm · active about 12 min in 2 stretches · handed work to codex at 10:23pm
             o open in Claude   f fork
 
 

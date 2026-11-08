@@ -604,7 +604,7 @@ impl RepoScene<'_> {
     fn clock(&self, ms: i64) -> String {
         let at = view::datetime(Timestamp::from_epoch_ms(ms).unwrap_or(self.report.now))
             .to_offset(self.options.offset);
-        format!("{:02}:{:02}", at.hour(), at.minute())
+        view::clock_label(at, false)
     }
     fn tick_label(&self, ms: i64) -> String {
         let at = view::datetime(Timestamp::from_epoch_ms(ms).unwrap_or(self.report.now))

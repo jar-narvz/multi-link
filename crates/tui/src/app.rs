@@ -1166,15 +1166,15 @@ mod repo_tests {
         assert!(app.explicit_range);
         assert!(!text(&app).contains("42m"));
         assert!(!text(&app).lines().nth(3).unwrap().contains("now"));
-        assert!(text(&app).lines().nth(3).unwrap().contains("21:54"));
+        assert!(text(&app).lines().nth(3).unwrap().contains("9:54pm"));
         app.update(Event::Key(KeyCode::Char('0')));
         assert!(!app.explicit_range);
         assert!(text(&app).contains("42m"));
-        assert!(text(&app).lines().nth(3).unwrap().contains("22:25 now"));
+        assert!(text(&app).lines().nth(3).unwrap().contains("10:25pm now"));
         app.update(Event::Key(KeyCode::Right));
         let axis = text(&app).lines().nth(3).unwrap().to_owned();
-        assert!(axis.contains("22:25 now"));
-        assert!(axis.trim_end().ends_with("22:25 now"));
+        assert!(axis.contains("10:25pm now"));
+        assert!(axis.trim_end().ends_with("10:25pm now"));
         let fitted = app.timeline.as_ref().unwrap().1;
         let bounds = TimeWindow::default_for(&app.report.as_ref().unwrap().overview);
         for _ in 0..10 {

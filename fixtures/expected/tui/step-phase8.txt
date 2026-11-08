@@ -1,10 +1,10 @@
  repo-g › step 1.1  Date parser: reject empty input
- Nov 6 · 08:05–08:12 · 6 min · 1 claude session · 2 codex runs · 1 fix round  Verify  cargo test --workspace (reported)
+ Nov 6 · 8:05am–8:12am · 6 min · 1 claude session · 2 codex runs · 1 fix round  Verify  cargo test --worksp… (reported)
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
  ╭────────────────────────────╮              ╭────────────────────────────╮              ╭────────────────────────────╮
  │ ● claude · plan            │              │ ● claude · review          │              │ ● claude · verify + commit │
- │ 08:05 · 17 s               │              │ 08:09 · 53 s               │              │ 08:10 · 1 min              │
+ │ 8:05am · 17 s              │              │ 8:09am · 53 s              │              │ 8:10am · 1 min             │
  │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│              │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│              │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
  │ 1 read · 1 run             │              │ 6 reads                    │              │ 4 reads · 1 edit · 3 runs  │
  │ ▸ codex exec · step 1.1    │              │ $ git diff                 │              │ $ cargo test ✓             │
@@ -12,11 +12,11 @@
  │ 6 reads while codex ran    │              │                            │              │ $ git commit               │
  ╰────────────────────────────╯              ╰────────────────────────────╯              ╰────────────────────────────╯
                            ╎ handed step 1.1     ▲ back to claude      │ handed fix          ▲ back to claude
-                           ╎ 08:05:43            │ 08:09:00            │ 08:09:53            │ 08:10:42
+                           ╎ 8:05:43am           │ 8:09:00am           │ 8:09:53am           │ 8:10:42am
                            ▼ matched by time     │                     ▼ confirmed           │
                        ╭────────────────────────────╮              ╭────────────────────────────╮
                        │ ● codex · implement        │              │ ● codex · fix round 1      │
-                       │ ✓ done 08:09 · 3 min       │              │ ✓ done 08:10 · 48 s        │
+                       │ ✓ done 8:09am · 3 min      │              │ ✓ done 8:10am · 48 s       │
                        │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│              │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│
                        │ 6 reads · 3 edits · 6 runs │              │ 3 reads · 2 edits · 2 runs │
                        │ edit parser.rs             │              │ $ cargo clippy ✓           │
@@ -25,14 +25,14 @@
                        ╰────────────────────────────╯              ╰────────────────────────────╯
 
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  selected  codex · implement · 82010000 · 08:05:44–08:09:00 · active about 3 min in 1 stretch
+  selected  codex · implement · 82010000 · 8:05:44am–8:09:00am · active about 3 min in 1 stretch
             asked  “Read AGENTS.md, then do Step 1.1 in PLAN.md. Reject empty input in the date parser and…”
-            from   claude 81010000 · plan · handed at 08:05:43 · matched by time · started 1 s after the call
+            from   claude 81010000 · plan · handed at 8:05:43am · matched by time · started 1 s after the call
             said   “Implemented Step 1.1 and the three requested tests. The workspace tests pass and the…”
             o open in Codex   f fork
 
   where the time went   plan     implement                        review        fix        verify + commit
-                       08:05                                                                                    08:12
+                       8:05am                                                                                  8:12am
 
  ▭ claude part   ▭ codex run   ╎ matched by time   │ confirmed link   ✓ done, or exit 0   ✗ exit non-zero
 

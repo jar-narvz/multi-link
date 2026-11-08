@@ -1,6 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 8.7 (2026-11-08, Codex loop) is committed: every TUI clock is 12-hour (`9:05pm`, `8:05:43am`, `12:00am`).**
+One helper, `view::clock_label(at, with_seconds)`, feeds `view::clock`, `RepoScene::clock` (axis ticks, header ranges)
+and `graph::clock`. JSON and CLI text are unchanged (UTC). All 8 TUI golden pairs were regenerated at this step's commit;
+later steps pin them there. Wider labels drop some axis ticks under P4 and cut two long lines (see the 8.7 log entry).
+`docs/img/**` predates 8.7 (README says so). Phase 8's owner check below is still pending.
+
 **Resume here (2026-11-08, latest). Step 8.6 is committed; Phase 8 is NOT closed: waiting on the owner.** 8.6 ran in
 the main checkout as a Claude step (no Codex, no worktree). The owner must reinstall (`cargo install --path crates/cli
 --force`; the installed binary predates the graph), run `multi-link tui`, press `s` on a repo-view lane and confirm
@@ -520,6 +526,41 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.7: TUI: 12-hour clock on screen — Codex
+- Did: Shared `view::clock_label` drives view/repo/graph clocks, with lowercase suffixes and optional seconds;
+  preserved date/relative-time rules. Graph strip reserves the actual clock width. Updated docs and test expectations.
+  Regenerated all 8 TUI text/style pairs from renderer output; removed temporary writers and kept compare logic.
+- Changed: `crates/tui/src/{view,timeline,graph,app}.rs` (app test literals only),
+  `crates/tui/tests/{view,timeline,graph,started}.rs`, `fixtures/expected/tui/*`, `docs/design.md`, `README.md`, `PROGRESS.md`.
+- Verify: Required Rust PATH exported. `cargo test --workspace` → exit 0; 521 passed, 0 failed across 48 suites.
+  Per-suite passed counts (all `test result: ok`): CLI main 15, cli 23, graph 7;
+  Claude lib 1, app_record 11, calls 5, fixtures 9, invocation 8, phase6 2, phase7 3;
+  Codex lib 0, calls 7, fixtures 9, phase6 9; core lib 48, graph 51, graph_commit 1, hook 6, links 16,
+  overview 5, phase6 7, repo_probe 11, sessions 13, started 13; hook lib 0, hook 14;
+  model lib 0, calls 3, graph 2, model 9; plan lib 0, fixtures 9;
+  TUI lib 52, graph 80, home 18, phase6_shape 3, phase8_shape 5, started 10, theme 5, timeline 22, view 9;
+  doc-tests 0 each for claude/codex/core/hook/model/plan/tui. Offset, seconds and exact 24 h cut-over tests pass.
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, Finished dev profile; no warnings.
+  `grep -hoE '[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?([ap]m)?' fixtures/expected/tui/*.txt | grep -vE '[ap]m$'`
+  → no output, exit 1 (no 24-hour clocks).
+  `git diff ddd91f8 -- fixtures/expected/tui | grep '^[-+] ' | grep -vE '[0-9]{1,2}:[0-9]{2}'`
+  → no output, exit 1 (only time-bearing text lines changed).
+  `git diff --exit-code ddd91f8 -- fixtures/expected ':!fixtures/expected/tui' crates/cli crates/core crates/model`
+  → no output, exit 0. Additional style-row audit: every changed style row belongs to a time-bearing text row.
+  `git diff --check` → no output, exit 0. Temporary renderer-write gate search → no matches.
+- Review: Claude, 1 round, 0 findings to fix. Read the whole diff: one helper, no 24-hour format left in
+  `crates/tui/src`; the graph strip end label now right-aligns by its real width (it was a fixed 5). 7.3 axis tests: the
+  only expectation changes drop ticks the wider end label overlaps (P4) and move the "now fits" case from minute 65 to 63,
+  so both branches (now shown, now dropped) stay covered; no assertion removed. Claude re-ran every Verify: 48 suites
+  `ok`, 521 passed, 1 ignored; clippy clean; `cargo fmt --all --check` clean; all three greps/diffs empty, exit 0.
+- Gotchas: Mode: Codex loop. `python3 -I tools/codex-quota.py` at start → `CODEX: UNKNOWN (no rate_limits in recent
+  rollouts)`, exit 2; before the later rounds → `CODEX: OK` (5-hour 3–5%, weekly 19%). Codex stopped twice, correctly,
+  on Claude's own constraints (no golden updater for the pinned goldens; `app.rs` not in Files). Claude ruled on both
+  and amended Files (PLAN.md Review log). Goldens came from a temporary env-gated writer that was then removed. The wider
+  clocks cut two lines that hold a time: home-full's `repo-a-wt` sentence at 100 columns ends `codex…` (was `codex
+  done`), and the step graph header shows `cargo test --worksp… (reported)`. Existing cut rules, accepted; the owner's
+  check may revisit them.
 
 ### 2026-11-08 — Step 8.6: Real check, README, owner confirm — Claude
 - Mode: Claude step (no Codex, no worktree; the quota check is for `codex exec` only and none ran). Docs reviewed by

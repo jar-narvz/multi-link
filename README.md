@@ -22,6 +22,9 @@ along time. It is built and awaits the owner's check ([real check](docs/phase8-c
 
 ![Home screen on the phase6 fixture](docs/img/home-phase6-fixture.png)
 
+The images in `docs/img/` predate Step 8.7; the TUI now uses 12-hour clocks with lowercase `am`/`pm`,
+no leading zero or space (`9:05pm`, with seconds `8:05:43am`).
+
 *HTML render of the home buffer on the synthetic fixture `fixtures/sessions-phase6` at 120×40
 (`crates/tui/examples/home_html.rs`; method, the approved mockup in words and real-data differences in
 [docs/phase6-check.md](docs/phase6-check.md)). Real renders are not committed because they show prompts.
@@ -33,20 +36,20 @@ The real terminal uses your own font.*
 - **A card for each repo with a waiting, working or stale session:** a rounded
   card (yellow when waiting, orange when working) titled with its latest PLAN.md step. Each such session is
   one line: harness, a label (its custom title, else its latest step, else its latest prompt in quotes, falling back to its first prompt, else `claude · no prompt`), a status
-  phrase (`waiting on you · since 21:40`, `working now · for 5 min`, `stale since …`) and its place (`worktree <folder>` or the current main branch).
+  phrase (`waiting on you · since 9:40pm`, `working now · for 5 min`, `stale since …`) and its place (`worktree <folder>` or the current main branch).
   App background preambles are skipped separately for each prompt candidate. A repo header adds
   `· latest hand-off step <id>` when the hand-off differs from the logged step.
   **Claude prompt:** the first user message that is not blank and does not start with `<`, after dropping
   any leading `<system-reminder>…</system-reminder>` blocks (what a session started by another session
   begins with), so the real text after them counts; an unclosed reminder or any other leading tag still
   skips the message. Codex uses its first user message (or, in `codex exec` rollouts, the first user input
-  that is not AGENTS.md instructions or a tag). **Times** less than 24 h old are a clock time (`HH:MM`,
-  even if that was yesterday: 23:53 seen at 14:07 the next day); older ones are a date (`Nov 1`); `last active` says `N min ago` within the
+  that is not AGENTS.md instructions or a tag). **Times** less than 24 h old are a clock time (`9:05pm`,
+  even if that was yesterday: 11:53pm seen at 2:07pm the next day); older ones are a date (`Nov 1`); `last active` says `N min ago` within the
   hour. A grey line counts the other sessions, and the last line names the latest hand-off in words (`claude handed
   step 6.3 to codex · codex done`).
 - **The window is named:** the header and the card's lines say `last 2h`, or the `--since` window
   (`last 16h`).
-- **Idle repos are one sentence:** `idle · last active 1 min ago · claude handed work to codex at 22:23,
+- **Idle repos are one sentence:** `idle · last active 1 min ago · claude handed work to codex at 10:23pm,
   codex done`. Repos with no activity in the window share one `quiet` line.
 - **Codex Desktop imports are hidden** (they are Claude chats copied into Codex Desktop, not runs); the
   footer counts them.
@@ -67,7 +70,7 @@ The real terminal uses your own font.*
   by time, and the sub line says how (`matched by time · 12 s after the call`).
 - **The axis fits the work:** it starts at the first activity; idle stretches over 15 minutes with no
   activity on any lane fold to a `≈` band (at most 3), labelled with its length when there is room
-  among the fold labels. Fold lengths win over the end label, which shortens from `HH:MM now` to `now` (or
+  among the fold labels. Fold lengths win over the end label, which shortens from `10:25pm now` to `now` (or
   disappears) when it would cover one, and over ticks; a tick never repeats the end minute (or, in an explicit range, the
   `now` minute). `z` unfolds,
   `+`/`-` zoom, ←/→ pan, `0` returns to the fitted range, `i` shows hidden imports.

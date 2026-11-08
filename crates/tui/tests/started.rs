@@ -113,13 +113,13 @@ fn coordinator_tree_draws_nested_with_indent_and_started_sub_lines() {
     );
     assert!(subs[0].starts_with("    main · "), "K sub: {}", subs[0]);
     assert!(
-        subs[1].starts_with("      started by this session · 09:10 "),
+        subs[1].starts_with("      started by this session · 9:10am "),
         "B sub: {}",
         subs[1]
     );
-    assert!(subs[2].starts_with("      started by this session · 09:05 "));
+    assert!(subs[2].starts_with("      started by this session · 9:05am "));
     assert!(
-        subs[3].starts_with("▌       started by this session · 09:25 "),
+        subs[3].starts_with("▌       started by this session · 9:25am "),
         "A2 sub: {}",
         subs[3]
     );
@@ -164,7 +164,7 @@ fn started_sub_line_uses_the_view_offset() {
         80,
         0,
     );
-    assert!(line(&b, lane_y(16) + 1).starts_with("        started by this session · 01:25"));
+    assert!(line(&b, lane_y(16) + 1).starts_with("        started by this session · 1:25am"));
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn narrow_list_keeps_indent() {
     let r = report();
     let b = render(&r, options(UtcOffset::UTC), 70, 80, 0);
     assert!(line(&b, lane_y(16)).starts_with("     └▸ claude "));
-    assert!(line(&b, lane_y(16) + 1).starts_with("        started by this session · 09:25"));
+    assert!(line(&b, lane_y(16) + 1).starts_with("        started by this session · 9:25am"));
 }
 
 fn refresh(overview: OverviewReport) -> Result<Box<Refresh>, String> {

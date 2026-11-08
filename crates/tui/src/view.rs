@@ -10,10 +10,24 @@ pub fn datetime(at: Timestamp) -> OffsetDateTime {
 pub fn local_offset(at: Timestamp) -> UtcOffset {
     UtcOffset::local_offset_at(datetime(at)).unwrap_or(UtcOffset::UTC)
 }
+/// Compact local clock shared by every TUI view; the caller selects the offset.
+pub fn clock_label(at: OffsetDateTime, with_seconds: bool) -> String {
+    let hour = match at.hour() % 12 {
+        0 => 12,
+        hour => hour,
+    };
+    let seconds = if with_seconds {
+        format!(":{:02}", at.second())
+    } else {
+        String::new()
+    };
+    let suffix = if at.hour() < 12 { "am" } else { "pm" };
+    format!("{hour}:{:02}{seconds}{suffix}", at.minute())
+}
 pub fn clock(at: Timestamp, now: Timestamp, offset: UtcOffset) -> String {
     let at = datetime(at).to_offset(offset);
     let now = datetime(now).to_offset(offset);
-    let time = format!("{:02}:{:02}", at.hour(), at.minute());
+    let time = clock_label(at, false);
     let age = now - at;
     if (age >= time::Duration::ZERO && age < time::Duration::hours(24))
         || (age < time::Duration::ZERO && at.date() == now.date())

@@ -1597,10 +1597,46 @@ changes" line for exactly the rows U2/U5 change.
 - Files: `docs/phase8-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
+### Step 8.7 — TUI: 12-hour clock on screen (Codex)
+- Depends on: 8.6. Owner asked 2026-11-08: "change all the times to 12hr clock am/pm".
+- C1 **Format.** Every clock time the TUI draws is 12-hour, no leading zero, lowercase suffix, no space: `9:05pm`,
+  `12:00am` (midnight), `12:00pm` (noon), with seconds `8:05:43am`. Ranges keep the dash between full times
+  (`9:23pm–10:24pm`). Why compact: axis ticks, graph boxes and header ranges are width-limited; `9:05 PM` would
+  cost 3 more cells per label than today and drop more axis ticks. One shared helper in `view.rs` used by
+  `view::clock`, `timeline.rs` (`RepoScene::clock`, so axis ticks and headers) and `graph.rs` (`clock`, with and
+  without seconds). Date labels (`Nov 1`, `Oct 29 23:20` → `Oct 29 11:20pm`) keep their date part and rules.
+- Amends: design.md V5, V7, W5 and README's `HH:MM` wording become the 12-hour form. The pinned 6.1 goldens
+  (`*-phase6*`, pinned at 26af6f2 since 6.1) may change in clock cells only, and so may every other TUI golden;
+  later steps pin them at this step's commit.
+- Non-goals: JSON (timestamps stay RFC 3339 UTC); the CLI text output (`graph` text prints UTC `HH:MM:SS`, a UTC
+  time with a 12-hour suffix would mislead); a 24-hour option or setting; re-shooting `docs/img/**` (README notes the
+  images predate 8.7); relative times (`13 min ago`) and durations (`42m`, `6 min`).
+- Files: `crates/tui/src/{view,timeline,graph,home}.rs`, `crates/tui/src/app.rs` (its in-file tests' clock
+  expectations only; amended 2026-11-08 when Codex hit them), `crates/tui/tests/**`, `crates/tui/examples/home_html.rs`
+  (only if it formats times), `fixtures/expected/tui/**` (clock cells and any axis tick layout the wider labels
+  force), `docs/design.md` (V5, V7, W5, the 12-hour rule), `README.md`, `PROGRESS.md`.
+- Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings` clean. Unit
+  tests: 00:00 → `12:00am`, 00:30 → `12:30am`, 09:05 → `9:05am`, 12:00 → `12:00pm`, 13:07 → `1:07pm`, 23:59 →
+  `11:59pm`, with seconds 08:05:43 → `8:05:43am`, across a non-UTC offset; the `Mon D` cut-over at 24 h unchanged.
+  No 24-hour time left on screen:
+  `grep -hoE '[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?([ap]m)?' fixtures/expected/tui/*.txt | grep -vE '[ap]m$'` prints
+  nothing. Only time-bearing lines changed in goldens:
+  `git diff ddd91f8 -- fixtures/expected/tui | grep '^[-+] ' | grep -vE '[0-9]{1,2}:[0-9]{2}'` prints nothing (a line
+  whose ticks moved still carries a time). JSON and CLI untouched:
+  `git diff --exit-code ddd91f8 -- fixtures/expected ':!fixtures/expected/tui' crates/cli crates/core crates/model`
+  → exit 0. Axis labels never hide each other (7.3's tests still pass with the wider labels).
+
 ### Backlog (ordered, uncommitted)
 Hook reads the background task output path (T10) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · Resume for cleanly exited terminal sessions (their record is deleted on exit, so they show `unknown`; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-08 — Step 8.7 Files amendment (Claude, during the step, Codex loop)
+Codex stopped twice, both times correctly. (1) My hand-off said "regenerate goldens only via the existing update
+mechanism", but the pinned phase6/phase8 goldens have none; the step already allows them to change in clock cells, so I
+withdrew that rule, kept the step's diff greps as the guard, and said never to hand-edit golden content. (2) `app.rs`
+in-file tests assert `21:54` / `22:25 now` on the repo axis; added `crates/tui/src/app.rs` to Files for those clock
+expectations only.
 
 ### 2026-11-08 — Step 8.5 review rounds 1–2 (Claude, adversarial subagents, Claude-only mode)
 Round 1, 0 Critical / 2 Important / 7 Minor. Accepted and fixed: the coordinator list read the overview's windowed

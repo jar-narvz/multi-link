@@ -21,7 +21,7 @@ fn status_phrases_use_evidence_and_whole_minutes() {
         view::status(row("6002"), r.now, offset),
         "working now · for 5 min"
     );
-    assert_eq!(view::status(row("6021"), r.now, offset), "done 21:31");
+    assert_eq!(view::status(row("6021"), r.now, offset), "done 9:31pm");
     assert_eq!(
         view::status(row("6011"), r.now, offset),
         "idle · last active 1 min ago"
@@ -29,13 +29,13 @@ fn status_phrases_use_evidence_and_whole_minutes() {
     let mut s = row("6002").clone();
     s.state = State::Stale;
     s.state_since = Some("2026-11-03T06:00:00Z".parse().unwrap());
-    assert_eq!(view::status(&s, r.now, offset), "stale since 22:00");
+    assert_eq!(view::status(&s, r.now, offset), "stale since 10:00pm");
     s.state = State::Busy;
     s.activity.clear();
     assert_eq!(view::status(&s, r.now, offset), "working now");
     s.state = State::Idle;
     s.last_activity = "2026-11-03T05:24:00Z".parse().unwrap();
-    assert_eq!(view::status(&s, r.now, offset), "idle · last active 21:24");
+    assert_eq!(view::status(&s, r.now, offset), "idle · last active 9:24pm");
     s.state = State::Unknown;
     assert_eq!(view::status(&s, r.now, offset), "state unknown");
     s.state = State::Finished;
@@ -44,10 +44,10 @@ fn status_phrases_use_evidence_and_whole_minutes() {
 #[test]
 fn clocks_use_elapsed_days_and_fractional_offsets() {
     let now = "2026-11-03T06:25:00Z".parse().unwrap();
-    assert_eq!(view::clock(now, now, time::UtcOffset::UTC), "06:25");
+    assert_eq!(view::clock(now, now, time::UtcOffset::UTC), "6:25am");
     assert_eq!(
         view::clock(now, now, time::UtcOffset::from_hms(5, 30, 0).unwrap()),
-        "11:55"
+        "11:55am"
     );
     let yesterday = "2026-11-02T06:00:00Z".parse().unwrap();
     assert_eq!(
@@ -72,7 +72,7 @@ fn clocks_use_elapsed_days_and_fractional_offsets() {
             now,
             time::UtcOffset::UTC
         ),
-        "05:25"
+        "5:25am"
     );
 }
 #[test]
@@ -161,15 +161,15 @@ fn clock_keeps_previous_day_until_exactly_24_hours_old() {
     let recent = "2026-11-02T06:26:00Z".parse().unwrap();
     let boundary = "2026-11-02T06:25:00Z".parse().unwrap();
     for (offset, expected_clock, expected_date) in [
-        (time::UtcOffset::UTC, "06:26", "Nov 2"),
+        (time::UtcOffset::UTC, "6:26am", "Nov 2"),
         (
             time::UtcOffset::from_hms(-8, 0, 0).unwrap(),
-            "22:26",
+            "10:26pm",
             "Nov 1",
         ),
         (
             time::UtcOffset::from_hms(5, 30, 0).unwrap(),
-            "11:56",
+            "11:56am",
             "Nov 2",
         ),
     ] {
@@ -181,7 +181,7 @@ fn clock_keeps_previous_day_until_exactly_24_hours_old() {
     let now = "2026-11-03T08:30:00Z".parse().unwrap();
     assert_eq!(
         view::clock("2026-11-03T07:00:00Z".parse().unwrap(), now, offset),
-        "23:00"
+        "11:00pm"
     );
 }
 
@@ -192,7 +192,7 @@ fn future_clocks_keep_the_local_date_rule() {
     assert_eq!(view::clock(future, now, time::UtcOffset::UTC), "Oct 30");
     assert_eq!(
         view::clock(future, now, time::UtcOffset::from_hms(-8, 0, 0).unwrap()),
-        "22:08"
+        "10:08pm"
     );
 }
 
@@ -219,4 +219,28 @@ fn title_precedes_step_and_each_background_candidate_is_rejected() {
     assert_eq!(view::place(&row), "worktree step-8.4b");
     assert_eq!(serde_json::to_value(&row).unwrap()["branch"], "main");
     assert!(serde_json::to_value(&row).unwrap().get("place").is_none());
+}
+
+#[test]
+fn clocks_use_compact_twelve_hour_times_across_an_offset() {
+    let offset = time::UtcOffset::from_hms(5, 30, 0).unwrap();
+    for (local, expected) in [
+        ("00:00:00", "12:00am"),
+        ("00:30:00", "12:30am"),
+        ("09:05:00", "9:05am"),
+        ("12:00:00", "12:00pm"),
+        ("13:07:00", "1:07pm"),
+        ("23:59:00", "11:59pm"),
+    ] {
+        let at = format!("2026-11-08T{local}+05:30").parse().unwrap();
+        assert_eq!(view::clock(at, at, offset), expected);
+    }
+}
+
+#[test]
+fn clock_seconds_use_the_local_hour_and_lowercase_suffix() {
+    let at = view::datetime("2026-11-08T02:35:43Z".parse().unwrap())
+        .to_offset(time::UtcOffset::from_hms(5, 30, 0).unwrap());
+    assert_eq!(view::clock_label(at, true), "8:05:43am");
+    assert_eq!(view::clock_label(at, false), "8:05am");
 }

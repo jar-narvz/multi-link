@@ -305,8 +305,8 @@ fn strip_widths() {
         assert_colored_text(&buf, first + 1, 33, label, foreground);
     }
     assert_eq!(rendered_rows(&buf, 33..=34), golden_rows(33..=34));
-    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:05am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:12am", options.theme.secondary);
 }
 
 #[test]
@@ -362,8 +362,8 @@ fn strip_with_a_one_second_part() {
         assert_eq!(buf[(last + 1, 33)].bg, options.theme.screen);
         assert_colored_text(&buf, first + 1, 33, label, foreground);
     }
-    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:05am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:12am", options.theme.secondary);
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn strip_without_room_for_labels() {
     assert_eq!(widths.iter().sum::<u16>(), 55);
     assert_eq!(x, 117, "strip must end at column 116");
     assert_eq!(buf[(22, 33)].bg, options.theme.screen);
-    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:05am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:12am", options.theme.secondary);
 }
 
 fn assert_strip_segments(buf: &Buffer, expected: &[(u16, Color)], screen: Color) {
@@ -444,8 +444,8 @@ fn strip_with_too_many_parts_keeps_title_and_times_only() {
             }
         }
     }
-    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:12", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:05am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:12am", options.theme.secondary);
 }
 
 #[test]
@@ -457,14 +457,14 @@ fn strip_times_cover_all_parts_and_skip_missing_timestamps() {
     report.parts[4].to = Some(Timestamp::parse("2026-11-06T16:10:00Z").unwrap());
     let options = golden_options();
     let buf = render(&report, &options, 120, 40);
-    assert_colored_text(&buf, 23, 34, "08:00", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:20", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:00am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:20am", options.theme.secondary);
 
     report.parts[0].from = None;
     report.parts[4].to = None;
     let buf = render(&report, &options, 120, 40);
-    assert_colored_text(&buf, 23, 34, "08:05", options.theme.secondary);
-    assert_colored_text(&buf, 112, 34, "08:20", options.theme.secondary);
+    assert_colored_text(&buf, 23, 34, "8:05am", options.theme.secondary);
+    assert_colored_text(&buf, 111, 34, "8:20am", options.theme.secondary);
 }
 
 #[test]
@@ -722,7 +722,7 @@ fn commit_is_green_right_aligned_and_leaves_two_blanks_after_cut_title() {
         let buf = render(&report, &options, 120, 40);
         let row = rendered_rows(&buf, 0..=0);
         let row = row.trim_end_matches('\n');
-        let commit = "✓ committed abc1234 · 08:20";
+        let commit = "✓ committed abc1234 · 8:20am";
         assert!(row.ends_with(commit));
         assert_eq!(Span::raw(row).width(), 119);
         assert_eq!(buf[(119, 0)].symbol(), " ");
@@ -977,7 +977,7 @@ fn panel_for_claude_part() {
     let buf = render(&report("1.1"), &options, 120, 40);
     assert!(
         rendered_rows(&buf, 27..=27)
-            .starts_with("  selected  claude · plan · 81010000 · 08:05:26–08:05:43 · ")
+            .starts_with("  selected  claude · plan · 81010000 · 8:05:26am–8:05:43am · ")
     );
     assert_eq!(buf[(2, 27)].fg, options.theme.secondary);
     assert_eq!(buf[(12, 27)].fg, options.theme.claude);
@@ -985,7 +985,7 @@ fn panel_for_claude_part() {
     assert!(!rendered_rows(&buf, 28..=28).contains("asked"));
     assert_eq!(
         rendered_rows(&buf, 29..=29),
-        "            from   handed step 1.1 to codex at 08:05:43\n"
+        "            from   handed step 1.1 to codex at 8:05:43am\n"
     );
     assert_eq!(
         rendered_rows(&buf, 31..=31),
@@ -1090,11 +1090,11 @@ fn panel_missing_runs_keep_their_handoff_origin_without_a_gap() {
     for (selected, expected) in [
         (
             1,
-            "            from   claude 81020000 · plan · handed at 07:00:20 · no run found\n",
+            "            from   claude 81020000 · plan · handed at 7:00:20am · no run found\n",
         ),
         (
             3,
-            "            from   claude 81020000 · review · handed at 07:03:00 · 2 possible runs\n",
+            "            from   claude 81020000 · review · handed at 7:03:00am · 2 possible runs\n",
         ),
     ] {
         let buf = render(
@@ -1147,7 +1147,7 @@ fn panel_gap_uses_whole_minutes_and_at_least_one_second() {
         assert_eq!(
             rendered_rows(&buf, 29..=29),
             format!(
-                "            from   claude 81010000 · plan · handed at 08:05:43 · matched by time{suffix}\n"
+                "            from   claude 81010000 · plan · handed at 8:05:43am · matched by time{suffix}\n"
             ),
             "gap {gap}"
         );
@@ -1199,7 +1199,7 @@ fn panel_origin_without_parent_part_omits_the_kind() {
     let buf = render(&report, &golden_options(), 120, 40);
     assert_eq!(
         rendered_rows(&buf, 29..=29),
-        "            from   claude 81010000 · handed at 08:05:43 · matched by time · started 1 s after the call\n"
+        "            from   claude 81010000 · handed at 8:05:43am · matched by time · started 1 s after the call\n"
     );
 }
 
@@ -1224,8 +1224,9 @@ fn selection_past_the_end_does_not_panic() {
     };
     let buf = render(&report("1.1"), &options, 120, 40);
     assert!(
-        rendered_rows(&buf, 27..=27)
-            .starts_with("  selected  claude · verify + commit · 81010000 · 08:10:42–08:12:14 · ")
+        rendered_rows(&buf, 27..=27).starts_with(
+            "  selected  claude · verify + commit · 81010000 · 8:10:42am–8:12:14am · "
+        )
     );
     assert_eq!(
         rendered_rows(&buf, 29..=29),
@@ -1354,10 +1355,10 @@ fn stale_subline_names_the_last_record_in_red() {
     report.parts[3].status = Some(PartStatus::Stale);
     let options = golden_options();
     let buf = render(&report, &options, 120, 40);
-    assert_colored_text(&buf, 69, 18, "stale since 08:10", options.theme.warning);
-    assert_eq!(buf[(86, 18)].symbol(), " ");
+    assert_colored_text(&buf, 69, 18, "stale since 8:10am", options.theme.warning);
+    assert_eq!(buf[(87, 18)].symbol(), " ");
     let narrow = render(&report, &options, 80, 40);
-    assert!(text(&narrow).contains("stale since 08:10"));
+    assert!(text(&narrow).contains("stale since 8:10am"));
 }
 
 #[test]
@@ -1486,21 +1487,21 @@ fn narrow_lists_every_part_in_order() {
         (
             "1.1",
             [
-                ("claude · plan", "08:05 · 17 s", "1 read · 1 run"),
+                ("claude · plan", "8:05am · 17 s", "1 read · 1 run"),
                 (
                     "codex · implement",
-                    "✓ done 08:09 · 3 min",
+                    "✓ done 8:09am · 3 min",
                     "6 reads · 3 edits · 6 runs",
                 ),
-                ("claude · review", "08:09 · 53 s", "6 reads"),
+                ("claude · review", "8:09am · 53 s", "6 reads"),
                 (
                     "codex · fix round 1",
-                    "✓ done 08:10 · 48 s",
+                    "✓ done 8:10am · 48 s",
                     "3 reads · 2 edits · 2 runs",
                 ),
                 (
                     "claude · verify + commit",
-                    "08:10 · 1 min",
+                    "8:10am · 1 min",
                     "4 reads · 1 edit · 3 runs",
                 ),
             ],
@@ -1514,11 +1515,11 @@ fn narrow_lists_every_part_in_order() {
         (
             "1.2",
             [
-                ("claude · plan", "07:00 · 20 s", "1 read"),
+                ("claude · plan", "7:00am · 20 s", "1 read"),
                 ("codex · implement", "no codex run found", ""),
-                ("claude · review", "07:00 · 2 min", "1 read"),
+                ("claude · review", "7:00am · 2 min", "1 read"),
                 ("codex · fix round 1", "2 possible runs", ""),
-                ("claude · review", "07:03 · 1 min", "1 run"),
+                ("claude · review", "7:03am · 1 min", "1 run"),
             ],
             [
                 &["handed step 1.2", "no run found"][..],
@@ -1896,9 +1897,9 @@ fn narrow_edges_keep_match_glyphs_and_wide_colors() {
     let options = golden_options();
     let buf = render(&report("1.1"), &options, 100, 40);
     for (y, expected) in [
-        (6, "╎ handed step 1.1 · 08:05:43 · matched by time"),
-        (9, "▲ back to claude · 08:09:00"),
-        (12, "│ handed fix · 08:09:53 · confirmed"),
+        (6, "╎ handed step 1.1 · 8:05:43am · matched by time"),
+        (9, "▲ back to claude · 8:09:00am"),
+        (12, "│ handed fix · 8:09:53am · confirmed"),
     ] {
         assert_eq!(rendered_rows(&buf, y..=y), format!("   {expected}\n"));
     }
@@ -1907,7 +1908,7 @@ fn narrow_edges_keep_match_glyphs_and_wide_colors() {
         &buf,
         23,
         6,
-        "08:05:43 · matched by time",
+        "8:05:43am · matched by time",
         options.theme.secondary,
     );
     assert_colored_text(&buf, 3, 9, "▲ back to claude", options.theme.secondary);
@@ -1963,6 +1964,6 @@ fn narrow_subline_drops_separator_before_ellipsis() {
     let buf = render(&report("1.6"), &golden_options(), 40, 20);
     let row = rendered_rows(&buf, 8..=8);
     assert!(!row.trim_end().ends_with("·…"), "{row:?}");
-    assert_eq!(row.trim(), "✓ done 03:02 · 1 min · 1 edit");
+    assert_eq!(row.trim(), "✓ done 3:02am · 1 min · 1 edit");
     assert!(!text(&buf).contains(" ·…"));
 }

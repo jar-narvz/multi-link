@@ -1030,11 +1030,7 @@ fn cut(text: &str, width: usize) -> String {
 
 fn clock(at: Timestamp, offset: UtcOffset, with_seconds: bool) -> String {
     let at = view::datetime(at).to_offset(offset);
-    let mut label = format!("{:02}:{:02}", at.hour(), at.minute());
-    if with_seconds {
-        label.push_str(&format!(":{:02}", at.second()));
-    }
-    label
+    view::clock_label(at, with_seconds)
 }
 
 fn summary(report: &GraphReport, offset: UtcOffset) -> String {
@@ -1238,10 +1234,11 @@ fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
         );
     }
     if let Some(to) = report.parts.iter().filter_map(|part| part.to).max() {
+        let label = clock(to, options.offset, false);
         paint.write(
-            end.saturating_sub(5),
+            end.saturating_sub(Span::raw(&label).width() as u16),
             y + 1,
-            &clock(to, options.offset, false),
+            &label,
             t.secondary,
             end,
         );

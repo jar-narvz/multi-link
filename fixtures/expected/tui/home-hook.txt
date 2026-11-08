@@ -6,7 +6,7 @@
  │                                                                                                │
  │ ◆ claude    claude · no prompt                       waiting on you · since Oct 30             │
  │   6 other sessions, 6 active in the last 2h · enter shows all                                  │
- │   last hand-off  23:00 · claude handed work to codex · codex done                              │
+ │   last hand-off  11:00pm · claude handed work to codex · codex done                            │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -21,10 +21,10 @@
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-b  idle · last active 14 min ago · claude handed work to codex at 23:00, codex done     │
+ │ ○ repo-b  idle · last active 14 min ago · claude handed work to codex at 11:00pm, codex done   │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ○ repo-a-wt  idle · last active 14 min ago · claude handed work to codex at 23:00, codex done  │
+ │ ○ repo-a-wt  idle · last active 14 min ago · claude handed work to codex at 11:00pm, codex…    │
  ──────────────────────────────────────────────────────────────────────────────────────────────────
  ↑↓ move   enter repo view   o open session   q quit                                      times UTC

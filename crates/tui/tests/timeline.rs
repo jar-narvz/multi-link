@@ -198,7 +198,7 @@ fn bar_clipped_at_window_start() {
 fn imports_on_off() {
     let r = report();
     let w = TimeWindow::default_for(&r);
-    assert!(text(&normal()).contains("1 Codex Desktop import at 22:13 hidden"));
+    assert!(text(&normal()).contains("1 Codex Desktop import at 10:13pm hidden"));
     let s = text(&render(
         &r,
         RepoOptions {
@@ -363,11 +363,16 @@ fn fitted_range_crossing_local_midnight_uses_clock_labels() {
     group.rows = vec![Row::Session(parent)];
     let b = render(&r, options(), TimeWindow::default_for(&r), 120);
     let s = text(&b);
-    assert!(s.lines().next().unwrap().ends_with("active 23:40–00:10"));
+    assert!(
+        s.lines()
+            .next()
+            .unwrap()
+            .ends_with("active 11:40pm–12:10am")
+    );
     let labels: Vec<_> = s.lines().nth(3).unwrap().split_whitespace().collect();
     assert_eq!(
         labels,
-        ["session", "23:40", "23:50", "00:00", "00:13", "now"]
+        ["session", "11:40pm", "11:50pm", "12:00am", "12:13am", "now"]
     );
 }
 
@@ -569,7 +574,7 @@ fn fold_near_end_keeps_length_and_shortens_end_to_now() {
     assert_eq!(cells(&b, 3, 110, 118), "40m  now");
     assert_eq!(
         axis_words(&b),
-        ["21:00", "21:15", "21:30", "21:45", "40m", "now"]
+        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "40m", "now"]
     );
 }
 
@@ -578,7 +583,10 @@ fn fold_at_end_keeps_length_when_even_now_does_not_fit() {
     let r = axis_report(102, &[(0, 60)]);
     let b = render(&r, options(), TimeWindow::default_for(&r), 120);
     assert_eq!(cells(&b, 3, 113, 118), " 42m ");
-    assert_eq!(axis_words(&b), ["21:00", "21:15", "21:30", "21:45", "42m"]);
+    assert_eq!(
+        axis_words(&b),
+        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "42m"]
+    );
 }
 
 #[test]
@@ -596,7 +604,7 @@ fn ticks_in_end_minute_are_suppressed_in_fitted_and_explicit_ranges() {
             w,
             120,
         );
-        assert_eq!(axis_words(&b), ["21:00", "now"]);
+        assert_eq!(axis_words(&b), ["9:00pm", "now"]);
     }
 }
 
@@ -604,20 +612,24 @@ fn ticks_in_end_minute_are_suppressed_in_fitted_and_explicit_ranges() {
 fn explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it() {
     // Explicit axes are unfolded; the current-time label wins over the tick
     // at the same column or the following minute. The end label wins on overlap.
+    // The 10:14pm end label also reserves the cells needed by the 10:00pm tick.
     for (now, expected) in [
         (
             29,
-            vec!["21:00", "21:15", "21:29", "now", "21:45", "22:00", "22:14"],
+            vec!["9:00pm", "9:15pm", "9:29pm", "now", "9:45pm", "10:14pm"],
         ),
         (
             30,
-            vec!["21:00", "21:15", "21:30", "now", "21:45", "22:00", "22:14"],
+            vec!["9:00pm", "9:15pm", "9:30pm", "now", "9:45pm", "10:14pm"],
         ),
-        (65, vec!["21:00", "21:15", "21:30", "21:45", "now", "22:14"]),
+        // With the wider end label, the now-only fallback fits at minute 63;
+        // at minute 65 it would cover the end label and must disappear.
         (
-            68,
-            vec!["21:00", "21:15", "21:30", "21:45", "22:00", "22:14"],
+            63,
+            vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "now", "10:14pm"],
         ),
+        (65, vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]),
+        (68, vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]),
     ] {
         let r = axis_report(now, &[(0, 74)]);
         let b = render(
@@ -635,6 +647,7 @@ fn explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it() {
 
 #[test]
 fn explicit_range_before_now_uses_plain_end_clock() {
+    // The wider end clock suppresses the overlapping 10:00pm tick (P4).
     let r = axis_report(90, &[(0, 74)]);
     let b = render(
         &r,
@@ -647,6 +660,6 @@ fn explicit_range_before_now_uses_plain_end_clock() {
     );
     assert_eq!(
         axis_words(&b),
-        ["21:00", "21:15", "21:30", "21:45", "22:00", "22:14"]
+        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]
     );
 }
