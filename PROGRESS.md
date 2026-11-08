@@ -1,8 +1,9 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-07, latest).** **Step 8.3 is committed (Superpowers trial, done); Step 8.4 is next** (normal
-Codex loop again; the trial is over). What 8.4 needs:
+**Resume here (2026-11-07, latest).** **Step 8.3 is committed (Superpowers trial, done); Step 8.4 is next** (**hybrid
+mode**, CLAUDE.md, owner 2026-11-07: Claude splits tasks and reviews, Codex writes each task test-first behind a
+red/green gate, Claude commits on `step/8.4`; Superpowers is installed for Claude Code and Codex). What 8.4 needs:
 - The report: `multi-link graph --repo R --step ID [--json]`; types `model::{GraphReport, GraphStep, GraphCommit, Part,
   PartStatus, Counts, Notable, Edge}` (crates/model). `Edge` is serde-tagged `kind: handoff|return`. Build it in tests with
   the CLI command in output-schema "Phase 8 fixture results"; all 13 keys match (`crates/cli/tests/graph.rs`).

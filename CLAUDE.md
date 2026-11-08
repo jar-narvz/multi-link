@@ -26,26 +26,36 @@ Run the loop step after step without asking the owner:
 4. Re-run Verify yourself; compare with what Codex pasted. Fill in the entry's Review line.
 5. Commit (rules below) and move to the next step.
 
-**Superpowers trial (owner, 2026-11-06) — Step 8.3 only, TEMPORARY.** Every other step uses the normal loop above.
-It tests whether Superpowers' test-first, subagent-per-task loop beats the Codex loop. Superpowers says CLAUDE.md and
-AGENTS.md outrank its skills, so these rules win wherever they differ:
-- Before starting: Superpowers (v7.x) must be installed and Step 8.2 committed. If not, stop and ask the owner. Nothing
-  else may run in this repo during the trial.
-- Spec: PLAN.md Step 8.3 and Phase 8 G0–G11 stay the source of truth. Skip `brainstorming`; the design is decided.
-  Superpowers needs a task file: write it with `writing-plans` to the session scratchpad, never into the repo
-  (not `docs/superpowers/`). Tasks may touch only the step's files; if another must change, stop and say why.
-- Code: `subagent-driven-development` with `test-driven-development`.
-- Branch: its task review reads commits, so implementers commit, which is the one exception to "implementers never
-  commit". They commit only on branch `trial/step-8.3` in a worktree from `main`, never on `main`. Stage specific
-  files; subject ends `(Step 8.3)`; no AI attribution. Use the committed fixtures: `fixtures/raw/` is not in a worktree.
-- Stops: the "Stop and ask" list above still applies, despite Superpowers' continuous execution.
-- Review: after Superpowers' own reviews, Codex reviews `git diff main...trial/step-8.3` against the step, at most 2
-  rounds; fixes are new commits on the branch. Whoever didn't write the code reviews it.
-- Finish: the step session re-runs Verify, writes the PROGRESS.md entry (agent `Claude (Superpowers trial)`), then
-  merges with `git merge --ff-only`. Skip `finishing-a-development-branch`. Leave the branch and worktree for the owner.
-- Measure, for Steps 8.2 and 8.3, in their PROGRESS.md entries: wall-clock time, tests added, implementer and reviewer
-  runs, findings from the independent review, fix rounds, and tokens only if a real output shows them. Real numbers
-  only; say "not measured" otherwise. The steps differ in size, so this is a rough comparison, not a benchmark.
+**Hybrid mode (owner, 2026-11-07) — from Step 8.4 on.** It replaces steps 2–4 of the loop above for implementation
+steps; plan critiques still come from `codex exec`. Claude designs and reviews, Codex writes all the code, and nobody
+reviews code they wrote. It keeps Superpowers' task split and two-stage review (Step 8.3 trial) and adds a red/green
+gate so test-first is checked, not trusted. CLAUDE.md and AGENTS.md outrank Superpowers' skills wherever they differ.
+- Setup: Superpowers is installed for Claude Code and for Codex (`codex plugin add superpowers@openai-curated-remote`,
+  7.0.1, 2026-11-07). If either is missing, stop and ask the owner.
+- Design (step session): `writing-plans` splits the PLAN.md step into tasks, each naming its files, the test to write
+  first and its `cargo test` filter. The task file goes in the session scratchpad, never the repo (not `docs/superpowers/`).
+  Skip `brainstorming`; PLAN.md stays the source of truth. Tasks touch only the step's files; if another must change,
+  stop and say why.
+- Branch: a worktree from `main` on branch `step/<id>`. Use the committed fixtures: `fixtures/raw/` is not in a worktree.
+  Codex never commits (AGENTS.md; its sandbox also blocks `.git`, seen 2026-11-07). The step session commits on the
+  branch: specific files, subject ends `(Step <id>)`, no AI attribution.
+- Implement, per task (Codex command below). The prompt starts "Read AGENTS.md, then do Task <n> of Step <id>.", gives
+  the task text, says "Use the superpowers `test-driven-development` skill.", and says not to touch PROGRESS.md.
+  1. `codex exec`: write the failing test only, run the filter, stop.
+  2. Red gate (Claude): the filter must FAIL on an assertion or on the missing item the task introduces, not on an
+     unrelated compile error. Pass → commit, subject ends `(red, Step <id>)`. Fail → back to Codex.
+  3. `codex exec resume --last`: write the code that makes it pass (refactor allowed), run the filter, stop.
+  4. Green gate (Claude): the filter passes, full `cargo test` and `cargo clippy` are clean, and the red commit's
+     assertions are unchanged (`git diff <red>.. -- <test file>`). Pass → commit. Fail → back to Codex.
+  A task is not reviewed until both gates pass. A task that fails a gate after 3 Codex rounds is a stop.
+- Review, per task (Claude subagents): spec review, then code-quality review. Findings go back to Codex as a follow-up,
+  at most 2 rounds per task; each fix passes the green gate again before re-review.
+- Final review: a fresh Claude subagent reviews `git diff main...step/<id>` against the step, at most 2 rounds.
+- Finish: the step session re-runs Verify, writes the PROGRESS.md entry (agent `Codex (hybrid)`, reviewer Claude) with
+  gate results per task, then merges with `git merge --ff-only`. Skip `finishing-a-development-branch`. Leave the
+  branch and worktree for the owner.
+- Measure, as for Steps 8.2 and 8.3: wall-clock time, tests added, implementer and reviewer runs, findings, fix rounds,
+  gate failures, and tokens only if a real output shows them. Real numbers only; "not measured" otherwise.
 
 **Codex-off mode is OFF (owner, 2026-10-30, from Step 3.7 on): use the normal Codex loop above.**
 The rules below are kept for the next time the owner turns it on; they do not apply now.
