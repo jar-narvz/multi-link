@@ -1,3 +1,4 @@
+pub mod graph;
 mod hook;
 mod link;
 pub mod links;
@@ -12,6 +13,7 @@ pub use probe::{FakeProcessProbe, FixtureProcessProbe, Liveness, ProcessProbe, R
 pub use repo::{RepoMode, RepoPaths};
 pub use sessions::{Options, SessionsOutput, sessions_report};
 
+pub use graph::{CodexDetails, GraphInput, build as build_graph, commit_for_step};
 pub use links::{LinksOutput, links_report};
 
 mod scanner;

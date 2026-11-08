@@ -14,7 +14,8 @@ use multi_link_core::{
     open::{self, OpenAction},
 };
 use multi_link_model::{
-    Convention, LinksReport, OverviewReport, Row, SessionsReport, StepsReport, Timestamp,
+    Convention, GraphReport, LinksReport, OverviewReport, Row, SessionsReport, StepsReport,
+    Timestamp,
 };
 use serde::Serialize;
 
@@ -39,6 +40,8 @@ enum Command {
     Overview(CommonArgs),
     /// Resume a finished Claude session or open it in the app (FR18).
     Open(OpenArgs),
+    /// One PLAN.md step across both harnesses.
+    Graph(GraphArgs),
     Steps {
         #[command(flatten)]
         common: CommonArgs,
@@ -46,6 +49,25 @@ enum Command {
         #[arg(long)]
         repo: Vec<String>,
     },
+}
+
+#[derive(Args)]
+struct GraphArgs {
+    /// Home-shaped root (default: HOME); enables fixture mode.
+    #[arg(long)]
+    root: Option<PathBuf>,
+    /// Override the current time with an RFC 3339 timestamp.
+    #[arg(long)]
+    now: Option<Timestamp>,
+    /// The session repo, as `sessions` prints it.
+    #[arg(long)]
+    repo: String,
+    /// The PLAN.md step id (a string: 1.10 is not 1.1).
+    #[arg(long)]
+    step: String,
+    /// Print JSON.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Args)]
@@ -414,6 +436,44 @@ fn overview_text(writer: &mut impl Write, report: &OverviewReport) -> io::Result
     writeln!(writer, "{} repos", report.repos.len())
 }
 
+fn clock(hms: &Timestamp) -> String {
+    // RFC 3339 UTC: `2026-11-06T10:00:00.000Z`; keep `HH:MM:SS`.
+    hms.to_string().chars().skip(11).take(8).collect()
+}
+
+fn graph_text(writer: &mut impl Write, report: &GraphReport) -> io::Result<()> {
+    writeln!(
+        writer,
+        "{} › {} {}",
+        report.repo,
+        report.step.id,
+        report.step.title.as_deref().unwrap_or("")
+    )?;
+    if let Some(empty) = &report.empty {
+        return writeln!(writer, "{empty}");
+    }
+    for part in &report.parts {
+        let range = |time: &Option<Timestamp>| time.as_ref().map_or("-".to_string(), clock);
+        writeln!(
+            writer,
+            "{} {} · {} {} {}–{} {} {} reads · {} edits · {} runs",
+            part.chain,
+            part.kind,
+            label(part.harness),
+            part.session
+                .as_deref()
+                .map_or("-", |id| &id[..id.len().min(8)]),
+            range(&part.from),
+            range(&part.to),
+            part.status.map_or(String::new(), label),
+            part.counts.reads,
+            part.counts.edits,
+            part.counts.runs
+        )?;
+    }
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let cli = match cli.command {
         Command::Hook { command } => return hook::run(command),
@@ -443,8 +503,45 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         return Ok(());
     }
+    if let Command::Graph(args) = &cli.command {
+        let fixture_probe = FixtureProcessProbe;
+        let real_probe = RealProcessProbe::default();
+        let (root, repo_mode, probe): (_, _, &dyn ProcessProbe) = match &args.root {
+            Some(root) => (root.clone(), RepoMode::Fixture, &fixture_probe),
+            None => (home()?, RepoMode::Real, &real_probe),
+        };
+        let options = Options {
+            state_dir: state_dir(&root),
+            now: match args.now {
+                Some(now) => now,
+                None => clock_now()?,
+            },
+            since: None,
+            repo_mode,
+            probe,
+        };
+        let mut plans = |folder: &std::path::Path| {
+            multi_link_plan::steps_report(
+                std::path::Path::new(""),
+                &[folder.to_string_lossy().into_owned()],
+            )
+            .repos
+            .remove(0)
+        };
+        let report = multi_link_core::Scanner::default()
+            .graph(&root, &options, &args.repo, &args.step, &mut plans)?;
+        let mut stdout = io::stdout().lock();
+        if args.json {
+            json(&mut stdout, &report)?;
+        } else {
+            graph_text(&mut stdout, &report)?;
+        }
+        return Ok(());
+    }
     let common = match &cli.command {
-        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) => unreachable!(),
+        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) | Command::Graph(_) => {
+            unreachable!()
+        }
         Command::Sessions(common)
         | Command::Links(common)
         | Command::Overview(common)
@@ -468,7 +565,9 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut stdout = io::stdout().lock();
     match &cli.command {
-        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) => unreachable!(),
+        Command::Hook { .. } | Command::Tui(_) | Command::Open(_) | Command::Graph(_) => {
+            unreachable!()
+        }
         Command::Sessions(_) => {
             let output = multi_link_core::sessions_report(&root, &options)?;
             hook_conflicts(multi_link_core::links_report(&root, &options)?.hook_conflicts);
