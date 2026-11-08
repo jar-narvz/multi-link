@@ -182,8 +182,9 @@ Rows are checked top to bottom; the first match wins. If the process probe canno
 | --- | --- | --- |
 | Claude session record whose process is confirmed gone: `ps` shows no `pid`, or the `pid` has a different start time than `procStart` (pid reused). Checked first. | `finished` | `process_exit` |
 | Claude session record, `status=waiting` (any age: a prompt can wait overnight; `waitingFor` is not read, its only observed value is `"permission prompt"`). Design H11. | `waiting` | `session_record` |
-| Claude session record, `status=busy`, now − `statusUpdatedAt` ≤ 300 s | `busy` | `session_record` |
-| Claude session record, `status=busy`, older than 300 s | `stale` | `session_record` |
+| Claude session record, `status=busy`, process probe `Alive` (any age; U3) | `busy` | `session_record` |
+| Claude session record, `status=busy`, process probe `Unavailable`, now − `statusUpdatedAt` ≤ 300 s | `busy` | `session_record` |
+| Claude session record, `status=busy`, process probe `Unavailable`, older than 300 s | `stale` | `session_record` |
 | Claude session record, `status=idle` (any age; freshness applies to `busy` only, Step 0.2 review) | `idle` | `session_record` |
 | Claude session record with any other `status` value | `unknown` | `session_record` |
 | Claude transcript, no session record, and the session's latest hook record is an uncleared `waiting` (Hook records → Waiting). Design H8: after `finished` (a record session never reaches this row, so the record's own status always wins), before the transcript-only fallback. | `waiting` | `hook` |
@@ -201,7 +202,7 @@ In fixture mode the session records are trusted as written (process probing is o
 to another machine). With `--now 2026-10-29T23:15:00Z` the two busy records are `busy` (`60243.json`, `statusUpdatedAt`
 23:12:39.714Z, age 140 s; synthetic `70001.json`, 23:13:30.000Z, age 90 s); the four idle records are `idle`; all transcript sessions are
 `unknown`. `stale` and `finished` have no fixture: Phase 1 covers them with state-machine unit tests
-(busy record at now + 301 s → `stale`; open Codex turn; process gone → `finished`). `waiting` has no row
+(busy record with unavailable process probe at now + 301 s → `stale`; open Codex turn; process gone → `finished`). `waiting` has no row
 in the plain fixtures; the Hook variant has one of each evidence (Hook records → Hook variant).
 
 **Visibility:** a session whose `state` is `waiting` is always listed, whatever `--since` says (record
@@ -265,6 +266,13 @@ same `tool_use` ids and must be ignored). `name=Bash`; split `input.command` int
 - `codex exec resume <uuid>` or `codex resume <uuid>` → `resume`;
 - `codex exec …` (anything else) → `exec`;
 - `node <path ending in codex-companion.mjs> task …` → `plugin` (exactly `task`; `task-resume-candidate` is not a launch).
+
+**U4: help is not a hand-off.** Exclude a Codex segment when `--help` or `-h` is an unquoted,
+unescaped word after `exec`/`resume` and before the first non-option word. Skip option values for
+`-c`, `-o`, `-C`, `-s`, `--add-dir` (and their long forms `--config`, `--output-last-message`, `--cd`,
+`--sandbox`); after `--`, nothing is an option. Quoted/escaped help text and help inside a prompt or
+option value remain launches. Continue checking the other segments: `codex exec --help; codex exec
+"Step 1.2 implement"` recognises the second launch.
 
 Anything else is not a hand-off and produces no link (`codex --version`, `ls ~/.codex/sessions`).
 One launch per `tool_use`. Env-var prefixes (`FOO=1 codex exec`) are not recognised in Phase 1.

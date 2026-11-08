@@ -22,6 +22,7 @@ pub fn claude_state(
         return (State::Finished, StateEvidence::ProcessExit);
     }
     let state = match record.status.as_str() {
+        "busy" if liveness == Liveness::Alive => State::Busy,
         "busy" => activity_state(now, record.status_updated_at),
         "idle" => State::Idle,
         "waiting" => State::Waiting,

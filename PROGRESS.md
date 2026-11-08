@@ -1,10 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-08, latest).** **Steps 8.4a, 8.4b, 8.4c are planned (PLAN.md, between 8.4 and 8.5); Step 8.4a
-is next.** Order: 8.4a → 8.4b → 8.4c → 8.5 → 8.6 (owner check closes Phase 8). Mode: the Codex loop is the default;
-before every `codex exec` run `python3 -I tools/codex-quota.py` (CLAUDE.md, "Mode switch"; at planning: 78% / 16%,
-`CODEX: OK`). What the next steps need:
+**Resume here (2026-11-08, latest).** **Step 8.4a is committed (Codex loop, review clean, no fix round); Step 8.4b
+is next.** Order: 8.4b → 8.4c → 8.5 → 8.6 (owner check closes Phase 8). Mode: the Codex loop is the default; before
+every `codex exec` run `python3 -I tools/codex-quota.py` (CLAUDE.md, "Mode switch"; at 8.4a hand-off: 81% / 16%,
+`CODEX: OK`). What 8.4b needs from 8.4a:
+- U3 lives in `claude_state` (crates/core/src/state.rs): `busy` + `Liveness::Alive` → `busy` at any age; Codex's open-turn
+  rule still uses the 300 s window (U3 is Claude only). U4 is `help_only` in crates/claude/src/invocation.rs; its
+  value-option list is the step's five plus long forms `--config`, `--output-last-message`, `--cd`, `--sandbox`.
+- Known limits of U4 as specified (not bugs, not fixed): `codex exec resume <uuid> --help` is still linked (the id is
+  the first non-option word); value options outside the list (`-m`, `-p`, `-i`) are not skipped, so `codex exec -m X
+  --help` is still linked. Not counted in real data.
+- Real data at `--now 2026-11-08T12:00:00Z`: 213 → 202 links, all 11 dropped are help-only; unparented 112 → 114.
+  8.4b's own before/after should be taken on the 8.4a build.
+- 440 tests pass, 1 ignored; clippy clean; `git diff --exit-code fixtures/expected` exit 0.
+Earlier notes that still apply:
 - **Why the amendment:** the owner watched 8.4 run in `multi-link tui` and could not tell rows apart (shared preamble
   labels, a busy session shown `stale`, `codex exec resume --help` linked, header on the wrong step). The phase intro
   in PLAN.md now amends G0 and the whole-phase Verify: from 8.4a on, the pinned `git diff` is replaced by each step's
@@ -424,6 +434,97 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.4a: Busy is busy; help is not a hand-off — Codex
+- Did: Implemented U3: confirmed-live Claude busy records stay busy at any age; unavailable probes retain
+  the 300 s limit, gone processes remain finished. Implemented U4 using the existing token quote/escape
+  metadata: skip help-only exec/resume segments, skip option values, stop options at `--` or a positional
+  word, and continue to later command segments. Updated the schema for both rules. Added regression
+  tests for the four FakeProcessProbe cases, W5 state_since, help flags, quoted/escaped text, option
+  values, wrappers and the second segment's step tag.
+- Changed: `crates/core/src/state.rs`, `crates/claude/src/invocation.rs`, `crates/core/tests/sessions.rs`,
+  `crates/claude/tests/invocation.rs`, `docs/output-schema.md`, `PROGRESS.md`.
+- Mode: Codex loop. Quota check before hand-off (provided by Claude/user):
+  `primary: 81% of 300 min window / secondary: 16% of 10080 min window / CODEX: OK` (exit 0).
+- Verify: Rust PATH set per AGENTS.md. Initial regression runs against the old implementation:
+  `cargo test -p multi-link-core --test sessions busy_record_uses_process_liveness_before_age` →
+  `test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s`
+  (Alive at 20 min was Stale, expected Busy).
+  `cargo test -p multi-link-claude --test invocation help_options_are_not_launches` →
+  `test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s`
+  (`codex exec --help` was recognised, expected None).
+- Verify: `cargo test --workspace` → exit 0; actual result lines:
+  ```text
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.11s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; no warnings; actual final line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.03s
+  ```
+- Verify: `rustfmt --edition 2024 --check crates/core/src/state.rs crates/claude/src/invocation.rs crates/core/tests/sessions.rs crates/claude/tests/invocation.rs`
+  → no output, exit 0. `git diff --exit-code fixtures/expected` → no output, exit 0.
+  `git diff --check` → no output, exit 0.
+- Real-data comparison (Claude; scratch only, counts): old build (HEAD e03f65c) and new build run back to back with
+  `--since all --json --now 2026-11-08T12:00:00Z`. `links`: 213 → 202; 11 links dropped, 0 added, 0 changed. All 11
+  are help-only invocations (their commands, read from the transcripts by tool_use id, all have a `--help`/`-h` word;
+  3 are `resume`); 5 were `unlinked`, 6 `heuristic` with a child. Of those 4 distinct children: 2 kept their other,
+  non-help link (child no longer double-claimed; no child moved to a new link), 2 had only help links and are now
+  unparented (`unparented` 112 → 114). `sessions`: 409 both, same ids; 1 session differs, `stale` → `busy` (`state`,
+  `state_since`; a busy record with a live process). No other difference.
+- Review (Claude): clean, 0 fix rounds. Re-ran Verify: 440 passed, 0 failed, 1 ignored; clippy exit 0;
+  `git diff --exit-code fixtures/expected` exit 0 — matches the pasted output. Notes, no change asked:
+  (1) invocation.rs `help_only`: `codex exec resume <uuid> --help` stays linked (the step's "before the first
+  non-option word"); (2) value options outside the step's list (`-m`, `-p`, `-i`) are not skipped, so `codex exec -m X
+  --help` stays linked; (3) the long forms added to the value list go beyond the step's five but follow its intent
+  and are documented. Scope: only the step's files changed. Codex had rewritten "Current state"; Claude replaced it.
+- Gotchas: No real agent data accessed. Claude owns the before/after comparison at the fixed clock
+  `2026-11-08T12:00:00Z`. One intermediate test run incorrectly expected null state_since for stale;
+  corrected the assertion to the existing W5 statusUpdatedAt rule (no implementation change to W5).
+  No staging or commits; existing untracked `.claude/` left untouched.
 
 ### 2026-11-07 — Step 8.4: TUI: step graph render to board 9 — Codex (hybrid)
 - Did: `crates/tui/src/graph.rs`, a pure render of `GraphReport` per G8 and G10: header, scroll hints, slots and boxes,

@@ -43,6 +43,9 @@ pub fn recognise(command: &str) -> Option<Launch> {
         let offset = wrapper_offset(&segment.tokens);
         let tokens = &segment.tokens[offset..];
         let words: Vec<_> = tokens.iter().map(|word| word.text.as_str()).collect();
+        if help_only(tokens) {
+            continue;
+        }
         let (form, resume_id) = match words.as_slice() {
             ["codex", "exec", "resume", id, ..] | ["codex", "resume", id, ..]
                 if uuid_shaped(id) =>
@@ -67,6 +70,47 @@ pub fn recognise(command: &str) -> Option<Launch> {
         });
     }
     None
+}
+
+/// Help is an option only before the prompt/id, outside quoting and escaping.
+fn help_only(words: &[Word]) -> bool {
+    let start = match words {
+        [codex, exec, resume, ..]
+            if codex.text == "codex" && exec.text == "exec" && resume.text == "resume" =>
+        {
+            3
+        }
+        [codex, subcommand, ..]
+            if codex.text == "codex" && matches!(subcommand.text.as_str(), "exec" | "resume") =>
+        {
+            2
+        }
+        _ => return false,
+    };
+    let mut options = words[start..].iter();
+    while let Some(word) = options.next() {
+        let text = word.text.as_str();
+        if text == "--" || !text.starts_with('-') || text == "-" {
+            break;
+        }
+        if !word.quoted_or_escaped && matches!(text, "--help" | "-h") {
+            return true;
+        }
+        if matches!(
+            text,
+            "-c" | "-o"
+                | "-C"
+                | "-s"
+                | "--add-dir"
+                | "--config"
+                | "--output-last-message"
+                | "--cd"
+                | "--sandbox"
+        ) {
+            options.next();
+        }
+    }
+    false
 }
 
 /// Skip only the narrow wrapper grammar, including stacked wrappers.

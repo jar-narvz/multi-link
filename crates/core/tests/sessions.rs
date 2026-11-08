@@ -96,7 +96,14 @@ fn claude_freshness_status_and_probe_precedence() {
         );
         assert_eq!(
             claude_state(stamp("2026-10-29T23:15:01Z"), Some(&record), liveness),
-            (State::Stale, StateEvidence::SessionRecord)
+            (
+                if liveness == Liveness::Alive {
+                    State::Busy
+                } else {
+                    State::Stale
+                },
+                StateEvidence::SessionRecord,
+            )
         );
     }
     record.status = "idle".into();
@@ -275,6 +282,60 @@ fn report_trusts_stale_busy_record_when_probe_is_unavailable() {
         (session.state, session.state_evidence),
         (State::Stale, StateEvidence::SessionRecord)
     );
+}
+
+#[test]
+fn busy_record_uses_process_liveness_before_age() {
+    for (clock, liveness, state, evidence) in [
+        (
+            "2026-10-29T23:35:00Z",
+            Liveness::Alive,
+            State::Busy,
+            StateEvidence::SessionRecord,
+        ),
+        (
+            "2026-10-29T23:21:00Z",
+            Liveness::Unavailable,
+            State::Stale,
+            StateEvidence::SessionRecord,
+        ),
+        (
+            "2026-10-29T23:16:00Z",
+            Liveness::Alive,
+            State::Busy,
+            StateEvidence::SessionRecord,
+        ),
+        (
+            "2026-10-29T23:35:00Z",
+            Liveness::Gone,
+            State::Finished,
+            StateEvidence::ProcessExit,
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        write_record(temp.path(), 42, 1793315700000, "busy");
+        let mut probe = FakeProcessProbe::default();
+        probe.results.insert((42, "start".into()), liveness);
+        let mut options = options(None);
+        options.now = stamp(clock);
+        options.probe = &probe;
+        let output = sessions_report(temp.path(), &options).unwrap();
+        assert_eq!(output.report.sessions.len(), 1);
+        let session = &output.report.sessions[0];
+        assert_eq!(
+            (session.state, session.state_evidence),
+            (state, evidence),
+            "{clock} {liveness:?}"
+        );
+        assert_eq!(
+            session.state_since,
+            if state == State::Stale {
+                Some(now())
+            } else {
+                None
+            }
+        );
+    }
 }
 
 #[test]

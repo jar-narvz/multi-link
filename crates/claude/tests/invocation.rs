@@ -119,6 +119,44 @@ fn recognition_table() {
 }
 
 #[test]
+fn help_options_are_not_launches() {
+    for command in [
+        "codex exec --help",
+        "codex exec -h",
+        "codex exec resume --help",
+        "codex exec resume -h",
+        "codex resume --help",
+        "codex exec -C d --help",
+        "codex exec -c v -o p -C d -s m --add-dir d --help",
+        "env TASK=x timeout 10 codex exec --help",
+    ] {
+        assert_eq!(recognise(command), None, "{command}");
+    }
+    for command in [
+        r#"codex exec "use --help""#,
+        r#"codex exec -o --help.txt "x""#,
+        "codex exec -- --help",
+        "codex exec prompt --help",
+        r#"codex exec "--help""#,
+        "codex exec '--help'",
+        r"codex exec \--help",
+        "codex exec --he'lp'",
+        "codex exec -c --help x",
+        "codex exec -o --help x",
+        "codex exec -C --help x",
+        "codex exec -s --help x",
+        "codex exec --add-dir --help x",
+        "codex exec --config=--help x",
+        "codex exec resume -- --help",
+    ] {
+        assert_eq!(recognise(command).unwrap().form, Exec, "{command}");
+    }
+    let launch = recognise(r#"codex exec --help; codex exec "Step 1.2 implement""#).unwrap();
+    assert_eq!(launch.form, Exec);
+    assert_eq!(launch.step.as_deref(), Some("1.2"));
+}
+
+#[test]
 fn directory_options_distinguish_current_directory_from_moves() {
     for (options, moved) in [
         (r#"-C "$PWD""#, false),
