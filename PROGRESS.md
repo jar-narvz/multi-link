@@ -1,7 +1,33 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-08, latest).** **Step 8.4b is committed (started in the Codex loop; Codex quota went LOW
+**Resume here (2026-11-08, latest).** **Step 8.4c is committed (Claude-only mode, merged ff-only into `main`; branch
+`step/8.4c` and worktree `.claude/worktrees/step-8.4c` left in place); Step 8.5 is next.** Order: 8.5 → 8.6. Run
+`python3 -I tools/codex-quota.py` before every `codex exec` (at 8.4c's start: 95% of the 5-hour window, `CODEX: LOW`,
+resets Sun 01:48; weekly 18%). What 8.5 needs from 8.4c (its G9 amendment uses `started_by`):
+- `Session.started_by` / `SessionRow.started_by: Option<String>` (parent's transcript id), serialised right after
+  `title`. Set only between transcript-backed Claude sessions that are both listed; cross-repo children keep the value
+  but stay top level. Source: `multi_link_claude::{AppRecord, read_app_record, scan_app_records}` reading
+  `<root>/Library/Application Support/Claude/claude-code-sessions/*/*/local_*.json`; the core scanner caches them by
+  file key and fills `started_by` in `core::sessions`. Cycles are found on the full record graph before the `--since`
+  filter. A record with no (or null) `cliSessionId` is ignored; malformed / wrong-typed → `bad_records`.
+- Overview `children` is now a tree of any depth mixing Codex children and started Claude children in one ascending
+  list (Codex key = placing hand-off `at`, started key = `started_at`, ties by id). A child is a started child iff its
+  harness is claude. Quiet merge eligibility is recursive. **G9 for 8.5: "direct started children" = a lane's
+  `children` with harness claude.**
+- TUI: `view::subtree` walks every depth (bell, selection, `o`/`f`, home attention, selection kept by id across a
+  reparent; a vanished row falls back to its nearest listed ancestor). The repo view keeps W6's newest-first order at
+  every level, so it draws children in the reverse of the JSON order (ruled; PLAN.md Review log). Indent 2 per level,
+  clamped so text ends before the bar column (deep chains past ~15 levels share one column; deep sub lines truncate).
+- Fixture root `fixtures/sessions-started` (`--now 2026-11-08T12:00:00Z --since all`), keys `fixtures/expected/started/
+  {sessions,links,overview}.json`. Coordinator K = `84c00001-…`; its direct started children A (`…02`, has an exact
+  Codex child and started A2) and B (`…03`). 8.5's `s` test on K can build on it (A's hand-off is tagged step 2.1;
+  the root has no PLAN.md, so G1 graphs need one added or a test-made copy).
+- Known limits: `home::selectable` (exported, no callers) still stops at depth 1 (parked, outside Files); the plain
+  `overview` text count is now recursive (`crates/cli/src/main.rs`, added to the Files line in review).
+- 490 tests pass, 1 ignored; clippy and fmt clean.
+
+**Step 8.4b (2026-11-08).** **Step 8.4b is committed (started in the Codex loop; Codex quota went LOW
 mid-step, so the review fixes and both reviews ran Claude-only); Step 8.4c is next.** Order: 8.4c → 8.5 → 8.6. Run
 `python3 -I tools/codex-quota.py` before every `codex exec` (at 8.4b's end: 95% of the 5-hour window, `CODEX: LOW`,
 resets Sun 01:48; weekly 18%). If still LOW, 8.4c runs in Claude-only mode. What 8.4c needs from 8.4b:
@@ -456,6 +482,38 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.4c: Sessions started by a session nest under it in the repo view — Claude (Superpowers)
+- Mode: Claude-only. `python3 -I tools/codex-quota.py` → `primary: 95% of 300 min window, resets Sun 01:48`,
+  `secondary: 18% of 10080 min window, resets Thu 00:53`, `CODEX: LOW -> Claude-only mode until the window resets`
+  (exit 1). Worktree `.claude/worktrees/step-8.4c`, branch `step/8.4c` from `main` (914f979).
+- Did: Claude wrote the synthetic fixture root and answer keys first (db194e0: keys derived from the 8.4b output by
+  the S1–S3 rules, script in scratch). Three implementer subagents (TDD; Task 2 and the finding-7 fix admitted code
+  before tests): app-record reader + `started_by` in sessions (3926b98), overview nesting + CLI test + docs (3154572),
+  repo view to any depth (ca0ca18). All three keys matched on the first run.
+- Changed: `crates/claude/src/{app_record,lib}.rs`, `crates/claude/tests/app_record.rs`, `crates/model/src/lib.rs`,
+  `crates/model/tests/model.rs`, `crates/core/src/{scanner,sessions,overview,open}.rs`, `crates/core/tests/{started,
+  graph,overview,phase6,sessions}.rs`, `crates/tui/src/{timeline,view,app}.rs`, `crates/tui/tests/started.rs`,
+  `crates/cli/src/main.rs` (count only), `crates/cli/tests/cli.rs`, `fixtures/sessions-started/**`,
+  `fixtures/expected/started/**`, 9 existing keys (added `started_by: null` only), `docs/{design,output-schema}.md`,
+  `PLAN.md` (Files line + Review log), `PROGRESS.md`.
+- Verify (re-run by the step session on 8fc31f9): `cargo test --workspace` → exit 0, 490 passed, 0 failed, 1 ignored
+  (49 suites); `cargo clippy --workspace --all-targets -- -D warnings` → clean; `cargo fmt --check` → clean;
+  `git diff 914f979 -- fixtures/expected ':!fixtures/expected/started' | grep '^[-+] ' | grep -v started_by` → prints
+  nothing; `git diff 914f979 --stat -- fixtures/expected/tui` and `-- fixtures/expected/phase8` → empty (every home
+  golden, the 8.1 golden and the 6.1 goldens unchanged). W10: no personal paths or non-synthetic ids in new fixture
+  files. Real run in scratch (counts only, `--since all`): 139 app records, 134 with `cliSessionId`, 66 with
+  `spawnedFrom`, 4 fork/btw, 62 eligible (was 59; new sessions since planning); 412 sessions, 233 Claude, 62 with
+  `started_by`, all 62 nested, 0 top level (no cross-repo or unlisted parent), 2 whose parent is itself started
+  (unchanged); no diagnostics on stderr.
+- Review: fresh adversarial subagent on `git diff main...step/8.4c` + the step: round 1, 9 findings (0 critical,
+  2 important). Fixed 1 (recursive CLI count), 2 (record-only sessions got `started_by`), 3 (empty hand-off
+  comparison), 4 (cycles after `--since`), 5 (deep indent over bars), 7 (deleted-mid-scan record counted bad) in
+  8fc31f9; ruled 6 (W6 order kept) and 9 (shared app id reading); parked 8 (`home::selectable`). Round 2: all six
+  ADDRESSED, no new breakage. Step session re-ran Verify; matches the implementers' reports.
+- Gotchas: Rulings: null fields count as absent; the conflict check counts only eligible records; repo view order is
+  the reverse of the JSON order. `priorCliSessionIds` exists on 19 real records (resumed sessions); not read (S1
+  uses `cliSessionId` only), so a child whose transcript id changed on resume would not link.
 
 ### 2026-11-08 — Step 8.4b: Rows named by title and place; header names the latest hand-off — Codex, then Claude (Claude-only after quota LOW)
 - Did: Implemented U1 own/main-file title parsing (last non-blank string, controls removed, trimmed), title
