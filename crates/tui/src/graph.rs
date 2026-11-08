@@ -14,6 +14,8 @@ use time::UtcOffset;
 
 use crate::{home::basename, theme::Theme, view};
 
+const BOX_HEIGHT: u16 = 9;
+
 #[derive(Clone, Copy)]
 pub struct GraphOptions {
     pub selected: usize,
@@ -56,12 +58,16 @@ pub fn graph_slots(report: &GraphReport) -> Vec<usize> {
 /// Move only far enough to show the selected part in the five-slot window.
 pub fn graph_first_slot(report: &GraphReport, selected: usize, first_slot: usize) -> usize {
     let slots = graph_slots(report);
-    first_visible_slot(&slots, selected, first_slot)
+    first_visible_slot(
+        &slots,
+        selected.min(slots.len().saturating_sub(1)),
+        first_slot,
+    )
 }
 
 fn first_visible_slot(slots: &[usize], selected: usize, first_slot: usize) -> usize {
     let Some(&last) = slots.last() else { return 0 };
-    let selected = slots[selected.min(slots.len() - 1)];
+    let selected = slots[selected];
     first_slot
         .min(last.saturating_sub(4))
         .min(selected)
@@ -76,6 +82,7 @@ struct Layout {
     scroll: u16,
     claude_lane: u16,
     codex_lane: u16,
+    edges: u16,
     panel: u16,
     strip: u16,
     legend: u16,
@@ -92,6 +99,7 @@ impl Layout {
             scroll: row(3),
             claude_lane: row(4),
             codex_lane: row(16),
+            edges: row(13),
             panel: row(27),
             strip: row(33),
             legend: row(36),
@@ -109,6 +117,11 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
     }
     let mut screen = Buffer::empty(Rect::new(0, 0, area.width, area.height));
     screen.set_style(screen.area, Style::default().bg(options.theme.screen));
+    let options = GraphOptions {
+        selected: options.selected.min(report.parts.len().saturating_sub(1)),
+        ..*options
+    };
+    let options = &options;
     let layout = Layout::new(area.height);
     let mut paint = Paint {
         buf: &mut screen,
@@ -160,15 +173,19 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
     }
 }
 
+fn slot_column(slot: usize, first: usize) -> i64 {
+    1 + 22 * (slot as i64 - first as i64)
+}
+
 fn visible_x(slot: usize, first: usize) -> Option<u16> {
     slot.checked_sub(first)
         .filter(|&slot| slot < 5)
-        .map(|slot| 1 + 22 * slot as u16)
+        .map(|_| slot_column(slot, first) as u16)
 }
 
 fn edge_x(slot: usize, first: usize, offset: u16, end: u16) -> Option<u16> {
     // The source box can be left of the window while its edge is still visible.
-    let x = 1 + 22 * (slot as i128 - first as i128) + i128::from(offset);
+    let x = slot_column(slot, first) + i64::from(offset);
     u16::try_from(x).ok().filter(|&x| x < end)
 }
 
@@ -187,9 +204,9 @@ fn lanes(
             } else {
                 layout.codex_lane
             };
-            let selected = i == options.selected.min(report.parts.len() - 1);
+            let selected = i == options.selected;
             let card = part_box(part, selected, options);
-            for dy in 0..9 {
+            for dy in 0..BOX_HEIGHT {
                 for dx in 0..30 {
                     if x + dx < paint.end() && y + dy < paint.buf.area.height {
                         paint.buf[(x + dx, y + dy)] = card[(dx, dy)].clone();
@@ -197,10 +214,13 @@ fn lanes(
                 }
             }
         }
+        if visible_x(slots[i], first).is_none() {
+            continue;
+        }
         match &part.edge_in {
             Some(Edge::Handoff { .. }) => {
                 if let Some(x) = edge_x(slots[i], first, 4, paint.end()) {
-                    handoff(part, &report.step.id, x, options, paint);
+                    handoff(part, &report.step.id, x, layout.edges, options, paint);
                 }
             }
             Some(Edge::Return { at }) => {
@@ -208,7 +228,7 @@ fn lanes(
                     && report.parts[previous].harness == Harness::Codex
                     && let Some(x) = edge_x(slots[previous], first, 26, paint.end())
                 {
-                    return_edge(x, *at, options, paint);
+                    return_edge(x, layout.edges, *at, options, paint);
                 }
             }
             None => {}
@@ -216,8 +236,8 @@ fn lanes(
     }
 }
 
-fn length(from: Timestamp, to: Timestamp) -> String {
-    let seconds = ((to.epoch_ms() - from.epoch_ms()) / 1000).max(1);
+fn length(milliseconds: i64) -> String {
+    let seconds = (milliseconds / 1000).max(1);
     if seconds < 60 {
         format!("{seconds} s")
     } else {
@@ -256,7 +276,7 @@ fn counts_label(counts: &Counts) -> String {
 fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
     let t = options.theme;
     let codex = part.harness == Harness::Codex;
-    let missing = codex && (part.from.is_none() || part.to.is_none());
+    let missing = codex && !has_run(part);
     let color = if missing {
         t.secondary
     } else if codex {
@@ -272,11 +292,16 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
         t.screen
     };
     let style = |fg| t.text_style(fg, bg);
-    let mut card = Buffer::empty(Rect::new(0, 0, 30, 9));
+    let mut card = Buffer::empty(Rect::new(0, 0, 30, BOX_HEIGHT));
     card.set_style(card.area, Style::default().bg(bg));
     card.set_string(0, 0, format!("╭{}╮", "─".repeat(28)), style(color));
-    card.set_string(0, 8, format!("╰{}╯", "─".repeat(28)), style(color));
-    for y in 1..8 {
+    card.set_string(
+        0,
+        BOX_HEIGHT - 1,
+        format!("╰{}╯", "─".repeat(28)),
+        style(color),
+    );
+    for y in 1..BOX_HEIGHT - 1 {
         card.set_string(0, y, "│", style(color));
         card.set_string(29, y, "│", style(color));
     }
@@ -300,7 +325,7 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
         ]),
         27,
     );
-    box_subline(&mut card, part, options, bg, missing);
+    box_subline(&mut card, part, options, bg);
     if !missing {
         card.set_stringn(
             2,
@@ -327,60 +352,98 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
     card
 }
 
-fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions, bg: Color, missing: bool) {
-    let t = options.theme;
-    let style = |fg| t.text_style(fg, bg);
-    if missing {
-        card.set_stringn(2, 2, cut(&missing_run(part), 27), 27, style(t.secondary));
-        return;
+fn has_run(part: &Part) -> bool {
+    part.run_available == Some(true) && part.from.is_some() && part.to.is_some()
+}
+
+#[derive(Clone, Copy)]
+enum Role {
+    Secondary,
+    Done,
+    Warning,
+    Claude,
+}
+
+impl Role {
+    fn color(self, theme: Theme) -> Color {
+        match self {
+            Self::Secondary => theme.secondary,
+            Self::Done => theme.done,
+            Self::Warning => theme.warning,
+            Self::Claude => theme.claude,
+        }
     }
-    let (Some(from), Some(to)) = (part.from, part.to) else {
-        return;
-    };
-    let duration = length(from, to);
-    let (label, color) = if part.harness == Harness::Claude {
-        (clock(from, options.offset, false), t.secondary)
+}
+
+/// Status text and its role, followed by a secondary-colour duration suffix.
+fn subline(part: &Part, offset: UtcOffset) -> Option<(String, Role, String)> {
+    if part.harness == Harness::Codex && !has_run(part) {
+        return Some((missing_run(part), Role::Secondary, String::new()));
+    }
+    let (from, to) = (part.from?, part.to?);
+    let (label, role) = if part.harness == Harness::Claude {
+        (clock(from, offset, false), Role::Secondary)
     } else {
         match part.status {
-            Some(PartStatus::Done) => (
-                format!("✓ done {}", clock(to, options.offset, false)),
-                t.done,
-            ),
+            Some(PartStatus::Done) => (format!("✓ done {}", clock(to, offset, false)), Role::Done),
             Some(PartStatus::Stale) => (
-                format!("stale since {}", clock(from, options.offset, false)),
-                t.warning,
+                format!("stale since {}", clock(from, offset, false)),
+                Role::Warning,
             ),
-            _ => ("working now".to_owned(), t.claude),
+            _ => ("working now".to_owned(), Role::Claude),
         }
     };
     let suffix = if part.status == Some(PartStatus::Stale) {
         String::new()
     } else {
-        format!(" · {duration}")
+        format!(" · {}", length(to.epoch_ms() - from.epoch_ms()))
     };
+    Some((label, role, suffix))
+}
+
+fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions, bg: Color) {
+    let Some((label, role, suffix)) = subline(part, options.offset) else {
+        return;
+    };
+    let t = options.theme;
     card.set_line(
         2,
         2,
         &Line::from(vec![
-            Span::styled(label, style(color)),
-            Span::styled(suffix, style(t.secondary)),
+            Span::styled(cut(&label, 27), t.text_style(role.color(t), bg)),
+            Span::styled(suffix, t.text_style(t.secondary, bg)),
         ]),
         27,
     );
 }
 
-fn notable_line(notable: &Notable, theme: Theme, bg: Color) -> Line<'static> {
-    let mark = match notable.ok {
-        Some(false) => Some((" ✗", theme.warning)),
+struct Mark {
+    text: &'static str,
+    role: Role,
+}
+
+fn notable_mark(notable: &Notable) -> Option<Mark> {
+    match notable.ok {
+        Some(false) => Some(Mark {
+            text: " ✗",
+            role: Role::Warning,
+        }),
         Some(true)
             if notable.label.starts_with("$ cargo ")
                 || notable.label == "$ pytest"
                 || notable.label == "$ npm test" =>
         {
-            Some((" ✓", theme.done))
+            Some(Mark {
+                text: " ✓",
+                role: Role::Done,
+            })
         }
         _ => None,
-    };
+    }
+}
+
+fn notable_line(notable: &Notable, theme: Theme, bg: Color) -> Line<'static> {
+    let mark = notable_mark(notable);
     let label = cut(&notable.label, if mark.is_some() { 25 } else { 27 });
     let style = |fg| theme.text_style(fg, bg);
     let mut spans = if let Some(rest) = label.strip_prefix('▸') {
@@ -391,13 +454,13 @@ fn notable_line(notable: &Notable, theme: Theme, bg: Color) -> Line<'static> {
     } else {
         vec![Span::styled(label, style(theme.text))]
     };
-    if let Some((mark, color)) = mark {
-        spans.push(Span::styled(mark, style(color)));
+    if let Some(mark) = mark {
+        spans.push(Span::styled(mark.text, style(mark.role.color(theme))));
     }
     Line::from(spans)
 }
 
-fn handoff(part: &Part, step: &str, x: u16, options: &GraphOptions, paint: &mut Paint<'_>) {
+fn handoff(part: &Part, step: &str, x: u16, y: u16, options: &GraphOptions, paint: &mut Paint<'_>) {
     let Some(Edge::Handoff {
         at,
         r#match: confidence,
@@ -413,7 +476,7 @@ fn handoff(part: &Part, step: &str, x: u16, options: &GraphOptions, paint: &mut 
     } else {
         "╎"
     };
-    for (y, glyph) in [(13, glyph), (14, glyph), (15, "▼")] {
+    for (y, glyph) in [(y, glyph), (y + 1, glyph), (y + 2, "▼")] {
         paint.write(x, y, glyph, t.text, paint.end());
     }
     let label = if part.kind == "implement" {
@@ -421,16 +484,16 @@ fn handoff(part: &Part, step: &str, x: u16, options: &GraphOptions, paint: &mut 
     } else {
         "handed fix".to_owned()
     };
-    paint.write(x + 2, 13, &label, t.text, paint.end());
+    paint.write(x + 2, y, &cut(&label, 19), t.text, paint.end());
     paint.write(
         x + 2,
-        14,
-        &clock(*at, options.offset, true),
+        y + 1,
+        &cut(&clock(*at, options.offset, true), 19),
         t.secondary,
         paint.end(),
     );
     let words = match_words(*confidence, *candidates);
-    paint.write(x + 2, 15, &words, t.secondary, paint.end());
+    paint.write(x + 2, y + 2, &cut(&words, 19), t.secondary, paint.end());
 }
 
 fn match_words(confidence: Match, candidates: usize) -> String {
@@ -443,18 +506,13 @@ fn match_words(confidence: Match, candidates: usize) -> String {
 }
 
 fn panel(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
-    let Some(selected) = report
-        .parts
-        .len()
-        .checked_sub(1)
-        .map(|last| options.selected.min(last))
-    else {
+    let selected = options.selected;
+    let Some(part) = report.parts.get(selected) else {
         return;
     };
-    let part = &report.parts[selected];
     let t = options.theme;
     let codex = part.harness == Harness::Codex;
-    let available = !codex || part.run_available == Some(true);
+    let available = !codex || has_run(part);
     let harness = if codex { "codex" } else { "claude" };
     paint.rule(y.saturating_sub(1));
     paint.write(2, y, "selected", t.secondary, paint.end());
@@ -600,14 +658,8 @@ fn panel_origin(report: &GraphReport, selected: usize, offset: UtcOffset) -> Opt
         clock(*at, offset, true),
         match_words(*confidence, *candidates)
     ));
-    if let Some(gap) = gap_ms {
-        let seconds = gap / 1000;
-        let duration = if seconds < 60 {
-            format!("{seconds} s")
-        } else {
-            format!("{} min", seconds / 60)
-        };
-        origin.push_str(&format!(" · started {duration} after the call"));
+    if let Some(gap) = gap_ms.filter(|gap| *gap >= 0) {
+        origin.push_str(&format!(" · started {} after the call", length(gap)));
     }
     Some(origin)
 }
@@ -635,16 +687,16 @@ fn quoted(text: &str, width: usize) -> String {
     format!("“{}…”", text[..end].trim_end())
 }
 
-fn return_edge(x: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
+fn return_edge(x: u16, y: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
     let color = options.theme.secondary;
-    for (y, glyph) in [(13, "▲"), (14, "│"), (15, "│")] {
+    for (y, glyph) in [(y, "▲"), (y + 1, "│"), (y + 2, "│")] {
         paint.write(x, y, glyph, color, paint.end());
     }
-    paint.write(x + 2, 13, "back to claude", color, paint.end());
+    paint.write(x + 2, y, &cut("back to claude", 19), color, paint.end());
     paint.write(
         x + 2,
-        14,
-        &clock(at, options.offset, true),
+        y + 1,
+        &cut(&clock(at, options.offset, true), 19),
         color,
         paint.end(),
     );
@@ -735,12 +787,7 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
         return String::new();
     };
     let date = view::datetime(from).to_offset(offset);
-    let seconds = ((to.epoch_ms() - from.epoch_ms()) / 1000).max(1);
-    let length = if seconds < 60 {
-        format!("{seconds} s")
-    } else {
-        format!("{} min", seconds / 60)
-    };
+    let length = length(to.epoch_ms() - from.epoch_ms());
     let sessions = report
         .parts
         .iter()
@@ -907,7 +954,7 @@ fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint
     let Some((widths, show_labels)) = strip_widths(&report.parts, &labels, 94) else {
         return;
     };
-    let selected = options.selected.min(report.parts.len() - 1);
+    let selected = options.selected;
     let mut x = 23;
     for (index, ((part, label), width)) in report.parts.iter().zip(labels).zip(widths).enumerate() {
         let codex = part.harness == Harness::Codex;

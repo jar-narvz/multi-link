@@ -480,6 +480,11 @@ fn seven_parts_scroll_at_each_end() {
     assert_eq!(Span::raw(row.trim_end()).width(), 119);
     assert_eq!(start[(119, 3)].symbol(), " ");
     assert!(!row.contains("earlier"));
+    for y in 13..=15 {
+        for x in 112..=118 {
+            assert_eq!(start[(x, y)].symbol(), " ", "no orphan edge at {x},{y}");
+        }
+    }
 
     options.selected = 6;
     assert_eq!(graph_first_slot(&report, 6, 0), 2);
@@ -699,17 +704,77 @@ fn selection_past_the_end_does_not_panic() {
 }
 
 fn assert_colored_text(buf: &Buffer, x: u16, y: u16, expected: &str, color: Color) {
-    for (offset, ch) in expected.chars().enumerate() {
-        let cell = &buf[(x + offset as u16, y)];
-        assert_eq!(
-            cell.symbol(),
-            ch.to_string(),
-            "text at {},{y}",
-            x + offset as u16
-        );
+    let mut column = x;
+    for ch in expected.chars() {
+        let symbol = ch.to_string();
+        let cell = &buf[(column, y)];
+        assert_eq!(cell.symbol(), symbol, "text at {},{y}", column);
         if ch != ' ' {
-            assert_eq!(cell.fg, color, "colour at {},{y}", x + offset as u16);
+            assert_eq!(cell.fg, color, "colour at {},{y}", column);
         }
+        column += Span::raw(symbol).width() as u16;
+    }
+}
+
+#[test]
+fn long_step_edge_labels_leave_room_before_the_next_edge() {
+    let mut report = report("1.3");
+    report.step.id = "12.345.678".into();
+    let options = GraphOptions {
+        selected: 0,
+        ..golden_options()
+    };
+    let buf = render(&report, &options, 120, 40);
+    assert_colored_text(&buf, 29, 13, "handed step 12.345…", options.theme.text);
+    assert_eq!(buf[(48, 13)].symbol(), " ");
+    assert_colored_text(&buf, 49, 13, "▲", options.theme.secondary);
+}
+
+#[test]
+fn panel_gap_uses_nonnegative_lengths_with_a_one_second_minimum() {
+    let options = golden_options();
+    for (gap, expected) in [
+        (-1, None),
+        (0, Some("1 s")),
+        (999, Some("1 s")),
+        (59_999, Some("59 s")),
+        (60_000, Some("1 min")),
+        (119_999, Some("1 min")),
+    ] {
+        let mut report = report("1.1");
+        if let Some(multi_link_model::Edge::Handoff { gap_ms, .. }) = &mut report.parts[1].edge_in {
+            *gap_ms = Some(gap);
+        }
+        let buf = render(&report, &options, 120, 40);
+        let row = rendered_rows(&buf, 29..=29);
+        if let Some(expected) = expected {
+            assert!(
+                row.trim_end()
+                    .ends_with(&format!("started {expected} after the call")),
+                "gap {gap}: {row}"
+            );
+        } else {
+            assert!(!row.contains("started"), "gap {gap}: {row}");
+        }
+    }
+}
+
+#[test]
+fn incomplete_run_metadata_is_unavailable_in_both_box_and_panel() {
+    let options = golden_options();
+    for missing in ["availability", "from", "to"] {
+        let mut report = report("1.1");
+        let part = &mut report.parts[1];
+        match missing {
+            "availability" => part.run_available = Some(false),
+            "from" => part.from = None,
+            _ => part.to = None,
+        }
+        let buf = render(&report, &options, 120, 40);
+        assert_colored_text(&buf, 25, 18, "run unavailable", options.theme.secondary);
+        assert!(rendered_rows(&buf, 27..=27).contains("implement · run unavailable"));
+        assert_eq!(rendered_rows(&buf, 28..=28), "\n");
+        assert_eq!(rendered_rows(&buf, 31..=31), "\n");
     }
 }
 
