@@ -61,7 +61,22 @@ pub fn sessions(group: &RepoGroup) -> impl Iterator<Item = &SessionRow> {
             Row::Session(r) => std::slice::from_ref(r),
             Row::Merged(r) => r.rows.as_slice(),
         })
-        .flat_map(|r| std::iter::once(r).chain(&r.children))
+        .flat_map(subtree)
+}
+/// A row and every descendant at any depth (Codex children and started Claude children, S3),
+/// in pre-order: a parent comes before its whole subtree, children in report order.
+pub fn subtree(row: &SessionRow) -> impl Iterator<Item = &SessionRow> {
+    let mut stack = vec![row];
+    std::iter::from_fn(move || {
+        let next = stack.pop()?;
+        stack.extend(next.children.iter().rev());
+        Some(next)
+    })
+}
+/// A started child is a Claude row nested under the session that started it (S3); Codex
+/// children hang off a hand-off instead.
+pub fn started_child(child: &SessionRow, parent: Option<&str>) -> bool {
+    child.harness == Harness::Claude && parent.is_some() && child.started_by.as_deref() == parent
 }
 pub fn placing<'a>(child: &'a SessionRow, parent: Option<&str>) -> Option<&'a Link> {
     child

@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 
 use crossterm::event::KeyCode;
-use multi_link_model::{LinksReport, OverviewReport, Row, State};
+use multi_link_model::{LinksReport, OverviewReport, State};
 use ratatui::{buffer::Buffer, layout::Rect};
 
 use crate::{
@@ -87,7 +87,25 @@ impl SelectionIdentity {
                         Target::Repo(_) | Target::Hidden(_) => self.id.is_none(),
                     }
             })
-            .or_else(|| targets.iter().position(|(repo, target)| *repo == self.repo && matches!(target, Target::Session(row) if row.children.iter().any(|c|Some(c.id.as_str())==self.id.as_deref()))))
+            .or_else(|| {
+                // The selected row is gone from the targets (e.g. hidden): fall back to its
+                // nearest listed ancestor, at any depth (the one with the smallest subtree).
+                let id = self.id.as_deref()?;
+                targets
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, (repo, target))| match target {
+                        Target::Session(row)
+                            if *repo == self.repo
+                                && crate::view::subtree(row).skip(1).any(|c| c.id == id) =>
+                        {
+                            Some((crate::view::subtree(row).count(), i))
+                        }
+                        _ => None,
+                    })
+                    .min()
+                    .map(|(_, i)| i)
+            })
             .or_else(|| targets.iter().position(|(repo, _)| *repo == self.repo))
     }
 }
@@ -422,12 +440,7 @@ fn waiting_ids(report: &OverviewReport) -> HashSet<String> {
     report
         .repos
         .iter()
-        .flat_map(|group| &group.rows)
-        .flat_map(|row| match row {
-            Row::Session(row) => std::slice::from_ref(row),
-            Row::Merged(merged) => merged.rows.as_slice(),
-        })
-        .flat_map(|row| std::iter::once(row).chain(&row.children))
+        .flat_map(crate::view::sessions)
         .filter(|row| row.state == State::Waiting)
         .map(|row| row.id.clone())
         .collect()
@@ -436,6 +449,7 @@ fn waiting_ids(report: &OverviewReport) -> HashSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use multi_link_model::Row;
     fn report() -> Box<Refresh> {
         Box::new(Refresh {
             overview: serde_json::from_str(include_str!(
@@ -640,6 +654,7 @@ mod tests {
 #[cfg(test)]
 mod phase6_tests {
     use super::*;
+    use multi_link_model::Row;
     fn refresh() -> Box<Refresh> {
         Box::new(Refresh {
             overview: serde_json::from_str(include_str!(
@@ -808,6 +823,7 @@ mod phase6_tests {
 #[cfg(test)]
 mod repo_tests {
     use super::*;
+    use multi_link_model::Row;
     fn refresh() -> Box<Refresh> {
         let overview: OverviewReport = serde_json::from_str(include_str!(
             "../../../fixtures/expected/phase6/overview.json"

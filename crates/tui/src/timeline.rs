@@ -7,7 +7,7 @@ use crate::{
     view,
 };
 use multi_link_model::{
-    Harness, LinksReport, Match, OverviewReport, RepoGroup, SessionRow, State, StateEvidence,
+    Harness, LinksReport, Match, OverviewReport, RepoGroup, Row, SessionRow, State, StateEvidence,
     Timestamp,
 };
 use ratatui::{
@@ -66,47 +66,72 @@ impl Default for RepoOptions {
 pub(crate) struct Lane<'a> {
     pub session: &'a SessionRow,
     pub parent: Option<&'a str>,
+    /// 0 for a top-level lane, +1 per nesting level (S3: any depth).
+    pub depth: u16,
+}
+fn visible(r: &SessionRow, imports: bool) -> bool {
+    if r.imported {
+        imports
+    } else {
+        !r.activity.is_empty()
+    }
+}
+fn newest_first(a: &&SessionRow, b: &&SessionRow) -> std::cmp::Ordering {
+    b.started_at
+        .cmp(&a.started_at)
+        .then_with(|| a.id.cmp(&b.id))
 }
 /// Rendering and keyboard selection must use this same ordering and visibility rule.
+/// A visible row nests under its direct parent when that parent is visible, to any depth;
+/// otherwise it is a top-level lane. Every level is newest first (W6), ties by id.
 pub(crate) fn lanes(group: &RepoGroup, imports: bool) -> Vec<Lane<'_>> {
-    let visible = |r: &&SessionRow| {
-        if r.imported {
-            imports
-        } else {
-            !r.activity.is_empty()
+    fn walk<'a>(
+        row: &'a SessionRow,
+        parent_visible: bool,
+        imports: bool,
+        roots: &mut Vec<&'a SessionRow>,
+    ) {
+        let shown = visible(row, imports);
+        if shown && !parent_visible {
+            roots.push(row);
         }
-    };
-    let all: Vec<_> = view::sessions(group).collect();
-    let mut roots: Vec<_> = all
-        .iter()
-        .copied()
-        .filter(visible)
-        .filter(|r| {
-            !all.iter()
-                .any(|parent| visible(parent) && parent.children.iter().any(|c| c.id == r.id))
-        })
-        .collect();
-    roots.sort_by(|a, b| {
-        b.started_at
-            .cmp(&a.started_at)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+        for child in &row.children {
+            walk(child, shown, imports, roots);
+        }
+    }
+    fn emit<'a>(
+        row: &'a SessionRow,
+        parent: Option<&'a str>,
+        depth: u16,
+        imports: bool,
+        out: &mut Vec<Lane<'a>>,
+    ) {
+        out.push(Lane {
+            session: row,
+            parent,
+            depth,
+        });
+        let mut children: Vec<_> = row
+            .children
+            .iter()
+            .filter(|c| visible(c, imports))
+            .collect();
+        children.sort_by(newest_first);
+        for child in children {
+            emit(child, Some(&row.id), depth + 1, imports, out);
+        }
+    }
+    let mut roots = Vec::new();
+    for top in group.rows.iter().flat_map(|r| match r {
+        Row::Session(r) => std::slice::from_ref(r),
+        Row::Merged(r) => r.rows.as_slice(),
+    }) {
+        walk(top, false, imports, &mut roots);
+    }
+    roots.sort_by(newest_first);
     let mut out = Vec::new();
     for root in roots {
-        out.push(Lane {
-            session: root,
-            parent: None,
-        });
-        let mut children: Vec<_> = root.children.iter().filter(visible).collect();
-        children.sort_by(|a, b| {
-            b.started_at
-                .cmp(&a.started_at)
-                .then_with(|| a.id.cmp(&b.id))
-        });
-        out.extend(children.into_iter().map(|r| Lane {
-            session: r,
-            parent: Some(&root.id),
-        }));
+        emit(root, None, 0, imports, &mut out);
     }
     out
 }
@@ -295,6 +320,24 @@ fn fold_label(ms: i64) -> String {
     } else {
         format!("{}d", m / 1440)
     }
+}
+/// The vertical mark from a nested lane up to its parent: a Codex child's placing hand-off
+/// (`│` confirmed, `╎` otherwise), or a started child's ancestry mark, a solid `│` at the
+/// child's `started_at` (S3; not a hand-off edge).
+fn connector(lane: &Lane<'_>) -> Option<(i64, &'static str)> {
+    let parent = lane.parent?;
+    if view::started_child(lane.session, Some(parent)) {
+        return Some((lane.session.started_at.epoch_ms(), "│"));
+    }
+    let link = view::placing(lane.session, Some(parent))?;
+    Some((
+        link.at.epoch_ms(),
+        if link.r#match == Match::Exact {
+            "│"
+        } else {
+            "╎"
+        },
+    ))
 }
 fn done(r: &SessionRow) -> bool {
     r.harness == Harness::Codex
@@ -701,26 +744,16 @@ impl RepoScene<'_> {
         for &(i, cy, _) in positions {
             let lane = &lanes[i];
             if let Some(parent) = lane.parent
-                && let Some(link) = view::placing(lane.session, Some(parent))
+                && let Some((at, glyph)) = connector(lane)
                 && let Some((_, py, _)) = positions
                     .iter()
                     .find(|&&(j, _, _)| lanes[j].session.id == parent)
                 && bars
-                && let Some(x) = axis.col(link.at.epoch_ms())
+                && let Some(x) = axis.col(at)
             {
                 for y in py + 1..cy {
                     let bg = p.buf[(0, y)].bg;
-                    p.put(
-                        44 + x,
-                        y,
-                        if link.r#match == Match::Exact {
-                            "│"
-                        } else {
-                            "╎"
-                        },
-                        t.secondary,
-                        bg,
-                    );
+                    p.put(44 + x, y, glyph, t.secondary, bg);
                 }
             }
         }
@@ -753,18 +786,26 @@ impl RepoScene<'_> {
                 p.put(0, y + 1, "▌", color, bg);
             }
         }
+        // Each nesting level indents 2 columns (S3); depth 1 keeps the Phase 6 columns.
+        let indent = 2 * lane.depth.saturating_sub(1);
+        let hx = if child { 6 + indent } else { 2 };
         if child {
-            p.put(3, y, "└▸", t.secondary, bg);
+            p.put(3 + indent, y, "└▸", t.secondary, bg);
         }
-        p.put(if child { 6 } else { 2 }, y, harness, color, bg);
+        p.put(hx, y, harness, color, bg);
         let label = if r.imported {
             format!("import · {}", view::home_label(group, r))
         } else {
             view::home_label(group, r)
         };
-        let lx = if child { 12 } else { 9 };
+        // One blank after the harness word: `codex` children keep column 12 at depth 1.
+        let lx = if child {
+            hx + harness.len() as u16 + 1
+        } else {
+            9
+        };
         let label_width = if bars {
-            42 - lx
+            42u16.saturating_sub(lx)
         } else {
             w.saturating_sub(lx + 1)
         };
@@ -785,7 +826,7 @@ impl RepoScene<'_> {
         );
         let sub = self.subline(lane);
         if y + 1 < body_end {
-            let sx = if child { 6 } else { 4 };
+            let sx = if child { hx } else { 4 };
             p.text(sx, y + 1, &sub, w.saturating_sub(sx + 1), t.secondary, bg);
         }
         if self.bars {
@@ -797,7 +838,12 @@ impl RepoScene<'_> {
         let links = self.links;
         let o = self.options;
         let r = lane.session;
-        if lane.parent.is_some() {
+        if view::started_child(r, lane.parent) {
+            format!(
+                "started by this session · {}",
+                self.clock(r.started_at.epoch_ms())
+            )
+        } else if lane.parent.is_some() {
             view::placing(r, lane.parent)
                 .map(|l| {
                     let seconds = (r.started_at.epoch_ms() - l.at.epoch_ms()).max(0) / 1000;
@@ -883,11 +929,11 @@ impl RepoScene<'_> {
                 let lane = &self.lanes[i];
                 lane.parent
                     .and_then(|parent| {
-                        let link = view::placing(lane.session, Some(parent))?;
+                        let (at, _) = connector(lane)?;
                         let (_, py, _) = positions
                             .iter()
                             .find(|&&(j, _, _)| self.lanes[j].session.id == parent)?;
-                        let col = axis.col(link.at.epoch_ms())?;
+                        let col = axis.col(at)?;
                         Some(*py < y && y < cy && space.contains(&col))
                     })
                     .unwrap_or(false)
