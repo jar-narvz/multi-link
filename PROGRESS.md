@@ -1,7 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Resume here (2026-11-08, latest).** **Step 8.5 is committed (Claude-only mode, merged ff-only into `main`; branch
+**Resume here (2026-11-08, latest). Step 8.6 is committed; Phase 8 is NOT closed: waiting on the owner.** 8.6 ran in
+the main checkout as a Claude step (no Codex, no worktree). The owner must reinstall (`cargo install --path crates/cli
+--force`; the installed binary predates the graph), run `multi-link tui`, press `s` on a repo-view lane and confirm
+the step graph meets need 4. Record the answer in `docs/phase8-check.md` → "Owner check" and here. A "no" with notes
+becomes amendment steps, as 8.4a–c were.
+- **Finding for the next planner (not fixed, Phase 8 non-goal):** most "lost" Codex rollouts look compressed, not deleted.
+  `~/.codex/sessions` held 202 `rollout-*.jsonl.zst` (folders 2026-10-16 to 10-30) next to 211 plain `.jsonl` on
+  2026-11-08; multi-link reads only `.jsonl`. 81 of 116 unlinked hand-offs have a `.zst` rollout whose file-name time
+  is 0–10 s later (one confirmed by content, step 3.7); 17 have a plain one (likely link misses), 18 neither. Reading `.zst` (a decompress dependency; who compresses was not investigated) is a candidate
+  backlog step. PLAN.md's "Codex rollouts disappear" line is out of date.
+- Also seen: a `codex exec resume --last` fix hand-off is unlinked and its turn lands in the resumed run's part (step
+  6.6), while the panel says `(the rollout may be gone)`; candidate wording/link fix for a later step.
+- Real step 6.7 matches board 9's layout; differences (G5/G6 counts, W5 minutes, wording) are in `docs/phase8-check.md`.
+
+**Step 8.5 (2026-11-08).** **Step 8.5 is committed (Claude-only mode, merged ff-only into `main`; branch
 `step/8.5` and worktree `.claude/worktrees/step-8.5` left in place); Step 8.6 closes Phase 8.** Run
 `python3 -I tools/codex-quota.py` first (at 8.5's start: 95% of the 5-hour window, `CODEX: LOW`, resets Sun 01:48;
 weekly 18%). What 8.6 needs from 8.5:
@@ -506,6 +520,34 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 8.6: Real check, README, owner confirm — Claude
+- Mode: Claude step (no Codex, no worktree; the quota check is for `codex exec` only and none ran). Docs reviewed by
+  an independent adversarial Claude subagent, 2 rounds.
+- Did: real step graphs of 6.7 (board 9's own), 6.6 (an unlinked part) and 3.7 (a compressed rollout) from the
+  release build (`graph --json` + `home_html --graph`, `--now 2026-11-09T00:00:00Z`), scratch only (W10); board 9's
+  source read from the owner's canvas for the comparison. Wrote `docs/phase8-check.md` (method, fixture image, board 9
+  in words, 6.7 vs board 9 region by region, 6.6, 3.7, missing-rollout counts, Step 8.4's graph, whole-phase Verify,
+  owner check waiting). README: step graph section (keys, membership, G3/G5/G6 limits, missing runs), `s` and `graph`
+  in Run, step graph limits, Phase 7 marked approved. Found that most "lost" rollouts are on disk as `.jsonl.zst`
+  (Current state).
+- Changed: `docs/phase8-check.md`, `docs/img/step-phase8-fixture.png`, `README.md`, `PROGRESS.md`
+- Verify (whole phase, HEAD 0ec1283): `cargo test --workspace` → exit 0, 49 test binaries, 519 passed, 0 failed, 1
+  ignored; `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; phase8 fixture report == `graph-1.1.json`
+  → True, its HTML text == `step-phase8.txt` (diff empty); 8.1 golden history → only 8448da9; amended key check
+  `git diff --diff-filter=MD e5f6c78 -- fixtures/expected ':!fixtures/expected/tui' | grep '^[-+] ' | grep -v '"title"'
+  | grep -v '"started_by"' | wc -l` → 0; text goldens changed since e5f6c78 → only `home-hook*` (8.4b) and
+  `repo-phase6*` (8.5 footer); real 6.7 vs board 9 → same slots, edges, panel; differences named in the check doc.
+  W10 over the 4 committed files: no `/Users/`, no UUID or 8-hex session id, no prompt text, no secrets; the image is
+  synthetic. Owner's answer: **waiting** (stop-and-ask).
+- Review: round 1, 9 findings, all accepted and fixed: Step 8.4's later runs are not "separate tasks"; "compressed,
+  not lost" over-claimed (now 81/17/18 of 116, one confirmed by content, 24 after the last `.zst` folder); 17 plain-file
+  link misses added; implement total is 15 not 9, fix round 1's read→run shift marked untraced; "Claude part covers the
+  run" is usually, not always (6.6); three PROGRESS known limits added to README; G5/G6 attribution; PROGRESS said
+  committed ahead of the commit (committed right after review); "13 answer-key files". Round 2: 3 findings, fixed:
+  8.4's 24 runs come from 28 calls (first ones untagged via a wrapper), "likely" link misses, a re-wrap.
+- Gotchas: `links` gives `codex exec resume --last` `form: "exec"`. Rollout file names carry local time. Oct 30
+  renders need `--offset -7` (PDT).
 
 ### 2026-11-08 — Step 8.5: TUI: `s`, moving along a step, refresh — Claude (Superpowers)
 - Mode: Claude-only. `python3 -I tools/codex-quota.py` at the start → `primary: 95% of 300 min window, resets Sun

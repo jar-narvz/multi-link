@@ -6,8 +6,9 @@ cleanup) did not meet the need ([owner verdict](docs/phase4-check.md#owner-check
 neither did Release 1.2's bars ([owner verdict](docs/phase5-check.md#owner-check-stop-and-ask--answered-2026-11-01)).
 Release 1.3 rebuilt home in plain words and the repo view as swimlanes, to two approved mockups; the
 owner approved the real screen ([visual check](docs/phase6-check.md)). Release 1.4 polishes those screens
-on real data (prompts after a system reminder, window words, clock times, axis labels); it is built and
-awaits the owner's check ([real check](docs/phase7-check.md)).
+on real data (prompts after a system reminder, window words, clock times, axis labels); the owner approved it
+([real check](docs/phase7-check.md)). Release 1.5 adds the step graph: one PLAN.md step's Claude and Codex parts
+along time. It is built and awaits the owner's check ([real check](docs/phase8-check.md)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -15,6 +16,7 @@ awaits the owner's check ([real check](docs/phase7-check.md)).
   Claude session that started them.
 - Opens supported Claude desktop sessions or resumes sessions confirmed finished; rechecks the
   action before executing. Unsupported actions show a command for you to run.
+- Draws one PLAN.md step as boxes along time: who planned, implemented, reviewed and fixed, in order.
 
 ## Home screen
 
@@ -72,6 +74,45 @@ The real terminal uses your own font.*
 - The `selected` line gives the session's short id, start, how long it was active and its hand-off; `o`
   opens it and `f` forks it. Below 80 columns the bars drop and the lanes become a list.
 
+## Step graph
+
+![Step graph on the phase8 fixture](docs/img/step-phase8-fixture.png)
+
+*HTML render of the step graph on the synthetic fixture `fixtures/sessions-phase8`, step 1.1, at 120×40 (method,
+the approved board 9 in words and real-data differences in [docs/phase8-check.md](docs/phase8-check.md)).*
+
+- **`s`** on a repo-view lane opens that lane's latest tagged step. A coordinator lane with no hand-off of its own
+  lists the steps of the sessions it started; a lane with neither says `no step on this session`. `←→` moves along
+  the parts (`↑↓` below 120 columns), `[ ]` goes to the previous or next step with tagged hand-offs, `o`/`f` open or
+  fork the selected part's session, `esc` returns to the repo view. The same report is on the CLI:
+  `multi-link graph --repo "$PWD" --step 6.7 [--json]`.
+- **Which sessions belong to a step:** only hand-offs whose prompt names the step (`Step 6.7`), their Claude parents
+  and their Codex children. Steps are never guessed from time or files, so a step whose hand-off prompt did not name
+  it, or a Claude-only step, has no graph.
+- **Parts:** Claude boxes on top, Codex runs below, cut at hand-offs (the only events both harnesses record). Each box
+  shows its start and length, `N reads · N edits · N runs`, and up to 3 notable calls with fixed labels (`$ cargo
+  test`, `$ git commit`, `edit <file>` …). Edges say how each run was linked; the panel shows the selected part's
+  prompt, its hand-off and the run's last message; the bottom strip shows each part's share of the step's time.
+- **Part names are a reading by position, not evidence** (G3): the first Codex run is `implement`, every later run in
+  the chain is `fix round N`, a Claude part followed by another hand-off is `review`, and the last is `verify +
+  commit` only if it holds a `git commit`. A later run is not always a fix: Step 8.4's graph names every Codex run
+  after the first `fix round 1` … `fix round 24`, though they come from 28 calls of 7 test halves, 7 code halves
+  and 14 review fix calls (the first went through a wrapper script, are untagged and are not drawn).
+- **Counts and marks** (G5, G6): shell commands that write files count as runs, not edits, because telling a write from
+  shell text would be a guess, so boxes show fewer edits than happened. Labels are fixed by category, and no other
+  command text is shown. `✓`/`✗` mean the call exited 0 / non-zero, not "tests passed" (a pipe to `grep` hides a
+  failure). `✓` is drawn only on `$ cargo …`, `$ pytest` and `$ npm test`; any call that exited non-zero gets `✗`; a
+  cargo, pytest or npm line with no mark has no recorded exit code. The header's Verify is the PLAN.md command, marked
+  `(reported)`, never passed or failed.
+- **Missing Codex runs:** an unlinked hand-off shows a dim `no codex run found` box, no return arrow, and `(the
+  rollout may be gone)` in the panel. That wording is often wrong. On 2026-11-08 `~/.codex/sessions` held 202
+  compressed `rollout-*.jsonl.zst` files next to 211 plain ones, and multi-link reads only plain `.jsonl`: 81 of 116
+  unlinked hand-offs have a compressed rollout starting 0–10 s later by file name (one confirmed by content), 17
+  have a plain rollout that close that was not matched (likely link misses), and 18 have neither. A `codex exec resume
+  --last` names no id and is also unlinked; its turns are then counted in the run it resumed
+  ([details](docs/phase8-check.md#real-step-66-an-unlinked-part)). While a run is unlinked, the Claude part around
+  it usually covers the time Codex worked, unless an earlier Codex run is still open (step 6.6).
+
 Scanning only reads local agent files (`~/.claude`, `~/.codex`), repo metadata and optional
 hook state in `~/.multi-link`. It makes no network calls. Opening a session launches the
 corresponding external program; hook recording writes multi-link's own state directory.
@@ -87,7 +128,8 @@ target/release/multi-link tui
 
 Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open, `f` to fork, Esc to return, and
 `q` to quit. In the repo view, `+`/`-` zoom, ←/→ pan, `0` resets the range, `z` unfolds idle stretches
-and `i` shows imports. The default history window is `2h`; use `--since all` for all history.
+and `i` shows imports; `s` opens the step graph for the selected lane. The default history window is `2h`; use
+`--since all` for all history.
 
 The CLI also exposes the data and safe open previews:
 
@@ -96,6 +138,7 @@ target/release/multi-link overview --json
 target/release/multi-link sessions --json
 target/release/multi-link links --json
 target/release/multi-link steps --repo "$PWD" --json
+target/release/multi-link graph --repo "$PWD" --step 6.7 --json
 target/release/multi-link open <session-id-prefix> --dry-run
 ```
 
@@ -126,13 +169,23 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
+- Step graph limits: older Codex runs stored as `.jsonl.zst` are not read, so their parts show `no codex run found`
+  (counts above). Step 8.4's own graph is misnamed (24 runs as fix rounds) and 10 of its 25 runs are unlinked.
+  Nesting sessions under the session that started them (repo view, and `s` on a coordinator lane) relies on the
+  Claude desktop app's undocumented per-session records. The first refresh after start takes about 6.4 s on the
+  owner's machine (the overview's first full parse, older than the graph); later refreshes with the largest real
+  graph open took 229–236 ms (Step 8.5). A Codex lane whose Claude parent is outside the TUI window says `no step on
+  this session`. Pressing `[ ]` quickly builds every graph it passes (about 230 ms each). The repo view's footer
+  drops `q quit` at 101–109 columns. With a graph open each refresh runs the all-time pass twice. The narrow list
+  form (below 120 columns) and the 256-colour palette are tested on fixtures only, not checked on real data.
 
-Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5 and 7.4 runs. Real-home
+Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4 and 8.6 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
 the Phase 4 home check is in [docs/phase4-check.md](docs/phase4-check.md), the Phase 5 visual check in
 [docs/phase5-check.md](docs/phase5-check.md), the Phase 6 visual check in
-[docs/phase6-check.md](docs/phase6-check.md) and the Phase 7 real check in
-[docs/phase7-check.md](docs/phase7-check.md).
+[docs/phase6-check.md](docs/phase6-check.md), the Phase 7 real check in
+[docs/phase7-check.md](docs/phase7-check.md) and the Phase 8 real check in
+[docs/phase8-check.md](docs/phase8-check.md).
 
 ## Docs
 
