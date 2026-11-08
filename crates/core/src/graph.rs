@@ -405,8 +405,22 @@ fn cut(
         let next = chain.hops.get(position + 1);
         let to = next.map_or(end, |h| h.link.at);
         let (from, edge_in) = match interval(&hop.run) {
-            // No interval: Claude's time runs through the hand-off.
-            None => (hop.link.at, None),
+            // No interval: Claude's time runs through the hand-off, but no
+            // Claude part covers an earlier run of the chain still going at
+            // it (G2), open runs included (their `to` is the last record).
+            None => {
+                let at = hop.link.at;
+                match chain.hops[..position]
+                    .iter()
+                    .filter_map(|h| interval(&h.run))
+                    .map(|(_, earlier_to)| earlier_to)
+                    .filter(|&earlier_to| earlier_to > at)
+                    .max()
+                {
+                    Some(run_to) => (run_to, Some(Edge::Return { at: run_to })),
+                    None => (at, None),
+                }
+            }
             Some(_) if next.is_none() && is_open(&hop.run) => continue,
             Some((_, run_to)) => {
                 let still_going = chain.hops[..position]

@@ -1011,9 +1011,19 @@ fn previous_run_still_going_leaves_no_plan() {
         Match::Unlinked,
         None,
     );
+    // The 2.0 run is still going at 10:05, so the chain starts at its end
+    // 10:08, after the first hand-off: no plan. That run is another chain's,
+    // so the part after the hand-off still starts at it.
     let report = w.build("/repo", "1.1");
-    assert_eq!(report.parts[0].harness, Harness::Codex);
+    assert_eq!(
+        rows(&report),
+        vec![
+            codex(0, "implement", None, None),
+            claude(0, "review", "2026-11-06T10:05:00Z", "2026-11-06T10:20:00Z"),
+        ]
+    );
     assert_eq!(parent_part(&report.parts[0]), None);
+    assert_eq!(report.parts[1].edge_in, None);
 }
 
 #[test]
@@ -1416,4 +1426,106 @@ fn second_parent_resume_caps_the_run() {
         rows(&report).last().unwrap(),
         &claude(0, "review", "2026-11-06T10:02:00Z", "2026-11-06T10:30:00Z")
     );
+}
+
+/// `p1` (burst 12:00–12:20) hands 1.5 to `c1` at 12:00:20, whose run ends at
+/// `run_end` (open when `open`), then makes no-interval hand-offs at `at`s.
+fn no_interval_after_run_world(run_end: &str, open: bool, ats: &[&str]) -> World {
+    let mut w = one_run_world(
+        &[("2026-11-06T12:00:00Z", "2026-11-06T12:20:00Z")],
+        "1.5",
+        "2026-11-06T12:00:20Z",
+        "2026-11-06T12:00:21Z",
+        run_end,
+    );
+    if open {
+        w.rollout(
+            "c1",
+            vec![turn("2026-11-06T12:00:21Z", None, run_end, Some("go"))],
+        );
+    }
+    for (i, at) in ats.iter().enumerate() {
+        w.hand_off(
+            "p1",
+            &format!("u{i}"),
+            Some("1.5"),
+            at,
+            Match::Unlinked,
+            None,
+        );
+    }
+    w
+}
+
+#[test]
+fn no_interval_handoff_during_run_starts_at_run_end() {
+    // G2: no Claude part covers a run's interval, even after a hand-off with
+    // no interval made while that run is still going (open or done).
+    for open in [false, true] {
+        let w = no_interval_after_run_world(
+            "2026-11-06T12:10:00Z",
+            open,
+            &["2026-11-06T12:02:00Z", "2026-11-06T12:15:00Z"],
+        );
+        let report = w.build("/repo", "1.5");
+        assert_eq!(
+            rows(&report),
+            vec![
+                claude(0, "plan", "2026-11-06T12:00:00Z", "2026-11-06T12:00:20Z"),
+                codex(
+                    0,
+                    "implement",
+                    Some("2026-11-06T12:00:21Z"),
+                    Some("2026-11-06T12:10:00Z")
+                ),
+                codex(0, "fix round 1", None, None),
+                claude(0, "review", "2026-11-06T12:10:00Z", "2026-11-06T12:15:00Z"),
+                codex(0, "fix round 2", None, None),
+                claude(0, "review", "2026-11-06T12:15:00Z", "2026-11-06T12:20:00Z"),
+            ],
+            "open {open}"
+        );
+        assert_eq!(parent_part(&report.parts[2]), Some(0));
+        assert_eq!(report.parts[3].edge_in, back("2026-11-06T12:10:00Z"));
+        assert_eq!(parent_part(&report.parts[4]), Some(3));
+        assert_eq!(report.parts[5].edge_in, None);
+    }
+
+    // The last hand-off has no interval: the last part also waits for the run.
+    let w = no_interval_after_run_world("2026-11-06T12:10:00Z", false, &["2026-11-06T12:02:00Z"]);
+    let report = w.build("/repo", "1.5");
+    assert_eq!(
+        rows(&report).last().unwrap(),
+        &claude(0, "review", "2026-11-06T12:10:00Z", "2026-11-06T12:20:00Z")
+    );
+    assert_eq!(report.parts[3].edge_in, back("2026-11-06T12:10:00Z"));
+
+    // The run outlasts the chain: no part after the hand-off.
+    let w = no_interval_after_run_world("2026-11-06T12:25:00Z", false, &["2026-11-06T12:02:00Z"]);
+    let report = w.build("/repo", "1.5");
+    assert_eq!(report.parts.len(), 3);
+}
+
+#[test]
+fn no_interval_handoff_after_run_ended_starts_at_handoff() {
+    // The common case: the earlier run ended before the hand-off.
+    let w = no_interval_after_run_world("2026-11-06T12:01:00Z", false, &["2026-11-06T12:02:00Z"]);
+    let report = w.build("/repo", "1.5");
+    assert_eq!(
+        rows(&report),
+        vec![
+            claude(0, "plan", "2026-11-06T12:00:00Z", "2026-11-06T12:00:20Z"),
+            codex(
+                0,
+                "implement",
+                Some("2026-11-06T12:00:21Z"),
+                Some("2026-11-06T12:01:00Z")
+            ),
+            claude(0, "review", "2026-11-06T12:01:00Z", "2026-11-06T12:02:00Z"),
+            codex(0, "fix round 1", None, None),
+            claude(0, "review", "2026-11-06T12:02:00Z", "2026-11-06T12:20:00Z"),
+        ]
+    );
+    assert_eq!(report.parts[2].edge_in, back("2026-11-06T12:01:00Z"));
+    assert_eq!(report.parts[4].edge_in, None);
 }
