@@ -1,5 +1,6 @@
 //! Terminal runtime. Only the worker touches disk; only this thread reads terminal input.
 use std::{
+    collections::{HashMap, HashSet},
     io::{self, Write},
     path::{Path, PathBuf},
     sync::mpsc::{self, Receiver, Sender},
@@ -18,7 +19,7 @@ use multi_link_core::{
     Options, Scanner,
     open::{self, OpenAction},
 };
-use multi_link_model::Timestamp;
+use multi_link_model::{Harness, Link, RepoSteps, Session, Timestamp};
 use multi_link_tui::{App, Effect, Event, Refresh};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -34,7 +35,12 @@ pub struct TuiArgs {
 }
 
 enum Request {
-    Open { id: String, fork: bool },
+    Open {
+        id: String,
+        fork: bool,
+    },
+    /// The step graph to build on every refresh from now on; None stops it.
+    Graph(Option<(String, String)>),
 }
 enum Message {
     Refresh(Result<Box<Refresh>, String>),
@@ -96,13 +102,22 @@ impl<M: Modes> Drop for Suspended<'_, M> {
     }
 }
 
-fn refresh(scanner: &mut Scanner, root: &Path, options: &Options<'_>) -> io::Result<Box<Refresh>> {
+/// One refresh for the App: the overview, and the step graph it asked for (G11: rebuilt on every
+/// refresh, so a stale turn or a new rollout shows without a key press). A failed graph build fails
+/// the whole refresh, so the App keeps its last screen and shows the error.
+fn refresh(
+    scanner: &mut Scanner,
+    root: &Path,
+    options: &Options<'_>,
+    graph: Option<&(String, String)>,
+) -> io::Result<Box<Refresh>> {
     let mut plans = |folder: &Path| {
         multi_link_plan::steps_report(Path::new(""), &[folder.to_string_lossy().into_owned()])
             .repos
             .remove(0)
     };
     let output = scanner.overview(root, options, &mut plans)?;
+    // Read before the graph's own refreshes replace the scanner's diagnostics.
     let diagnostics = [
         ("bad records", output.sessions.bad_records.len()),
         ("incomplete", output.sessions.incomplete.len()),
@@ -115,13 +130,73 @@ fn refresh(scanner: &mut Scanner, root: &Path, options: &Options<'_>) -> io::Res
     .map(|(name, count)| format!("{name}: {count}"))
     .collect::<Vec<_>>()
     .join(" · ");
+    let (graph, graph_steps) = match graph {
+        None => (None, Vec::new()),
+        Some((repo, step)) => {
+            let report = scanner.graph(root, options, repo, step, &mut plans)?;
+            // G2: the step list is all-time, like the graph, whatever the TUI's window.
+            let all = Options {
+                state_dir: options.state_dir.clone(),
+                since: None,
+                ..*options
+            };
+            let (sessions, links) = scanner.refresh(root, &all)?;
+            let plan = multi_link_core::overview::plan_folder(root, options.repo_mode, repo)
+                .map(|folder| plans(&folder));
+            let steps = graph_steps(
+                &sessions.report.sessions,
+                &links.report.links,
+                repo,
+                plan.as_ref(),
+            );
+            (Some(report), steps)
+        }
+    };
     Ok(Box::new(Refresh {
         overview: output.report,
         links: output.links.report,
         diagnostics,
-        graph: None,
-        graph_steps: Vec::new(),
+        graph,
+        graph_steps,
     }))
+}
+
+/// Steps `[` `]` walk in a repo (G9): ids tagged on hand-offs whose parent is a listed Claude
+/// session of `repo`, in PLAN.md order; tagged ids PLAN.md lacks follow, by first hand-off, then id.
+fn graph_steps(
+    sessions: &[Session],
+    links: &[Link],
+    repo: &str,
+    plan: Option<&RepoSteps>,
+) -> Vec<String> {
+    let in_repo: HashSet<&str> = sessions
+        .iter()
+        .filter(|s| s.harness == Harness::Claude && s.repo == repo)
+        .map(|s| s.id.as_str())
+        .collect();
+    let mut first: HashMap<&str, Timestamp> = HashMap::new();
+    for link in links.iter().filter(|l| in_repo.contains(l.parent.as_str())) {
+        if let Some(step) = link.step.as_deref() {
+            let at = first.entry(step).or_insert(link.at);
+            *at = (*at).min(link.at);
+        }
+    }
+    let planned: Vec<&str> = plan
+        .map(|plan| plan.steps.iter().map(|s| s.id.as_str()).collect())
+        .unwrap_or_default();
+    let mut rest: Vec<(Timestamp, &str)> = first
+        .iter()
+        .filter(|(id, _)| !planned.contains(id))
+        .map(|(id, at)| (*at, *id))
+        .collect();
+    rest.sort();
+    planned
+        .iter()
+        .filter(|id| first.contains_key(*id))
+        .copied()
+        .chain(rest.into_iter().map(|(_, id)| id))
+        .map(String::from)
+        .collect()
 }
 
 fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: Sender<Message>) {
@@ -129,6 +204,7 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
     let real = multi_link_core::RealProcessProbe::default();
     let mut scanner = Scanner::default();
     let mut next_refresh = Instant::now();
+    let mut graph: Option<(String, String)> = None;
     loop {
         let now = match args.now.map(Ok).unwrap_or_else(super::clock_now) {
             Ok(now) => now,
@@ -150,7 +226,8 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
         };
         if Instant::now() >= next_refresh {
             let started = Instant::now();
-            let result = refresh(&mut scanner, &root, &options).map_err(|error| error.to_string());
+            let result = refresh(&mut scanner, &root, &options, graph.as_ref())
+                .map_err(|error| error.to_string());
             if messages.send(Message::Refresh(result)).is_err() {
                 return;
             }
@@ -174,6 +251,11 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
                 if messages.send(Message::Open(result)).is_err() {
                     return;
                 }
+            }
+            Ok(Request::Graph(target)) => {
+                // Build the newly asked step at once rather than at the next 2 s tick.
+                graph = target;
+                next_refresh = Instant::now();
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
@@ -279,8 +361,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
                     Effect::Quit => return Ok(()),
                     Effect::FreshOpen { id, fork } => requests.send(Request::Open { id, fork })?,
                     Effect::Bell => unreachable!(),
-                    // Task 4: the worker builds the requested step graph on every refresh.
-                    Effect::Graph(_) => {}
+                    Effect::Graph(target) => requests.send(Request::Graph(target))?,
                 }
             }
         }
@@ -394,13 +475,238 @@ mod tests {
         };
         (id.clone(), *fork)
     }
+    fn fixtures() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
+    }
+    /// The worker's options for a fixture root, with the TUI's default 2 h window.
+    fn fixture_options<'a>(probe: &'a dyn multi_link_core::ProcessProbe, now: &str) -> Options<'a> {
+        Options {
+            state_dir: PathBuf::new(),
+            now: now.parse().unwrap(),
+            since: Some(Duration::from_secs(2 * 3600)),
+            repo_mode: multi_link_core::RepoMode::Fixture,
+            probe,
+        }
+    }
+    fn graph_target(repo: &str, step: &str) -> (String, String) {
+        (repo.to_string(), step.to_string())
+    }
+
+    #[test]
+    fn graph_steps_are_tagged_plan_steps_then_unplanned_by_first_handoff() {
+        use multi_link_model::{Harness, RepoSteps, Step};
+        let root = fixtures().join("sessions-phase8");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let (sessions, links) = Scanner::default()
+            .refresh(&root, &fixture_options(&probe, "2026-11-06T18:00:00Z"))
+            .unwrap();
+        let template = sessions
+            .report
+            .sessions
+            .iter()
+            .find(|s| s.harness == Harness::Claude)
+            .unwrap()
+            .clone();
+        let session = |id: &str, repo: &str| {
+            let mut s = template.clone();
+            s.id = id.into();
+            s.repo = repo.into();
+            s
+        };
+        let sessions = vec![session("c1", "/r"), session("c2", "/other")];
+        let template = links.report.links[0].clone();
+        let link = |parent: &str, step: Option<&str>, at: &str| {
+            let mut l = template.clone();
+            l.parent = parent.into();
+            l.step = step.map(Into::into);
+            l.at = at.parse().unwrap();
+            l
+        };
+        let links = vec![
+            link("c1", Some("9.9"), "2026-11-06T10:05:00Z"),
+            link("c1", Some("1.3"), "2026-11-06T10:04:00Z"),
+            link("c1", Some("8.0"), "2026-11-06T10:01:00Z"),
+            link("c1", Some("1.1"), "2026-11-06T10:03:00Z"),
+            link("c1", Some("9.9"), "2026-11-06T09:00:00Z"),
+            link("c1", None, "2026-11-06T10:00:00Z"),
+            // Another repo's session and an unknown parent never count.
+            link("c2", Some("1.2"), "2026-11-06T10:00:00Z"),
+            link("nope", Some("1.2"), "2026-11-06T10:00:00Z"),
+        ];
+        let step = |id: &str| Step {
+            id: id.into(),
+            title: String::new(),
+            verify_command: None,
+            progress: Vec::new(),
+        };
+        let plan = RepoSteps {
+            repo: "/r".into(),
+            convention: multi_link_model::Convention::Missing,
+            latest_logged_step: None,
+            steps: vec![step("1.1"), step("1.2"), step("1.3")],
+        };
+        assert_eq!(
+            graph_steps(&sessions, &links, "/r", Some(&plan)),
+            ["1.1", "1.3", "9.9", "8.0"]
+        );
+        assert_eq!(
+            graph_steps(&sessions, &links, "/r", None),
+            ["9.9", "8.0", "1.1", "1.3"]
+        );
+        assert!(graph_steps(&sessions, &links, "/none", Some(&plan)).is_empty());
+    }
+
+    #[test]
+    fn graph_refresh_on_phase8_fixture() {
+        let root = fixtures().join("sessions-phase8");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let options = fixture_options(&probe, "2026-11-06T18:00:00Z");
+        let mut scanner = Scanner::default();
+        let plain = refresh(&mut scanner, &root, &options, None).unwrap();
+        assert!(plain.graph.is_none() && plain.graph_steps.is_empty());
+        let target = graph_target("/home/dev/repo-g", "1.5");
+        let report = refresh(&mut scanner, &root, &options, Some(&target)).unwrap();
+        let key: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(fixtures().join("expected/phase8/graph-1.5.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(report.graph.as_ref().unwrap()).unwrap(),
+            key
+        );
+        assert!(
+            report.graph_steps.iter().any(|id| id == "1.5"),
+            "{:?}",
+            report.graph_steps
+        );
+        // The overview is the same as without a graph: the 2 h window still applies to it.
+        assert_eq!(report.overview, plain.overview);
+        assert_eq!(report.diagnostics, plain.diagnostics);
+    }
+
+    #[test]
+    fn stale_threshold_changes_status_without_file_change() {
+        use multi_link_model::PartStatus;
+        // graph-1.5 part 2 is an open Codex turn whose last record is 17:58:30: working at
+        // 18:00 (90 s quiet), stale at 18:06 (7.5 min > 5 min). Only `now` moves.
+        let root = fixtures().join("sessions-phase8");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let target = graph_target("/home/dev/repo-g", "1.5");
+        let mut scanner = Scanner::default();
+        let status = |scanner: &mut Scanner, now: &str| {
+            let report =
+                refresh(scanner, &root, &fixture_options(&probe, now), Some(&target)).unwrap();
+            let part = &report.graph.as_ref().unwrap().parts[2];
+            assert_eq!(
+                part.session.as_deref(),
+                Some("82520000-0000-4000-8000-000000008252")
+            );
+            part.status
+        };
+        assert_eq!(
+            status(&mut scanner, "2026-11-06T18:00:00Z"),
+            Some(PartStatus::Working)
+        );
+        assert_eq!(
+            status(&mut scanner, "2026-11-06T18:06:00Z"),
+            Some(PartStatus::Stale)
+        );
+    }
+
+    #[test]
+    fn coordinator_s_end_to_end() {
+        // sessions-started: coordinator K (84c00001) started A (84c00002, hand-off tagged 2.1)
+        // and B (84c00003, none); A started the grandchild A2. The committed fixture has no
+        // other tagged hand-off, so the picker lists exactly A's step.
+        const K: &str = "84c00001-0000-4000-8000-000000008401";
+        let root = fixtures().join("sessions-started");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let mut options = fixture_options(&probe, "2026-11-08T12:00:00Z");
+        options.since = None;
+        let mut scanner = Scanner::default();
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh(
+            &mut scanner,
+            &root,
+            &options,
+            None,
+        )
+        .unwrap())));
+        // K needs no attention, so home lists it only inside repo-k: select repo-k's first home
+        // entry, open the repo view, go to the top lane, then walk ↓ until `o` names K (each `o` is
+        // answered with `Opened` so the next one is not blocked).
+        app.selection = multi_link_tui::selectable_home(
+            &app.report.as_ref().unwrap().overview,
+            &Default::default(),
+        )
+        .iter()
+        .position(|(repo, _)| *repo == "/home/dev/repo-k")
+        .expect("repo-k on home");
+        assert!(app.update(Event::Key(KeyCode::Enter)).is_empty());
+        for _ in 0..=40 {
+            app.update(Event::Key(KeyCode::Up));
+        }
+        for _ in 0..=40 {
+            let effects = app.update(Event::Key(KeyCode::Char('o')));
+            let [Effect::FreshOpen { id, .. }] = effects.as_slice() else {
+                panic!("no lane selected")
+            };
+            let found = id == K;
+            app.update(Event::Opened(String::new()));
+            if found {
+                break;
+            }
+            app.update(Event::Key(KeyCode::Down));
+        }
+        assert!(
+            matches!(app.update(Event::Key(KeyCode::Char('o'))).as_slice(), [Effect::FreshOpen { id, .. }] if id == K),
+            "K's lane not reached"
+        );
+        app.update(Event::Opened(String::new()));
+        let footer = |app: &App| {
+            let area = ratatui::layout::Rect::new(0, 0, 120, 40);
+            let mut buf = ratatui::buffer::Buffer::empty(area);
+            app.render(area, &mut buf);
+            (0..120)
+                .map(|x| buf[(x, 39)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        };
+        assert!(app.update(Event::Key(KeyCode::Char('s'))).is_empty());
+        assert_eq!(
+            footer(&app),
+            "started: step 2.1 · ←→ choose · enter opens step 2.1 · esc cancel"
+        );
+        let target = graph_target("/home/dev/repo-k", "2.1");
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Enter)),
+            [Effect::Graph(Some(target.clone()))]
+        );
+        // The worker's next refresh carries the graph; the App shows it.
+        let report = refresh(&mut scanner, &root, &options, Some(&target)).unwrap();
+        let graph = report.graph.clone().unwrap();
+        assert_eq!(
+            (graph.repo.as_str(), graph.step.id.as_str()),
+            ("/home/dev/repo-k", "2.1")
+        );
+        assert!(!graph.parts.is_empty());
+        assert_eq!(report.graph_steps, ["2.1"]);
+        app.update(Event::Refresh(Ok(report)));
+        assert!(
+            !footer(&app).starts_with("loading step"),
+            "{}",
+            footer(&app)
+        );
+    }
+
     #[test]
     fn app_open_running_fixture_uses_fresh_pass_and_never_resumes() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions");
         let mut scanner = Scanner::default();
         let options = options(&multi_link_core::FixtureProcessProbe);
         let mut app = App::default();
-        let report = refresh(&mut scanner, &root, &options).unwrap();
+        let report = refresh(&mut scanner, &root, &options, None).unwrap();
         app.update(Event::Refresh(Ok(report)));
         app.selection = multi_link_tui::selectable_home(&app.report.as_ref().unwrap().overview, &Default::default())
             .iter().position(|(_, target)| matches!(target, multi_link_tui::Target::Session(row) if row.id == "00000000-0000-4000-8000-000000000010")).unwrap();
@@ -436,6 +742,7 @@ mod tests {
             &mut scanner,
             root.path(),
             &options(&probe),
+            None,
         )
         .unwrap())));
         let multi_link_model::Row::Session(row) =
@@ -466,7 +773,7 @@ mod tests {
         // ENOTDIR is deterministic even when tests run with elevated filesystem privileges.
         std::fs::write(transcript.join(id), "not a directory").unwrap();
         let result =
-            refresh(&mut scanner, root.path(), &options(&probe)).map_err(|e| e.to_string());
+            refresh(&mut scanner, root.path(), &options(&probe), None).map_err(|e| e.to_string());
         assert!(result.is_err());
         app.update(Event::Opened(String::new()));
         app.update(Event::Refresh(result));
