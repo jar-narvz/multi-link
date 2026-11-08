@@ -211,6 +211,138 @@ pub fn read_session_record(root: &Path, path: &Path) -> Option<SessionRecord> {
 mod tests {
     use super::*;
 
+    fn parse_folder_records(records: &[Value]) -> ParsedFile {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("main.jsonl");
+        let content: String = records.iter().map(|record| format!("{record}\n")).collect();
+        fs::write(&path, content).unwrap();
+        parse_file(root.path(), &path, false).unwrap()
+    }
+
+    #[test]
+    fn session_folder_ignores_outside_moves_and_keeps_descendants() {
+        use serde_json::json;
+
+        let home = json!({"type": "user", "cwd": "/r/repo", "gitBranch": "main"});
+        let outside = json!({"type": "assistant", "cwd": "/r/notes", "gitBranch": "HEAD"});
+        let worktree = json!({"type": "assistant", "cwd": "/r/repo/.claude/worktrees/step", "gitBranch": "step"});
+        for (name, records, cwd, branch) in [
+            (
+                "outside then worktree",
+                vec![home.clone(), outside.clone(), worktree.clone()],
+                "/r/repo/.claude/worktrees/step",
+                "step",
+            ),
+            (
+                "outside only",
+                vec![home.clone(), outside.clone()],
+                "/r/repo",
+                "main",
+            ),
+            (
+                "sibling prefix",
+                vec![
+                    home.clone(),
+                    json!({"type": "assistant", "cwd": "/r/repo-other", "gitBranch": "other"}),
+                ],
+                "/r/repo",
+                "main",
+            ),
+            (
+                "branch without cwd",
+                vec![
+                    home.clone(),
+                    json!({"type": "assistant", "gitBranch": "updated"}),
+                    outside.clone(),
+                ],
+                "/r/repo",
+                "updated",
+            ),
+            (
+                "delayed first cwd",
+                vec![
+                    json!({"type": "user", "gitBranch": "early"}),
+                    home.clone(),
+                    outside.clone(),
+                ],
+                "/r/repo",
+                "main",
+            ),
+            (
+                "return to home",
+                vec![home.clone(), worktree, home.clone()],
+                "/r/repo",
+                "main",
+            ),
+            (
+                "outside after worktree",
+                vec![
+                    home.clone(),
+                    json!({"type": "assistant", "cwd": "/r/repo/wt", "gitBranch": "wt"}),
+                    outside,
+                ],
+                "/r/repo/wt",
+                "wt",
+            ),
+        ] {
+            let parsed = parse_folder_records(&records);
+            assert_eq!(parsed.transcript.cwd.as_deref(), Some(cwd), "{name}");
+            assert_eq!(parsed.transcript.branch.as_deref(), Some(branch), "{name}");
+        }
+    }
+
+    #[test]
+    fn inherited_folders_do_not_set_the_own_session_home() {
+        use serde_json::json;
+
+        for own_id in [Some("main"), None] {
+            let mut own = json!({"type": "user", "cwd": "/r/repo", "gitBranch": "main"});
+            if let Some(id) = own_id {
+                own["sessionId"] = json!(id);
+            }
+            let parsed = parse_folder_records(&[
+                json!({"type": "user", "sessionId": "earlier", "cwd": "/r/old", "gitBranch": "old"}),
+                json!({"type": "assistant", "sessionId": "main", "gitBranch": "before-home"}),
+                json!({"type": "assistant", "sessionId": "earlier", "cwd": "/r/other", "gitBranch": "other"}),
+                own,
+                json!({"type": "assistant", "sessionId": "main", "cwd": "/r/notes", "gitBranch": "HEAD"}),
+            ]);
+            assert_eq!(parsed.transcript.cwd.as_deref(), Some("/r/repo"));
+            assert_eq!(parsed.transcript.branch.as_deref(), Some("main"));
+        }
+    }
+
+    #[test]
+    fn inherited_only_file_keeps_newest_folder_and_branch() {
+        use serde_json::json;
+
+        let parsed = parse_folder_records(&[
+            json!({"type": "user", "sessionId": "earlier", "cwd": "/r/old", "gitBranch": "old"}),
+            json!({"type": "assistant", "sessionId": "earlier", "cwd": "/r/new", "gitBranch": "new"}),
+            json!({"type": "assistant", "sessionId": "earlier", "gitBranch": "latest"}),
+        ]);
+        assert_eq!(parsed.transcript.cwd.as_deref(), Some("/r/new"));
+        assert_eq!(parsed.transcript.branch.as_deref(), Some("latest"));
+    }
+
+    #[test]
+    fn outside_handoff_keeps_its_record_checkout() {
+        use serde_json::json;
+
+        let parsed = parse_folder_records(&[
+            json!({"type": "user", "cwd": "/r/repo", "gitBranch": "main"}),
+            json!({"type": "assistant", "cwd": "/r/notes", "gitBranch": "HEAD",
+            "timestamp": "2026-11-08T01:00:00Z", "message": {"content": [
+                {"type": "tool_use", "id": "handoff", "name": "Bash",
+                    "input": {"command": "codex exec 'check'"}}
+            ]}}),
+        ]);
+        assert_eq!(parsed.transcript.cwd.as_deref(), Some("/r/repo"));
+        assert_eq!(parsed.transcript.branch.as_deref(), Some("main"));
+        assert_eq!(parsed.invocations.len(), 1);
+        assert_eq!(parsed.invocations[0].checkout, "/r/notes");
+    }
+
     #[test]
     fn parse_file_reports_missing_at_open_but_reads_empty_file() {
         let root = tempfile::tempdir().unwrap();
@@ -273,6 +405,7 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
     } else {
         id
     };
+    let mut home_folder = None;
     let mut skipped = Vec::new();
     let mut latest_timestamp = None;
     let mut call_owners = std::collections::HashMap::new();
@@ -306,10 +439,10 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             .and_then(Value::as_str)
             .and_then(|s| Timestamp::parse(s).ok());
         latest_timestamp = latest_timestamp.max(at);
-        if value["sessionId"]
+        let own_record = value["sessionId"]
             .as_str()
-            .is_none_or(|id| id == activity_id)
-        {
+            .is_none_or(|id| id == activity_id);
+        if own_record {
             transcript.activity_timestamps.extend(at);
         }
         if !subagent
@@ -348,10 +481,23 @@ pub fn parse_file(root: &Path, path: &Path, subagent: bool) -> io::Result<Parsed
             });
             continue;
         }
-        if let Some(cwd) = value.get("cwd").and_then(Value::as_str) {
-            transcript.cwd = Some(cwd.to_owned());
-        }
-        if let Some(branch) = value.get("gitBranch").and_then(Value::as_str) {
+        // R8: inherited records update metadata freely until an own record sets home.
+        // Path::starts_with compares whole components without filesystem access.
+        let counts = if let Some(cwd) = value.get("cwd").and_then(Value::as_str) {
+            if own_record && home_folder.is_none() {
+                home_folder = Some(PathBuf::from(cwd));
+            }
+            let counts = home_folder
+                .as_ref()
+                .is_none_or(|home| Path::new(cwd).starts_with(home));
+            if counts {
+                transcript.cwd = Some(cwd.to_owned());
+            }
+            counts
+        } else {
+            true
+        };
+        if counts && let Some(branch) = value.get("gitBranch").and_then(Value::as_str) {
             transcript.branch = Some(branch.to_owned());
         }
         if let Some(at) = at {

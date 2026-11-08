@@ -1,6 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 9.6a (2026-11-08, Codex) is done on branch `step/9.6a` (worktree `.claude/worktrees/step-9.6a`), reviewed and verified; not yet merged into main.**
+R8 sets home from the first known record with cwd belonging to the session (sessionId absent or equal to
+activity_id). Before home exists, inherited records retain the previous metadata behavior; afterward,
+outside cwd/branch metadata is ignored. Session `85a715ba…` keeps repo-c as its unchanged answer key requires.
+Workspace tests: 525 passed, 0 failed, 1 ignored; clippy/fmt clean. The worktree release real run passes both
+requested checks (log below). All answer keys and PLAN.md remain untouched by Codex. Nothing staged or committed.
+
 **Phase 8 is closed (2026-11-08): the owner confirmed the step graph on real data** ("it looks good", then "Yes, close
 Phase 8"), after reinstalling with Step 8.7. Nothing after Phase 8 is planned in PLAN.md yet. Candidates, in the
 coordinator's recommended order (owner to choose): fixes (clean-exit resume from `.claude/handoff/backlog-findings.md`,
@@ -533,6 +540,102 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.6a: A Claude session's folder ignores moves outside it — Codex
+- Did: Implemented amended R8: the first own known-record string cwd sets home, using the parser's existing
+  activity_id ownership test. Before home is set all known records update metadata as before. Afterward,
+  whole-component path comparison accepts home/descendants without filesystem access; accepted/no-cwd records
+  update branch. Per-call checkouts remain unchanged. Tests cover all five original cases, returning home,
+  outside movement after a worktree, and outside hand-off checkout. Fix round 1 adds inherited→own tests for
+  matching and absent sessionId, an own record without cwd before home, and an inherited-only file retaining
+  the latest cwd/branch. Updated the existing synthetic unknown-record test to use a descendant folder.
+- Changed: `crates/claude/src/lib.rs`, `crates/claude/tests/fixtures.rs`, `PROGRESS.md`.
+- Verify: Rust PATH exported per AGENTS.md. Committed fixtures used; fixtures/raw absent. Fix-round tests
+  were run before the correction: `cargo test -p multi-link-claude --lib` → exit 101, actual output excerpts:
+  ```text
+  test tests::inherited_only_file_keeps_newest_folder_and_branch ... FAILED
+  test tests::inherited_folders_do_not_set_the_own_session_home ... FAILED
+  test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  They returned `/r/old` instead of `/r/new` and `/r/repo`, respectively. After correction,
+  `cargo test --workspace` → exit 0; 525 passed, 0 failed, 1 ignored across 48 targets. Actual result lines:
+  ```text
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.21s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 80 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.95s
+  ```
+  `cargo fmt --all -- --check` → no output, exit 0.
+  `cargo build --release` → exit 0:
+  ```text
+      Finished `release` profile [optimized] target(s) in 4.64s
+  ```
+  `target/release/multi-link overview --json --since 2h` → exit 0; JSON kept only in scratch.
+  Only the two requested checks extracted (checkout home prefix rendered as `~`):
+  ```text
+repos under side-session-notes: 0
+session c205b4c0 checkout: ~/multi-link/.claude/worktrees/step-9.6a
+  ```
+  `git diff --name-only -- fixtures/expected` and `git diff --check` → no output, exit 0.
+- Review: Claude (Codex loop; `codex-quota.py` → `CODEX: OK`, 5-hour 16%, weekly 21%). Round 1 stopped correctly:
+  R8 as first written moved resumed session `85a715ba…` to repo-f; Claude amended R8 (home from the session's own
+  records) and Codex fixed it. Diff matches R8, nothing outside Files. Claude re-ran Verify: 525 passed, 0 failed,
+  1 ignored; clippy clean; no fixture or key changed; real run 0 repos under `side-session-notes`, `c205b4c0` in
+  this worktree. Not fixed here: Claude Code's `gitBranch` reads `HEAD` on 106 of this session's 226 records with
+  `cwd` (in the main checkout too), so its branch cell shows `HEAD`; U6's place word already avoids `gitBranch`.
+  Worked on branch `step/9.6a` in a worktree beside Phase 9; the coordinator merges it.
+- Gotchas: A resumed file's inherited records cannot establish home, but still update metadata until an
+  own record with cwd does. Files containing only inherited records keep the previous newest-record behavior.
+  PLAN.md was already modified by Claude and remains untouched by Codex. This replaces the original step
+  log entry and blocked Current state; no second entry was added.
 
 ### 2026-11-08 — Phase 8 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 8.6 answer and closed Phase 8.
