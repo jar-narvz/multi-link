@@ -1,6 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 9.7 (2026-11-08, Claude step, no Codex) is committed: Phase 9 real check, README, re-shot images. Phase 9 waits
+on the owner's check** (stop-and-ask in `docs/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
+confirm the need. Real counts at one clock (`--now 2026-11-09T00:34:07Z`, 6a2c306 → HEAD): Codex sessions 223 → 425;
+Claude `unknown` 232 → 3, `finished` 0 → 229 (all `transcript_exit`; `session_end` 0 until the snippet is merged);
+unlinked hand-offs 124 → 47 of 222 → 221; exact 28 → 44; ambiguous 1 → 9 (all 8 new from `.zst` runs on 2026-10-30,
+two runs in one checkout within 60 s). R7's 13 real `resume --last` hand-offs had their turn 0.8–2.71 s later.
+Follow-ups noticed, not done: ambiguous tie-break (nearest run far ahead of the rest, or a run already matched
+elsewhere); `cd`-then-`resume --last` stays unlinked (3 real).
+
 **Step 9.6 (2026-11-08, Codex, mode Codex loop) is committed: fix rounds from `codex exec resume --last` (R7).
 Step 9.7 is next** (real check, README, owner confirm). Claude wrote the fixtures and keys first (`aea1002`), reviewed
 one round (2 findings, both fixed) and re-ran Verify: 580 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 6`
@@ -671,6 +680,50 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.7: Real check, README, owner confirm — Claude
+- Mode: Claude step (no Codex, no worktree; no `codex exec` ran, so no quota check). Docs reviewed by an independent
+  adversarial Claude subagent (Review below).
+- Did: whole-phase Verify. Built release binaries of 6a2c306, 0d490ce, 531aeeb, fb2da53, d6edf92, 6e82309, 8416429
+  (each `git archive` into scratch, own target dir) and HEAD; ran each on real `~` at `--now 2026-11-09T00:34:07Z`,
+  `--since all`, counts only, plus a per-commit scratch Rust harness (that commit's core) for Claude state × entrypoint
+  × open action. Explained ambiguous 1 → 9, counted R7's real gaps (rollout `task_started` times, plain and `.zst`,
+  read-only), rendered step 8.7's real graph (scratch only). Re-shot `docs/img/{home,repo}-phase6-fixture.png` and
+  `step-phase8-fixture.png` with HEAD (12-hour clock); added `step-phase9-fixture.png` (graph-2.1). Wrote
+  `docs/phase9-check.md`; README: Release 1.6, "States and links" section, limits updated.
+- Changed: `docs/phase9-check.md`, `README.md`, `docs/img/home-phase6-fixture.png`, `docs/img/repo-phase6-fixture.png`,
+  `docs/img/step-phase8-fixture.png`, `docs/img/step-phase9-fixture.png`, `PROGRESS.md`
+- Verify (HEAD a223dc1): `cargo test --workspace` → exit 0, 54 result lines all `ok`, 580 passed, 0 failed, 1 ignored;
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; `git diff --stat 6a2c306 -- fixtures/expected` →
+  `phase9/` (7 files) plus `sessions.json`, `overview.json`, `hook/{overview,sessions,sessions-2h}.json`,
+  `tui/home-hook{,-full}{,.styles}.txt`, exactly the keys 9.0 listed. Fixture renders: p6 overview, p8 graph, p9 graph
+  == keys → `True True True`; HTML text == `home-phase6.txt`, `repo-phase6.txt`, `step-phase8.txt` → 40/40 lines,
+  `True` each. Real counts (my summary of the per-commit JSON lines kept in scratch; full tables in the check doc):
+  ```text
+6a2c306 codex 223 (zst 0) claude unknown/no_signal 232 links 222: unlinked 124 heuristic 69 exact 28 ambiguous 1
+531aeeb codex 425 (zst 202)  claude unknown 232          links 222: unlinked 59 heuristic 126 exact 28 ambiguous 9
+fb2da53 claude finished/transcript_exit 229, unknown 3   links unchanged from 531aeeb
+d6edf92 links 222: unlinked 53 heuristic 116 exact 44 (redirect_file 16) ambiguous 9
+a223dc1 links 221: unlinked 47 heuristic 121 (resume_turn 5) exact 44 ambiguous 9
+0d490ce == 6a2c306; 6e82309 == 8416429 == d6edf92 (all counts); every exit 0, stderr empty
+  ```
+  W10 over the committed files: no `/Users/` path, no UUID or real 8-hex id (only commit hashes and synthetic fixture
+  ids), no prompt text, no secrets; images are synthetic fixtures. Owner's answer: **waiting** (stop-and-ask).
+- Review: one adversarial subagent round (wrote none of it; recomputed counts from scratch, reran `r7.py`, checked
+  rules against `crates/`). Nothing serious; every count traced. 10 findings, 8 accepted and fixed: "never resumed in a
+  terminal" was false for `process_exit` (code resumes it whatever the entrypoint); 9.1's 65 is 57 heuristic + 8
+  ambiguous; the unlinked drop also came from `redirect_file`; the "never a wrong `finished`" guarantee softened to
+  "designed to fall back"; kept a caveat that `rollout may be gone` is still wrong for some (3 `cd` cases); `resume
+  --last` behaviour marked as seen so far; dates in local time (2026-11-08) with the UTC clock; README gained the
+  append-log refusal and R8's full rule. Rejected 2: the two-decimal R7 gaps trace to the links' `gap_ms`, not only to
+  `r7.py` (now said so); the 55th "test result" line is a test named `result_without_is_error_…`, so 54 result lines
+  is right.
+- Gotchas: building several archived commits into one shared `--target-dir` silently reused the first build
+  (identical binaries; cargo's fingerprints did not see the changed sources), so each commit needs its own target dir;
+  check with `md5`. The hook snippet embeds the path of the binary that prints it, so the owner should print it with
+  `~/.cargo/bin/multi-link` after reinstalling. `links` `invocation` is the tool-use id, not command text. On today's
+  data no session sits under the notes folder at any commit (the 9.6a session returned to the repo), so R8 shows no
+  real count change.
 
 ### 2026-11-08 — Step 9.6: Fix rounds from `codex exec resume --last` — Codex
 - Did: Implemented R7, mode **Codex loop**. Quota check supplied by the coordinator:

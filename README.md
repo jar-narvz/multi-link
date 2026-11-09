@@ -8,7 +8,9 @@ Release 1.3 rebuilt home in plain words and the repo view as swimlanes, to two a
 owner approved the real screen ([visual check](docs/phase6-check.md)). Release 1.4 polishes those screens
 on real data (prompts after a system reminder, window words, clock times, axis labels); the owner approved it
 ([real check](docs/phase7-check.md)). Release 1.5 adds the step graph: one PLAN.md step's Claude and Codex parts
-along time. It is built and awaits the owner's check ([real check](docs/phase8-check.md)).
+along time; the owner approved it ([real check](docs/phase8-check.md)). Release 1.6 makes states and links truthful:
+ended Claude sessions say `finished`, compressed Codex rollouts are read, and more hand-offs find their run. It is
+built and awaits the owner's check ([real check](docs/phase9-check.md)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -22,8 +24,8 @@ along time. It is built and awaits the owner's check ([real check](docs/phase8-c
 
 ![Home screen on the phase6 fixture](docs/img/home-phase6-fixture.png)
 
-The images in `docs/img/` predate Step 8.7; the TUI now uses 12-hour clocks with lowercase `am`/`pm`,
-no leading zero or space (`9:05pm`, with seconds `8:05:43am`).
+Times use a 12-hour clock with lowercase `am`/`pm`, no leading zero or space (`9:05pm`, with seconds
+`8:05:43am`).
 
 *HTML render of the home buffer on the synthetic fixture `fixtures/sessions-phase6` at 120×40
 (`crates/tui/examples/home_html.rs`; method, the approved mockup in words and real-data differences in
@@ -84,6 +86,12 @@ The real terminal uses your own font.*
 *HTML render of the step graph on the synthetic fixture `fixtures/sessions-phase8`, step 1.1, at 120×40 (method,
 the approved board 9 in words and real-data differences in [docs/phase8-check.md](docs/phase8-check.md)).*
 
+![Step graph with two resumed fix rounds on the phase9 fixture](docs/img/step-phase9-fixture.png)
+
+*Synthetic fixture `fixtures/sessions-phase9`, step 2.1: one Codex run resumed twice with `codex exec resume --last`
+shows as implement, fix round 1 and fix round 2, with a Claude review between them
+([docs/phase9-check.md](docs/phase9-check.md)).*
+
 - **`s`** on a repo-view lane opens that lane's latest tagged step. A coordinator lane with no hand-off of its own
   lists the steps of the sessions it started; a lane with neither says `no step on this session`. `←→` moves along
   the parts (`↑↓` below 120 columns), `[ ]` goes to the previous or next step with tagged hand-offs, `o`/`f` open or
@@ -108,13 +116,52 @@ the approved board 9 in words and real-data differences in [docs/phase8-check.md
   cargo, pytest or npm line with no mark has no recorded exit code. The header's Verify is the PLAN.md command, marked
   `(reported)`, never passed or failed.
 - **Missing Codex runs:** an unlinked hand-off shows a dim `no codex run found` box, no return arrow, and `(the
-  rollout may be gone)` in the panel. That wording is often wrong. On 2026-11-08 `~/.codex/sessions` held 202
-  compressed `rollout-*.jsonl.zst` files next to 211 plain ones, and multi-link reads only plain `.jsonl`: 81 of 116
-  unlinked hand-offs have a compressed rollout starting 0–10 s later by file name (one confirmed by content), 17
-  have a plain rollout that close that was not matched (likely link misses), and 18 have neither. A `codex exec resume
-  --last` names no id and is also unlinked; its turns are then counted in the run it resumed
-  ([details](docs/phase8-check.md#real-step-66-an-unlinked-part)). While a run is unlinked, the Claude part around
-  it usually covers the time Codex worked, unless an earlier Codex run is still open (step 6.6).
+  rollout may be gone)` in the panel. That wording is still wrong for some: Phase 9's rules (compressed rollouts,
+  redirect logs, `resume --last`, below) cut real unlinked hand-offs from 124 of 222 to 47 of 221 on 2026-11-08, but
+  at least 3 of the 47 (`cd` then `resume --last`) have their run on disk ([counts](docs/phase9-check.md#links)).
+  While a run is unlinked, the Claude part around it usually covers the time Codex worked, unless an earlier Codex run
+  is still open (step 6.6).
+
+## States and links (Release 1.6)
+
+Each rule below reads a format that Claude Code or Codex does not document; only the `SessionEnd` hook event is
+documented. Each is designed so that a missing marker falls back to `unknown` or unlinked; a format that changes in
+another way (say, `cost-state` written mid-session) could still give wrong results. Real counts before and after are
+in [docs/phase9-check.md](docs/phase9-check.md).
+
+- **`finished` and its evidence.** A Claude session is `finished` only on positive evidence, checked in this order:
+  its live session record (`~/.claude/sessions/<pid>.json`) means it is running and wins; `process_exit` (the record
+  outlived its process); `session_end` (the hook's `SessionEnd` record, dropped when a later turn or hook record shows
+  the session was resumed); `transcript_exit` (no live record, and the transcript's last `cost-state` record comes
+  after its last turn; Claude Code writes it on every clean exit seen so far). This moved real Claude sessions from
+  232 `unknown` / 0 `finished` to 3 / 229 (2026-11-08). Codex `done` still means only that the last turn completed.
+- **Reopening a session finished by `transcript_exit` or `session_end`** depends on where it ran (the transcript's
+  last `entrypoint`): `cli` or `sdk-cli` → `claude --resume <id>` in its folder; `claude-desktop` → the app link, only
+  when exactly one desktop app record maps the session; anything else → Unavailable with the command shown, so a
+  cleanly exited desktop session is not resumed in a terminal while the app may reopen it. A `process_exit` session
+  still resumes in a terminal whatever its entrypoint (0 real cases on 2026-11-08).
+- **Compressed rollouts.** Older Codex rollouts are on disk as `rollout-*.jsonl.zst` (a standard zstd frame holding
+  the same JSONL). multi-link decompresses them in pure Rust (`ruzstd`), up to 64 MiB each; a file over the cap or
+  that fails to decode is counted as unreadable, never an error. When the same run exists in both forms, the plain
+  file wins. On 2026-11-08 this added 202 Codex sessions (223 → 425).
+- **Redirect rule.** When a `codex exec` hand-off sends stdout to a file (`> log 2>&1`, `>>`, `1>`, `&>`, `&>>`,
+  `>|`), the hook and the scanner read that file for Codex's `session id:` line. The link is `exact` (`redirect_file`)
+  only when the file holds exactly one such line. Path limits: the target must be a literal path (no `$VAR` or quoted
+  expansion), the segment must have exactly one stdout redirect, and a relative path counts only when no `cd` or
+  subshell comes before the launch. The opened file must be a regular file (not a FIFO or device), have a single link
+  and resolve under the hand-off's folder or the system temp folder (`$TMPDIR`, `/tmp`, `/private/tmp`). At most 64
+  KiB is read, and an append log (`>>`, `&>>`) over 64 KiB is refused. Pipes to `tail` or `head` are not recoverable.
+  Old logs are mostly gone, so the gain grows as the hook records new hand-offs.
+- **`resume --last` linking.** `codex exec resume --last` names no session id. As seen so far (undocumented), it
+  writes no new rollout and adds a turn to the run it resumes. multi-link links it to a run in the same checkout whose
+  later turn (not its first) starts 0–10 s after the hand-off: `heuristic` with evidence `resume_turn`, or ambiguous
+  when two runs qualify. An observed id (stdout or a redirect log) still wins and makes it exact. The 10 s window was
+  not calibrated in advance; on real data all 13 such hand-offs had their turn 0.8–2.7 s later. A `cd` before the
+  launch keeps the hand-off unlinked (3 real cases), as it does for the creation-time match.
+- **Session folder (R8).** The first folder a Claude session's own records name is its home folder (records inherited
+  from a resumed session do not set it). After that, a record's folder counts only if it is the home folder or inside
+  it, so a shell `cd` elsewhere (Claude Code stamps later records with it) is ignored and the session stays in its
+  repo; the session shows the newest folder that counts, such as a worktree.
 
 Scanning only reads local agent files (`~/.claude`, `~/.codex`), repo metadata and optional
 hook state in `~/.multi-link`. It makes no network calls. Opening a session launches the
@@ -156,10 +203,14 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
   are skipped and counted; missing evidence can leave states or links unknown.
 - Codex waiting detection and automatic Codex opening are unsupported.
 - Claude desktop opening uses an undocumented `claude://` link.
-- Resume requires a transcript and positive process-exit evidence. If process probing is
-  unavailable, the app cannot confirm that a session has finished.
-- A cleanly exited terminal Claude session deletes its record, so `o` shows Unavailable with
-  the resume command. Resume is available only when a session's record outlives its process.
+- Resume and the app link require a transcript and positive exit evidence (above). `transcript_exit`
+  relies on the undocumented `cost-state` record; `session_end` needs the 1.6 hook snippet, including `SessionEnd`,
+  merged into `~/.claude/settings.json`. On 2026-11-08, 72 finished desktop sessions had no single app record, so
+  `o` shows Unavailable with the command for them.
+- Ambiguous links rose from 1 to 9 once compressed rollouts were read: on 2026-10-30 several Codex runs started
+  in one checkout within the 60 s creation window. In each case one run started 0.5–1.8 s after the hand-off and
+  another 3.0–58.7 s after it. multi-link does not pick the nearest run, so these stay ambiguous
+  ([details](docs/phase9-check.md#why-ambiguous-links-rose-from-1-to-9)).
 - A keypress arriving together with a terminal resize can be delayed until the next key
   (crossterm 0.29).
 - Activity is inferred from record timestamps: a tool call that writes nothing for over 5 minutes
@@ -172,23 +223,21 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
-- Step graph limits: older Codex runs stored as `.jsonl.zst` are not read, so their parts show `no codex run found`
-  (counts above). Step 8.4's own graph is misnamed (24 runs as fix rounds) and 10 of its 25 runs are unlinked.
+- Step graph limits: Step 8.4's own graph is misnamed (24 runs as fix rounds) and 10 of its 25 runs are unlinked.
   Nesting sessions under the session that started them (repo view, and `s` on a coordinator lane) relies on the
   Claude desktop app's undocumented per-session records. The first refresh after start takes about 6.4 s on the
   owner's machine (the overview's first full parse, older than the graph); later refreshes with the largest real
-  graph open took 229–236 ms (Step 8.5). A Codex lane whose Claude parent is outside the TUI window says `no step on
-  this session`. Pressing `[ ]` quickly builds every graph it passes (about 230 ms each). The repo view's footer
+  graph open took 229–236 ms (Step 8.5). Pressing `[ ]` quickly builds every graph it passes (about 230 ms each). The repo view's footer
   drops `q quit` at 101–109 columns. With a graph open each refresh runs the all-time pass twice. The narrow list
   form (below 120 columns) and the 256-colour palette are tested on fixtures only, not checked on real data.
 
-Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4 and 8.6 runs. Real-home
+Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4, 8.6 and 9.7 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
 the Phase 4 home check is in [docs/phase4-check.md](docs/phase4-check.md), the Phase 5 visual check in
 [docs/phase5-check.md](docs/phase5-check.md), the Phase 6 visual check in
 [docs/phase6-check.md](docs/phase6-check.md), the Phase 7 real check in
-[docs/phase7-check.md](docs/phase7-check.md) and the Phase 8 real check in
-[docs/phase8-check.md](docs/phase8-check.md).
+[docs/phase7-check.md](docs/phase7-check.md), the Phase 8 real check in
+[docs/phase8-check.md](docs/phase8-check.md) and the Phase 9 real check in [docs/phase9-check.md](docs/phase9-check.md).
 
 ## Docs
 
