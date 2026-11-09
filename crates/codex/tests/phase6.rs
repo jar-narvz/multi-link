@@ -207,3 +207,50 @@ fn latest_response_fallback_skips_ineligible_and_imported_messages() {
         Some("Synthetic latest fallback")
     );
 }
+
+#[test]
+fn real_turn_order_excludes_imports_before_and_between_resumes() {
+    let rollout = parse(vec![
+        event("task_started", "external-import-a", 1),
+        event("task_complete", "external-import-a", 2),
+        event("task_started", "first-real", 3),
+        event("task_complete", "first-real", 4),
+        event("task_started", "external-import-b", 5),
+        event("task_started", "second-real", 6),
+        event("task_complete", "second-real", 7),
+    ]);
+    assert_eq!(
+        rollout
+            .real_turns()
+            .map(|turn| (turn.turn_id.as_str(), turn.started_at, turn.completed_at))
+            .collect::<Vec<_>>(),
+        vec![
+            ("first-real", t(3), Some(t(4))),
+            ("second-real", t(6), Some(t(7)))
+        ]
+    );
+    // Both readers must expose the same real turn boundaries.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase9");
+    let discovery = multi_link_codex::discover(&root).unwrap();
+    let rollout = discovery
+        .rollouts
+        .iter()
+        .find(|run| run.id.starts_with("96c00004"))
+        .unwrap();
+    let real: Vec<_> = rollout
+        .real_turns()
+        .map(|turn| turn.started_at.to_string())
+        .collect();
+    assert_eq!(
+        real,
+        ["2026-11-09T03:30:05.000Z", "2026-11-09T03:35:01.000Z"]
+    );
+    let graph = multi_link_codex::codex_turns(&root.join(&rollout.transcript)).unwrap();
+    assert_eq!(
+        graph
+            .iter()
+            .map(|turn| turn.start.to_string())
+            .collect::<Vec<_>>(),
+        real
+    );
+}

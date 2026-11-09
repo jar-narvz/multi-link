@@ -64,6 +64,9 @@ pub fn recognise(command: &str) -> Option<Launch> {
             {
                 (InvocationForm::Resume, Some((*id).to_owned()))
             }
+            ["codex", "exec", ..] if exec_resume_options(tokens).is_some_and(resume_last) => {
+                (InvocationForm::Resume, None)
+            }
             ["codex", "exec", ..] => (InvocationForm::Exec, None),
             ["node", path, "task", ..] if path.ends_with("codex-companion.mjs") => {
                 (InvocationForm::Plugin, None)
@@ -262,7 +265,11 @@ fn help_only(words: &[Word]) -> bool {
         }
         _ => return false,
     };
-    let mut options = words[start..].iter();
+    help_options(&words[start..]) || exec_resume_options(words).is_some_and(help_options)
+}
+
+fn help_options(words: &[Word]) -> bool {
+    let mut options = words.iter();
     while let Some(word) = options.next() {
         let text = word.text.as_str();
         if text == "--" || !text.starts_with('-') || text == "-" {
@@ -271,18 +278,74 @@ fn help_only(words: &[Word]) -> bool {
         if !word.quoted_or_escaped && matches!(text, "--help" | "-h") {
             return true;
         }
-        if matches!(
-            text,
-            "-c" | "-o"
-                | "-C"
-                | "-s"
-                | "--add-dir"
-                | "--config"
-                | "--output-last-message"
-                | "--cd"
-                | "--sandbox"
-        ) {
+        if option_takes_value(text) {
             options.next();
+        }
+    }
+    false
+}
+
+/// Find the resume subcommand after exec options, stopping at the first
+/// positional word. Preserve the narrower, existing UUID-resume grammar above.
+fn exec_resume_options(words: &[Word]) -> Option<&[Word]> {
+    if words.first()?.text != "codex" || words.get(1)?.text != "exec" {
+        return None;
+    }
+    let mut index = 2;
+    while let Some(word) = words.get(index) {
+        let text = word.text.as_str();
+        if word.redirect || text == "--" || text == "-" {
+            return None;
+        }
+        if !text.starts_with('-') {
+            return (text == "resume" && !word.quoted_or_escaped).then_some(&words[index + 1..]);
+        }
+        index += if option_takes_value(text) { 2 } else { 1 };
+    }
+    None
+}
+
+/// Exact option names only: an equals-form already contains its value.
+fn option_takes_value(text: &str) -> bool {
+    matches!(
+        text,
+        "-c" | "-o"
+            | "-C"
+            | "-s"
+            | "--add-dir"
+            | "--config"
+            | "--output-last-message"
+            | "--cd"
+            | "--sandbox"
+            | "-m"
+            | "--model"
+            | "-i"
+            | "--image"
+            | "-p"
+            | "--profile"
+            | "--enable"
+            | "--disable"
+            | "--output-schema"
+            | "--thread-source"
+            | "--cyber-access-program"
+            | "--local-provider"
+            | "--color"
+    )
+}
+
+/// Only options before the positional prompt / `--` can select the last run.
+fn resume_last(words: &[Word]) -> bool {
+    let mut words = words.iter();
+    while let Some(word) = words.next() {
+        let text = word.text.as_str();
+        if word.redirect || text == "--" || !text.starts_with('-') || text == "-" {
+            break;
+        }
+        if text == "--last" && !word.quoted_or_escaped {
+            return true;
+        }
+        if option_takes_value(text) {
+            words.next();
         }
     }
     false

@@ -640,3 +640,122 @@ fn redirect_hard_links_are_refused_until_only_one_link_remains() {
     std::fs::remove_file(private).unwrap();
     assert_eq!(read().unwrap().as_deref(), Some(id));
 }
+
+#[test]
+fn resume_last_recognition_obeys_option_and_segment_boundaries() {
+    for command in [
+        "codex exec resume --last 'Step 2.1'",
+        "nohup env X=y timeout 30 codex exec resume --last --json 'Step 2.1'",
+        "codex exec resume -c model=x --last 'Step 2.1'",
+        "codex exec resume --last -C . 'Step 2.1'",
+    ] {
+        let launch = recognise(command).unwrap();
+        assert_eq!(launch.form, Resume, "{command}");
+        assert_eq!(launch.resume_id, None, "{command}");
+        assert!(!launch.dir_moved, "{command}");
+    }
+    for command in [
+        "codex exec resume 'prompt containing --last'",
+        "codex exec resume prompt --last",
+        "codex exec resume -- --last",
+        "codex exec resume -c --last prompt",
+        "codex exec '--last'",
+    ] {
+        assert_eq!(recognise(command).unwrap().form, Exec, "{command}");
+    }
+    assert!(recognise("codex exec resume --last --help").is_none());
+    assert!(recognise("codex exec resume --last -h").is_none());
+    let launch = recognise("cd /elsewhere; codex exec resume --last x").unwrap();
+    assert_eq!(launch.form, Resume);
+    assert!(launch.dir_moved);
+}
+
+#[test]
+fn resume_last_after_exec_options_preserves_directory_and_prompt_boundaries() {
+    for (command, moved) in [
+        (
+            r#"codex exec -s workspace-write -c k=v --add-dir D -C "$PWD" -o F resume --last "prompt""#,
+            false,
+        ),
+        ("codex exec --json -C /elsewhere resume --last prompt", true),
+        (
+            "nohup env X=y timeout 30 codex exec --json -c a=b resume --last prompt",
+            false,
+        ),
+    ] {
+        let launch = recognise(command).unwrap();
+        assert_eq!(launch.form, Resume, "{command}");
+        assert_eq!(launch.resume_id, None, "{command}");
+        assert_eq!(launch.dir_moved, moved, "{command}");
+    }
+    for command in [
+        "codex exec --json 'resume' --last",
+        "codex exec --json prompt resume --last",
+        "codex exec --json -- resume --last",
+        "codex exec --json > resume --last",
+        "codex exec -c resume --last prompt",
+        "codex exec -s read-only resume 01a189e2-d57f-7a91-b74c-ae85abd1a6a1",
+    ] {
+        let launch = recognise(command).unwrap();
+        assert_eq!(launch.form, Exec, "{command}");
+        assert_eq!(launch.resume_id, None, "{command}");
+    }
+    for command in [
+        "codex exec -s read-only resume --help",
+        "codex exec --json -c a=b resume --last --help",
+        "codex exec --help resume --last prompt",
+    ] {
+        assert!(recognise(command).is_none(), "{command}");
+    }
+    let id = "01a189e2-d57f-7a91-b74c-ae85abd1a6a1";
+    for command in [
+        format!("codex exec resume {id}"),
+        format!("codex resume {id}"),
+    ] {
+        let launch = recognise(&command).unwrap();
+        assert_eq!(launch.form, Resume);
+        assert_eq!(launch.resume_id.as_deref(), Some(id));
+    }
+}
+
+#[test]
+fn resume_last_skips_all_supported_option_values_without_consuming_equals_forms() {
+    for option in [
+        "-m",
+        "--model",
+        "-i",
+        "--image",
+        "-p",
+        "--profile",
+        "--enable",
+        "--disable",
+        "--output-schema",
+        "--thread-source",
+        "--cyber-access-program",
+        "--local-provider",
+        "--color",
+    ] {
+        for command in [
+            format!("codex exec resume {option} gpt-x --last prompt"),
+            format!("codex exec {option} gpt-x resume --last prompt"),
+            format!("codex exec {option}=gpt-x resume --last prompt"),
+            format!("codex exec resume {option}=gpt-x --last prompt"),
+        ] {
+            let launch = recognise(&command).unwrap();
+            assert_eq!(launch.form, Resume, "{command}");
+            assert_eq!(launch.resume_id, None, "{command}");
+        }
+        for command in [
+            format!("codex exec resume {option} --last prompt"),
+            format!("codex exec {option} resume --last prompt"),
+        ] {
+            assert_eq!(recognise(&command).unwrap().form, Exec, "{command}");
+        }
+        for command in [
+            format!("codex exec resume {option} --help --last prompt"),
+            format!("codex exec {option} --help resume --last prompt"),
+        ] {
+            assert_eq!(recognise(&command).unwrap().form, Resume, "{command}");
+        }
+    }
+}

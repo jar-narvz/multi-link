@@ -69,12 +69,32 @@ pub(crate) fn resolve(
         if link.r#match == Match::Exact || invocation.dir_moved {
             continue;
         }
+        // An id-less resume is recognised only for exec resume --last. It
+        // searches later real turns even in runs claimed by an exact launch.
+        let resume_last =
+            invocation.form == InvocationForm::Resume && invocation.resume_id.is_none();
         link.candidates = rollouts
             .iter()
-            .filter(|child| child.cwd == invocation.checkout && !claimed.contains(&child.id))
+            .filter(|child| child.cwd == invocation.checkout)
             .filter_map(|child| {
-                let gap_ms = gap_ms(child.started_at, invocation.at);
-                (0..=60_000).contains(&gap_ms).then(|| Candidate {
+                let gap_ms = if resume_last {
+                    child
+                        .real_turns()
+                        .skip(1)
+                        .map(|turn| gap_ms(turn.started_at, invocation.at))
+                        .filter(|gap| (0..=10_000).contains(gap))
+                        .min()?
+                } else {
+                    if claimed.contains(&child.id) {
+                        return None;
+                    }
+                    let gap = gap_ms(child.started_at, invocation.at);
+                    if !(0..=60_000).contains(&gap) {
+                        return None;
+                    }
+                    gap
+                };
+                Some(Candidate {
                     id: child.id.clone(),
                     gap_ms,
                 })
@@ -86,6 +106,9 @@ pub(crate) fn resolve(
             [] => Match::Unlinked,
             [candidate] => {
                 link.child = Some(candidate.id.clone());
+                if resume_last {
+                    link.evidence = Some(LinkEvidence::ResumeTurn);
+                }
                 Match::Heuristic
             }
             _ => Match::Ambiguous,

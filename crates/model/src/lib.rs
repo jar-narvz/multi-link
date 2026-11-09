@@ -56,6 +56,7 @@ string_enum!(LinkEvidence {
     ThreadReady,
     TaskOutput,
     RedirectFile,
+    ResumeTurn,
     Hook
 });
 string_enum!(Convention {

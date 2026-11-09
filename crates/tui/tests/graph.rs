@@ -1967,3 +1967,30 @@ fn narrow_subline_drops_separator_before_ellipsis() {
     assert_eq!(row.trim(), "✓ done 3:02am · 1 min · 1 edit");
     assert!(!text(&buf).contains(" ·…"));
 }
+
+#[test]
+fn phase9_plan_and_reviews_show_their_own_handoffs() {
+    let report: GraphReport = serde_json::from_slice(
+        &fs::read(root().join("fixtures/expected/phase9/graph-2.1.json")).unwrap(),
+    )
+    .unwrap();
+    for (selected, expected) in [
+        (0, "from   handed step 2.1 to codex at 3:00:40am"),
+        (2, "from   handed fix to codex at 3:04:00am"),
+        (4, "from   handed fix to codex at 3:06:00am"),
+        (6, "from   no hand-offs"),
+    ] {
+        let options = GraphOptions {
+            selected,
+            offset: UtcOffset::UTC,
+            ..golden_options()
+        };
+        let buf = render(&report, &options, 140, 60);
+        let rows = rendered_rows(&buf, 0..=59);
+        let origin = rows
+            .lines()
+            .find(|line| line.trim_start().starts_with("from "))
+            .unwrap();
+        assert_eq!(origin.trim(), expected, "selected {selected}");
+    }
+}

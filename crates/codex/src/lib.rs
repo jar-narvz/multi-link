@@ -35,7 +35,19 @@ pub struct Rollout {
     pub last_real_complete: Option<Timestamp>,
 }
 
+fn is_imported_turn(id: &str) -> bool {
+    id.starts_with("external-import")
+}
+
 impl Rollout {
+    /// Real turns in file order, using the same import rule as graph details.
+    /// The first item is the initial work, never a resume candidate.
+    pub fn real_turns(&self) -> impl Iterator<Item = &Turn> {
+        self.turns
+            .iter()
+            .filter(|turn| !is_imported_turn(&turn.turn_id))
+    }
+
     /// None means no usable task_started; only the latest turn governs completion.
     pub fn last_turn_complete(&self) -> Option<bool> {
         self.turns.last().map(|turn| turn.completed_at.is_some())
@@ -224,7 +236,7 @@ fn parse<R: BufRead>(
             starts += 1;
             imported_turn = payload["turn_id"]
                 .as_str()
-                .filter(|id| id.starts_with("external-import"))
+                .filter(|id| is_imported_turn(id))
                 .map(str::to_owned);
             if imported_turn.is_none() {
                 real_starts += 1;
@@ -419,7 +431,7 @@ pub fn read_details(
             active = None;
             imported = None;
             if let (Some(id), Some(at)) = (payload["turn_id"].as_str(), at) {
-                if id.starts_with("external-import") {
+                if is_imported_turn(id) {
                     imported = Some(id.to_owned());
                 } else {
                     active = Some((id.to_owned(), turns.len()));

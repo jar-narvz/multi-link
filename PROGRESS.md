@@ -1,8 +1,25 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.5 (2026-11-08, Codex, mode Codex loop) is committed: Codex lane's step from all-time hand-offs (R6).
-Step 9.6 is next** (R7; Claude writes its fixtures and keys first), then 9.7. Claude reviewed one round (3 findings, all
+**Step 9.6 (2026-11-08, Codex, mode Codex loop) is committed: fix rounds from `codex exec resume --last` (R7).
+Step 9.7 is next** (real check, README, owner confirm). Claude wrote the fixtures and keys first (`aea1002`), reviewed
+one round (2 findings, both fixed) and re-ran Verify: 580 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 6`
+47/47 `ok`; no key edited by Codex.
+- **9.6 / R7:** `recognise` classifies `codex exec [opts] resume [opts] --last` as `Resume` with no id (exec options may
+  precede `resume`; a quoted `--last`/`resume`, or `--last` after the prompt, is not a flag). `Rollout::real_turns`
+  (shared import predicate with `read_details`). `link::resolve`: an id-less resume takes candidates from runs in the same
+  checkout whose real turn, not the first, starts 0–10 s after the hand-off (exact-launch claims ignored, no 60 s fallback,
+  `dir_moved` suppresses); one → `heuristic` / `resume_turn`. Option-first `resume <uuid>` stays `Exec` as before.
+- **Fixtures (ids `96…`, times 03:00–03:36Z, outside the 2 h lanes window):** repo-p9r (graph `graph-2.1.json`), p9s (late),
+  p9t (ambiguous, `96c00005` manual run), p9u (imported then real). `check.sh 6` adds them. No existing key changed.
+- **Real data (counts only, `--now 2026-11-09T00:26:54Z`):** unlinked 53 → 47 (5 now `resume_turn`, 1 was this session's
+  own `codex exec … resume --help` probe, now help-only). Step 8.7's three Codex parts were already `exact` /
+  `redirect_file` before 9.6 (from 9.3); implement 21:29:59–21:32:05. 9.7 should count the 3 `--last` hand-offs that stay
+  unlinked.
+Quota check for 9.6: `primary 75%, secondary 30%, CODEX: OK` (82% before the fix round).
+
+**Step 9.5 (2026-11-08, Codex, mode Codex loop) is committed: Codex lane's step from all-time hand-offs (R6).**
+Claude reviewed one round (3 findings, all
 fixed) and re-ran Verify: 570 passed / 0 failed / 1 ignored; clippy, fmt clean; `check.sh 5` 46/46 `ok`; keys unchanged.
 - **9.5 / R6:** the TUI worker's existing all-time pass fills `Refresh::codex_steps` (Codex id → step of its latest
   tagged incoming hand-off from a same-repo parent, max `(at, position)`). `s` on a Codex lane uses that entry first,
@@ -654,6 +671,281 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-08 — Step 9.6: Fix rounds from `codex exec resume --last` — Codex
+- Did: Implemented R7, mode **Codex loop**. Quota check supplied by the coordinator:
+  `primary 75%, secondary 30%, CODEX: OK`. Recognised the flag only in resume options, including
+  wrappers and value-taking options; help and prompt occurrences do not select this timing path.
+  Added `Rollout::real_turns`, sharing the import predicate with graph details while preserving
+  the existing all-turn list used by state handling. Link candidates skip the first real turn,
+  use inclusive 0–10 s starts in the same checkout, ignore exact-launch claims, deduplicate each
+  run at its earliest eligible gap, and never fall back to creation timing. Observed child ids win;
+  a directory move still suppresses timing. A unique candidate carries `ResumeTurn` evidence.
+  Added boundary, concurrent-run, import, exact-precedence and recognition tests; named Phase 9
+  links/graph tests compare parsed JSON with Claude's keys. Exact panel assertions cover plan,
+  both reviews handing fixes off, and the final review with no hand-offs. Renderer rule unchanged.
+- Did (Claude review round 1): Fixed both findings in the invocation recogniser. Scan past exec dash
+  options and their values to the first positional word; only an unquoted, unredirected `resume`
+  selects the resume option scan. Stop at prompts, redirects and `--`. Added all requested value-taking
+  options to one helper shared by subcommand, last-run and help scans; equals forms consume no next word.
+  Regression tests cover the project's full option-first command, `$PWD` versus an elsewhere `-C`,
+  wrappers, quoted resume, prompt/redirect boundaries, every new option and its equals form, option
+  values that look like flags/subcommands, and help on either side of the resume subcommand.
+  UUID choice: preserved the existing immediate `codex exec resume <uuid>` / `codex resume <uuid>`
+  branch and its id evidence; `codex exec -s read-only resume <uuid>` was Exec before review and
+  remains Exec. No extension of UUID-resume syntax. Round 1 changed only
+  `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`, and this log.
+- Changed: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`,
+  `crates/codex/src/lib.rs`, `crates/codex/tests/phase6.rs`, `crates/core/src/link.rs`,
+  `crates/core/tests/links.rs`, `crates/model/src/lib.rs`, `crates/cli/tests/phase9.rs`,
+  `crates/tui/tests/graph.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Before implementation, `cargo test -p multi-link --test phase9`
+  exited 101 with actual output:
+  ```text
+failures:
+    phase9_graph_fix_rounds_match_answer_key
+    phase9_links_match_answer_key
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+  ```
+  Round 1 regression-first run, `cargo test -p multi-link-claude --test invocation resume_last`
+  → exit 101 before the fixes; actual result:
+  ```text
+failures:
+    resume_last_after_exec_options_preserves_directory_and_prompt_boundaries
+    resume_last_skips_all_supported_option_values_without_consuming_equals_forms
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  After the fixes, `cargo test -p multi-link-claude --test invocation` → exit 0:
+  ```text
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+  ```
+  First round 1 workspace Verify attempt → exit 101; actual failure:
+  ```text
+---- sentinels_never_in_output stdout ----
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+failures:
+    sentinels_never_in_output
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.28s
+  ```
+  This happened at `crates/cli/tests/graph.rs:30` while spawning the CLI, before any output assertion.
+  The key checker was also invoking Cargo; overlapping binary rebuilds are the suspected cause.
+  After it finished, the binary existed and an isolated full workspace rerun passed without changes.
+  Final round 1 `cargo test --workspace` → exit 0, 580 passed / 0 failed / 1 ignored across 54 targets
+  (totals summed from result lines). Actual target/result output, omitting individual old passing tests:
+  ```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-08847752104a7bdc)
+test tui::tests::phase9_codex_lane_same_repo_beats_newer_cross_repo ... ok
+test tui::tests::phase9_codex_lane_parent_outside_window ... ok
+test tui::tests::phase9_codex_lane_untagged_has_no_step ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+     Running tests/cli.rs (target/debug/deps/cli-99e8775e49a659be)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.19s
+     Running tests/graph.rs (target/debug/deps/graph-8a591d0ed3e9b725)
+test sentinels_never_in_output ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+     Running tests/phase9.rs (target/debug/deps/phase9-d050da92124c0d2f)
+test phase9_links_match_answer_key ... ok
+test phase9_graph_fix_rounds_match_answer_key ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-37ca4495ce1206e7)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/app_record.rs (target/debug/deps/app_record-14488ec49e14100e)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/calls.rs (target/debug/deps/calls-4a8609cb04da380b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-545ec70c001e488e)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests/invocation.rs (target/debug/deps/invocation-69120c3c058e55ba)
+test resume_last_after_exec_options_preserves_directory_and_prompt_boundaries ... ok
+test resume_last_recognition_obeys_option_and_segment_boundaries ... ok
+test resume_last_skips_all_supported_option_values_without_consuming_equals_forms ... ok
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests/last_turn.rs (target/debug/deps/last_turn-1af0001944e6c552)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase6.rs (target/debug/deps/phase6-262ba0e4a0142f5a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase7.rs (target/debug/deps/phase7-548c379cabf6cea8)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-2b22e6fd27ea8e2c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-5452a130312fc135)
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compressed.rs (target/debug/deps/compressed-5a94df3ada6149f0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-4d2173f54dd8b4de)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/phase6.rs (target/debug/deps/phase6-6d75b82e8f960ed4)
+test real_turn_order_excludes_imports_before_and_between_resumes ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-a452195a4da16e95)
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+     Running tests/compressed.rs (target/debug/deps/compressed-71c9213e610d9e26)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/graph.rs (target/debug/deps/graph-d9ed96fb16eda702)
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/graph_commit.rs (target/debug/deps/graph_commit-55ee0f30653b8b5a)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+     Running tests/hook.rs (target/debug/deps/hook-c034f80c961b9f68)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+     Running tests/links.rs (target/debug/deps/links-0901c1739e7aa862)
+test resume_last_deduplicates_runs_ignores_launch_claims_and_preserves_ambiguity ... ok
+test phase9_redirect_cases_match_claudes_keys ... ok
+test resume_last_observed_id_wins_and_directory_move_suppresses_timing ... ok
+test resume_last_matches_only_later_real_turns_in_ten_second_window ... ok
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+     Running tests/overview.rs (target/debug/deps/overview-13e977653dfe64b1)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+     Running tests/phase6.rs (target/debug/deps/phase6-4e85c5da5a6a761d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-876d1c98833cd571)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/session_end.rs (target/debug/deps/session_end-12bbde3eecf1cfcb)
+test phase9_session_end_and_clear_match_claude_keys_on_cold_and_warm_passes ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/sessions.rs (target/debug/deps/sessions-1bd3186c797cc2ce)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+     Running tests/started.rs (target/debug/deps/started-5b4b43f4a847b7f5)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/transcript_exit.rs (target/debug/deps/transcript_exit-a77a141a2f0c06f8)
+test phase9_clean_exit_states_and_fresh_open_match_keys_on_cold_and_warm_passes ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-8a546e8bd5fab307)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-14fcede7590f0bd8)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-9b7a21c997bc424d)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-e1f238057aadea12)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/graph.rs (target/debug/deps/graph-461cb86389d0acb3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/model.rs (target/debug/deps/model-9bfcd1efda99cd6c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-1644ecda9bd1d599)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-5e10167c48b03dc8)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-2ee3edd1699db90c)
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/graph.rs (target/debug/deps/graph-1db84d80984236b3)
+test phase9_plan_and_reviews_show_their_own_handoffs ... ok
+test result: ok. 81 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+     Running tests/home.rs (target/debug/deps/home-4d93152f7c1a3add)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/phase6_shape.rs (target/debug/deps/phase6_shape-bba810f63b64a9ca)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase8_shape.rs (target/debug/deps/phase8_shape-e67bcf447fc87aec)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/started.rs (target/debug/deps/started-2c966f5b73e0809d)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/theme.rs (target/debug/deps/theme-c6758922202a4b01)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/timeline.rs (target/debug/deps/timeline-6c17575291aa24f4)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/view.rs (target/debug/deps/view-bb9d43cfd306927e)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual final output
+  (omitting package-check lines containing machine-local paths):
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.18s
+  ```
+  `cargo fmt --check` → exit 0, no output.
+  `fixtures/expected/phase9/check.sh 6` → exit 0, actual output:
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+  `git diff --check` → exit 0, no output.
+  `git diff --name-only -- fixtures PLAN.md docs` and `git diff --cached --name-only` → no output.
+- Review: Claude (step session). Round 1, 2 findings, both fixed: (1) `resume --last` after exec options
+  (`codex exec -s … -C … resume --last`, valid Codex syntax, checked with `--help`) was `Exec`; (2) the value-taking
+  option list missed `-m/-i/-p`, `--enable/--disable`, `--output-schema` and others from `codex exec [resume] --help`
+  (0.164). Round 1 diff re-read: correct; it also makes option-first `--help` help-only, which is right. Claude re-ran
+  Verify: `cargo test --workspace --no-fail-fast` → passed 580 failed 0 ignored 1; clippy exit 0; `cargo fmt --check`
+  exit 0; `fixtures/expected/phase9/check.sh 6` → exit 0, 47 `ok` lines. Matches Codex's numbers.
+  **Resume matching off** (scratch copy, `resume_last` forced `false` in `link.rs`): `cargo test -p multi-link --test
+  phase9` → `FAILED. 0 passed; 2 failed` (`phase9_links_match_answer_key`, `phase9_graph_fix_rounds_match_answer_key`);
+  core `links resume` → `resume_last_matches_only_later_real_turns_in_ten_second_window`,
+  `resume_last_deduplicates_runs_ignores_launch_claims_and_preserves_ambiguity` FAILED.
+  **Real run** (release builds of `8416429`+fixtures and of this diff, back to back, `links --since all --now
+  2026-11-09T00:26:54Z`, counts only): before 222 hand-offs = 44 exact, 116 heuristic, 53 unlinked, 9 ambiguous; after
+  221 = 44 exact, 121 heuristic (5 `resume_turn`), 47 unlinked, 9 ambiguous. Per-invocation diff: 5 `exec/unlinked →
+  resume/heuristic/resume_turn`, 5 `exec/exact/redirect_file → resume/exact/redirect_file`, 3 `exec/unlinked →
+  resume/unlinked`; the one dropped hand-off is this session's `codex exec -s read-only resume --help` probe. Step 8.7
+  graph (`--repo` multi-link `--step 8.7`), before and after identical: plan, implement 21:29:59–21:32:05 (exact),
+  review, fix round 1 21:32:27–21:34:18 (exact), review, fix round 2 21:34:47–21:39:42 (exact), verify + commit. So the
+  expected result (both fix rounds linked, implement about 2 min) holds, but via 9.3's `redirect_file` (the 8.7 commands
+  redirect stdout to a log), not R7; the screenshot predates 9.3. R7 adds the 5 links above.
+- Gotchas: No fixture, answer key or check.sh edits, including existing keys; docs needed no wording fix.
+  An initial compile caught the import helper shadowing a local variable; renamed it `is_imported_turn`.
+  The new panel test initially expected six padding spaces after `from`; the renderer uses three,
+  so only the assertion spacing was corrected. All final checks above passed. Pre-existing untracked
+  `.claude/` left untouched. Nothing staged, committed or pushed.
 
 ### 2026-11-08 — Step 9.5: Codex lane's step from all-time hand-offs — Codex
 - Did: Implemented R6, mode **Codex loop**. Quota check output supplied by Claude (the coordinator's step session):

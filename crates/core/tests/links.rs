@@ -811,3 +811,211 @@ fn oversized_redirect_reads_truncating_prefix_but_refuses_append() {
         assert_eq!(actual.links[0].evidence, evidence, "{operator}");
     }
 }
+
+fn add_turns(root: &Path, id: &str, turns: &[(&str, &str)]) {
+    let path = root.join(format!(".codex/sessions/rollout-{id}.jsonl"));
+    let mut text = fs::read_to_string(&path).unwrap();
+    for (turn_id, at) in turns {
+        let record = json!({"type":"event_msg", "timestamp":at,
+            "payload":{"type":"task_started", "turn_id":turn_id}});
+        text.push_str(&format!("{record}\n"));
+    }
+    fs::write(path, text).unwrap();
+}
+
+#[test]
+fn resume_last_matches_only_later_real_turns_in_ten_second_window() {
+    for (at, cwd, turns, want_gap) in [
+        (
+            "2026-10-29T23:00:00Z",
+            "/repo",
+            vec![("first", OLD), ("next", "2026-10-29T22:59:59.999Z")],
+            None,
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![("first", OLD), ("next", RECENT)],
+            Some(0),
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![("first", OLD), ("next", "2026-10-29T23:00:10Z")],
+            Some(10_000),
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![("first", OLD), ("next", "2026-10-29T23:00:10.001Z")],
+            None,
+        ),
+        (
+            RECENT,
+            "/other",
+            vec![("first", OLD), ("next", RECENT)],
+            None,
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![("external-import-a", RECENT), ("external-import-b", RECENT)],
+            None,
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![("external-import-a", OLD), ("first-real", RECENT)],
+            None,
+        ),
+        (
+            RECENT,
+            "/repo",
+            vec![
+                ("external-import-a", OLD),
+                ("first-real", OLD),
+                ("later-real", RECENT),
+            ],
+            Some(0),
+        ),
+        (RECENT, "/repo", vec![], None),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        call(temp.path(), "resume", at, "codex exec resume --last x", "");
+        // Creation itself is in the window: it must never be a fallback candidate.
+        child(temp.path(), A, RECENT, cwd);
+        add_turns(temp.path(), A, &turns);
+        let result = report(temp.path());
+        let actual = serde_json::to_value(&result.links[0]).unwrap();
+        assert_eq!(actual["form"], "resume");
+        assert_eq!(
+            actual["match"],
+            if want_gap.is_some() {
+                "heuristic"
+            } else {
+                "unlinked"
+            },
+            "{turns:?}"
+        );
+        assert_eq!(
+            actual["evidence"],
+            if want_gap.is_some() {
+                json!("resume_turn")
+            } else {
+                Value::Null
+            }
+        );
+        assert_eq!(
+            actual["candidates"],
+            want_gap.map_or(json!([]), |gap| json!([{"id":A,"gap_ms":gap}]))
+        );
+        assert_eq!(
+            actual["child"],
+            if want_gap.is_some() {
+                json!(A)
+            } else {
+                Value::Null
+            }
+        );
+    }
+}
+
+#[test]
+fn resume_last_deduplicates_runs_ignores_launch_claims_and_preserves_ambiguity() {
+    let temp = tempfile::tempdir().unwrap();
+    call(
+        temp.path(),
+        "launch",
+        OLD,
+        "codex exec x",
+        &format!("session id: {A}"),
+    );
+    call(
+        temp.path(),
+        "resume",
+        RECENT,
+        "codex exec resume --last x",
+        "",
+    );
+    child(temp.path(), A, OLD, "/repo");
+    add_turns(
+        temp.path(),
+        A,
+        &[
+            ("first", OLD),
+            ("second", "2026-10-29T23:00:01Z"),
+            ("third", "2026-10-29T23:00:02Z"),
+        ],
+    );
+    let result = report(temp.path());
+    assert_eq!(result.links[1].r#match, Match::Heuristic);
+    assert_eq!(result.links[1].child.as_deref(), Some(A));
+    assert_eq!(
+        result.links[1].candidates,
+        vec![Candidate {
+            id: A.into(),
+            gap_ms: 1000
+        }]
+    );
+    child(temp.path(), B, OLD, "/repo");
+    add_turns(
+        temp.path(),
+        B,
+        &[("first", OLD), ("second", "2026-10-29T23:00:03Z")],
+    );
+    let result = report(temp.path());
+    let actual = &result.links[1];
+    assert_eq!(actual.r#match, Match::Ambiguous);
+    assert_eq!(actual.child, None);
+    assert_eq!(actual.evidence, None);
+    assert_eq!(
+        actual.candidates,
+        vec![
+            Candidate {
+                id: A.into(),
+                gap_ms: 1000
+            },
+            Candidate {
+                id: B.into(),
+                gap_ms: 3000
+            }
+        ]
+    );
+    assert_eq!(result.unparented, vec![B.to_owned()]);
+}
+
+#[test]
+fn resume_last_observed_id_wins_and_directory_move_suppresses_timing() {
+    for (command, result_text, want_match, want_child) in [
+        (
+            "codex exec resume --last x".to_owned(),
+            format!("session id: {B}"),
+            Match::Exact,
+            Some(B),
+        ),
+        (
+            format!("codex exec resume {B} x"),
+            String::new(),
+            Match::Exact,
+            Some(B),
+        ),
+        (
+            "cd /other; codex exec resume --last x".to_owned(),
+            String::new(),
+            Match::Unlinked,
+            None,
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        call(temp.path(), "resume", RECENT, &command, &result_text);
+        child(temp.path(), A, OLD, "/repo");
+        add_turns(temp.path(), A, &[("first", OLD), ("second", RECENT)]);
+        let result = report(temp.path());
+        assert_eq!(result.links[0].r#match, want_match);
+        assert_eq!(result.links[0].child.as_deref(), want_child);
+        assert!(result.links[0].candidates.is_empty());
+        if command.contains(B) {
+            assert_eq!(result.links[0].evidence, Some(LinkEvidence::ResumeArg));
+        }
+    }
+}
