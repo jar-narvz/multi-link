@@ -1036,7 +1036,7 @@ logged step. Place words show the memoised current main branch (recorded branch 
 
 ## Phase 9 fixture results (`fixtures/sessions-phase9/`, Step 9.0)
 Synthetic root (W10: no real prompt, id or path), `--now 2026-11-09T12:00:00Z`, `--since all` unless noted. Every
-id's first two hex digits name the step whose rule it tests (`91…` = 9.1, …, `95…` = 9.5). Keys in
+id's first two hex digits name the step whose rule it tests (`91…` = 9.1, …, `96…` = 9.6). Keys in
 `fixtures/expected/phase9/` are the **final** Phase 9 output; step 9.N compares the ids with prefixes `91`–`9N`
 (`fixtures/expected/phase9/check.sh <N>`), so a later step's cases never block an earlier step and an earlier
 step's cases are re-checked at every later one. The full keys (including `skipped: []`) hold from 9.4 on.
@@ -1084,6 +1084,10 @@ Decoded size is capped at 64 MiB (`.zst` only); over the cap or failing to decod
 | `95c00001` (repo-p9l) | only incoming hand-off: `Step 2.1` from `95000001`, 5 h before now | `lanes.json`: `s` opens step 2.1 with the 2 h window |
 | `95c00002` | `Step 2.2` from same-repo `95000002` (6 h before), then `codex exec resume` with `Step 7.1` from `95000003` in repo-p9m (90 min before) | `s` opens 2.2 (same-repo rule beats the newer cross-repo parent) |
 | `95c00004` | untagged hand-off from `95000004` (inside the window) | footer `no step on this session` |
+| `96000001` (repo-p9r) → `96c00001` | *(Step 9.6, R7)* `codex exec` with the id in stdout at 03:00:40, then two `codex exec resume --last` (03:04:00, 03:06:00; no id in their results); one rollout with three real turns starting 03:00:45, 03:04:01, 03:06:01 | first `exact` / `stdout`; both resumes `heuristic` / `resume_turn`, `form: "resume"`, `gap_ms` 1000 (today `unlinked`); `graph-2.1.json`: plan, implement (03:00:45–03:02:45), review, fix round 1, review, fix round 2, review |
+| `96000002` (repo-p9s) → `96c00002` | resume `--last` at 03:12:00, the run's second turn starts 15 s later | `unlinked` (outside 0–10 s) |
+| `96000003` (repo-p9t) → `96c00003`, `96c00005` | resume `--last` at 03:22:00; two runs in the checkout start a later turn at +1 s and +3 s (`96c00005` is a manual run) | `ambiguous`, candidates `96c00003` 1000, `96c00005` 3000; `96c00005` `unparented` |
+| `96000004` (repo-p9u) → `96c00004` | run created 03:30:02 with an imported turn (`external-import…`, 03:30:02), first real turn 03:30:05, second 03:35:01; resumes `--last` at 03:30:01 and 03:35:00 | first `unlinked` (only the imported and the first real turn are in its window; no 60 s creation fallback, which today makes it `heuristic`); second `heuristic` / `resume_turn`, `gap_ms` 1000 |
 
 `skipped` is `[]`: the five `ended` lines and the `redirect_file` hand-off line are valid from 9.4 / 9.3 on (until
 then each is one `unknown_type` entry).

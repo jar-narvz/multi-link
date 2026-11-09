@@ -2,6 +2,330 @@
   "now": "2026-11-09T12:00:00.000Z",
   "sessions": [
     {
+      "id": "96000001-0000-4000-8000-000096000001",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9r/96000001-0000-4000-8000-000096000001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9r",
+      "repo": "/home/dev/repo-p9r",
+      "checkout": "/home/dev/repo-p9r",
+      "branch": "main",
+      "started_at": "2026-11-09T03:00:00.000Z",
+      "last_activity": "2026-11-09T03:07:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T03:00:00.000Z",
+          "to": "2026-11-09T03:07:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:00:00.000Z",
+          "to": "2026-11-09T03:07:30.000Z"
+        }
+      ],
+      "asked": "Coordinate Step 2.1 with Codex.",
+      "last_asked": "Coordinate Step 2.1 with Codex.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "96c00001-0000-4000-8000-000096c00001",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T03-00-45-96c00001-0000-4000-8000-000096c00001.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9r",
+      "repo": "/home/dev/repo-p9r",
+      "checkout": "/home/dev/repo-p9r",
+      "branch": null,
+      "started_at": "2026-11-09T03:00:45.000Z",
+      "last_activity": "2026-11-09T03:07:01.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T03:00:45.000Z",
+          "to": "2026-11-09T03:07:01.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:00:45.000Z",
+          "to": "2026-11-09T03:07:01.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Add the synthetic report.",
+      "last_asked": "Step 2.1 fix round 2: fix the report header.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T03:07:01.000Z"
+    },
+    {
+      "id": "96000002-0000-4000-8000-000096000002",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9s/96000002-0000-4000-8000-000096000002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9s",
+      "repo": "/home/dev/repo-p9s",
+      "checkout": "/home/dev/repo-p9s",
+      "branch": "main",
+      "started_at": "2026-11-09T03:10:00.000Z",
+      "last_activity": "2026-11-09T03:13:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T03:10:00.000Z",
+          "to": "2026-11-09T03:13:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:10:00.000Z",
+          "to": "2026-11-09T03:13:30.000Z"
+        }
+      ],
+      "asked": "Coordinate Step 2.1 with Codex.",
+      "last_asked": "Coordinate Step 2.1 with Codex.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "96c00002-0000-4000-8000-000096c00002",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T03-10-25-96c00002-0000-4000-8000-000096c00002.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9s",
+      "repo": "/home/dev/repo-p9s",
+      "checkout": "/home/dev/repo-p9s",
+      "branch": null,
+      "started_at": "2026-11-09T03:10:25.000Z",
+      "last_activity": "2026-11-09T03:13:15.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T03:10:25.000Z",
+          "to": "2026-11-09T03:13:15.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:10:25.000Z",
+          "to": "2026-11-09T03:13:15.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic late resume.",
+      "last_asked": "Step 2.1 fix round 1: synthetic late resume.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T03:13:15.000Z"
+    },
+    {
+      "id": "96000003-0000-4000-8000-000096000003",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9t/96000003-0000-4000-8000-000096000003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9t",
+      "repo": "/home/dev/repo-p9t",
+      "checkout": "/home/dev/repo-p9t",
+      "branch": "main",
+      "started_at": "2026-11-09T03:20:00.000Z",
+      "last_activity": "2026-11-09T03:23:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T03:20:00.000Z",
+          "to": "2026-11-09T03:23:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:20:00.000Z",
+          "to": "2026-11-09T03:23:30.000Z"
+        }
+      ],
+      "asked": "Coordinate Step 2.1 with Codex.",
+      "last_asked": "Coordinate Step 2.1 with Codex.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "96c00003-0000-4000-8000-000096c00003",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T03-20-25-96c00003-0000-4000-8000-000096c00003.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9t",
+      "repo": "/home/dev/repo-p9t",
+      "checkout": "/home/dev/repo-p9t",
+      "branch": null,
+      "started_at": "2026-11-09T03:20:25.000Z",
+      "last_activity": "2026-11-09T03:23:01.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T03:20:25.000Z",
+          "to": "2026-11-09T03:23:01.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:20:25.000Z",
+          "to": "2026-11-09T03:23:01.000Z"
+        }
+      ],
+      "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic two runs.",
+      "last_asked": "Step 2.1 fix round 1: synthetic two runs.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T03:23:01.000Z"
+    },
+    {
+      "id": "96c00005-0000-4000-8000-000096c00005",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T03-20-50-96c00005-0000-4000-8000-000096c00005.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9t",
+      "repo": "/home/dev/repo-p9t",
+      "checkout": "/home/dev/repo-p9t",
+      "branch": null,
+      "started_at": "2026-11-09T03:20:50.000Z",
+      "last_activity": "2026-11-09T03:22:40.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T03:20:50.000Z",
+          "to": "2026-11-09T03:22:40.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:20:50.000Z",
+          "to": "2026-11-09T03:22:40.000Z"
+        }
+      ],
+      "asked": "Synthetic manual run in the same checkout.",
+      "last_asked": "Synthetic manual follow-up.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T03:22:40.000Z"
+    },
+    {
+      "id": "96000004-0000-4000-8000-000096000004",
+      "harness": "claude",
+      "transcript": ".claude/projects/-home-dev-repo-p9u/96000004-0000-4000-8000-000096000004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9u",
+      "repo": "/home/dev/repo-p9u",
+      "checkout": "/home/dev/repo-p9u",
+      "branch": "main",
+      "started_at": "2026-11-09T03:29:50.000Z",
+      "last_activity": "2026-11-09T03:36:30.000Z",
+      "state": "unknown",
+      "state_evidence": "no_signal",
+      "segments": [
+        {
+          "from": "2026-11-09T03:29:50.000Z",
+          "to": "2026-11-09T03:36:30.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:29:50.000Z",
+          "to": "2026-11-09T03:36:30.000Z"
+        }
+      ],
+      "asked": "Coordinate Step 2.1 with Codex.",
+      "last_asked": "Coordinate Step 2.1 with Codex.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": null
+    },
+    {
+      "id": "96c00004-0000-4000-8000-000096c00004",
+      "harness": "codex",
+      "transcript": ".codex/sessions/2026/11/09/rollout-2026-11-09T03-30-02-96c00004-0000-4000-8000-000096c00004.jsonl",
+      "record": null,
+      "host_session_id": null,
+      "cwd": "/home/dev/repo-p9u",
+      "repo": "/home/dev/repo-p9u",
+      "checkout": "/home/dev/repo-p9u",
+      "branch": null,
+      "started_at": "2026-11-09T03:30:02.000Z",
+      "last_activity": "2026-11-09T03:36:00.000Z",
+      "state": "unknown",
+      "state_evidence": "turns_complete",
+      "segments": [
+        {
+          "from": "2026-11-09T03:30:02.000Z",
+          "to": "2026-11-09T03:36:00.000Z",
+          "step": null,
+          "step_source": "unknown"
+        }
+      ],
+      "subagents": [],
+      "activity": [
+        {
+          "from": "2026-11-09T03:30:05.000Z",
+          "to": "2026-11-09T03:36:00.000Z"
+        }
+      ],
+      "asked": "Step 2.1 fix round 1: synthetic imported case A.",
+      "last_asked": "Step 2.1 fix round 2: synthetic imported case B.",
+      "title": null,
+      "started_by": null,
+      "imported": false,
+      "state_since": "2026-11-09T03:36:00.000Z"
+    },
+    {
       "id": "92000001-0000-4000-8000-000092000001",
       "harness": "claude",
       "transcript": ".claude/projects/-home-dev-repo-p9c/92000001-0000-4000-8000-000092000001.jsonl",

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Phase 9 answer-key check (Step 9.0). Usage, from the repo root: fixtures/expected/phase9/check.sh <N>
-# N = 1..5: compares the cases of steps 9.1..9.N (ids starting 91..9N) with the keys in this folder,
+# Phase 9 answer-key check (Step 9.0; N=6 added in Step 9.6). Usage, from the repo root: fixtures/expected/phase9/check.sh <N>
+# N = 1..6: compares the cases of steps 9.1..9.N (ids starting 91..9N) with the keys in this folder,
 # using `cargo run` (never the installed binary) and the fixed --now. Keys are Claude's; do not edit them.
 set -euo pipefail
-N=${1:?usage: check.sh <1-5>}
-[[ $N =~ ^[1-5]$ ]] || { echo "N must be 1-5" >&2; exit 2; }
+N=${1:?usage: check.sh <1-6>}
+[[ $N =~ ^[1-6]$ ]] || { echo "N must be 1-6" >&2; exit 2; }
 K=fixtures/expected/phase9
 ROOT=fixtures/sessions-phase9
 NOW=2026-11-09T12:00:00Z
@@ -27,6 +27,8 @@ L_F="{links: [.links[] | select(.parent | test(\"$RE\"))], unparented}"
 check sessions.json "$S_F" "${ML[@]}" sessions --root $ROOT --now $NOW --since all --json
 check links.json "$L_F" "${ML[@]}" links --root $ROOT --now $NOW --since all --json
 check graph-1.1.json . "${ML[@]}" graph --root $ROOT --now $NOW --repo /home/dev/repo-p9a --step 1.1 --json
+# Step 9.6 (R7): implement, then fix rounds 1 and 2 from `codex exec resume --last`, each after a Claude review part.
+(( N >= 6 )) && check graph-2.1.json . "${ML[@]}" graph --root $ROOT --now $NOW --repo /home/dev/repo-p9r --step 2.1 --json
 if (( N >= 4 )); then
   check sessions.json . "${ML[@]}" sessions --root $ROOT --now $NOW --since all --json
   check links.json . "${ML[@]}" links --root $ROOT --now $NOW --since all --json
