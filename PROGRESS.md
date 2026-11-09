@@ -1,8 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 9.7 (2026-11-08, Claude step, no Codex) is committed: Phase 9 real check, README, re-shot images. Phase 9 waits
-on the owner's check** (stop-and-ask in `docs/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
+**Phase 9 is closed (2026-11-09): the owner confirmed it on real data** ("looks good") after reinstalling and adding
+`SessionEnd` to `~/.claude/settings.json`. Next, owner to choose: board 11 ("where it is now": bright now line in the
+repo view, highlighted live box in the step graph; mockup on the canvas artifact R5Bh9iX6bsn3jSu8F8D58C, awaiting
+approval), then the backlog (`hook check` first). Owner-facing manual steps must be one ready-to-run command, never
+hand-edited JSON (owner, 2026-11-09). `main` is not pushed past 0d490ce; the owner pushes.
+
+**Step 9.7 (2026-11-08, Claude step, no Codex) is committed: Phase 9 real check, README, re-shot images. Phase 9 waited
+on the owner's check (done 2026-11-09, above)** (stop-and-ask in `docs/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
 confirm the need. Real counts at one clock (`--now 2026-11-09T00:34:07Z`, 6a2c306 → HEAD): Codex sessions 223 → 425;
 Claude `unknown` 232 → 3, `finished` 0 → 229 (all `transcript_exit`; `session_end` 0 until the snippet is merged);
 unlinked hand-offs 124 → 47 of 222 → 221; exact 28 → 44; ambiguous 1 → 9 (all 8 new from `.zst` runs on 2026-10-30,
@@ -680,6 +686,15 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-09 — Phase 9 close: owner confirm — Claude (coordinator)
+- Did: recorded the owner's Step 9.7 answer and closed Phase 9.
+- Changed: `docs/phase9-check.md` (Owner check → confirmed), `PLAN.md` (Phase 9 heading marked closed), `PROGRESS.md`.
+- Verify: the owner's words after reinstalling, adding `SessionEnd` (settings.json now has it) and viewing
+  `multi-link tui --since 24h` and the fixture demo: "looks good". Tests at 2c359d0: 580 passed, 0 failed.
+- Review: no code change.
+- Gotchas: hand-merge instructions for the hook were too fiddly for the owner; a one-command merge (backup, add only
+  the missing entry) worked. The backlog's `hook check` prints such a command.
 
 ### 2026-11-08 — Step 9.7: Real check, README, owner confirm — Claude
 - Mode: Claude step (no Codex, no worktree; no `codex exec` ran, so no quota check). Docs reviewed by an independent

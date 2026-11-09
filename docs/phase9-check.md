@@ -194,7 +194,7 @@ W10 scan over committed files                          → see below
 synthetic fixture ids), no `/Users/` path, no secrets. All images are synthetic fixtures. Real renders, JSON and the
 count scripts stay in scratch.
 
-## Owner check (stop-and-ask) — waiting
+## Owner check (stop-and-ask) — confirmed
 
 Need (design needs 1 and 2): a session that ended says so and can be reopened; a hand-off whose Codex run is still on
 disk finds it. To check:
@@ -214,4 +214,4 @@ disk finds it. To check:
 
 3. Run `~/.cargo/bin/multi-link tui`, then confirm the need or say what is wrong.
 
-Owner's answer: waiting.
+Owner's answer (2026-11-09): reinstalled (binary built 2026-11-09 12:40), added `SessionEnd` to `~/.claude/settings.json` with a one-command merge (backup kept as `settings.json.bak`), looked at `multi-link tui --since 24h` and the Phase 9 fixture demo: "looks good". Phase 9 is closed.

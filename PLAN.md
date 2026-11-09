@@ -1626,7 +1626,7 @@ changes" line for exactly the rows U2/U5 change.
   `git diff --exit-code ddd91f8 -- fixtures/expected ':!fixtures/expected/tui' crates/cli crates/core crates/model`
   → exit 0. Axis labels never hide each other (7.3's tests still pass with the wider labels).
 
-### Phase 9 — Truthful states and links (Release 1.6)
+### Phase 9 — Truthful states and links (Release 1.6) — closed 2026-11-09 (owner confirmed)
 Need (design needs 1 and 2): the screens already exist, but much of what they say is "unknown". A session that
 ended should say so and be reopenable; a hand-off whose Codex run is still on disk should find it. Owner chose
 these fixes over the live grid on 2026-11-08. No new screen.
