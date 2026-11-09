@@ -1851,7 +1851,7 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 - Verify: whole-phase Verify; W10 scan over every committed file; the owner's answer recorded.
 
 ### Backlog (ordered, uncommitted)
-`hook check` (owner chose 2026-11-09): a read-only command that compares `~/.claude/settings.json` (or `--scope local`) with the current snippet and lists the missing or outdated multi-link entries, never writing the file; README install steps say to add only the missing entries. Keeps the read-only rule absolute (no `--write`) · `codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` (owner chose 2026-11-09): a read-only command that compares `~/.claude/settings.json` (or `--scope local`) with the current snippet and lists the missing or outdated multi-link entries, never writing the file; it also prints one ready-to-run command that adds only those entries after backing the file up (the user runs it; multi-link itself still never writes). README install steps use that command, never hand-editing JSON (owner, 2026-11-09: "make it as simple and easy as possible"). Keeps the read-only rule absolute (no `--write`) · `codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
 
