@@ -1973,8 +1973,8 @@ Decisions:
   `min(now, window.end)`, so a window that ends before now has no line), a presentation-only resolver picks the
   column: `now == axis.end` → the last axis cell (`cells − 1`), even when a trailing fold leaves the end segment zero
   width; now inside a fold → that fold's last cell (`x + 4`); otherwise `axis.col(now)`. Bar and link mapping are not
-  changed. That column gets `▼` on the axis rule row and `┃` in `now` on every visible lane row (from the first lane
-  row to the last one on screen; never the header, legend, detail or footer rows).
+  changed. That column gets `▼` on the axis rule row and `┃` in `now` on every row below it (from the grid row right under
+  the rule, as board 11b, to the last lane row on screen; never the legend, detail or footer rows).
 - **N2 Paint order decides what sits on top.** Today: grid → links → lanes/bars → completion labels. The line is
   painted after links and before lanes, so grid `│`, link `│`/`╎` and fold `≈` in that column give way to `┃`, while
   bars, `✓`, `◆`, `✓ done` labels and lane text paint over it (a bar that reaches the present visibly plugs into the

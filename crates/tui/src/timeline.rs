@@ -260,6 +260,20 @@ impl Axis {
                 }
             })
     }
+    /// Presentation only: bars and links retain their recorded-time mapping.
+    fn now_col(&self, now: i64) -> Option<u16> {
+        if self.cells == 0 || now < self.start || now > self.end {
+            return None;
+        }
+        if now == self.end {
+            return Some(self.cells - 1);
+        }
+        self.folds
+            .iter()
+            .find(|f| f.from < now && now < f.to)
+            .map(|f| f.x + 4)
+            .or_else(|| self.col(now))
+    }
     /// Stop visiting as soon as spacing fails, rather than allocating every minute
     /// in a long history window for each candidate step.
     fn visit_ticks(
@@ -563,6 +577,13 @@ fn draw_repo(
     let grid_end = y.saturating_sub(1).min(body_end.saturating_sub(1));
     scene.draw_grid(&mut p, body_start.saturating_sub(1), grid_end);
     scene.draw_links(&mut p, &positions);
+    if !positions.is_empty() {
+        scene.draw_now(
+            &mut p,
+            body_start.saturating_sub(1),
+            grid_end.min(h.saturating_sub(3)),
+        );
+    }
     for &(i, y, bg) in &positions {
         scene.draw_lane(&mut p, i, y, bg, body_end);
     }
@@ -688,54 +709,66 @@ impl RepoScene<'_> {
         // Reserve actual label cells in priority order. Every later label must fit
         // entirely in the axis, with a blank cell between labels to keep words distinct.
         let mut occupied = Vec::new();
-        let mut place = |x: u16, label: &str| {
+        let mut place = |x: u16, label: &str, fg: Color| {
             let right = x.saturating_add(label.chars().count() as u16);
             if right > axis.cells || occupied.iter().any(|&(a, b)| x <= b && a <= right) {
                 return false;
             }
             occupied.push((x, right));
-            p.put(44 + x, 3, label, t.secondary, t.screen);
+            p.put(44 + x, 3, label, fg, t.screen);
             true
         };
-        for f in &axis.folds {
-            let label = fold_label(f.to - f.from);
-            place(f.x + (5u16.saturating_sub(label.len() as u16)) / 2, &label);
-        }
-        let end_clock = clock(end);
         let now = report.now.epoch_ms();
-        let end_label = if end == now {
-            format!("{end_clock} now")
-        } else {
-            end_clock.clone()
-        };
-        for label in [end_label.as_str(), if end == now { "now" } else { "" }] {
-            if !label.is_empty()
-                && let Some(x) = axis.cells.checked_sub(label.len() as u16)
-                && place(x, label)
-            {
-                break;
-            }
-        }
+        let now_col = axis.now_col(now);
         let now_clock = clock(now);
-        let interior_now = !self.options.fitted && axis.start <= now && now < end;
-        if interior_now && let Some(x) = axis.col(now) {
+        if let Some(col) = now_col {
             for label in [format!("{now_clock} now"), "now".into()] {
-                if place(x, &label) {
+                if let Some(last_start) = axis.cells.checked_sub(label.len() as u16)
+                    && place(col.min(last_start), &label, t.now)
+                {
                     break;
                 }
             }
         }
+        for f in &axis.folds {
+            let label = fold_label(f.to - f.from);
+            place(
+                f.x + (5u16.saturating_sub(label.len() as u16)) / 2,
+                &label,
+                t.secondary,
+            );
+        }
+        let end_clock = clock(end);
+        if now != end
+            && let Some(x) = axis.cells.checked_sub(end_clock.len() as u16)
+        {
+            place(x, &end_clock, t.secondary);
+        }
         for &(i, x, at) in ticks {
             // Compare clock strings, including when the priority label shortened
-            // to `now` or had to be dropped altogether.
+            // to `now`.
             let tick_clock = clock(at);
-            if tick_clock == end_clock || (interior_now && tick_clock == now_clock) {
+            if tick_clock == end_clock || (now_col.is_some() && tick_clock == now_clock) {
                 continue;
             }
             let label = self.tick_label(at);
             let s = &axis.segments[i];
             if x + label.len() as u16 <= s.x + s.width {
-                place(x, &label);
+                place(x, &label, t.secondary);
+            }
+        }
+    }
+
+    fn draw_now(&self, p: &mut Paint<'_>, start: u16, end: u16) {
+        if self.bars
+            && let Some(col) = self.axis.now_col(self.report.now.epoch_ms())
+        {
+            let x = 44 + col;
+            let t = self.options.theme;
+            p.put(x, 4, "▼", t.now, t.screen);
+            for y in start..=end {
+                let bg = p.buf[(x, y)].bg;
+                p.put(x, y, "┃", t.now, bg);
             }
         }
     }
@@ -1126,6 +1159,70 @@ impl RepoScene<'_> {
 mod tests {
     use super::*;
     const MINUTE: i64 = 60_000;
+    #[test]
+    fn now_inside_fold_uses_its_last_cell_without_changing_bar_mapping() {
+        let axis = Axis::new(
+            0,
+            120 * MINUTE,
+            74,
+            &[(0, 30 * MINUTE), (90 * MINUTE, 120 * MINUTE)],
+            true,
+        );
+        assert_eq!(axis.col(60 * MINUTE), None);
+        assert_eq!(axis.now_col(60 * MINUTE), Some(39));
+        assert_eq!(axis.now_col(120 * MINUTE), Some(73));
+        assert_eq!(axis.now_col(-1), None);
+        assert_eq!(axis.now_col(121 * MINUTE), None);
+    }
+
+    #[test]
+    fn folded_now_paints_last_fold_cell_and_short_axis_keeps_now_word() {
+        let mut report: OverviewReport = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase6/overview.json"
+        ))
+        .unwrap();
+        report.now = Timestamp::from_epoch_ms(60 * MINUTE).unwrap();
+        let links = LinksReport {
+            links: vec![],
+            unparented: vec![],
+        };
+        let options = RepoOptions::default();
+        let mut scene = RepoScene {
+            report: &report,
+            links: &links,
+            group: &report.repos[0],
+            options: &options,
+            lanes: vec![],
+            axis: Axis::new(
+                0,
+                120 * MINUTE,
+                74,
+                &[(0, 30 * MINUTE), (90 * MINUTE, 120 * MINUTE)],
+                true,
+            ),
+            bars: true,
+            ticks: vec![],
+            selection: None,
+        };
+        let mut buf = Buffer::empty(Rect::new(0, 0, 120, 12));
+        let mut p = Paint {
+            buf: &mut buf,
+            theme: options.theme,
+        };
+        scene.draw_grid(&mut p, 5, 9);
+        scene.draw_now(&mut p, 5, 9);
+        assert_eq!(p.buf[(83, 4)].symbol(), "▼");
+        for y in 5..=9 {
+            assert_eq!(p.buf[(83, y)].symbol(), "┃");
+            assert_eq!(p.buf[(83, y)].fg, options.theme.now);
+        }
+        assert_eq!(p.buf[(81, 5)].symbol(), "≈");
+        scene.axis = Axis::new(0, 60 * MINUTE, 5, &[], false);
+        scene.draw_axis(&mut p);
+        let label: String = (44..49).map(|x| p.buf[(x, 3)].symbol()).collect();
+        assert_eq!(label, "  now");
+    }
+
     #[test]
     fn gaps_of_14_vs_16_minutes() {
         let axis = Axis::new(

@@ -1,7 +1,10 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 11 (Where is now?, Release 1.8) is planned (2026-11-10); Step 11.1 is next (Codex).** The owner approved
+**Step 11.1 is committed (2026-11-10, Codex loop): repo view now line. Step 11.2 (step graph live box) is next.**
+The `now` colour is `Theme::now`; the column resolver is `Axis::now_col` (presentation only); the line is drawn by
+`RepoScene::draw_now` after links, before lanes, from the grid row under the rule. New snapshot `repo-now`.
+**Phase 11 (Where is now?, Release 1.8)**: The owner approved
 board 11 (canvas R5Bh9iX6bsn3jSu8F8D58C, boards 11a–11i) on 2026-11-10. Codex critiqued the plan (10 points, 8
 accepted, 2 in part; PLAN.md Review log). Key rules: one `now` colour (#E58AE5 / 176) used only for now; repo view
 draws `▼` + `┃` at the now column (paint order: after links, before lanes; now label first); step graph marks live
@@ -712,6 +715,192 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 11.1: Repo view now line — Codex
+- Did: Implemented N0–N4 / boards 11b and 11e: dedicated now palette, presentation-only column resolver,
+  `▼` on the axis rule and `┃` after links/before lanes, preserving backgrounds and bar/text/completion paint.
+  Now labels reserve their space first, shift left at the edge, and displace overlapping folds/end clocks/ticks.
+  Added fixed-fixture tests for fitted/unfitted, folds (including zero-width end), palette/NO_COLOR, 79 columns,
+  past windows, completion collisions, and short scrolled screens. Added repo-now snapshot with a Codex bar at now.
+  Fix round 1: addressed Claude's one finding under amended N1 by starting the line at the same
+  `body_start.saturating_sub(1)` row as the grid, closing the row-5 gap below `▼`.
+  Round-1 files: `crates/tui/src/timeline.rs`, `crates/tui/tests/timeline.rs`, both repo-phase6 snapshots,
+  both repo-now snapshots, and `PROGRESS.md`. The owner's PLAN.md amendment was left untouched.
+- Changed: `crates/tui/src/theme.rs`, `crates/tui/src/timeline.rs`, `crates/tui/tests/theme.rs`,
+  `crates/tui/tests/timeline.rs`, `fixtures/expected/tui/repo-phase6.txt`,
+  `fixtures/expected/tui/repo-phase6.styles.txt`, `fixtures/expected/tui/repo-now.txt`,
+  `fixtures/expected/tui/repo-now.styles.txt`, `PROGRESS.md`.
+- Changed existing tests (exhaustive; all other existing tests untouched):
+  - `theme.rs::environment_selection_and_exact_palette_table`: now in RGB/indexed/NO_COLOR expectations;
+    its `colors` helper includes now.
+  - `theme.rs::every_text_pair_has_wcag_aa_contrast_in_both_palettes`: now included on all existing backgrounds.
+  - `timeline.rs::fold_near_end_keeps_length_and_shortens_end_to_now` →
+    `fold_near_end_yields_to_full_now_label`: full clock + now takes priority over fold length (N3).
+  - `timeline.rs::fold_at_end_keeps_length_when_even_now_does_not_fit` →
+    `trailing_fold_with_zero_width_end_keeps_now_label`: now label survives the trailing fold; marker/line at last cell.
+  - `timeline.rs::explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it` →
+    `explicit_interior_now_precedes_ticks_and_end_clock`: near-end now label shifts left and displaces end clock.
+- Fix-round-1 affected tests (in addition to the original existing-test list above):
+  - `timeline.rs::fitted_now_line_keeps_background_and_avoids_chrome`: line includes row 5; chrome exclusion updated.
+  - `timeline.rs::short_scrolled_screen_limits_now_to_visible_lanes`: row 5 now asserts `┃`.
+  - `src/timeline.rs::tests::folded_now_paints_last_fold_cell_and_short_axis_keeps_now_word`: starts at row 5,
+    checks the line there and retains a neighbouring fold glyph assertion.
+- repo-phase6 cell audit (exhaustive, zero-based **(row,column)**; styles expanded to cells, blanks normalized
+  exactly as the snapshot dumper): 20 visible cells changed, all N1–N3. No background or modifier changed.
+  - Foreground only, secondary `#9AA1AE` → now `#E58AE5`: (3,107) `1`, (3,108) `0`, (3,109) `:`,
+    (3,110) `2`, (3,111) `5`, (3,112) `p`, (3,113) `m`, (3,115) `n`, (3,116) `o`, (3,117) `w`.
+    The blank (3,114) remains unchanged in normalized snapshot output.
+  - (4,117): `─` / border `#2A2F3A` → `▼` / now `#E58AE5`, screen background `#0E1014`.
+  - (5,117): blank → `┃` / now `#E58AE5`, screen background `#0E1014` preserved (fix round 1).
+  - (6,117), (7,117): blank → `┃` / now `#E58AE5`, selected background `#262C3A` preserved.
+  - (8,117): blank → `┃` / now `#E58AE5`, screen background `#0E1014` preserved.
+  - (10,117): blank → `┃` / now `#E58AE5`, child background `#12151B` preserved.
+  - (11,117), (12,117), (13,117), (14,117): blank → `┃` / now `#E58AE5`, screen background `#0E1014` preserved.
+    (9,117) keeps its existing green `✓`; text/style run splitting changes no other cells.
+- Fix-round snapshot delta: repo-phase6 and repo-now each change only (5,117), blank → `┃`,
+  foreground reset → `#E58AE5`, background `#0E1014` and modifiers unchanged. All other snapshot cells
+  are unchanged from the initial Step 11.1 implementation.
+- Verify: Rust PATH set per AGENTS.md before cargo. `cargo test --workspace` → exit 0,
+  601 passed / 0 failed / 1 ignored (sum of actual result lines). Actual result output pasted below
+  (`cargo test --workspace > /tmp/multi-link-11-r1-tests.log 2>&1`; result lines extracted from that log):
+```text
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.92s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 81 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual result line
+  (compile-path lines omitted for W10):
+```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.10s
+```
+  `cargo fmt --all -- --check` → no output, exit 0.
+  `fixtures/expected/phase9/check.sh 6` → exit 0, actual output (47 `ok` lines):
+```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+```
+  `git diff --name-only -- 'fixtures/expected/*.json' 'fixtures/expected/**/*.json'` → no output;
+  no JSON keys or JSON answer files changed. `git diff --check` → no output, exit 0.
+- Review: Claude, 2 passes (session coordinator ran this step itself, owner asked 2026-11-10). Round 1: 1 finding
+  (`timeline.rs` draw_repo started the line on the first lane row, leaving a gap under `▼`; board 11b draws `┃` on the
+  grid row too; PLAN.md N1 amended to match the board). Fixed in round 1; round 2 clean. Diff touches only the step's
+  files (plus Claude's N1 wording in PLAN.md). Re-ran Verify: 601 passed / 0 failed / 1 ignored; clippy `-D warnings`
+  and `fmt --check` clean; JSON keys unchanged; `check.sh 6` 47/47 `ok`; `repo-now` columns: `▼` row 4, `┃` rows 5–14
+  at x=117 except bar rows (6, 9), matching board 11b. Mode: Codex loop, quota `primary 23%, secondary 35%, CODEX: OK`.
+  (implementer does not decide the step is done). W10 audit of added lines and new
+  snapshots: no personal paths, secrets, real prompts or real session ids; fixture prompts/ids remain synthetic.
+  Home and step snapshots unchanged. All edited/new files are in Step 11.1's Files list. Nothing staged or committed.
+- Gotchas: Fix-round-1 regression before the production change:
+  `cargo test -p multi-link-tui --test timeline fitted_now_line_keeps_background_and_avoids_chrome`
+  failed at row 5, `left: " "`, `right: "┃"`; 0 passed / 1 failed / 26 filtered out. Final workspace run passes.
+  Initial regression test failed as expected (`─` vs `▼`); initial compile exposed the missing Theme.now
+  field before that glyph-only regression run. Tests then exposed expected N3 changes and existing completion marks
+  painting over the line; assertions preserve those marks. First clippy run caught unnecessary test parentheses
+  (removed). First workspace run failed `invalid_flags_are_clap_errors` with `Os { code: 2, kind: NotFound,
+  message: "No such file or directory" }` at `crates/cli/tests/cli.rs:20:10` while other cargo verification commands
+  were active; both subsequent sequential workspace runs passed that test. No unrelated CLI file changed.
+  The temporary snapshot writer was removed after generating the authorized outputs; comparisons remain immutable.
+  Existing untracked `.claude/` untouched. Quota supplied by owner: primary 23%, secondary 35%, CODEX: OK.
+
 
 ### 2026-11-10 — Step 10.2: README setup, real merge, owner confirm — Claude
 - Did: Rewrote README "Run" as "Install" (`cargo install --path crates/cli --locked`) plus "Hook setup": `multi-link

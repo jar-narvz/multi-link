@@ -568,24 +568,26 @@ fn axis_words(b: &Buffer) -> Vec<String> {
 }
 
 #[test]
-fn fold_near_end_keeps_length_and_shortens_end_to_now() {
+fn fold_near_end_yields_to_full_now_label() {
     let r = axis_report(104, &[(0, 60), (100, 104)]);
     let b = render(&r, options(), TimeWindow::default_for(&r), 120);
-    assert_eq!(cells(&b, 3, 110, 118), "40m  now");
+    assert_eq!(cells(&b, 3, 110, 118), "44pm now");
     assert_eq!(
         axis_words(&b),
-        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "40m", "now"]
+        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:44pm", "now"]
     );
 }
 
 #[test]
-fn fold_at_end_keeps_length_when_even_now_does_not_fit() {
+fn trailing_fold_with_zero_width_end_keeps_now_label() {
     let r = axis_report(102, &[(0, 60)]);
     let b = render(&r, options(), TimeWindow::default_for(&r), 120);
-    assert_eq!(cells(&b, 3, 113, 118), " 42m ");
+    assert_eq!(cells(&b, 3, 107, 118), "10:42pm now");
+    assert_eq!(b[(117, 4)].symbol(), "▼");
+    assert_eq!(b[(117, 7)].symbol(), "┃");
     assert_eq!(
         axis_words(&b),
-        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "42m"]
+        ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:42pm", "now"]
     );
 }
 
@@ -609,10 +611,8 @@ fn ticks_in_end_minute_are_suppressed_in_fitted_and_explicit_ranges() {
 }
 
 #[test]
-fn explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it() {
-    // Explicit axes are unfolded; the current-time label wins over the tick
-    // at the same column or the following minute. The end label wins on overlap.
-    // The 10:14pm end label also reserves the cells needed by the 10:00pm tick.
+fn explicit_interior_now_precedes_ticks_and_end_clock() {
+    // Now reserves its full label first, shifting left near the end.
     for (now, expected) in [
         (
             29,
@@ -622,14 +622,18 @@ fn explicit_interior_now_precedes_ticks_and_falls_back_when_end_blocks_it() {
             30,
             vec!["9:00pm", "9:15pm", "9:30pm", "now", "9:45pm", "10:14pm"],
         ),
-        // With the wider end label, the now-only fallback fits at minute 63;
-        // at minute 65 it would cover the end label and must disappear.
         (
             63,
-            vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "now", "10:14pm"],
+            vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:03pm", "now"],
         ),
-        (65, vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]),
-        (68, vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]),
+        (
+            65,
+            vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:05pm", "now"],
+        ),
+        (
+            68,
+            vec!["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:08pm", "now"],
+        ),
     ] {
         let r = axis_report(now, &[(0, 74)]);
         let b = render(
@@ -661,5 +665,139 @@ fn explicit_range_before_now_uses_plain_end_clock() {
     assert_eq!(
         axis_words(&b),
         ["9:00pm", "9:15pm", "9:30pm", "9:45pm", "10:14pm"]
+    );
+}
+
+// Phase 11: these tests catch incorrect presentation mapping and paint order.
+#[test]
+fn fitted_now_line_keeps_background_and_avoids_chrome() {
+    let b = normal();
+    let t = options().theme;
+    assert_eq!(b[(117, 4)].symbol(), "▼");
+    assert_eq!(b[(117, 4)].fg, ratatui::style::Color::Rgb(0xE5, 0x8A, 0xE5));
+    assert_eq!(b[(117, 9)].symbol(), "✓");
+    assert_eq!(b[(117, 9)].fg, t.done);
+    for y in (5..15).filter(|&y| y != 9) {
+        assert_eq!(b[(117, y)].symbol(), "┃", "row {y}");
+        assert_eq!(b[(117, y)].fg, ratatui::style::Color::Rgb(0xE5, 0x8A, 0xE5));
+    }
+    assert_eq!(b[(117, 6)].bg, t.selected);
+    assert_eq!(b[(117, 10)].bg, t.child);
+    for y in [0, 1, 2, 3, 15, 29, 35, 39] {
+        assert_ne!(b[(117, y)].symbol(), "┃");
+    }
+}
+
+#[test]
+fn interior_now_overwrites_link_but_bar_and_done_label_win() {
+    let mut r = report();
+    r.now = Timestamp::parse("2026-11-03T06:23:00Z").unwrap();
+    let b = render(&r, options(), TimeWindow::default_for(&r), 120);
+    assert_eq!(b[(117, 7)].symbol(), "┃");
+    assert_eq!(b[(117, 6)].symbol(), "█");
+    assert_eq!(b[(117, 6)].fg, options().theme.claude);
+
+    let r = axis_report(14, &[(0, 10)]);
+    let b = render(
+        &r,
+        RepoOptions {
+            fitted: false,
+            ..options()
+        },
+        TimeWindow::new(completion_time(0), completion_time(74)),
+        120,
+    );
+    assert_eq!(b[(58, 4)].symbol(), "▼");
+    assert_eq!(cells(&b, 6, 54, 62), "█ ✓ done");
+    assert_eq!(b[(58, 6)].fg, options().theme.done);
+    assert_eq!(b[(58, 7)].symbol(), "┃");
+}
+
+#[test]
+fn now_line_modes_and_outside_windows() {
+    use multi_link_tui::theme::Theme;
+    use ratatui::style::Color;
+    for theme in [
+        Theme::from_env(None, None),
+        Theme::from_env(None, Some(std::ffi::OsStr::new("1"))),
+    ] {
+        let r = report();
+        let b = render(
+            &r,
+            RepoOptions { theme, ..options() },
+            TimeWindow::default_for(&r),
+            120,
+        );
+        assert_eq!(b[(117, 4)].symbol(), "▼");
+        assert_eq!(b[(117, 7)].symbol(), "┃");
+        assert_eq!(
+            b[(117, 7)].fg,
+            if theme.mode == multi_link_tui::theme::ColorMode::Indexed {
+                Color::Indexed(176)
+            } else {
+                Color::Reset
+            }
+        );
+    }
+    let r = axis_report(90, &[(0, 60)]);
+    for fitted in [false, true] {
+        let b = render(
+            &r,
+            RepoOptions {
+                fitted,
+                ..options()
+            },
+            TimeWindow::new(completion_time(0), completion_time(74)),
+            120,
+        );
+        assert!(!text(&b).contains('┃'));
+        assert!(!text(&b).contains('▼'));
+    }
+    let r = report();
+    let b = render(&r, options(), TimeWindow::default_for(&r), 79);
+    assert!(!text(&b).contains('┃'));
+    assert!(!text(&b).contains('▼'));
+}
+
+#[test]
+fn short_scrolled_screen_limits_now_to_visible_lanes() {
+    let r = report();
+    let mut b = Buffer::empty(Rect::new(0, 0, 120, 12));
+    render_repo(
+        &r,
+        &links(&r),
+        "/home/dev/repo-r",
+        TimeWindow::default_for(&r),
+        Some(2),
+        &options(),
+        b.area,
+        &mut b,
+    );
+    assert_eq!(b[(117, 4)].symbol(), "▼");
+    for y in 7..10 {
+        assert_eq!(b[(117, y)].symbol(), "┃");
+    }
+    assert_eq!(b[(117, 5)].symbol(), "┃");
+    assert_ne!(b[(117, 10)].symbol(), "┃");
+    assert_ne!(b[(117, 11)].symbol(), "┃");
+    assert!(cells(&b, 6, 0, 44).contains("codex"));
+}
+
+#[test]
+fn fixture_lane_reaching_now_matches_snapshot() {
+    let mut r = report();
+    r.now = Timestamp::parse("2026-11-03T06:24:00Z").unwrap();
+    let b = render(&r, options(), TimeWindow::default_for(&r), 120);
+    assert_eq!(b[(117, 9)].symbol(), "█");
+    assert_eq!(b[(117, 9)].fg, options().theme.codex);
+    assert_eq!(b[(117, 10)].symbol(), "┃");
+    let dir = root().join("fixtures/expected/tui");
+    assert_eq!(
+        text(&b),
+        fs::read_to_string(dir.join("repo-now.txt")).unwrap()
+    );
+    assert_eq!(
+        support::dump_styles(&b),
+        fs::read_to_string(dir.join("repo-now.styles.txt")).unwrap()
     );
 }

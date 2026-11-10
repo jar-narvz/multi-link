@@ -2,17 +2,17 @@
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   session                                          9:25pm           9:30pm        42m                      10:25pm now
- ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-                                                   │                │            ≈ ≈ ≈              │
-▌ claude “Let's pick back up. Where do…”           │             ████████████████≈ ≈ ≈██████████████████████████████
-▌   main · idle · last active 1 min ago            │                │            ≈ ≈ ≈              │            ╎
-                                                   │                │            ≈ ≈ ≈              │            ╎
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────▼─
+                                                   │                │            ≈ ≈ ≈              │                ┃
+▌ claude “Let's pick back up. Where do…”           │             ████████████████≈ ≈ ≈██████████████████████████████ ┃
+▌   main · idle · last active 1 min ago            │                │            ≈ ≈ ≈              │            ╎   ┃
+                                                   │                │            ≈ ≈ ≈              │            ╎   ┃
    └▸ codex “Run the unit tests and fix…”          │                │            ≈ ≈ ≈              │             ███✓
-      matched by time · 12 s after the call        │                │            ≈ ≈ ≈              │
-                                                   │                │            ≈ ≈ ≈              │
-  claude “Can we recheck the export at 9?”  ██████████████████      │            ≈ ≈ ≈              │
-    main · idle · last active 57 min ago           │                │            ≈ ≈ ≈              │
-                                                   │                │            ≈ ≈ ≈              │
+      matched by time · 12 s after the call        │                │            ≈ ≈ ≈              │                ┃
+                                                   │                │            ≈ ≈ ≈              │                ┃
+  claude “Can we recheck the export at 9?”  ██████████████████      │            ≈ ≈ ≈              │                ┃
+    main · idle · last active 57 min ago           │                │            ≈ ≈ ≈              │                ┃
+                                                   │                │            ≈ ≈ ≈              │                ┃
   ▸ 1 Codex Desktop import at 10:13pm hidden (copies of Claude chats, not runs)
 
 
