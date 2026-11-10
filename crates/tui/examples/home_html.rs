@@ -21,6 +21,7 @@
 //! line. Pass the report's
 //! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would
 //! give it.
+//! `--live 1,3` marks part indices live for screenshots.
 //! `--graph` draws a GraphReport instead; `--selected` is its zero-based part index (default 0).
 use std::{env, fmt::Write, fs, time::Duration};
 
@@ -170,6 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut repo_arg: Option<String> = None;
     let mut since = DEFAULT_WINDOW;
     let mut selected = 0;
+    let mut live = Vec::new();
     let mut rest = args[3..].iter();
     while let Some(flag) = rest.next() {
         let value = rest.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -181,6 +183,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--offset" => offset_arg = value.clone(),
             "--repo" if links.is_some() => repo_arg = Some(value.clone()),
             "--since" if links.is_some() => since = parse_since(value)?,
+            "--live" if links.is_none() => {
+                live = value
+                    .split(',')
+                    .map(str::parse::<usize>)
+                    .collect::<Result<_, _>>()?;
+            }
             "--selected" if links.is_none() => {
                 selected = value
                     .parse::<usize>()
@@ -205,7 +213,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             parse_offset(&offset_arg)?
         };
+        if live.iter().any(|&i| i >= report.parts.len()) {
+            return Err("--live: part index out of range".into());
+        }
         let options = GraphOptions {
+            live: &live,
             selected,
             offset,
             ..GraphOptions::default()

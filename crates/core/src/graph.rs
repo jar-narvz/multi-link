@@ -15,6 +15,71 @@ use multi_link_model::{
 
 use crate::{Options, RepoMode, Scanner, overview::plan_folder};
 
+/// Presentation-only live part indices; the serialized report is unchanged.
+/// Pick the last interval per session (ties by index), across all of its chains.
+pub fn live_parts(report: &GraphReport, sessions: &[Session]) -> Vec<usize> {
+    let mut last = HashMap::new();
+    for (i, part) in report.parts.iter().enumerate() {
+        if let Some(id) = part.session.as_deref() {
+            // An unavailable resumed run has no interval, but its hand-off still
+            // dates the window and supersedes the previous run of this child.
+            let start = part.from.or(match part.edge_in {
+                Some(Edge::Handoff { at, .. }) => Some(at),
+                _ => None,
+            });
+            let key = (start, i);
+            let entry = last
+                .entry((part.harness == Harness::Codex, id))
+                .or_insert(key);
+            *entry = (*entry).max(key);
+        }
+    }
+    let latest = |i: usize, part: &Part| {
+        part.session.as_deref().is_some_and(|id| {
+            last.get(&(part.harness == Harness::Codex, id))
+                .is_some_and(|&(_, index)| index == i)
+        })
+    };
+    let codex: Vec<usize> = report
+        .parts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, part)| {
+            (part.harness == Harness::Codex
+                && latest(i, part)
+                && part.status == Some(PartStatus::Working)
+                && part.run_available == Some(true)
+                && part.from.is_some()
+                && part.to.is_some())
+            .then_some(i)
+        })
+        .collect();
+    report
+        .parts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, part)| {
+            let live = if part.harness == Harness::Codex {
+                codex.contains(&i)
+            } else {
+                latest(i, part)
+                    && sessions.iter().any(|s| {
+                        s.harness == Harness::Claude
+                            && Some(s.id.as_str()) == part.session.as_deref()
+                            && s.state == multi_link_model::State::Busy
+                    })
+                    && part.to.is_some_and(|to| {
+                        (0..=STALE_MS).contains(&(report.now.epoch_ms() - to.epoch_ms()))
+                    })
+                    && !codex
+                        .iter()
+                        .any(|&j| j > i && report.parts[j].chain == part.chain)
+            };
+            live.then_some(i)
+        })
+        .collect()
+}
+
 /// A Codex run read from its rollout.
 #[derive(Debug, Clone, Default)]
 pub struct CodexDetails {

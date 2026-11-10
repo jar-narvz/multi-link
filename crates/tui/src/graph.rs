@@ -30,16 +30,19 @@ const MIN_PANEL_HEIGHT: u16 = PANEL + 1 + FOOTER_ROWS;
 const MIN_LEGEND_HEIGHT: u16 = PANEL + PANEL_ROWS + 2 + FOOTER_ROWS;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GraphOptions {
+pub struct GraphOptions<'a> {
+    /// Presentation-only part indices computed by the worker.
+    pub live: &'a [usize],
     pub selected: usize,
     pub first_slot: usize,
     pub theme: Theme,
     pub offset: UtcOffset,
 }
 
-impl Default for GraphOptions {
+impl Default for GraphOptions<'_> {
     fn default() -> Self {
         Self {
+            live: &[],
             selected: 0,
             first_slot: 0,
             theme: Theme::from_env(Some("truecolor"), None),
@@ -145,7 +148,12 @@ impl Layout {
 }
 
 /// Render in local coordinates, then copy into the caller's clipped area.
-pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, buf: &mut Buffer) {
+pub fn render_graph(
+    report: &GraphReport,
+    options: &GraphOptions<'_>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let area = area.intersection(buf.area);
     if area.is_empty() {
         return;
@@ -180,20 +188,20 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
         let earlier = slots.iter().filter(|&&slot| slot < first).count();
         let later = slots.iter().filter(|&&slot| slot >= first + 5).count();
         if earlier > 0 {
-            paint.write(
-                1,
-                layout.scroll,
-                &format!("‹ {earlier} earlier"),
-                options.theme.secondary,
-                paint.end(),
-            );
+            let live = slots
+                .iter()
+                .enumerate()
+                .any(|(i, &slot)| slot < first && options.live.contains(&i));
+            let label = format!("‹ {earlier} earlier{}", if live { " · ● now" } else { "" });
+            scroll_label(&mut paint, layout.scroll, &label, false);
         }
         if later > 0 {
-            paint.right(
-                layout.scroll,
-                &format!("{later} later ›"),
-                options.theme.secondary,
-            );
+            let live = slots
+                .iter()
+                .enumerate()
+                .any(|(i, &slot)| slot >= first + 5 && options.live.contains(&i));
+            let label = format!("{}{later} later ›", if live { "● now · " } else { "" });
+            scroll_label(&mut paint, layout.scroll, &label, true);
         }
         lanes(report, options, &layout, &slots, first, &mut paint);
     }
@@ -225,7 +233,7 @@ pub fn render_graph(report: &GraphReport, options: &GraphOptions, area: Rect, bu
 }
 
 /// Two rows per part, with its incoming edge on the preceding indented row.
-fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
+fn list(report: &GraphReport, options: &GraphOptions<'_>, layout: &Layout, paint: &mut Paint<'_>) {
     let t = options.theme;
     let mut rows = Vec::new();
     let mut starts = Vec::new();
@@ -286,7 +294,14 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
         rows.push((
             1,
             Line::from(vec![
-                Span::styled("● ", style(color)),
+                Span::styled(
+                    "● ",
+                    style(if options.live.contains(&index) {
+                        color
+                    } else {
+                        mark_color(part, color, options)
+                    }),
+                ),
                 Span::styled(
                     if part.harness == Harness::Codex {
                         "codex"
@@ -332,7 +347,67 @@ fn list(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &m
         if let Some(bg) = bg {
             paint.fill(Rect::new(1, y, paint.end().saturating_sub(1), 1), bg);
         }
-        paint.line(x, y, line, paint.end());
+        let live_title = starts
+            .iter()
+            .enumerate()
+            .any(|(i, &start)| start == first + dy && options.live.contains(&i));
+        let end = paint.end().saturating_sub(if live_title { 6 } else { 0 });
+        paint.line(x, y, line, end);
+        if live_title {
+            let bg = bg.unwrap_or(t.screen);
+            paint
+                .buf
+                .set_string(end, y, " ● now", t.text_style(t.now, bg));
+        }
+    }
+    if room > 0 {
+        let above = starts
+            .iter()
+            .enumerate()
+            .any(|(i, &start)| start < first && options.live.contains(&i));
+        let below = starts
+            .iter()
+            .enumerate()
+            .any(|(i, &start)| start >= first + room && options.live.contains(&i));
+        for (show, y, label) in [
+            (above, layout.claude_lane, "● now ↑"),
+            (below, layout.claude_lane + room as u16 - 1, "● now ↓"),
+        ] {
+            if show {
+                let x = paint.end().saturating_sub(7);
+                let bg = paint.buf[(x, y)].bg;
+                paint.buf.set_string(x, y, label, t.text_style(t.now, bg));
+            }
+        }
+    }
+}
+
+/// Only non-text marks recede; missing runs retain their grey marks.
+fn mark_color(part: &Part, color: Color, options: &GraphOptions<'_>) -> Color {
+    if options.live.is_empty() || (part.harness == Harness::Codex && !has_run(part)) {
+        color
+    } else if part.harness == Harness::Codex {
+        options.theme.codex_dim
+    } else {
+        options.theme.claude_dim
+    }
+}
+
+fn scroll_label(paint: &mut Paint<'_>, y: u16, label: &str, right: bool) {
+    let x = if right {
+        paint.end().saturating_sub(Span::raw(label).width() as u16)
+    } else {
+        1
+    };
+    paint.write(x, y, label, paint.theme.secondary, paint.end());
+    if let Some((prefix, _)) = label.split_once("● now") {
+        paint.write(
+            x + Span::raw(prefix).width() as u16,
+            y,
+            "● now",
+            paint.theme.now,
+            paint.end(),
+        );
     }
 }
 
@@ -354,7 +429,7 @@ fn edge_x(slot: usize, first: usize, offset: u16, end: u16) -> Option<u16> {
 
 fn lanes(
     report: &GraphReport,
-    options: &GraphOptions,
+    options: &GraphOptions<'_>,
     layout: &Layout,
     slots: &[usize],
     first: usize,
@@ -368,7 +443,7 @@ fn lanes(
                 layout.codex_lane
             };
             let selected = i == options.selected;
-            let card = part_box(part, selected, options);
+            let card = part_box(part, selected, options.live.contains(&i), options);
             for dy in 0..BOX_HEIGHT {
                 for dx in 0..30 {
                     if x + dx < paint.end() && y + dy < paint.bottom {
@@ -451,7 +526,7 @@ fn plural(n: usize, word: &str) -> String {
 }
 
 /// A local card keeps clipping independent of the screen's dimensions.
-fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
+fn part_box(part: &Part, selected: bool, live: bool, options: &GraphOptions<'_>) -> Buffer {
     let t = options.theme;
     let codex = part.harness == Harness::Codex;
     let missing = codex && !has_run(part);
@@ -472,16 +547,36 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
     let style = |fg| t.text_style(fg, bg);
     let mut card = Buffer::empty(Rect::new(0, 0, 30, BOX_HEIGHT));
     card.set_style(card.area, Style::default().bg(bg));
-    card.set_string(0, 0, format!("╭{}╮", "─".repeat(28)), style(color));
+    let border_color = if live {
+        color
+    } else {
+        mark_color(part, color, options)
+    };
+    let border_style = if live {
+        style(border_color).add_modifier(Modifier::BOLD)
+    } else {
+        style(border_color)
+    };
+    let (tl, h, tr, v, bl, br) = if live {
+        ("┏", "━", "┓", "┃", "┗", "┛")
+    } else {
+        ("╭", "─", "╮", "│", "╰", "╯")
+    };
+    card.set_string(0, 0, format!("{tl}{}{tr}", h.repeat(28)), border_style);
     card.set_string(
         0,
         BOX_HEIGHT - 1,
-        format!("╰{}╯", "─".repeat(28)),
-        style(color),
+        format!("{bl}{}{br}", h.repeat(28)),
+        border_style,
     );
     for y in 1..BOX_HEIGHT - 1 {
-        card.set_string(0, y, "│", style(color));
-        card.set_string(29, y, "│", style(color));
+        card.set_string(0, y, v, border_style);
+        card.set_string(29, y, v, border_style);
+    }
+    if live {
+        card.set_string(21, 0, " ", border_style);
+        card.set_string(22, 0, "● now", style(t.now).add_modifier(Modifier::BOLD));
+        card.set_string(27, 0, " ", border_style);
     }
     card.set_string(1, 3, "┄".repeat(28), style(t.border));
     let harness = if codex { "codex" } else { "claude" };
@@ -494,7 +589,7 @@ fn part_box(part: &Part, selected: bool, options: &GraphOptions) -> Buffer {
         2,
         1,
         &Line::from(vec![
-            Span::styled("● ", style(color)),
+            Span::styled("● ", style(if live { color } else { border_color })),
             Span::styled(harness, style(color).add_modifier(Modifier::BOLD)),
             Span::styled(
                 cut(&format!(" · {}", part.kind), 27 - 2 - harness.len()),
@@ -579,7 +674,7 @@ fn subline(part: &Part, offset: UtcOffset) -> Option<(String, Role, String)> {
     Some((label, role, suffix))
 }
 
-fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions, bg: Color) {
+fn box_subline(card: &mut Buffer, part: &Part, options: &GraphOptions<'_>, bg: Color) {
     let Some((label, role, suffix)) = subline(part, options.offset) else {
         return;
     };
@@ -638,7 +733,14 @@ fn notable_line(notable: &Notable, theme: Theme, bg: Color) -> Line<'static> {
     Line::from(spans)
 }
 
-fn handoff(part: &Part, step: &str, x: u16, y: u16, options: &GraphOptions, paint: &mut Paint<'_>) {
+fn handoff(
+    part: &Part,
+    step: &str,
+    x: u16,
+    y: u16,
+    options: &GraphOptions<'_>,
+    paint: &mut Paint<'_>,
+) {
     let Some(Edge::Handoff {
         at,
         r#match: confidence,
@@ -683,7 +785,7 @@ fn match_words(confidence: Match, candidates: usize) -> String {
     }
 }
 
-fn panel(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
+fn panel(report: &GraphReport, options: &GraphOptions<'_>, layout: &Layout, paint: &mut Paint<'_>) {
     let y = layout.panel;
     let rows = layout.panel_rows;
     let visible = |dy| dy < rows;
@@ -895,7 +997,7 @@ fn without_controls(text: &str) -> String {
     text.chars().filter(|ch| !ch.is_control()).collect()
 }
 
-fn return_edge(x: u16, y: u16, at: Timestamp, options: &GraphOptions, paint: &mut Paint<'_>) {
+fn return_edge(x: u16, y: u16, at: Timestamp, options: &GraphOptions<'_>, paint: &mut Paint<'_>) {
     let color = options.theme.secondary;
     for (y, glyph) in [(y, "▲"), (y + 1, "│"), (y + 2, "│")] {
         paint.write(x, y, glyph, color, paint.end());
@@ -1075,7 +1177,12 @@ fn summary(report: &GraphReport, offset: UtcOffset) -> String {
     )
 }
 
-fn header(report: &GraphReport, options: &GraphOptions, layout: &Layout, paint: &mut Paint<'_>) {
+fn header(
+    report: &GraphReport,
+    options: &GraphOptions<'_>,
+    layout: &Layout,
+    paint: &mut Paint<'_>,
+) {
     let t = options.theme;
     let narrow = paint.buf.area.width < 120;
     let fit = if narrow { cut_words } else { cut };
@@ -1214,7 +1321,7 @@ fn strip_widths(parts: &[Part], labels: &[&str], span: usize) -> Option<(Vec<usi
     Some((widths, show_labels))
 }
 
-fn strip(report: &GraphReport, options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
+fn strip(report: &GraphReport, options: &GraphOptions<'_>, y: u16, paint: &mut Paint<'_>) {
     let t = options.theme;
     let end = if paint.buf.area.width < 120 {
         paint.end().saturating_sub(2)
@@ -1310,7 +1417,7 @@ fn legend(y: u16, paint: &mut Paint<'_>) {
     paint.line(1, y, Line::from(spans), paint.end());
 }
 
-fn footer(options: &GraphOptions, y: u16, paint: &mut Paint<'_>) {
+fn footer(options: &GraphOptions<'_>, y: u16, paint: &mut Paint<'_>) {
     let t = paint.theme;
     let zone = format!("times {}", view::offset_label(options.offset));
     let until = paint

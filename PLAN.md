@@ -2048,7 +2048,8 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
 - Depends on: 11.1. L1–L6.
 - Files: `crates/core/src/graph.rs` (the pure live-parts function and its unit tests), `crates/core/tests/**`,
   `crates/cli/src/tui.rs` (worker calls L1, fills `Refresh::graph_live`), `crates/cli/tests/**`,
-  `crates/tui/src/{graph,app}.rs` (`GraphOptions` gains the live set), `crates/tui/tests/graph.rs`,
+  `crates/tui/src/{graph,app}.rs` (`GraphOptions` gains the live set), `crates/tui/tests/**` (graph tests,
+  plus every exhaustive `Refresh` initializer, e.g. `started.rs`; amended 2026-11-10),
   `crates/tui/examples/home_html.rs` (a live variant for screenshots), new
   `fixtures/expected/tui/step-live.{txt,styles.txt}`, `PROGRESS.md`. `step-phase8` (graph-1.1, all parts done) must
   stay unchanged.
@@ -2081,6 +2082,11 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
 `hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Step 11.2 Files amendment (Claude, during the step, Codex loop)
+Codex stopped before writing code: `Refresh` is built with exhaustive struct initializers in TUI tests outside
+`crates/tui/tests/graph.rs` (`started.rs:179`), so adding `graph_live` must touch them. Files widened to
+`crates/tui/tests/**`; only initializer additions are allowed outside `graph.rs`.
 
 ### 2026-11-10 — Phase 11 plan critique (Codex, read-only, Codex loop)
 Quota check: `primary 20%, secondary 35%, CODEX: OK`. Ten points, all accepted (two in part):

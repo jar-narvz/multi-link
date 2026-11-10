@@ -143,14 +143,15 @@ fn refresh(
     let links = &links.report.links;
     let started_steps = started_steps(sessions, links);
     let codex_steps = codex_steps(sessions, links);
-    let (graph, graph_steps) = match graph {
-        None => (None, Vec::new()),
+    let (graph, graph_steps, graph_live) = match graph {
+        None => (None, Vec::new(), Vec::new()),
         Some((repo, step)) => {
             let plan = multi_link_core::overview::plan_folder(root, options.repo_mode, repo)
                 .map(|folder| plans(&folder));
             let steps = graph_steps(sessions, links, repo, plan.as_ref());
             let report = scanner.graph(root, options, repo, step, &mut plans)?;
-            (Some(report), steps)
+            let live = multi_link_core::graph::live_parts(&report, sessions);
+            (Some(report), steps, live)
         }
     };
     Ok(Box::new(Refresh {
@@ -159,6 +160,7 @@ fn refresh(
         diagnostics,
         graph,
         graph_steps,
+        graph_live,
         codex_steps,
         started_steps,
     }))
@@ -751,6 +753,30 @@ mod tests {
         // The overview is the same as without a graph: the 2 h window still applies to it.
         assert_eq!(report.overview, plain.overview);
         assert_eq!(report.diagnostics, plain.diagnostics);
+    }
+
+    #[test]
+    fn live_indices_follow_worker_step_and_freshness() {
+        let root = fixtures().join("sessions-phase8");
+        let probe = multi_link_core::FixtureProcessProbe;
+        let mut scanner = Scanner::default();
+        for (step, now, expected) in [
+            (Some("1.5"), "2026-11-06T18:00:00Z", vec![2]),
+            (Some("1.1"), "2026-11-06T18:00:00Z", vec![]),
+            (Some("1.5"), "2026-11-06T18:00:00Z", vec![2]),
+            (Some("1.5"), "2026-11-06T18:06:00Z", vec![]),
+            (None, "2026-11-06T18:00:00Z", vec![]),
+        ] {
+            let target = step.map(|s| graph_target("/home/dev/repo-g", s));
+            let report = refresh(
+                &mut scanner,
+                &root,
+                &fixture_options(&probe, now),
+                target.as_ref(),
+            )
+            .unwrap();
+            assert_eq!(report.graph_live, expected, "{step:?} at {now}");
+        }
     }
 
     #[test]

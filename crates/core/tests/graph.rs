@@ -2397,3 +2397,90 @@ fn child_file_removed_before_reading_is_unavailable() {
         assert_eq!((part.from, part.to), (None, None));
     }
 }
+
+#[test]
+fn live_parts_require_latest_evidence_per_session_and_chain() {
+    use multi_link_core::graph::live_parts;
+    let mut report: GraphReport = serde_json::from_str(include_str!(
+        "../../../fixtures/expected/phase8/graph-1.1.json"
+    ))
+    .unwrap();
+    report.now = t("2026-11-06T16:12:00Z");
+    let mut parent = claude_session(
+        report.parts[0].session.as_deref().unwrap(),
+        &report.repo,
+        &[],
+    );
+    parent.state = State::Busy;
+    // A completed graph renders no live parts, even while the parent is busy elsewhere.
+    report.parts[4].to = Some(t("2026-11-06T16:06:59Z"));
+    assert_eq!(live_parts(&report, &[parent.clone()]), Vec::<usize>::new());
+    report.parts[4].to = Some(t("2026-11-06T16:07:00Z"));
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![4]);
+    // Work after a commit is still live.
+    report.commit = Some(multi_link_model::GraphCommit {
+        hash: "abc1234".into(),
+        at: report.now,
+    });
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![4]);
+    for state in [
+        State::Idle,
+        State::Finished,
+        State::Waiting,
+        State::Stale,
+        State::Unknown,
+    ] {
+        parent.state = state;
+        assert_eq!(live_parts(&report, &[parent.clone()]), Vec::<usize>::new());
+    }
+    parent.state = State::Busy;
+    report.parts.truncate(2);
+    report.parts[0].to = Some(report.now);
+    for status in [
+        PartStatus::Done,
+        PartStatus::Stale,
+        PartStatus::Unlinked,
+        PartStatus::Ambiguous,
+        PartStatus::Unavailable,
+    ] {
+        report.parts[1].status = Some(status);
+        assert_eq!(live_parts(&report, &[parent.clone()]), vec![0]);
+    }
+    report.parts[1].status = Some(PartStatus::Working);
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![1]);
+    report.parts[1].run_available = Some(false);
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![0]);
+    report.parts[1].run_available = Some(true);
+    // Resume of the same child supersedes its old fresh, uncompleted run.
+    let mut resumed = report.parts[1].clone();
+    resumed.to = Some(report.now);
+    report.parts.push(resumed);
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![2]);
+    report.parts[2].status = Some(PartStatus::Done);
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![0]);
+    // An unavailable later window still supersedes the old working window.
+    report.parts[2].from = None;
+    report.parts[2].to = None;
+    report.parts[2].status = Some(PartStatus::Unavailable);
+    report.parts[2].run_available = Some(false);
+    if let Some(Edge::Handoff { at, .. }) = &mut report.parts[2].edge_in {
+        *at = report.now;
+    }
+    assert_eq!(live_parts(&report, &[parent.clone()]), vec![0]);
+    // Independent parents can each be live, including A→B→A chain order.
+    let mut child = report.parts[1].clone();
+    report.parts = vec![report.parts[0].clone(); 3];
+    report.parts[1].session = Some("other-parent".into());
+    report.parts[1].chain = 1;
+    report.parts[2].chain = 2;
+    let mut other = parent.clone();
+    other.id = "other-parent".into();
+    assert_eq!(
+        live_parts(&report, &[parent.clone(), other.clone()]),
+        vec![1, 2]
+    );
+    child.chain = 2;
+    child.status = Some(PartStatus::Working);
+    report.parts.push(child);
+    assert_eq!(live_parts(&report, &[parent, other]), vec![1, 3]);
+}

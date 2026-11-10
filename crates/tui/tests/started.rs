@@ -181,6 +181,7 @@ fn refresh(overview: OverviewReport) -> Result<Box<Refresh>, String> {
         links: links(),
         diagnostics: String::new(),
         graph: None,
+        graph_live: Vec::new(),
         graph_steps: Vec::new(),
         codex_steps: Default::default(),
         started_steps: Default::default(),

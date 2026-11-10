@@ -1,7 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 11.1 is committed (2026-11-10, Codex loop): repo view now line. Step 11.2 (step graph live box) is next.**
+**Step 11.2 is committed (2026-11-10, Codex loop): step graph live box. Step 11.3 (real check, images, README, owner
+confirm) is next.** `multi_link_core::graph::live_parts` gives live part indices; the CLI worker sends them as
+`Refresh::graph_live`; `GraphOptions::live` drives the heavy border, `● now` badge, dimmed marks and off-screen
+labels. New snapshot `step-live`; `home_html.rs` has a live variant for screenshots.
+**Step 11.1 is committed (cd5c0b1): repo view now line.**
 The `now` colour is `Theme::now`; the column resolver is `Axis::now_col` (presentation only); the line is drawn by
 `RepoScene::draw_now` after links, before lanes, from the grid row under the rule. New snapshot `repo-now`.
 **Phase 11 (Where is now?, Release 1.8)**: The owner approved
@@ -715,6 +719,82 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 11.2: Step graph live box — Codex
+- Did: Implemented L1–L7 / boards 11d, 11f, 11g, 11i. Core `graph::live_parts` selects the latest
+  interval per session (ties by part index), requires Working/available Codex or Busy/fresh Claude,
+  and suppresses Claude while a later Codex part in its chain is live. An unavailable resume's
+  hand-off dates its window, so the old run cannot stay live. Commits do not suppress resumed work.
+  The all-time worker computes indices; Refresh/App keep or reject them together with their graph,
+  clearing them on a step switch. No model or serialized JSON fields changed.
+  Live boxes have bold heavy harness-coloured borders and a now-coloured badge; L3 dims only inactive
+  borders/dots, retaining harness words, text, arrows, selection, and grey unavailable boxes.
+  Hidden-part indicators count parts across slot gaps. Narrow titles reserve badge width before cutting;
+  scrolled-out live titles get up/down indicators. Added `home_html --live 1,3` for fixture screenshots.
+- Changed: `crates/core/src/graph.rs`, `crates/core/tests/graph.rs`, `crates/cli/src/tui.rs`,
+  `crates/tui/src/graph.rs`, `crates/tui/src/app.rs`, `crates/tui/tests/graph.rs`,
+  `crates/tui/tests/started.rs` (one empty Refresh initializer only), `crates/tui/examples/home_html.rs`,
+  new `fixtures/expected/tui/step-live.txt`, new `fixtures/expected/tui/step-live.styles.txt`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `cargo test --workspace --offline` → exit 0.
+  Actual relevant target output (copied from the final run):
+  ```text
+  CLI unit tests:
+  test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+  CLI tests/graph.rs:
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+  Core tests/graph.rs:
+  test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  TUI unit tests:
+  test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+  TUI tests/graph.rs:
+  test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+  ```
+  Python aggregation of that run's `test result:` lines printed:
+  ```text
+  workspace totals: 56 targets; 609 passed; 0 failed; 1 ignored
+  ```
+  Existing ignored test: `real_counts`. All 13 Phase 8 graph JSON keys match via
+  `every_phase8_key_matches`; Phase 9 graph keys match via the check script below.
+  New tests cover the 5-min boundary, non-Busy states, latest/superseded/unavailable runs,
+  independent parents and A→B→A chains, same-chain suppression, work after a commit, worker step/freshness
+  transitions, rejected stale reports, 120/119/80-column rendering, both live marks, exact hidden-part counts
+  across same-harness gaps, long-title reservation, list scrolling, NO_COLOR selection, grey boxes, unchanged
+  text/arrows, and the new snapshot and live HTML example.
+- Verify: `cargo clippy --workspace --all-targets --offline -- -D warnings` → exit 0; actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.09s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `fixtures/expected/phase9/check.sh 6` → exit 0; actual output ends:
+  ```text
+  ok   open fork 94000003
+  ok   open fork 94000004
+  ok   open fork 94000006
+  ok   open fork 94000007
+  note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+  Counting its output printed `phase9/check.sh 6: 47 ok; 0 FAIL`.
+  `git diff --exit-code -- fixtures/expected/tui/step-phase8.txt fixtures/expected/tui/step-phase8.styles.txt`
+  → no output, exit 0. Existing JSON answer keys unchanged. W10 added-line/new-snapshot scan for personal
+  paths/names and token patterns printed `W10 added-line/new-snapshot scan: no matches`; new snapshot content
+  uses only the synthetic Phase 8 graph-1.5 fixture, with displayed session ids limited to eight characters.
+- Review: Claude, 1 pass, no findings (session coordinator ran this step itself, owner asked 2026-11-10). Codex
+  first stopped on an unlisted file (`started.rs` Refresh initializer); Claude widened Files to `crates/tui/tests/**`
+  (Review log). Diff touches only the amended Files; `started.rs` is a one-line initializer. Checked: `live_parts`
+  follows L1 (last part per session by `(from or hand-off at, index)`, Codex `Working` + run, Claude `Busy` + `to`
+  within 5 min + no later live Codex in its chain); worker computes it with the graph, App keeps it only with an
+  accepted graph; `step-live` shows the heavy border and `● now` on fix round 1, plan/implement borders in
+  `#8A6448`/`#4F79B3`, harness words and text unchanged. Re-ran Verify: 609 passed / 0 failed / 1 ignored; clippy
+  `-D warnings` and `fmt --check` clean; JSON keys, `step-phase8` and `repo-*` snapshots unchanged; `check.sh 6`
+  47/47 `ok`. Mode: Codex loop, quota `primary 33%, secondary 37%, CODEX: OK`.
+- Gotchas: Claude amended the Files list before implementation; the old file-list blocker is resolved.
+  L3/Review log take precedence over the Verify sentence requesting dim harness words.
+  Initial test setup incorrectly assumed graph-1.1 had a commit and seven list items overflowed: corrected by
+  supplying an explicit commit and a longer list. A regression failed with old run index 1 live after an
+  unavailable resume; using its known hand-off time fixed it. The live HTML check initially searched raw HTML
+  for contiguous badge text, but each cell has its own span; checking rendered text fixed it. Final suite is green.
+  PLAN.md's pre-existing Claude amendment and untracked `.claude/` were left untouched. Nothing staged or committed.
+  Owner-supplied quota: primary 33%, secondary 37%, CODEX: OK. Real-data transition/owner confirmation is Step 11.3.
 
 ### 2026-11-10 — Step 11.1: Repo view now line — Codex
 - Did: Implemented N0–N4 / boards 11b and 11e: dedicated now palette, presentation-only column resolver,

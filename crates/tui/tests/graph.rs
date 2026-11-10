@@ -22,10 +22,11 @@ fn report(id: &str) -> GraphReport {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
-fn golden_options() -> GraphOptions {
+fn golden_options() -> GraphOptions<'static> {
     GraphOptions {
         selected: 1,
         first_slot: 0,
+        live: &[],
         theme: Theme::from_env(Some("truecolor"), None),
         offset: UtcOffset::from_hms(-8, 0, 0).unwrap(),
     }
@@ -204,7 +205,7 @@ fn example_draws_graph_html() {
         .parent()
         .unwrap()
         .join("examples/home_html");
-    let output = std::process::Command::new(example)
+    let output = std::process::Command::new(&example)
         .current_dir(&workspace)
         .arg("--graph")
         .arg("fixtures/expected/phase8/graph-1.1.json")
@@ -220,25 +221,52 @@ fn example_draws_graph_html() {
         String::from_utf8_lossy(&output.stderr)
     );
     let html = html.expect("home_html writes out.html");
-    let mut in_tag = false;
-    let rendered_text: String = html
-        .chars()
-        .filter(|&ch| match ch {
-            '<' => {
-                in_tag = true;
-                false
-            }
-            '>' => {
-                in_tag = false;
-                false
-            }
-            _ => !in_tag,
-        })
-        .collect();
+    let html_text = |html: &str| {
+        let mut in_tag = false;
+        html.chars()
+            .filter(|&ch| match ch {
+                '<' => {
+                    in_tag = true;
+                    false
+                }
+                '>' => {
+                    in_tag = false;
+                    false
+                }
+                _ => !in_tag,
+            })
+            .collect::<String>()
+    };
+    let rendered_text = html_text(&html);
     for expected in ["step 1.1", "implement", "where the time went"] {
         assert!(rendered_text.contains(expected), "missing text: {expected}");
     }
     assert!(html.contains("#1B2130"), "missing selected background");
+    let output = std::process::Command::new(&example)
+        .current_dir(&workspace)
+        .args(["--graph", "fixtures/expected/phase8/graph-1.5.json"])
+        .arg(&out)
+        .args([
+            "--size",
+            "120x40",
+            "--offset",
+            "-8",
+            "--selected",
+            "2",
+            "--live",
+            "2",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let live_html = fs::read_to_string(&out).unwrap();
+    assert!(live_html.contains("┏"));
+    assert!(html_text(&live_html).contains("● now"));
+    assert!(live_html.contains("#E58AE5"));
 }
 
 #[test]
@@ -1993,4 +2021,183 @@ fn phase9_plan_and_reviews_show_their_own_handoffs() {
             .unwrap();
         assert_eq!(origin.trim(), expected, "selected {selected}");
     }
+}
+
+#[test]
+fn live_boxes_keep_text_colors_and_selection() {
+    let report = report("1.1");
+    let options = GraphOptions {
+        live: &[1],
+        ..golden_options()
+    };
+    let before = render(&report, &golden_options(), 120, 40);
+    let buf = render(&report, &options, 120, 40);
+    let t = options.theme;
+    assert_eq!(buf[(23, 16)].symbol(), "┏");
+    assert_eq!(buf[(23, 16)].fg, t.codex);
+    assert!(buf[(23, 16)].modifier.contains(Modifier::BOLD));
+    assert_colored_text(&buf, 45, 16, "● now", t.now);
+    assert_eq!(buf[(23, 16)].bg, t.graph_selected);
+    assert_eq!(buf[(1, 4)].fg, t.claude_dim);
+    assert_eq!(buf[(3, 5)].fg, t.claude_dim);
+    for (x, y) in [(5, 5), (3, 6), (25, 18), (25, 20)] {
+        assert_eq!(buf[(x, y)], before[(x, y)], "text {x},{y}");
+    }
+    let two = render(
+        &report,
+        &GraphOptions {
+            live: &[0, 1],
+            ..options
+        },
+        120,
+        40,
+    );
+    assert_eq!(two[(1, 4)].symbol(), "┏");
+    assert_eq!(two[(23, 16)].symbol(), "┏");
+    let two_list = render(
+        &report,
+        &GraphOptions {
+            live: &[0, 1],
+            ..options
+        },
+        80,
+        40,
+    );
+    for y in [4, 7] {
+        assert_colored_text(&two_list, 74, y, "● now", t.now);
+    }
+    // L3 leaves all card content and the arrows unchanged, apart from the dot.
+    for y in 5..12 {
+        for x in 2..30 {
+            if y == 5 && (3..=4).contains(&x) {
+                continue;
+            }
+            assert_eq!(buf[(x, y)], before[(x, y)], "unchanged content {x},{y}");
+        }
+    }
+    assert_eq!(
+        rendered_styles(&buf, 13..=15),
+        rendered_styles(&before, 13..=15)
+    );
+    let no_color = GraphOptions {
+        theme: Theme::from_env(None, Some(std::ffi::OsStr::new("1"))),
+        ..options
+    };
+    let mono = render(&report, &no_color, 120, 40);
+    assert_eq!(mono[(23, 16)].symbol(), "┏");
+    assert!(text(&mono).contains("● now"));
+    assert!(mono[(32, 17)].modifier.contains(Modifier::BOLD));
+    let mono_list = render(&report, &no_color, 80, 40);
+    assert!(rendered_rows(&mono_list, 7..=7).contains("● now"));
+    assert!(mono_list[(11, 7)].modifier.contains(Modifier::BOLD));
+    assert!(!mono_list[(12, 4)].modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn live_list_reserves_badge_before_cutting_long_title_and_resizes() {
+    let mut report = report("1.1");
+    report.parts[1].kind = "a long live title ".repeat(15);
+    for width in [80, 119, 120, 119, 80] {
+        let buf = render(
+            &report,
+            &GraphOptions {
+                live: &[1],
+                ..golden_options()
+            },
+            width,
+            40,
+        );
+        if width < 120 {
+            assert!(rendered_rows(&buf, 7..=7).contains("● now"));
+            assert_eq!(buf[(1, 4)].fg, golden_options().theme.claude_dim);
+        } else {
+            assert_eq!(buf[(23, 16)].symbol(), "┏");
+        }
+    }
+}
+
+#[test]
+fn live_offscreen_indicators_count_parts_across_slot_gaps() {
+    let mut report = report("1.3");
+    report.parts[1].harness = report.parts[0].harness;
+    let options = GraphOptions {
+        selected: 0,
+        live: &[6],
+        ..golden_options()
+    };
+    let buf = render(&report, &options, 120, 40);
+    assert!(rendered_rows(&buf, 3..=3).contains("● now · 4 later ›"));
+    let options = GraphOptions {
+        selected: 2,
+        first_slot: 3,
+        live: &[0, 6],
+        ..options
+    };
+    let buf = render(&report, &options, 120, 40);
+    assert!(rendered_rows(&buf, 3..=3).contains("‹ 2 earlier · ● now"));
+    assert!(rendered_rows(&buf, 3..=3).contains("● now · 1 later ›"));
+    let buf = render(
+        &report,
+        &GraphOptions {
+            selected: 6,
+            live: &[0],
+            ..options
+        },
+        120,
+        40,
+    );
+    assert!(rendered_rows(&buf, 3..=3).contains("earlier · ● now"));
+    report.parts.extend(report.parts.clone());
+    let buf = render(
+        &report,
+        &GraphOptions {
+            selected: 0,
+            live: &[13],
+            ..options
+        },
+        80,
+        40,
+    );
+    assert!(rendered_rows(&buf, 25..=25).contains("● now ↓"));
+    let buf = render(
+        &report,
+        &GraphOptions {
+            selected: 13,
+            live: &[0],
+            ..options
+        },
+        80,
+        40,
+    );
+    assert!(rendered_rows(&buf, 4..=4).contains("● now ↑"));
+}
+
+#[test]
+fn live_dimming_keeps_unavailable_boxes_grey() {
+    let report = report("1.2");
+    let options = GraphOptions {
+        live: &[0],
+        ..golden_options()
+    };
+    let buf = render(&report, &options, 120, 40);
+    assert_eq!(buf[(23, 16)].fg, options.theme.secondary);
+    assert_eq!(buf[(25, 17)].fg, options.theme.secondary);
+}
+
+#[test]
+fn step_live_matches_snapshot() {
+    let options = GraphOptions {
+        live: &[2],
+        selected: 2,
+        ..golden_options()
+    };
+    let buf = render(&report("1.5"), &options, 120, 40);
+    assert_eq!(
+        text(&buf),
+        fs::read_to_string(root().join("fixtures/expected/tui/step-live.txt")).unwrap()
+    );
+    assert_eq!(
+        support::dump_styles(&buf),
+        fs::read_to_string(root().join("fixtures/expected/tui/step-live.styles.txt")).unwrap()
+    );
 }

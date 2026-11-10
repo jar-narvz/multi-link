@@ -18,6 +18,8 @@ pub struct Refresh {
     pub diagnostics: String,
     /// Graph of the step the App asked for, built on this refresh; None when none is open.
     pub graph: Option<GraphReport>,
+    /// Live part indices belonging only to this refresh's graph.
+    pub graph_live: Vec<usize>,
     /// Step ids `[` `]` walk for that graph's repo, in G9 order; empty when none is open.
     pub graph_steps: Vec<String>,
     /// Per Codex session id: latest tagged incoming hand-off step from a same-repo parent, all-time.
@@ -55,6 +57,7 @@ struct GraphView {
     step: String,
     /// None until a refresh brings the report for exactly this (repo, step).
     report: Option<GraphReport>,
+    live: Vec<usize>,
     steps: Vec<String>,
     selected: usize,
     first_slot: usize,
@@ -246,7 +249,8 @@ impl App {
             Event::Refresh(Ok(mut report)) => {
                 let graph = report.graph.take();
                 let steps = std::mem::take(&mut report.graph_steps);
-                self.take_graph(graph, steps);
+                let live = std::mem::take(&mut report.graph_live);
+                self.take_graph(graph, steps, live);
                 let selected = self.selection_identity();
                 let waiting = waiting_ids(&report.overview);
                 let bells = self
@@ -365,6 +369,7 @@ impl App {
             repo: repo.clone(),
             step: step.clone(),
             report: None,
+            live: Vec::new(),
             steps,
             selected: 0,
             first_slot: 0,
@@ -514,7 +519,7 @@ impl App {
 
     /// Take a refresh's graph when it is for the open (repo, step); keep the selected part by
     /// session and position, else clamp the old index.
-    fn take_graph(&mut self, report: Option<GraphReport>, steps: Vec<String>) {
+    fn take_graph(&mut self, report: Option<GraphReport>, steps: Vec<String>, live: Vec<usize>) {
         let (Some(graph), Some(report)) = (&mut self.graph, report) else {
             return;
         };
@@ -538,6 +543,7 @@ impl App {
         });
         graph.selected = kept.unwrap_or(graph.selected).min(last);
         graph.first_slot = graph_first_slot(&report, graph.selected, graph.first_slot);
+        graph.live = live;
         graph.report = Some(report);
         graph.steps = steps;
     }
@@ -596,6 +602,7 @@ impl App {
             .and_then(|g| Some((g, g.report.as_ref()?)));
         if let Some((graph, report)) = graph {
             let options = GraphOptions {
+                live: &graph.live,
                 selected: graph.selected,
                 first_slot: graph.first_slot,
                 theme: self.home_options().theme,
@@ -752,6 +759,7 @@ mod tests {
                 .unwrap(),
             diagnostics: String::new(),
             graph: None,
+            graph_live: Vec::new(),
             graph_steps: Vec::new(),
             codex_steps: Default::default(),
             started_steps: Default::default(),
@@ -963,6 +971,7 @@ mod phase6_tests {
             },
             diagnostics: String::new(),
             graph: None,
+            graph_live: Vec::new(),
             graph_steps: Vec::new(),
             codex_steps: Default::default(),
             started_steps: Default::default(),
@@ -1143,6 +1152,7 @@ mod repo_tests {
             links,
             diagnostics: String::new(),
             graph: None,
+            graph_live: Vec::new(),
             graph_steps: Vec::new(),
             codex_steps: Default::default(),
             started_steps: Default::default(),
@@ -1370,6 +1380,7 @@ mod graph_tests {
             links: serde_json::from_str(&read("fixtures/expected/links.json")).unwrap(),
             diagnostics: String::new(),
             graph: None,
+            graph_live: Vec::new(),
             graph_steps: Vec::new(),
             codex_steps: Default::default(),
             started_steps: Default::default(),
@@ -1382,6 +1393,7 @@ mod graph_tests {
             links: serde_json::from_str(&read("fixtures/expected/started/links.json")).unwrap(),
             diagnostics: String::new(),
             graph: None,
+            graph_live: Vec::new(),
             graph_steps: Vec::new(),
             codex_steps: Default::default(),
             started_steps: Default::default(),
@@ -1885,6 +1897,38 @@ mod graph_tests {
     }
 
     #[test]
+    fn live_indices_follow_only_the_accepted_graph() {
+        let mut app = graph_app("1.3", &["1.3", "1.5"]);
+        let mut fresh = with_graph(tagged(), graph("1.3", REPO, "1.3"), &["1.3", "1.5"]);
+        fresh.graph_live = vec![1];
+        app.update(Event::Refresh(Ok(fresh)));
+        assert_eq!(app.graph.as_ref().unwrap().live, [1]);
+        assert!(app.report.as_ref().unwrap().graph_live.is_empty());
+        key(&mut app, KeyCode::Char(']'));
+        assert!(app.graph.as_ref().unwrap().live.is_empty());
+        let mut stale = with_graph(tagged(), graph("1.3", REPO, "1.3"), &["1.3", "1.5"]);
+        stale.graph_live = vec![1];
+        app.update(Event::Refresh(Ok(stale)));
+        assert!(app.graph.as_ref().unwrap().live.is_empty());
+        assert!(app.graph.as_ref().unwrap().report.is_none());
+        let mut fresh = with_graph(tagged(), graph("1.5", REPO, "1.5"), &["1.3", "1.5"]);
+        fresh.graph_live = vec![2];
+        app.update(Event::Refresh(Ok(fresh)));
+        assert_eq!(app.graph.as_ref().unwrap().live, [2]);
+        // A stale response must not replace an already accepted graph or its live indices.
+        let mut stale = with_graph(tagged(), graph("1.3", REPO, "1.3"), &[]);
+        stale.graph_live = vec![0];
+        app.update(Event::Refresh(Ok(stale)));
+        assert_eq!(app.graph.as_ref().unwrap().live, [2]);
+        app.update(Event::Refresh(Ok(with_graph(
+            tagged(),
+            graph("1.5", REPO, "1.5"),
+            &[],
+        ))));
+        assert!(app.graph.as_ref().unwrap().live.is_empty());
+    }
+
+    #[test]
     fn stale_graph_refresh_is_ignored() {
         let mut app = graph_app("1.3", &["1.3", "1.5"]);
         key(&mut app, KeyCode::Char(']'));
@@ -2166,6 +2210,7 @@ mod graph_tests {
                 links: self.links.clone(),
                 diagnostics: self.diagnostics.clone(),
                 graph: self.graph.clone(),
+                graph_live: self.graph_live.clone(),
                 graph_steps: self.graph_steps.clone(),
                 codex_steps: self.codex_steps.clone(),
                 started_steps: self.started_steps.clone(),
