@@ -244,6 +244,7 @@ fn list(report: &GraphReport, options: &GraphOptions<'_>, layout: &Layout, paint
                     at,
                     r#match,
                     candidates,
+                    nearest_run,
                     ..
                 } => {
                     let handed = if part.kind == "implement" {
@@ -262,7 +263,7 @@ fn list(report: &GraphReport, options: &GraphOptions<'_>, layout: &Layout, paint
                             format!(
                                 " · {} · {}",
                                 clock(*at, options.offset, true),
-                                match_words(*r#match, *candidates)
+                                match_words(*r#match, *candidates, *nearest_run)
                             ),
                             t.secondary,
                         ),
@@ -745,6 +746,7 @@ fn handoff(
         at,
         r#match: confidence,
         candidates,
+        nearest_run,
         ..
     }) = &part.edge_in
     else {
@@ -772,13 +774,14 @@ fn handoff(
         t.secondary,
         paint.end(),
     );
-    let words = match_words(*confidence, *candidates);
+    let words = match_words(*confidence, *candidates, *nearest_run);
     paint.write(x + 2, y + 2, &cut(&words, 19), t.secondary, paint.end());
 }
 
-fn match_words(confidence: Match, candidates: usize) -> String {
+fn match_words(confidence: Match, candidates: usize, nearest_run: bool) -> String {
     match confidence {
         Match::Exact => "confirmed".to_owned(),
+        Match::Heuristic if nearest_run => "matched by time · nearest run".to_owned(),
         Match::Heuristic => "matched by time".to_owned(),
         Match::Ambiguous => format!("{candidates} possible runs"),
         Match::Unlinked => "no run found".to_owned(),
@@ -938,6 +941,7 @@ fn panel_origin(
         r#match: confidence,
         gap_ms,
         candidates,
+        nearest_run,
     }) = &part.edge_in
     else {
         return None;
@@ -949,7 +953,7 @@ fn panel_origin(
     origin.push_str(&format!(
         " · handed at {} · {}",
         clock(*at, offset, true),
-        match_words(*confidence, *candidates)
+        match_words(*confidence, *candidates, *nearest_run)
     ));
     if let Some(gap) = gap_ms.filter(|gap| *gap >= 0) {
         origin.push_str(&format!(" · started {} after the call", length(gap)));

@@ -10,7 +10,7 @@ use std::{
 
 use multi_link_model::{
     Activity, Call, CallKind, Calls, Counts, Edge, GraphCommit, GraphReport, GraphStep, Harness,
-    Link, Match, Notable, Part, PartStatus, RepoSteps, Session, Timestamp, Turn,
+    Link, LinkEvidence, Match, Notable, Part, PartStatus, RepoSteps, Session, Timestamp, Turn,
 };
 
 use crate::{Options, RepoMode, Scanner, overview::plan_folder};
@@ -332,6 +332,7 @@ fn codex_part(
             parent_part,
             gap_ms: from.map(|from| from.epoch_ms() - link.at.epoch_ms()),
             candidates: link.candidates.len(),
+            nearest_run: link.evidence == Some(LinkEvidence::NearestRun),
         }),
     }
 }

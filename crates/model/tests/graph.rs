@@ -41,9 +41,29 @@ fn edge_kinds_serialize_as_schema() {
         parent_part: Some(0),
         gap_ms: None,
         candidates: 0,
+        nearest_run: false,
     })
     .unwrap();
+    assert!(handoff.get("nearest_run").is_none());
     assert_eq!(handoff["kind"], "handoff");
     assert_eq!(handoff["match"], "exact");
     assert!(handoff.get("gap_ms").unwrap().is_null());
+}
+
+#[test]
+fn nearest_run_edges_round_trip_and_false_is_omitted() {
+    let base = json!({"kind":"handoff", "at":"2026-11-06T18:00:00.000Z", "match":"heuristic",
+        "parent":"p", "parent_part":0, "gap_ms":1000, "candidates":1});
+    for nearest in [None, Some(false), Some(true)] {
+        let mut input = base.clone();
+        if let Some(nearest) = nearest {
+            input["nearest_run"] = json!(nearest);
+        }
+        let edge: Edge = serde_json::from_value(input).unwrap();
+        let mut expected = base.clone();
+        if nearest == Some(true) {
+            expected["nearest_run"] = json!(true);
+        }
+        assert_eq!(serde_json::to_value(edge).unwrap(), expected);
+    }
 }

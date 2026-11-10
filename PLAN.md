@@ -2164,7 +2164,8 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 ### Step 12.1 — K1–K3 in the link resolver (Codex)
 - Depends on: 12.0. K0–K3.
 - Files: `crates/model/src/lib.rs` (`LinkEvidence::NearestRun`), `crates/core/src/link.rs` and its unit tests,
-  `crates/core/src/graph.rs` (`Edge` `nearest_run`, amended in 12.0), `crates/core/tests/**`,
+  `crates/core/src/graph.rs` (`Edge` `nearest_run`, amended in 12.0), `crates/core/tests/**`, `crates/model/tests/**`
+  (Edge constructors; amended in 12.1),
   `crates/tui/src/{view,timeline,graph}.rs` (the `nearest run` words only),
   `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
 - Verify: tests and clippy clean (`phase12` tests compare every Phase 12 key); `fixtures/expected/phase12/check.sh`
@@ -2201,6 +2202,10 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 - **Files.** `crates/core/tests/keys-before-phase6.json` holds a copy of `links-amb-hidden.json`, so its amb-1 value
   changes with the key; added to 12.0's Files.
 - **Found:** option-first explicit-id resume is not recognised as a resume (case h pins today's behaviour); backlog.
+
+### 2026-11-10 — Step 12.1 amendment (Codex stopped on scope)
+- `Edge` is defined in `crates/model/src/lib.rs` and built in `crates/model/tests/graph.rs`; adding `nearest_run` needs
+  that test to compile. Accepted: 12.1 Files gain `crates/model/tests/**` (constructor updates only).
 
 ### 2026-11-10 — Phase 12 plan critique (Codex, read-only, Codex loop)
 Quota check: `primary 0%, secondary 39%, CODEX: OK`. Ten points; outcome:

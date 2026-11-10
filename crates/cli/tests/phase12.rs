@@ -44,7 +44,12 @@ fn tree(row: &Value) -> Value {
         .map(|rows| rows.iter().map(tree).collect())
         .unwrap_or_default();
     children.sort_by(by("id"));
-    let mut handoffs: Vec<_> = row["handoffs"].as_array().unwrap().iter().map(handoff).collect();
+    let mut handoffs: Vec<_> = row["handoffs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(handoff)
+        .collect();
     handoffs.sort_by(by("invocation"));
     json!({"id": row["id"], "children": children, "handoffs": handoffs})
 }

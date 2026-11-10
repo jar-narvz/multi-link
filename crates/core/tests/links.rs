@@ -170,7 +170,11 @@ fn link(
         background: false,
         at: Timestamp::parse(at).unwrap(),
         checkout: "/repo".into(),
-        r#match: if evidence.is_some() {
+        r#match: if evidence == Some(LinkEvidence::NearestRun)
+            || evidence == Some(LinkEvidence::ResumeTurn)
+        {
+            Match::Heuristic
+        } else if evidence.is_some() {
             Match::Exact
         } else {
             match candidates.len() {
@@ -297,17 +301,11 @@ fn heuristic_window_is_inclusive_and_checkout_is_an_exact_string() {
                 "parent",
                 RECENT,
                 InvocationForm::Exec,
-                None,
-                None,
+                Some(A),
+                Some(LinkEvidence::NearestRun),
                 vec![candidate(A, 0), candidate(B, 60_000)]
             )],
-            unparented: vec![
-                A.into(),
-                B.into(),
-                C.into(),
-                "after".into(),
-                "before".into()
-            ],
+            unparented: vec![B.into(), C.into(), "after".into(), "before".into()],
         }
     );
 }

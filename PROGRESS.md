@@ -1,17 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 12 (settle ambiguous links with evidence, Release 1.9): Step 12.0 is committed (2026-11-10); Step 12.1
-(Codex: K1–K3 in `crates/core/src/link.rs`, `LinkEvidence::NearestRun`, graph `Edge.nearest_run`, TUI words) is
-next.** Rules K0–K4 are in `docs/design.md` (Phase 12 decisions) and `docs/output-schema.md` (Heuristic → Phase 12).
-K1 (amended in 12.0): a run leaves a hand-off when another launch hand-off would itself choose it (K2/K3 on its own
-list) at a strictly smaller gap; K2: nearest ≤ 5 s and others ≥ 10 s; launch hand-offs only, R7 untouched. TUI words
-`matched by time · nearest run`. Keys: `fixtures/expected/phase12/` (`check.sh`, `crates/cli/tests/phase12.rs`).
-Tests failing until 12.1, by name: `phase12_links_match_answer_key`, `phase12_overview_reparents_nearest_runs`,
-`phase12_graph_uses_the_nearest_run` (cli), `ambiguous_variant_equals_answer_key` (core links), and
-`every_expected_report_round_trips` (model: `nearest_run` is not a variant yet). Unit tests in
-`crates/core/tests/links.rs` that build ambiguity through the resolver may need new expectations; each change needs
-a reason tied to K1–K3.
+**Phase 12: Step 12.1 is committed (2026-11-10); Step 12.2 (Claude: real check, `docs/phase12-check.md`, README
+limitation, owner confirm) is next.** The resolver applies K1 (a run leaves a hand-off when another launch hand-off
+would itself choose it at a smaller gap), K2 (nearest ≤ 5 s, others ≥ 10 s) and K3 (`nearest_run` evidence, never
+exact); R7 and exact links unchanged. Graph `Edge.nearest_run` (omitted when false); TUI words `matched by time ·
+nearest run` (the 19-cell graph box shows `matched by time · …`; full words on the origin line). Real data at 12.1
+(scratch, counts only): transitions equal PLAN K4 (8 ambiguous → nearest_run, 1 stays, 1 heuristic → unlinked).
+12.2 still owes the masked check with the built resolver (stop gate) and the owner's look.
 
 **Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
 draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
@@ -736,6 +732,319 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 12.1: K1–K3 in the link resolver (key correction pending) — Codex
+- Did: Implemented K1 with original-choice minimum gaps per checkout/run, followed by K2/K3 on survivors.
+  Exact reservations and R7 turn matching retain their existing paths. Added `LinkEvidence::NearestRun`, optional
+  graph edge serialization and conditional TUI words through the existing shared lane helper. Added tests for
+  boundaries, ties, order, original choices (including no fixed-point iteration), exclusions, R7, serialization
+  and the words at 120/80 columns. The owner amended model-test scope after the initial stop.
+- Changed: `crates/model/src/lib.rs`, `crates/model/tests/graph.rs`, `crates/core/src/link.rs`,
+  `crates/core/src/graph.rs`, `crates/core/tests/links.rs`, `crates/tui/src/view.rs`, `crates/tui/src/graph.rs`,
+  `crates/tui/tests/timeline.rs`, `crates/tui/tests/graph.rs`, `crates/cli/tests/phase12.rs` (rustfmt only), `PROGRESS.md`.
+- Verify: Pre-change commands below used the required Rust PATH. Actual output excerpts (large assertion
+  value dumps omitted); these are failures, not completion checks.
+
+  `cargo test -p multi-link --test phase12` →
+  ```text
+  running 3 tests
+  test phase12_graph_uses_the_nearest_run ... FAILED
+  test phase12_links_match_answer_key ... FAILED
+  test phase12_overview_reparents_nearest_runs ... FAILED
+
+  failures:
+      phase12_graph_uses_the_nearest_run
+      phase12_links_match_answer_key
+      phase12_overview_reparents_nearest_runs
+
+  test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+  error: test failed, to rerun pass `-p multi-link --test phase12`
+  ```
+
+  `cargo test -p multi-link-core --test links ambiguous_variant_equals_answer_key` →
+  ```text
+  running 1 test
+  test ambiguous_variant_equals_answer_key ... FAILED
+
+  failures:
+      ambiguous_variant_equals_answer_key
+
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.33s
+
+  error: test failed, to rerun pass `-p multi-link-core --test links`
+  ```
+
+  `cargo test -p multi-link-model every_expected_report_round_trips` →
+  ```text
+  thread 'every_expected_report_round_trips' (6091371) panicked at crates/model/tests/model.rs:115:62:
+  called `Result::unwrap()` on an `Err` value: Error("unknown variant `nearest_run`, expected one of `stdout`, `resume_arg`, `thread_ready`, `task_output`, `redirect_file`, `resume_turn`, `hook`", line: 0, column: 0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  failures:
+      every_expected_report_round_trips
+
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.02s
+
+  error: test failed, to rerun pass `-p multi-link-model --test model`
+  ```
+
+  Post-change commands below used the required Rust PATH. Output excerpts are pasted verbatim; workspace output
+  includes every target's result, with individual passing test names and large assertion dumps omitted.
+  `cargo test -p multi-link-core --lib link::tests` → exit 0:
+  ```text
+running 4 tests
+test link::tests::resume_turns_do_not_use_nearest_run_margins_or_creation_competition ... ok
+test link::tests::competitors_keep_equal_gaps_and_ignore_other_checkouts_moves_and_resumes ... ok
+test link::tests::competitors_use_original_choices_once_independent_of_order ... ok
+test link::tests::nearest_run_boundaries_and_original_candidate_evidence ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+  ```
+  `cargo test --workspace --no-fail-fast` → exit 101:
+  ```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-cac680f01a88ebba)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+     Running tests/cli.rs (target/debug/deps/cli-8c01f063f9a0379e)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s
+     Running tests/graph.rs (target/debug/deps/graph-f001f1d8121ee529)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+     Running tests/hook_check.rs (target/debug/deps/hook_check-152098d6643c7d4f)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+     Running tests/phase12.rs (target/debug/deps/phase12-1b421b346333a6ee)
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+error: test failed, to rerun pass `-p multi-link --test phase12`
+     Running tests/phase9.rs (target/debug/deps/phase9-12c6295aea63b214)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-3007d227ffc8769a)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/app_record.rs (target/debug/deps/app_record-c6763d08001f1e6c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/calls.rs (target/debug/deps/calls-45eb22dd6795bdda)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-499f3a2e254ccd24)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+     Running tests/invocation.rs (target/debug/deps/invocation-3e16b8bc37be96e1)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+     Running tests/last_turn.rs (target/debug/deps/last_turn-b71057714a3b5979)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/phase6.rs (target/debug/deps/phase6-e2db30bd15f79be3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase7.rs (target/debug/deps/phase7-2c8b6d1063153907)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-e78d5e99d41da51c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-586748b917de5a55)
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compressed.rs (target/debug/deps/compressed-a0fe57bc51027b49)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.72s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-ba5f82572d1c4a8d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/phase6.rs (target/debug/deps/phase6-d1fad84a09bb2e55)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-b9f5577635e977c9)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+     Running tests/compressed.rs (target/debug/deps/compressed-23fd67b2786194f6)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/graph.rs (target/debug/deps/graph-367a1c66ea7fcc9e)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/graph_commit.rs (target/debug/deps/graph_commit-413fc54f4401db0c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests/hook.rs (target/debug/deps/hook-9d2c70dbcc7efb25)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+     Running tests/links.rs (target/debug/deps/links-f8b4f67c998fff9c)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running tests/overview.rs (target/debug/deps/overview-958464a7d8ad16d7)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+     Running tests/phase6.rs (target/debug/deps/phase6-a939478b5426845c)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-489df8ea92fb062c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+     Running tests/session_end.rs (target/debug/deps/session_end-97da6fcc150d54f9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/sessions.rs (target/debug/deps/sessions-59bcd1019b17c9c4)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+     Running tests/started.rs (target/debug/deps/started-d7b62c3a1b08ef27)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/transcript_exit.rs (target/debug/deps/transcript_exit-27b68d6dc1e2bf21)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-62ceaf9ce3262d6f)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-312d13ac9a0e316c)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/settings.rs (target/debug/deps/settings-22861df00bc1ebd7)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-df157fa80d5a3417)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-5289ef8606320dd4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/graph.rs (target/debug/deps/graph-bb878fdee95626eb)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/model.rs (target/debug/deps/model-452af6df96c138b7)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-b5ab79d96e45b0d3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-1edf5b4804af5d92)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-548055adc3cdb49a)
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests/graph.rs (target/debug/deps/graph-3ad73ce1cd9b6cc6)
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/home.rs (target/debug/deps/home-7fa1d0c4e28679e3)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/phase6_shape.rs (target/debug/deps/phase6_shape-1ebc76e16856c05b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase8_shape.rs (target/debug/deps/phase8_shape-6208c77eec7f7412)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/started.rs (target/debug/deps/started-0c445af505d452c8)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/theme.rs (target/debug/deps/theme-2754cdbe81372a77)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/timeline.rs (target/debug/deps/timeline-9a45a9c85f7f2dd2)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/view.rs (target/debug/deps/view-9ba5ceb92b04b29b)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: 1 target failed:
+    `-p multi-link --test phase12`
+  ```
+  Named acceptance/serialization/TUI results from that same workspace run:
+  ```text
+test phase12_graph_uses_the_nearest_run ... ok
+test phase12_links_match_answer_key ... FAILED
+test phase12_overview_reparents_nearest_runs ... ok
+test ambiguous_variant_equals_answer_key ... ok
+test nearest_run_edges_round_trip_and_false_is_omitted ... ok
+test every_expected_report_round_trips ... ok
+test nearest_run_words_follow_edge_evidence_in_graph_and_list ... ok
+test nearest_run_words_survive_lane_truncation_at_120_and_80 ... ok
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, final output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 27.51s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → both exit 0, no output.
+  `fixtures/expected/phase12/check.sh` → exit 1:
+  ```text
+FAIL links.json
+512,513d511
+<     "12c00101-0000-4000-8000-000012c00101",
+<     "12c00201-0000-4000-8000-000012c00201",
+519d516
+<     "12c00701-0000-4000-8000-000012c00701",
+521d517
+<     "12c00a01-0000-4000-8000-000012c00a01",
+524d519
+<     "12c00b01-0000-4000-8000-000012c00b01",
+526d520
+<     "12c00b03-0000-4000-8000-000012c00b03",
+532d525
+<     "12c00b09-0000-4000-8000-000012c00b09",
+ok   overview.json
+ok   graph-1.1.json
+  ```
+  `fixtures/expected/phase9/check.sh 6` → exit 0 (47 `ok` lines):
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+  `git diff 04b4233 -- fixtures/expected` → exit 0, diff headers (only Step 12.0's keys):
+  ```text
+diff --git a/fixtures/expected/links-amb-hidden.json b/fixtures/expected/links-amb-hidden.json
+diff --git a/fixtures/expected/phase12/check.sh b/fixtures/expected/phase12/check.sh
+diff --git a/fixtures/expected/phase12/graph-1.1.json b/fixtures/expected/phase12/graph-1.1.json
+diff --git a/fixtures/expected/phase12/links.json b/fixtures/expected/phase12/links.json
+diff --git a/fixtures/expected/phase12/overview.json b/fixtures/expected/phase12/overview.json
+  ```
+  `git diff --exit-code HEAD -- fixtures/expected` → exit 0, no output: no answer keys changed here.
+  `git diff --cached --name-only` → exit 0, no output. Real-data run deliberately left to Claude.
+- Review: Claude, round 1 clean (no fix round). Codex stopped once on scope (Edge in `crates/model/tests/graph.rs`;
+  Files amended, Review log). Codex was right about the key: Claude's `phase12/links.json` kept the 7 newly chosen
+  children in `unparented`; Claude removed them (key fix, Claude-owned). Claude re-ran Verify: `cargo test --workspace`
+  619 passed / 0 failed / 1 ignored; clippy `-D warnings` and `fmt --check` clean; `phase12/check.sh` 3/3 `ok`;
+  `phase9/check.sh 6` 47/47; `git diff a746a8d -- fixtures/expected` = only that key fix. Resolver read against K1–K3:
+  own-choice map from original lists, one pass, ties kept, R7 single-candidate only. Real run (release build, scratch,
+  counts only): 236 links now (3 new since the export); transitions on the exported ones equal K4: 8 ambiguous →
+  heuristic / nearest_run, 1 ambiguous stays, 1 heuristic → unlinked, 117 heuristic, 59 exact + 6 resume_turn + 47
+  unlinked unchanged. Minor, not fixed: the graph's 19-cell hand-off box cuts the new words to `matched by time · …`.
+- Gotchas: Changed `heuristic_window_is_inclusive_and_checkout_is_an_exact_string` in `core/tests/links.rs`:
+  its two candidates have gaps 0 and 60000 ms, so K2 chooses A and K3 requires `nearest_run` (original list size 2).
+  A therefore leaves `unparented` under the existing schema. The expected-link helper now treats `nearest_run`
+  and `resume_turn` evidence as heuristic rather than exact, as K0/K3 and R7 require. No other existing links unit
+  expectation changed. The graph's fixed-width connector label retains its existing clipping; the full phrase
+  survives in its selected-origin sub line and narrow incoming-edge row, tested at 120 and 80 columns.
+  The Phase 12 links key's `unparented` mismatch is independently confirmed by comparing parsed JSON: every link
+  field agrees, and these seven entries occur only in the key's `unparented` list:
+  - `12c00101-0000-4000-8000-000012c00101`
+  - `12c00201-0000-4000-8000-000012c00201`
+  - `12c00701-0000-4000-8000-000012c00701`
+  - `12c00a01-0000-4000-8000-000012c00a01`
+  - `12c00b01-0000-4000-8000-000012c00b01`
+  - `12c00b03-0000-4000-8000-000012c00b03`
+  - `12c00b09-0000-4000-8000-000012c00b09`
+  The schema says selected heuristic children cannot be unparented; the existing core report assembler already
+  implements that rule, so it was not changed to fit this inconsistent key. The amended legacy ambiguous key also
+  removes its newly selected child from `unparented`. All other workspace targets pass; one pre-existing test is
+  ignored. The pre-existing untracked `.claude/` and the owner's PLAN.md amendment were left untouched.
 
 ### 2026-11-10 — Step 12.0: Rules, fixtures and answer keys — Claude
 - Did: K0–K4 into `docs/design.md` and `docs/output-schema.md`; synthetic fixture root `fixtures/sessions-phase12/`

@@ -2201,3 +2201,33 @@ fn step_live_matches_snapshot() {
         fs::read_to_string(root().join("fixtures/expected/tui/step-live.styles.txt")).unwrap()
     );
 }
+
+#[test]
+fn nearest_run_words_follow_edge_evidence_in_graph_and_list() {
+    for nearest in [false, true] {
+        let mut r = report("1.1");
+        let Some(Edge::Handoff { nearest_run, .. }) = &mut r.parts[1].edge_in else {
+            panic!()
+        };
+        *nearest_run = nearest;
+        for width in [120, 80] {
+            let b = render(&r, &golden_options(), width, 40);
+            let screen = text(&b);
+            let words = if nearest {
+                "matched by time · nearest run"
+            } else {
+                "matched by time"
+            };
+            assert!(screen.contains(words), "{width}:\n{screen}");
+            assert_eq!(screen.contains("nearest run"), nearest);
+            // The selected-origin sub line is used in the wide layout; the
+            // incoming-edge row carries the same wording in the narrow list.
+            let sub = if width == 120 {
+                rendered_rows(&b, 29..=29)
+            } else {
+                rendered_rows(&b, 6..=6)
+            };
+            assert!(sub.contains(words), "{width}: {sub}");
+        }
+    }
+}

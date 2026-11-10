@@ -801,3 +801,47 @@ fn fixture_lane_reaching_now_matches_snapshot() {
         fs::read_to_string(dir.join("repo-now.styles.txt")).unwrap()
     );
 }
+
+#[test]
+fn nearest_run_words_survive_lane_truncation_at_120_and_80() {
+    use multi_link_model::{LinkEvidence, Match};
+    for (confidence, evidence, words) in [
+        (
+            Match::Heuristic,
+            Some(LinkEvidence::NearestRun),
+            "matched by time · nearest run",
+        ),
+        (Match::Heuristic, None, "matched by time"),
+        (
+            Match::Heuristic,
+            Some(LinkEvidence::ResumeTurn),
+            "matched by time",
+        ),
+        (Match::Exact, Some(LinkEvidence::Stdout), "confirmed"),
+    ] {
+        let mut r = report();
+        let g = r
+            .repos
+            .iter_mut()
+            .find(|g| g.repo.ends_with("repo-r"))
+            .unwrap();
+        let Row::Session(parent) = &mut g.rows[0] else {
+            panic!()
+        };
+        let link = &mut parent.children[0].handoffs[0];
+        link.r#match = confidence;
+        link.evidence = evidence;
+        assert_eq!(multi_link_tui::view::link_words(link), words);
+        for width in [120, 80] {
+            let screen = text(&render(&r, options(), TimeWindow::default_for(&r), width));
+            assert!(
+                screen.contains(&format!("{words} · 12 s after the call")),
+                "{width}:\n{screen}"
+            );
+            assert_eq!(
+                screen.contains("nearest run"),
+                evidence == Some(LinkEvidence::NearestRun)
+            );
+        }
+    }
+}

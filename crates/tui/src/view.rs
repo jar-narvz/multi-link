@@ -1,6 +1,7 @@
 //! Presentation rules derived from reports; core grouping and values stay unchanged.
 use multi_link_model::{
-    Harness, Link, Match, OverviewReport, RepoGroup, Row, SessionRow, State, Timestamp,
+    Harness, Link, LinkEvidence, Match, OverviewReport, RepoGroup, Row, SessionRow, State,
+    Timestamp,
 };
 use time::{OffsetDateTime, UtcOffset, format_description::well_known::Rfc3339};
 
@@ -102,6 +103,9 @@ pub fn placing<'a>(child: &'a SessionRow, parent: Option<&str>) -> Option<&'a Li
 pub fn link_words(link: &Link) -> String {
     match link.r#match {
         Match::Exact => "confirmed".into(),
+        Match::Heuristic if link.evidence == Some(LinkEvidence::NearestRun) => {
+            "matched by time · nearest run".into()
+        }
         Match::Heuristic => "matched by time".into(),
         Match::Ambiguous => format!("{} possible runs", link.candidates.len()),
         Match::Unlinked => "no run found".into(),

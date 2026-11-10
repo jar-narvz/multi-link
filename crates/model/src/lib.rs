@@ -57,6 +57,7 @@ string_enum!(LinkEvidence {
     TaskOutput,
     RedirectFile,
     ResumeTurn,
+    NearestRun,
     Hook
 });
 string_enum!(Convention {
@@ -584,6 +585,8 @@ pub enum Edge {
         parent_part: Option<usize>,
         gap_ms: Option<i64>,
         candidates: usize,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        nearest_run: bool,
     },
     Return {
         at: Timestamp,
