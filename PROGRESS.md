@@ -1,13 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 10 (hook setup in one command, Release 1.7) is planned (2026-11-09); Step 10.1 is next (Codex).** Owner chose
-`hook check` over board 11. Codex critiqued the plan (10 points, 7 accepted, 3 in part; PLAN.md Review log). Key
-rules: multi-link still never writes settings; `hook check` reports per event (`ok`/`missing`/`outdated`/`duplicate`/
-`customized`/`unknown event`) and prints one POSIX command (`mktemp` → `--merged` → `chmod` → atomic `mv`, backup
-first). Real settings today: four entries run `target/release/multi-link`, `SessionEnd` runs `~/.cargo/bin/multi-link`.
-Board 11 (mockup on canvas artifact R5Bh9iX6bsn3jSu8F8D58C) is in the backlog awaiting approval. Owner-facing manual
-steps must be one ready-to-run command, never hand-edited JSON (owner, 2026-11-09). The owner pushes `main`.
+**Step 10.1 (2026-11-09, Codex, mode Codex loop) is committed: `multi-link hook check` and `--merged`. Step 10.2 is
+next (Claude): README "Install" switches to `hook check` + its printed command; limitations get H4's whitespace and
+strict-number note, H6's millisecond race and H7's "one file" meaning; `docs/design.md` gets H0–H7 as "Phase 10
+decisions"; then stop and ask the owner to run the command printed by the installed binary
+(`cargo install --path crates/cli` first, then `~/.cargo/bin/multi-link hook check`), start and `/exit` one Claude
+session, and confirm `hook check` exits 0, a backup sits beside the settings, and that session shows `finished` /
+`session_end`.** The snippet now lives once in `multi_link_hook::settings::snippet`; check/merge/refusals are pure
+(`settings::check`), file I/O and the command are in `crates/cli/src/hook.rs`. serde_json `preserve_order` is on
+workspace-wide (keys unchanged). Real read-only check with `target/release/multi-link`: four events `ok`,
+`SessionEnd` `outdated` (`~/.cargo/bin/multi-link` vs `target/release`); run from `~/.cargo/bin` the other four will
+show `outdated` instead, which is the merge 10.2 wants. Board 11 remains in the backlog awaiting approval.
+Owner-facing manual steps must be one ready-to-run command, never hand-edited JSON. The owner pushes `main`.
 
 **Phase 9 is closed (2026-11-09): the owner confirmed it on real data** ("looks good") after reinstalling and adding
 `SessionEnd` to `~/.claude/settings.json`.
@@ -691,6 +696,70 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-09 — Step 10.1: `hook check` and `--merged` — Codex
+- Did: Implemented H0–H7 and the Phase 10 critique: one shared snippet; pure source refusal,
+  recognition, per-event findings and conservative merge in the hook crate; CLI-only path resolution,
+  file checks, mode, UTC timestamp and printed POSIX command. The binary never writes settings.
+  Added eight pure settings tests and six CLI tests using temporary directories only, including the
+  executed shell command, byte-identical backups, preserved modes/key order/user entries, symlinks,
+  absent files, special paths, re-read edits, errors and failed-merge cleanup. The scope test sets
+  CLAUDE_CONFIG_DIR to a temporary directory. Enabled workspace serde_json preserve_order only.
+- Changed: `Cargo.toml`, `Cargo.lock`, `crates/hook/src/{lib,settings}.rs`,
+  `crates/hook/tests/settings.rs`, `crates/cli/src/hook.rs`, `crates/cli/tests/hook_check.rs`, `PROGRESS.md`.
+- Verify: Mode: Codex loop. Quota check (`python3 -I tools/codex-quota.py`, run by Claude before the hand-off, exit 0):
+  `primary: 12% of 300 min window, secondary: 34% of 10080 min window, CODEX: OK`.
+  Rust PATH set per AGENTS.md.
+  `cargo test --workspace` → exit 0; summed over all `test result:` lines: 594 passed, 0 failed, 1 ignored
+  (the existing ignored Codex calls test); new suites `hook_check` 6 passed, `settings` 8 passed.
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual output (home shortened to ~):
+  ```text
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Checking multi-link-hook v0.1.0 (~/multi-link/crates/hook)
+    Checking multi-link v0.1.0 (~/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.57s
+  ```
+  `cargo fmt --check` → no output, exit 0.
+  `cargo build --release` → exit 0; actual output (home shortened to ~):
+  ```text
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling multi-link-hook v0.1.0 (~/multi-link/crates/hook)
+   Compiling multi-link v0.1.0 (~/multi-link/crates/cli)
+    Finished `release` profile [optimized] target(s) in 3.06s
+  ```
+  Real run: `target/release/multi-link hook check` → exit 1. Read-only; only the file line,
+  events and findings are pasted here (paths shortened to ~):
+  ```text
+File: ~/.claude/settings.json
+PostToolUse: ok
+PostToolUseFailure: ok
+PermissionRequest: ok
+Notification: ok
+SessionEnd: outdated (binary: ~/.cargo/bin/multi-link -> ~/multi-link/target/release/multi-link)
+  ```
+  `git diff --exit-code -- fixtures` → no output, exit 0: every existing answer key unchanged.
+  `git diff --check` → no output, exit 0. W10 scan of added lines and new step files → no matches.
+- Review: Claude, one pass, no fix round (0 blocking findings). Diff touches only the step's files. Re-ran Verify:
+  `cargo test --workspace` 594 passed / 0 failed / 1 ignored; clippy `-D warnings` and `fmt --check` clean;
+  `git status fixtures` empty (keys unchanged); release `hook check` on real settings → exit 1 with the same six
+  lines as above, and `shasum` of `~/.claude/settings.json` identical before and after (read-only confirmed).
+  Every Verify case is covered (unit: shapes, refusals incl. `1e400` and `18446744073709551616`, `disableAllHooks`,
+  `Stop`, `echo multi-link …`; CLI: sh-run command, modes 0644/0600, symlink, absent, FIFO, unreadable, dangling,
+  stub-binary failure, `- space ' $(never) \`never\`` path). Non-blocking notes for 10.2's README: (1) H4 is applied
+  literally, so a number written as `1e5` or `1.50` is refused, not only out-of-range ones; (2) `customized` lines
+  say "edit multi-link entries and matcher by hand" without naming the key; (3) `disableAllHooks: true` gives exit 1
+  with no command; (4) the timestamp in the printed command is generated when `check` runs.
+- Gotchas: Initial CLI RED run: four failures because `check` did not exist. Additional RED→GREEN
+  regressions preserve pre-existing empty user groups and recognize a bare `~/.cargo/bin/multi-link`
+  as outdated rather than missing. Explicit null matchers remain customized. Initial clippy rejected
+  a decimal zero permission literal in a test; changed it to `0o0`, then reran all Verify commands.
+  The existing ignored Codex test remains ignored (shown above). Real settings were only read;
+  the printed command was never executed on them. Customized/unknown entries and disableAllHooks
+  require a hand edit; the documented read-to-mv race remains per H6. Step 10.2 is next (Claude).
+
 
 ### 2026-11-09 — Phase 9 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 9.7 answer and closed Phase 9.

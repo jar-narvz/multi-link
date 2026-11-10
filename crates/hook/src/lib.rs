@@ -6,6 +6,8 @@
 //! `write` takes the same injected environment so even direct writes enforce the
 //! state-directory policy without consulting process environment variables.
 
+pub mod settings;
+
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
