@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 10 is closed (2026-11-10): Step 10.2 is committed and the owner confirmed it ("done").** The owner reinstalled
+`~/.cargo/bin/multi-link`, ran the one command its `hook check` printed, then started and `/exit`ed one Claude session.
+Real settings now: all five events `ok` from the installed binary (exit 0), every hook on `~/.cargo/bin/multi-link`,
+backup `settings.json.multi-link-backup-20261110T104151Z-…` beside them; the post-merge session shows `finished` /
+`session_end`. README "Install" / "Hook setup" use `hook check`; `docs/design.md` has "Phase 10 decisions" (H0–H7).
+Next is the backlog (PLAN.md): `cd`-then-`resume --last`, ambiguous tie-break, lost key on resize, board 11, live grid.
+Owner-facing manual steps must be one ready-to-run command, never hand-edited JSON. The owner pushes `main`.
+
 **Step 10.1 (2026-11-09, Codex, mode Codex loop) is committed: `multi-link hook check` and `--merged`. Step 10.2 is
 next (Claude): README "Install" switches to `hook check` + its printed command; limitations get H4's whitespace and
 strict-number note, H6's millisecond race and H7's "one file" meaning; `docs/design.md` gets H0–H7 as "Phase 10
@@ -696,6 +704,40 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 10.2: README setup, real merge, owner confirm — Claude
+- Did: Rewrote README "Run" as "Install" (`cargo install --path crates/cli --locked`) plus "Hook setup": `multi-link
+  hook check`, its findings and exit codes, and the printed command in place of "merge the JSON"; CLI examples use the
+  installed `multi-link`; limitations gain H4 (2-space rewrite, duplicate keys and numbers like `1e5`/`1.50` refused),
+  H6 (millisecond race, no lock) and H7 ("current" means that one file). Release 1.6 line updated (owner confirmed
+  2026-11-09). `docs/design.md` gains "Phase 10 decisions" (H0–H7, amending the "Hook install" major decision).
+  Stop-and-ask: the installed binary (Nov 9 12:40) predated 10.1 (`unrecognized subcommand 'check'`), so the owner got
+  one reinstall command, then ran the merge command `hook check` printed from `~/.cargo/bin/multi-link` (before the
+  merge: the four `target/release` entries `outdated`, `SessionEnd` `ok`), then started `claude` in this repo, sent one
+  message and `/exit`ed. Claude never ran the merge or edited settings.
+- Changed: `README.md`, `docs/design.md`, `PROGRESS.md`.
+- Verify: `cargo test --workspace` → exit 0, 594 passed / 0 failed / 1 ignored. `cargo clippy --workspace
+  --all-targets -- -D warnings` → exit 0. `git status --short fixtures` → empty (every answer key unchanged).
+  `git diff --check` clean; W10 scan of added lines (home paths, ids ≥ 9 hex, `local_` ids, tokens) → no matches.
+  `~/.cargo/bin/multi-link hook check` → exit 0 (home shortened to ~):
+  ```text
+File: ~/.claude/settings.json
+PostToolUse: ok
+PostToolUseFailure: ok
+PermissionRequest: ok
+Notification: ok
+SessionEnd: ok
+multi-link hooks in ~/.claude/settings.json are current
+  ```
+  Backup beside the settings: `~/.claude/settings.json.multi-link-backup-20261110T104151Z-s0XHpw` (mode 644, 2055
+  bytes; live file 1995 bytes, mode 644: 60 bytes = 4 paths × 15 characters shorter).
+  `multi-link sessions --json --since all` (counts only, W10): 700 sessions; Claude `finished`/`transcript_exit` 244,
+  `finished`/`session_end` 2, `idle` 4, `busy` 1, `unknown` 3; Codex 446. The one Claude session started after the
+  merge (10:41:51Z): `708143e6`, started 10:42:22Z, last activity 10:42:48Z, in multi-link → `finished` /
+  `session_end`, so the merged `SessionEnd` hook ran.
+- Review: Claude step (docs only, no code). Owner's answer, relayed by the coordinator: "done".
+- Gotchas: A zsh `${PIPESTATUS[0]}` printed empty, so exit codes were re-taken without pipes. The installed binary
+  must be reinstalled after a code step before an owner check that uses it.
 
 ### 2026-11-09 — Step 10.1: `hook check` and `--merged` — Codex
 - Did: Implemented H0–H7 and the Phase 10 critique: one shared snippet; pure source refusal,

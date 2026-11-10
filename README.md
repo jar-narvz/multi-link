@@ -9,8 +9,9 @@ owner approved the real screen ([visual check](docs/phase6-check.md)). Release 1
 on real data (prompts after a system reminder, window words, clock times, axis labels); the owner approved it
 ([real check](docs/phase7-check.md)). Release 1.5 adds the step graph: one PLAN.md step's Claude and Codex parts
 along time; the owner approved it ([real check](docs/phase8-check.md)). Release 1.6 makes states and links truthful:
-ended Claude sessions say `finished`, compressed Codex rollouts are read, and more hand-offs find their run. It is
-built and awaits the owner's check ([real check](docs/phase9-check.md)).
+ended Claude sessions say `finished`, compressed Codex rollouts are read, and more hand-offs find their run; the owner
+confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 replaces hand-merging hook JSON with
+`multi-link hook check`, which reports your hooks and prints one command that updates them ([hook setup](#hook-setup)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -167,14 +168,52 @@ Scanning only reads local agent files (`~/.claude`, `~/.codex`), repo metadata a
 hook state in `~/.multi-link`. It makes no network calls. Opening a session launches the
 corresponding external program; hook recording writes multi-link's own state directory.
 
-## Run
+## Install
 
 Requires macOS, Rust/Cargo and git. From the repo:
 
 ```sh
-cargo build --release -p multi-link
-target/release/multi-link tui
+cargo install --path crates/cli --locked
+multi-link tui
 ```
+
+This puts the binary at `~/.cargo/bin/multi-link`. To try it without installing, use
+`cargo build --release -p multi-link` and run `target/release/multi-link` instead.
+
+### Hook setup
+
+The screens work without hooks. The Claude Code hook adds exact links for hand-offs whose Codex id only reaches the
+hook, step tags as they happen, "waiting on you" when the app has no session record, and `session_end` when a
+session exits. multi-link never edits your Claude settings; it checks them and prints a command you run.
+
+```sh
+multi-link hook check
+```
+
+It reads one settings file: `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json` when that is set),
+`--scope local` for the repo's `.claude/settings.local.json`, or `--settings <path>`. It prints the file it read,
+one line per hook event and, when something can be fixed, one command:
+
+- `ok`: exactly one multi-link entry, equal to what this binary would generate. All `ok` → `multi-link hooks in
+  <file> are current`, exit 0.
+- `missing`, `outdated` (another binary path, `async` or `timeout`; both paths are shown) or `duplicate`: fixed by the
+  printed command. Exit 1.
+- `customized` (a multi-link entry you changed, such as an `if` key or a narrower matcher), `unknown event`, or
+  `disableAllHooks: true`: reported for you to edit by hand, never changed. Exit 1.
+- A file it cannot safely read or merge (invalid JSON, wrong types, a directory, a dangling symlink, values that would
+  not survive a rewrite, below): the reason, no command, exit 2.
+
+Copy the printed command and run it. It is plain `sh`: it copies an existing file to a backup beside it
+(`settings.json.multi-link-backup-<UTC time>-XXXXXX`; an absent file is created instead), writes `multi-link hook check --merged` to a private temp file
+in the same folder, gives it the file's mode and moves it into place in one step, so the file is never half-written;
+if any part fails it removes the temp file and the original stays as it was. Only multi-link's own entries for
+`missing`, `outdated` and `duplicate` events change; your other hooks, keys and their order stay. Run
+`multi-link hook check` again to see exit 0, then start a new Claude session so it loads the hooks.
+
+Run the check with the binary you want the hooks to call (normally the installed one): the hooks are compared with
+that binary's path. `hook install` still prints the bare snippet, and `hook uninstall` prints what to remove.
+
+## Run
 
 Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open, `f` to fork, Esc to return, and
 `q` to quit. In the repo view, `+`/`-` zoom, ←/→ pan, `0` resets the range, `z` unfolds idle stretches
@@ -184,18 +223,18 @@ and `i` shows imports; `s` opens the step graph for the selected lane. The defau
 The CLI also exposes the data and safe open previews:
 
 ```sh
-target/release/multi-link overview --json
-target/release/multi-link sessions --json
-target/release/multi-link links --json
-target/release/multi-link steps --repo "$PWD" --json
-target/release/multi-link graph --repo "$PWD" --step 6.7 --json
-target/release/multi-link open <session-id-prefix> --dry-run
+multi-link overview --json
+multi-link sessions --json
+multi-link links --json
+multi-link steps --repo "$PWD" --json
+multi-link graph --repo "$PWD" --step 6.7 --json
+multi-link open <session-id-prefix> --dry-run
 ```
 
 For fixture data, add `--root fixtures/sessions --now 2026-10-29T23:15:00Z --since all`
 to `tui` or the report commands. `--root` enables fixture mode and disables real process probing.
-`hook install --scope local` prints configuration to paste manually; it does not edit Claude
-settings. See the [design](docs/design.md) for hook behavior and state rules.
+Hooks are set up with `hook check` ([above](#hook-setup)). See the [design](docs/design.md) for hook behavior and
+state rules.
 
 ## Limitations and validation
 
@@ -204,8 +243,8 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
 - Codex waiting detection and automatic Codex opening are unsupported.
 - Claude desktop opening uses an undocumented `claude://` link.
 - Resume and the app link require a transcript and positive exit evidence (above). `transcript_exit`
-  relies on the undocumented `cost-state` record; `session_end` needs the 1.6 hook snippet, including `SessionEnd`,
-  merged into `~/.claude/settings.json`. On 2026-11-08, 72 finished desktop sessions had no single app record, so
+  relies on the undocumented `cost-state` record; `session_end` needs the hook with `SessionEnd` (`multi-link hook check`
+  reports it). On 2026-11-08, 72 finished desktop sessions had no single app record, so
   `o` shows Unavailable with the command for them.
 - Ambiguous links rose from 1 to 9 once compressed rollouts were read: on 2026-10-30 several Codex runs started
   in one checkout within the 60 s creation window. In each case one run started 0.5–1.8 s after the hand-off and
@@ -223,6 +262,13 @@ settings. See the [design](docs/design.md) for hook behavior and state rules.
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
+- Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
+  (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
+  duplicate key or with a number serde_json would not write back as the same text: beyond 64-bit integers, and also
+  forms like `1e5` or `1.50`. An edit to the settings file in the milliseconds between `--merged` reading it and the
+  final `mv` is lost; there is no lock that Claude Code also honours. "Current" means current in that one file: it
+  does not read other settings levels (project, local, managed policy), so it cannot prove they let the hooks run.
+  The binary path is compared as text, not checked to exist.
 - Step graph limits: Step 8.4's own graph is misnamed (24 runs as fix rounds) and 10 of its 25 runs are unlinked.
   Nesting sessions under the session that started them (repo view, and `s` on a coordinator lane) relies on the
   Claude desktop app's undocumented per-session records. The first refresh after start takes about 6.4 s on the
