@@ -1,6 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 12 (settle ambiguous links with evidence, Release 1.9) is planned (2026-11-10); Step 12.0 (Claude: rules,
+fixtures, keys) is next.** Owner chose it 2026-11-10. Codex critiqued the plan (10 points, 7 accepted, 2 in part,
+1 point's sub-item rejected; PLAN.md Review log). K1: a run that is another hand-off's unique nearest with a smaller
+gap goes there; K2: nearest ≤ 5 s and others ≥ 10 s (provisional); evidence `nearest_run`, never exact. Masked
+check on 29 exact links: 28 right, 0 wrong, 1 unlinked.
+
 **Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
 draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
 `docs/phase11-check.md`. Next is the backlog (PLAN.md): `cd`-then-`resume --last`, ambiguous tie-break, lost key on

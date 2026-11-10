@@ -2079,10 +2079,130 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
 - Verify: whole-phase Verify; the comparisons recorded in PROGRESS (what matches the board, what differs and why);
   the owner's answer recorded.
 
+### Phase 12 — Settle ambiguous links with evidence (Release 1.9)
+Need (design need 1: see which Codex run came from which Claude session, and how sure that is): 9 real hand-offs
+are `ambiguous` because two or more Codex runs in the same checkout started within the 60 s creation window. The
+TUI says "2 possible runs" and links nothing, though in most of them the answer is plain from the data. Owner chose
+this over the other backlog items on 2026-11-10. Phase 9's check explained the 9 (`docs/phase9-check.md`).
+Measured 2026-11-10 on real data (`links` / `sessions --since all`, release build at 04b4233; counts only):
+- 234 hand-offs: 124 heuristic, 53 exact, 48 unlinked, 9 ambiguous.
+- **Calibration on ground truth.** 29 exact launch links (child id observed, not `resume`): the true child is among
+  the 60 s candidates in 28; its gap is 0.45–3.18 s in 27 and 6.2 s in one. 4 of the 29 had other candidates
+  (17.0–56.8 s); the nearest was the true child in 4 of 4. Small sample, stated as such.
+- **Masked check** (hide each of the 29 observed ids, run K1–K3): 28 right, 0 wrong, 1 unlinked (the run outside the
+  window). Only 4 of the 29 had rivals, so this says little near the K2 margins: they are provisional.
+- **The 9.** Each has a nearest run at 0.49–1.76 s. In 7, every further candidate starts closer to a different
+  hand-off (it is that hand-off's nearest run). In 1, the other runs start ≥ 23.8 s after. In 1 (0.91 s vs 7.88 s,
+  the 7.88 s run claimed by nobody) the answer is not plain.
+
+Decisions:
+- **K0 Contract (a stated revision, not purely additive).** Link `evidence` gains `"nearest_run"`, allowed only on
+  a `heuristic` link (like `resume_turn`). `exact` keeps its meaning: an observed child id; nothing here makes a
+  link exact. `candidates` now means the runs left after K1 (survivors), sorted by gap: `heuristic` without
+  evidence has 1, `heuristic` / `nearest_run` has 1 or more with `child` = `candidates[0]`, `ambiguous` has 2 or
+  more, `unlinked` has none. Runs K1 removed are not listed (the schema doc says so); `docs/output-schema.md`
+  records the revision.
+- **K1 A run that is another hand-off's own nearest goes there.** Competitors are exactly the hand-offs that use
+  the 60 s creation window today: not `exact`, not `dir_moved`, no `resume_id`, and not an id-less `resume --last`
+  (R7 compares later turns, not creation, so its gaps cannot compete). Exact launches keep reserving their observed
+  child (`claimed`, unchanged). Run r is removed from hand-off h when, for some other competitor h', r is h''s
+  unique nearest original candidate and gap(h', r) < gap(h, r). Equal gaps, or r not h''s unique nearest, → r stays.
+  One pass over the original candidate lists, so hand-off order cannot matter. **An assumption, stated:** Codex
+  creates a run within seconds of its launch (27 of 28 ground-truth gaps ≤ 3.2 s). It can be wrong: A launches in
+  the background at 0 s and its run appears at 11 s, while B launched at 10 s failed to start one; K1 then gives
+  A's run to B. Today both A and B would claim that run (two `heuristic` links to one child), so K1 removes a
+  duplicate attribution rather than adding a new risk; the link still says `matched by time`, never confirmed.
+- **K2 A clear nearest (provisional margins).** If two or more runs remain after K1, the nearest is chosen when its
+  gap is ≤ 5 s and every other remaining run's gap is ≥ 10 s (inclusive, in ms). Why these: 27 of 28 true gaps are
+  ≤ 3.2 s, and the 4 ground-truth rivals started ≥ 17 s after; the margins are chosen wider than that, not fitted to
+  the 9. Known failure: a manual run at +1 s and a slow true child at +12 s picks the manual run. 12.2 re-runs the
+  masked check; any wrong answer there stops the phase.
+- **K3 Result.** After K1/K2: one chosen run → `heuristic`, `child` = it; `evidence: "nearest_run"` when the
+  original list had more than one run (else `null`, as today). None left → `unlinked`. Otherwise `ambiguous`, as
+  today. Every child change flows on as today's heuristic links do: overview reparents the run under its parent,
+  and the step graph uses it for run windows, prompts and return edges. Words in the TUI: `matched by time ·
+  nearest of N runs` (N = original candidates) where the sub line says `matched by time` today; the graph derives
+  it from the edge's candidate count, so `Edge` needs no evidence field.
+- **K4 Changes to today's answers are listed, not hidden.** Expected transitions on today's data (descriptive; the
+  data grows, so these are not acceptance targets): 53 exact → unchanged; 48 unlinked → unchanged; 6 heuristic
+  `resume_turn` → unchanged; 118 heuristic launch → 117 unchanged, 1 `unlinked` (its only run is a closer hand-off's
+  nearest); 9 ambiguous → 8 `heuristic` / `nearest_run` (7 by K1, 1 by K2), 1 ambiguous. Totals 234 → exact 53,
+  heuristic 131, unlinked 49, ambiguous 1. Step 12.0 lists every committed key value that changes.
+
+Non-goals: making any of these `exact`; changing the 60 s window or R7's 10 s; the `cd`-then-`resume --last` case;
+using session text or prompts to match; iterating K1 to a fixed point.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings`
+clean; every committed answer key equal except the values Step 12.0 lists; W10 scan over committed files.
+
+### Step 12.0 — Rules, fixtures and answer keys (Claude)
+- Depends on: 11.3. K0–K4 into `docs/design.md` ("Phase 12 decisions") and `nearest_run` into
+  `docs/output-schema.md`. Synthetic fixtures (W10) in `fixtures/sessions-phase12/`, fixed `--now`, and
+  Claude-written keys in `fixtures/expected/phase12/` with a `check.sh`, before any code: (a) two hand-offs 40 s apart
+  in one checkout, each with a run 1 s after it (each gets its own run by K1); (b) one hand-off with runs at 1 s and
+  30 s, nobody else (K2 → nearest); (c) runs at 1 s and 7 s (stays ambiguous); (d) runs at 6 s and 30 s (stays
+  ambiguous: nearest over 5 s); (e) a hand-off whose only run started closer to another hand-off (→ `unlinked`);
+  (f1) two hand-offs at the same instant, one run 1 s after (kept by both: both `heuristic` to the same child, as
+  today); (f2) the same with two runs at 1 s and 30 s (both pick the 1 s run by K2); (g) an exact launch beside a
+  heuristic one (claimed run never a candidate); (h) an id-less `resume --last` and an option-first explicit-id
+  resume beside launches (both unchanged); (i) a competitor that stays ambiguous itself (its rival runs are not its
+  unique nearest, so nothing is removed elsewhere); (j) K2 boundaries at 4999/5000/5001 ms and 9999/10000/10001 ms;
+  (k) a `dir_moved` hand-off (no candidates, never a competitor). Keys: `links.json`, plus `overview.json` (a run
+  reparented by K1) and one `graph-*.json` (its run window and return edge), all with one fixed `--now`; a
+  `crates/cli/tests/phase12.rs` compares them in `cargo test`. Existing keys that change are listed value by value.
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase12/**`, `fixtures/expected/phase12/**`,
+  `crates/cli/tests/phase12.rs`, `fixtures/expected/**` (only the listed values), `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` except `phase12` tests and tests comparing changed keys, listed by
+  name in PROGRESS (all pass by 12.1); `fixtures/expected/phase12/check.sh` runs (`cargo run`, fixed `--now`, `jq -S`
+  comparison) and fails only on the new cases; W10 scan: `git grep -n -E '/Users/|jarednarvaez' -- fixtures docs`
+  finds nothing new.
+
+### Step 12.1 — K1–K3 in the link resolver (Codex)
+- Depends on: 12.0. K0–K3.
+- Files: `crates/model/src/lib.rs` (`LinkEvidence::NearestRun`), `crates/core/src/link.rs` and its unit tests,
+  `crates/core/tests/**`, `crates/tui/src/{view,timeline,graph}.rs` (the `nearest of N runs` words only),
+  `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests and clippy clean (`phase12` tests compare every Phase 12 key); `fixtures/expected/phase12/check.sh`
+  all `ok`; `fixtures/expected/phase9/check.sh 6` 47/47; `git diff 04b4233 -- fixtures/expected` shows only 12.0's
+  keys; unit tests: K1 (strictly smaller gap and unique nearest only, ties kept, result independent of hand-off
+  order, other checkouts ignored), K2 (boundaries as written), K3 (evidence only with more than one original
+  candidate), exact and R7 links unchanged; the longer words survive the lane's truncation at 120 and 80 columns.
+  Real run in scratch, counts only: transitions against K4's table.
+
+### Step 12.2 — Real check, README, owner confirm (Claude)
+- Depends on: 12.1. Real counts before/after by K1/K2, each of the 9 described by gaps only (W10), and the one
+  heuristic → unlinked case. Re-run the masked check on every exact launch link with the built resolver (scratch
+  harness); any wrong answer stops the phase for the owner. README: the "Ambiguous links" limitation rewritten (what still stays ambiguous and why).
+  Then stop and ask the owner to look at the repo view's links and confirm the need.
+- Files: `docs/phase12-check.md`, `README.md`, `PROGRESS.md`
+- Verify: whole-phase Verify; real counts match K4 or each difference is explained; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Phase 12 plan critique (Codex, read-only, Codex loop)
+Quota check: `primary 0%, secondary 39%, CODEX: OK`. Ten points; outcome:
+1. K1 can give a delayed background run to a failed later launch → **accepted in part**: stated as an assumption
+   with that counterexample in K1. Kept, because today both hand-offs claim that run (duplicate attribution) and
+   the link stays `matched by time`.
+2. K1 drops a run even when the other hand-off does not take it → **accepted**: a run is removed only when it is the
+   other hand-off's unique nearest original candidate with a strictly smaller gap; fixture (i).
+3. Competitor eligibility → **accepted**: competitors are exactly today's creation-window hand-offs (no exact, no
+   `dir_moved`, no `resume_id`, no id-less `resume --last`); fixtures (h), (k).
+4. Calibration does not validate 5 s / 10 s → **accepted**: margins labelled provisional, the known failure named,
+   a masked check on all 29 exact links run now (28 right, 0 wrong, 1 unlinked) and again in 12.2 as a stop gate.
+5. Keeping losing runs in `candidates` changes its meaning → **accepted**: `candidates` = survivors after K1, the
+   per-match counts written out, and the revision recorded in the schema doc (K0 no longer claims "additive only").
+6. Graph and overview consequences → **accepted**: Phase 12 keys include `overview.json` and a `graph-*.json`.
+7. `view.rs` missing; graph has no evidence → **accepted**: `view.rs` in 12.1's Files; the graph words come from the
+   edge's candidate count, so `Edge` is unchanged; truncation tested.
+8. Equal-gap fixture wrong → **accepted**: (f1) and (f2) with exact expected results; ms boundary fixtures (j).
+9. Verify commands and invariants → **accepted**: commands named, `phase12.rs` in `cargo test`, order and checkout
+   invariance, exact and R7 unchanged. History-window invariance **rejected**: links already use `--since all`.
+10. K4 arithmetic → **accepted**: full transition table summing to 234 (118 launch heuristics, not 124; the other
+    6 are `resume_turn`), marked descriptive, not an acceptance target.
 
 ### 2026-11-10 — Step 11.3 Files amendment (Claude, during the step)
 The real check needs a record like `docs/phase9-check.md` (method, frames, board comparison) that the README links
