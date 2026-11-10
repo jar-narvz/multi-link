@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 11 (Where is now?, Release 1.8) is planned (2026-11-10); Step 11.1 is next (Codex).** The owner approved
+board 11 (canvas R5Bh9iX6bsn3jSu8F8D58C, boards 11a–11i) on 2026-11-10. Codex critiqued the plan (10 points, 8
+accepted, 2 in part; PLAN.md Review log). Key rules: one `now` colour (#E58AE5 / 176) used only for now; repo view
+draws `▼` + `┃` at the now column (paint order: after links, before lanes; now label first); step graph marks live
+parts with a heavy border and `● now`, finished parts' borders and `●` dim (text keeps its colour, unlike 11d).
+A Claude part is live only if it is its session's last part, the session is `Busy` and its last activity is within
+5 min; a Codex part only if `Working` and its child's last part. The CLI worker computes liveness (`Refresh::graph_live`).
+
 **Phase 10 is closed (2026-11-10): Step 10.2 is committed and the owner confirmed it ("done").** The owner reinstalled
 `~/.cargo/bin/multi-link`, ran the one command its `hook check` printed, then started and `/exit`ed one Claude session.
 Real settings now: all five events `ok` from the installed binary (exit 0), every hook on `~/.cargo/bin/multi-link`,

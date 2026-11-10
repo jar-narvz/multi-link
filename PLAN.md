@@ -1956,10 +1956,155 @@ clean; every committed answer key unchanged; W10 scan over committed files.
   file sits beside them; the session started after the merge shows `finished` / `session_end` in `multi-link
   sessions --json` (proof the merged hooks actually run, critique 10); the owner's answer recorded.
 
+### Phase 11 — Where is now? (Release 1.8)
+Need (owner, 2026-11-08): "make it clear where the agents / current task are", in the repo swimlanes and the step
+graph. Today the repo view marks the present only with a `now` axis label (and a trailing fold can hide even that,
+board 11e), and the step graph marks a running Codex part only with the words `working now` inside its box. Board 11
+(canvas R5Bh9iX6bsn3jSu8F8D58C, boards 11a–11i) was approved by the owner on 2026-11-10.
+Comparables (board 11 notes): calendar/Gantt "today" lines (one coloured line over every row, head marker on the
+axis); CI graphs (the running job marked on its node, finished jobs recede); htop/k9s (one colour per state, never
+reused).
+
+Decisions:
+- **N0 One colour for now.** Theme gains `now`: truecolor `#E58AE5`, indexed 176. It is used only for "now", in both
+  views, never for anything else. NO_COLOR keeps the glyphs (`┃`, `▼`, `●`), which already differ from grid `│` and
+  part `●` by shape or position.
+- **N1 Repo view now line.** When bars are drawn and `axis.start ≤ now ≤ axis.end` (fitted mode ends the axis at
+  `min(now, window.end)`, so a window that ends before now has no line), a presentation-only resolver picks the
+  column: `now == axis.end` → the last axis cell (`cells − 1`), even when a trailing fold leaves the end segment zero
+  width; now inside a fold → that fold's last cell (`x + 4`); otherwise `axis.col(now)`. Bar and link mapping are not
+  changed. That column gets `▼` on the axis rule row and `┃` in `now` on every visible lane row (from the first lane
+  row to the last one on screen; never the header, legend, detail or footer rows).
+- **N2 Paint order decides what sits on top.** Today: grid → links → lanes/bars → completion labels. The line is
+  painted after links and before lanes, so grid `│`, link `│`/`╎` and fold `≈` in that column give way to `┃`, while
+  bars, `✓`, `◆`, `✓ done` labels and lane text paint over it (a bar that reaches the present visibly plugs into the
+  line; text is never cut by it). Row backgrounds (selected, child, lane tint) are kept under `┃`.
+- **N3 Label priority.** The now label is placed first, before fold labels, the end clock and ticks, so nothing
+  hides it (11e: today the trailing fold label wins and `now` disappears). It is `<clock> now` when that fits, else
+  `now`, starting at the now column and shifted left to end inside the axis when it would overflow. When now is the
+  axis end it replaces the end-clock label (as today's `<clock> now`). Labels that would overlap it are dropped, as
+  overlaps are today. Existing tests that expect `now` to vanish near the end are updated, each named in PROGRESS.
+- **N4 No now on screen → today's view.** Panned or windowed so now is outside the axis, or bars not drawn (below 80
+  columns or an empty axis): nothing changes. Home is out of scope.
+- **L1 Which parts are live** (a pure core function over the existing `GraphReport` plus the refresh's sessions,
+  returning part indices; no JSON key changes). A **Codex part** is live when its status is `Working` and it is the
+  last part of its Codex session in the step (a run window superseded by a later resume of the same child is never
+  live, even with an uncompleted turn). A **Claude part** is live when all hold: it is the last part of its Claude
+  session in the step (ties by part index); its session's state is `Busy`; its `to` is within 5 min of `now` (the
+  same threshold as Codex `Stale`), so an old step is never live because its session is busy on a newer one; and no
+  later part in its chain is a live Codex part (while Codex runs, Claude's planning part keeps collecting reads,
+  but the work is Codex's: board 11d dims plan). Evaluated per session, so two parents in one step can each have a
+  live part. No commit condition: work resumed after a commit can be live (critique 2), and the 5-min rule already
+  ends old steps.
+- **L2 Live box.** A live part's box border is heavy (`┏━┓ ┃ ┗━┛`) in its harness colour, bold, and its top border
+  carries a `● now` badge in `now` (11d: `┏━━…━ ● now ━┓`). Its content is unchanged (Codex keeps `working now ·
+  <length>`).
+- **L3 Finished parts recede.** When at least one part is live, every other part's border and `●` use the harness's
+  dim colour (`claude_dim`, `codex_dim`; non-text marks, 3:1 is enough). The harness word and all text keep today's
+  colours (critique 9: dim colours on `graph_selected` are 3.06:1 and 3.61:1, under the 4.5:1 text rule). Boxes that
+  are grey today (unlinked, ambiguous, unavailable) stay grey. Arrows unchanged. No live part → the graph renders
+  exactly as today.
+- **L4 Live part off screen** (11g). Visibility comes from the renderer's own slot calculation (five slots; a
+  same-harness neighbour advances two). When a live part is not drawn, the parts row shows `● now · N later ›` at the
+  right edge (or `‹ N earlier · ● now` at the left; both when live parts are on both sides), `● now` in `now`, N =
+  parts (not slots) hidden on that side. Selection and keys unchanged.
+- **L5 Narrow list form** (below 120 columns, 11i). The live item's title line ends with `● now` in `now`; its width is
+  reserved before the title is cut, so it is never clipped. L3 dims the others' `●`. A live item scrolled out of the
+  list shows `● now ↑` / `● now ↓` at the right of the first / last visible list row. Two live parts (11f): each gets
+  the L2 / L5 marks.
+- **L7 Data flow.** The TUI crate has no core dependency and `Refresh` carries overview rows, not sessions. The CLI
+  worker, which already holds the all-time sessions when it builds the graph, calls L1 and sends the live indices
+  with that graph in `Refresh` (`graph_live`). A stale or rejected graph report drops its live set with it. NO_COLOR:
+  live stays visible by the heavy border and `● now`, selection by its existing marker.
+- **L6 Liveness is evidence-bound.** Live never comes from a guess: Codex `Working` is the existing status rule
+  (last turn not completed, a record within 5 min); Claude `Busy` is the existing session state. Stale and unknown
+  are never live.
+
+Non-goals: a legend entry (the 120-col legend has no room; the axis says now); live tips on bars; sorting active
+lanes first; a now header line; opening the graph on the live part; the home screen; new JSON keys.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings`
+clean; JSON answer keys unchanged (`cargo test` compares them, and `fixtures/expected/phase9/check.sh 6` passes 47/47);
+`fixtures/expected/tui/` snapshots change only where the step names them, and Claude reviews each change by rendered
+cells (style-run splitting makes text diffs look wider); W10 scan over committed files.
+
+### Step 11.1 — Repo view now line (Codex)
+- Depends on: 10.2. N0–N4.
+- Files: `crates/tui/src/{theme,timeline}.rs`, `crates/tui/tests/{theme,timeline}.rs`,
+  `fixtures/expected/tui/repo-phase6.{txt,styles.txt}` (only the now column and the axis label row), new
+  `fixtures/expected/tui/repo-now.{txt,styles.txt}`, `PROGRESS.md`
+- Verify: tests and clippy clean; JSON keys unchanged; new timeline tests on fixture data at a fixed `--now`: fitted
+  view → `┃` in `now` on every lane row of the last axis column, `▼` on the rule, label `now`; a bar reaching now keeps
+  its glyph and colour in that cell; a link `╎` at that column becomes `┃`; a selected row keeps its background under
+  `┃`; a trailing fold → `now` label still shown (11e); unfitted window with now inside → line at `axis.col(now)`;
+  window entirely in the past → no `┃` anywhere; 79 columns → no line; NO_COLOR → `┃` and `▼` present, no colour;
+  indexed mode → index 176; a `✓ done` label crossing the now column stays whole; now inside a fold → `┃` on the
+  fold's last cell; trailing fold with a zero-width end segment → last cell; a near-end interior now → label shifted
+  left, still whole; a short screen with lanes scrolled → line on visible lane rows only; `now` passes the theme
+  contrast test. `repo-now` is a new snapshot of a fixture lane that reaches now; the `repo-phase6` change touches
+  only N1–N3 cells (listed in PROGRESS).
+
+### Step 11.2 — Step graph live box (Codex)
+- Depends on: 11.1. L1–L6.
+- Files: `crates/core/src/graph.rs` (the pure live-parts function and its unit tests), `crates/core/tests/**`,
+  `crates/cli/src/tui.rs` (worker calls L1, fills `Refresh::graph_live`), `crates/cli/tests/**`,
+  `crates/tui/src/{graph,app}.rs` (`GraphOptions` gains the live set), `crates/tui/tests/graph.rs`,
+  `crates/tui/examples/home_html.rs` (a live variant for screenshots), new
+  `fixtures/expected/tui/step-live.{txt,styles.txt}`, `PROGRESS.md`. `step-phase8` (graph-1.1, all parts done) must
+  stay unchanged.
+- Verify: tests and clippy clean; JSON keys unchanged (`graph --json` identical on every committed key). Core tests:
+  Codex `Working` and last of its child → live; `Done`/`Stale`/unavailable → not; an uncompleted fresh turn in an
+  old window followed by a resume of the same child → only the newest part can be live; Claude last part of its
+  session + `Busy` + `to` within 5 min → live; same with `to` older than 5 min (an old step, parent busy elsewhere),
+  with a live Codex part later in its chain, or with session not `Busy` → not; two parents in one step each live;
+  A→B→A chains; work resumed after a commit → live. Worker tests: `Refresh::graph_live` follows a step switch and is
+  dropped with a rejected stale report. TUI tests (120×40
+  and 80×40): one live Codex part → heavy border in codex colour, `● now` badge in `now`, other parts' border/`●`/
+  harness word in dim colours and their text unchanged; no live part → buffer identical to today's render of the same
+  report; two live parts → both marked; live part beyond the last visible slot → `● now · N later ›` with N counted in
+  parts across a same-harness slot gap, `‹ N earlier · ● now` before the first, both at once; 80 columns → list form
+  `● now` on the live item with a long title (badge kept), `● now ↓` when scrolled away; 119 ↔ 120 columns resize;
+  selection on a live part keeps both marks; NO_COLOR → live and selected each identifiable; grey (unlinked) boxes
+  stay grey under L3. `step-live` is a new snapshot with one live Codex part.
+
+### Step 11.3 — Real check, README images, owner confirm (Claude)
+- Depends on: 11.2. Real renders (scratch only, W10) of the multi-link repo view and of a step graph through a full
+  sandbox transition in `~/multi-link-sandbox/`: Claude plans (Claude part live) → `codex exec` runs (Codex live, plan
+  dims) → Claude reviews (review live) → fix round via `resume` (fix live, old run not live) → idle (no live part,
+  graph as today). Compared side by side with boards 11b, 11d, 11e. Re-shoot the repo and step images in `docs/img/` from fixtures. README: one line that
+  magenta means now. Then stop and ask the owner to look at the real TUI and confirm the need.
+- Files: `README.md`, `docs/design.md` (N0–N4, L1–L6 as "Phase 11 decisions"), `docs/img/**`, `PROGRESS.md`
+- Verify: whole-phase Verify; the comparisons recorded in PROGRESS (what matches the board, what differs and why);
+  the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · board 11 "where it is now" (mockup awaiting approval) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Phase 11 plan critique (Codex, read-only, Codex loop)
+Quota check: `primary 20%, secondary 35%, CODEX: OK`. Ten points, all accepted (two in part):
+1. "Latest part + Busy" marks an old step live when its session is busy on another step → **accepted**: a Claude part
+   also needs its `to` within 5 min of now (L1); test an old step whose parent is busy elsewhere.
+2. One global latest part suppresses another parent's work; "no commit" hides work resumed after a commit →
+   **accepted**: L1 is per session (last part of its session, ties by index); the commit condition is dropped (the
+   5-min rule ends old steps).
+3. `Working` on a run window superseded by a resume → **accepted**: a Codex part must also be its child's last part;
+   live is tracked by part index.
+4. TUI has no core dependency and `Refresh` has no sessions → **accepted**: the CLI worker computes L1 and sends
+   `Refresh::graph_live`; `crates/cli/src/tui.rs` and its tests added to 11.2 (L7).
+5. `Axis::col` is `None` in folds; zero-width end segment; fitted end is `min(now, window.end)` → **accepted**: N1 now
+   names a presentation-only resolver (end → last cell, fold → its last cell).
+6. Label can overflow near the right edge; end-label priority unclear → **accepted**: N3 shifts it left inside the
+   axis and replaces the end clock when now is the end; tests that expect `now` to vanish are updated and named.
+7. Paint collisions undefined → **accepted**: N2 fixes the order (after links, before lanes) and the row range.
+8. Visibility must match slots; narrow badge can be clipped; no narrow off-screen rule → **accepted** (L4, L5).
+9. Dimmed harness word on `graph_selected` is 3.06:1 / 3.61:1, under 4.5:1; grey boxes would turn harness-coloured →
+   **accepted in part**: only borders and `●` dim (non-text, 3:1), harness word and text keep today's colours, grey
+   boxes stay grey. This is a departure from board 11d, which dimmed the harness word; 11.3 compares it.
+10. Verify gaps: no live snapshot, screenshot example not authorised, no transition check → **accepted in part**: new
+    `repo-now` and `step-live` snapshots, `home_html.rs` authorised, 11.3 runs plan → implement → review → fix → idle.
+    `step-phase8` must stay unchanged (graph-1.1 has no live part).
 
 ### 2026-11-09 — Phase 10 plan critique (Codex, read-only, Codex loop)
 Quota check: `primary 6%, secondary 33%, CODEX: OK`. Ten points; outcome:
