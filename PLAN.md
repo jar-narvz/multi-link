@@ -1850,7 +1850,7 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 - Files: `docs/phase9-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 scan over every committed file; the owner's answer recorded.
 
-### Phase 10 — Hook setup in one command (Release 1.7)
+### Phase 10 — Hook setup in one command (Release 1.7) — closed 2026-11-10 (owner confirmed)
 Need (owner, 2026-11-09: "make it as simple and easy as possible"): someone setting up multi-link should not have to
 hand-merge JSON into `~/.claude/settings.json`, and should be able to tell whether their hooks are current. Today
 `hook install` prints a snippet and says "merge it"; the owner did that by hand for 9.4's `SessionEnd`.
@@ -1957,7 +1957,7 @@ clean; every committed answer key unchanged; W10 scan over committed files.
   sessions --json` (proof the merged hooks actually run, critique 10); the owner's answer recorded.
 
 ### Backlog (ordered, uncommitted)
-`hook check` is Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · board 11 "where it is now" (mockup awaiting approval) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · board 11 "where it is now" (mockup awaiting approval) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
 
