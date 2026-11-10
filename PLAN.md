@@ -1850,10 +1850,140 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
 - Files: `docs/phase9-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 scan over every committed file; the owner's answer recorded.
 
+### Phase 10 — Hook setup in one command (Release 1.7)
+Need (owner, 2026-11-09: "make it as simple and easy as possible"): someone setting up multi-link should not have to
+hand-merge JSON into `~/.claude/settings.json`, and should be able to tell whether their hooks are current. Today
+`hook install` prints a snippet and says "merge it"; the owner did that by hand for 9.4's `SessionEnd`.
+Measured 2026-11-09 on the owner's real settings (read-only, keys and hook fields only): five multi-link entries,
+one per snippet event, all `async: true`, `timeout: 60`, right matchers; four run
+`…/multi-link/target/release/multi-link`, `SessionEnd` runs `~/.cargo/bin/multi-link`. So a hand merge already left
+two binaries in use; if `target/` is cleaned, four hooks fail silently.
+
+Decisions:
+- **H0 Read-only stays absolute.** multi-link never writes a settings file (no `--write`). `hook check` reads and
+  reports; `hook check --merged` prints the whole merged settings to stdout. The printed command does the write with
+  POSIX shell tools only (`mktemp`, `cp`, `chmod`, `mv`), plus multi-link itself. Why not `jq` or `python3`: neither
+  is guaranteed on a fresh Mac, and the user should not need a second tool.
+- **H1 One snippet definition.** The snippet (events, matchers, entry fields) moves from `crates/cli/src/hook.rs`
+  into the hook crate as one function of the binary path; `install`, `uninstall` and `check` all call it, so they
+  cannot drift.
+- **H2 What counts as a multi-link entry.** A hook object with `"type": "command"` whose `command` is a binary
+  followed by exactly ` hook record`, where the binary (single-quoted as install prints it, or bare) has the file
+  name `multi-link`. Anything else is the user's and is never changed or reported.
+- **H3 Findings, per snippet event.** For each multi-link entry: *generated shape* = its keys are a subset of
+  `type`, `command`, `async`, `timeout`, and its group's `matcher` is the snippet's (for an event whose snippet group
+  has no matcher, absent, `""` and `"*"` are equal; `Bash` and `permission_prompt|elicitation_dialog` must match
+  exactly). Event findings: `ok` (exactly one entry, generated shape, equal to the snippet entry: this binary's
+  path, `async: true`, `timeout: 60`); `missing` (none); `outdated` (one, generated shape, with each difference:
+  other binary path with both shown, `async`, `timeout`); `duplicate` (two or more, all generated shape);
+  `customized` (any entry with another key, e.g. `if`, `shell`, `args`, or another matcher). Multi-link entries under
+  an event the snippet lacks → `unknown event`. A top-level `disableAllHooks: true` is reported. Why "this binary"
+  is the reference: the hook should run the binary the user just checked with, and both paths are shown.
+- **H4 Merge.** `missing`, `outdated` and `duplicate` events are fixed: remove those multi-link entries, drop a
+  group left with no hooks, append the snippet's group at the end of the event's list. `customized` and
+  `unknown event` entries are never changed: the check names them and says to edit them by hand (Codex critique 3:
+  a user's `if` or narrower matcher is intent, not staleness). Nothing else changes: other top-level keys, other
+  events, the user's entries and their order. Key order is kept by enabling serde_json's `preserve_order`
+  (workspace feature; answer keys compare parsed JSON, which ignores order). Output is 2-space pretty JSON with a
+  trailing newline, so whitespace may change. Values may not: a file with a duplicate object key, or a number whose
+  text serde_json would not write back the same (beyond i64/u64, or a float that does not round-trip), is refused
+  (exit 2), checked on the source text before any merge.
+- **H5 The file and its errors.** `--settings <path>` names the file directly (overrides `--scope`). Otherwise
+  `--scope user` reads `$CLAUDE_CONFIG_DIR/settings.json` when that variable is set, else `~/.claude/settings.json`;
+  `--scope local` as `install` does today. The path is made absolute; a symlink is followed to its target R (all
+  reads and the write use R; the link stays). Output always names the file read. Absent file → every event
+  `missing`, and the command creates it. Exit 2, the reason printed, no command: a dangling symlink, a directory,
+  FIFO or other non-regular file, an unreadable file, a path holding a newline, invalid JSON, an empty file, a top
+  level that is not an object, `hooks` / an event / a group / a group's `hooks` of the wrong type, H4's refusals.
+  `--merged` runs the same checks, so a bad file never reaches the write.
+- **H6 The printed command** (paths absolute and quoted with the existing POSIX single-quote function; `R` the
+  resolved file, `E` this binary, `M` R's current octal mode, `TS` UTC `YYYYmmddTHHMMSSZ`). Existing file:
+  `tmp=$(mktemp 'R.multi-link-XXXXXX') && cp -p 'R' "$(mktemp 'R.multi-link-backup-TS-XXXXXX')" && 'E' hook check
+  --settings 'R' --merged > "$tmp" && chmod M "$tmp" && mv "$tmp" 'R' || { rm -f "$tmp"; false; }`.
+  Absent file: `mkdir -p 'D' && tmp=$(mktemp 'D/settings.json.multi-link-XXXXXX') && 'E' hook check --settings 'R'
+  --merged > "$tmp" && [ ! -e 'R' ] && mv "$tmp" 'R' || { rm -f "$tmp"; false; }`.
+  Why this shape: `mktemp` makes unique, private (0600) files, so two runs or an existing file cannot collide or be
+  followed; `mv` in the same directory is atomic, so the live file is either old or new, never half-written
+  (critique 1); `chmod M` keeps the mode; writing to R keeps a symlink a symlink; any failure removes the temp file
+  and returns non-zero. `--merged` re-reads R when the command runs, so earlier edits are kept. Remaining limit,
+  documented: an edit to R in the milliseconds between that read and the `mv` is lost (single-user local file; no
+  lock exists that Claude Code also honours).
+- **H7 Output and exit.** `hook check`: plain text on stdout, the file name, one line per event, then (if any fix
+  applies) one line of explanation and the command on its own line; `customized` lines say what to edit by hand.
+  Exit 0 when every event is `ok` ("multi-link hooks in <file> are current"; it does not prove another settings
+  level or a managed policy lets them run), 1 when anything is not `ok`, 2 on error. `hook check --merged`: only the
+  merged JSON on stdout, exit 0 on success (also when nothing changes), 2 on error, diagnostics on stderr
+  (critique 6). `install` adds one stderr line pointing to `hook check`.
+
+Non-goals: a `--write` flag or any write by multi-link; `--json` output for `check`; removing hooks (`uninstall`
+keeps printing what to remove); keeping the file's whitespace; merging customized entries; reading other settings
+levels or managed policy; `--scope project`; locking against concurrent writers; Windows; checking that the binary
+path exists (reported only as a path difference).
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; `cargo clippy --workspace --all-targets -- -D warnings`
+clean; every committed answer key unchanged; W10 scan over committed files.
+
+### Step 10.1 — `hook check` and `--merged` (Codex)
+- Depends on: 9.7. H0–H7.
+- Files: workspace `Cargo.toml` (serde_json `preserve_order`), `Cargo.lock`, `crates/hook/src/**` (snippet and the
+  pure check/merge/refusal logic on text and `serde_json::Value`, no I/O), `crates/hook/tests/**`,
+  `crates/cli/src/hook.rs`, `crates/cli/tests/hook_check.rs`, `PROGRESS.md`
+- Verify: tests and clippy clean; every existing answer key unchanged. Hook-crate unit tests: `{}`; the current
+  snippet (`ok`); the pre-9.4 snippet (no `SessionEnd` → `missing`); another binary path (`outdated`, both paths);
+  `async: false`; `matcher: "*"` on `SessionEnd` (`ok`); matcher `Bash|Edit` on `PostToolUse` (`customized`, kept);
+  an `if` key (`customized`, kept); two entries in one event (`duplicate`, merged to one); the user's own entries in
+  the same event and group (kept, in order); a multi-link entry under `Stop` (`unknown event`, kept); `echo
+  multi-link hook record` (not ours); `disableAllHooks: true` reported; a duplicate key and `1e400` and
+  `18446744073709551616` (refused); each wrong-type case of H5. `crates/cli/tests/hook_check.rs`, temp dirs only
+  (never `$HOME`, `CLAUDE_CONFIG_DIR` set to a temp dir for the scope test): check exit 0/1/2; `--merged` stdout parses
+  as JSON alone and exits 0 on a no-op; run the printed command with `sh -c` → backup byte-identical to the
+  original, re-check exits 0, non-hook values and top-level key order unchanged, mode 0644 and 0600 kept, a symlinked
+  file stays a symlink and its target is updated, an absent file is created; a path with a space, an apostrophe,
+  `$(…)`, a backtick and a leading `-` works; with a stub binary as `E` that exits 2 → the original's bytes
+  unchanged, no temp file left, the command exits non-zero; dangling symlink, directory, FIFO, unreadable file and
+  invalid JSON → exit 2, no command, file untouched.
+  Real run (release build, read-only): `multi-link hook check` on the owner's settings, events and findings only,
+  pasted in PROGRESS (expected: `outdated` for the entries whose binary differs from the one running it). Do not run
+  the printed command on real settings.
+
+### Step 10.2 — README setup, real merge, owner confirm (Claude)
+- Depends on: 10.1. README "Install" uses `hook check` and its printed command instead of "merge the JSON"; the
+  limitations section gets H4's whitespace note, H6's millisecond race and H7's "one file" meaning. Stop and ask the
+  owner to run the command `hook check` prints from their installed binary (`~/.cargo/bin/multi-link`), then
+  start and `/exit` one Claude session.
+- Files: `README.md`, `docs/design.md` (H0–H7 as "Phase 10 decisions"), `PROGRESS.md`
+- Verify: whole-phase Verify; after the owner's run, `multi-link hook check` exits 0 on real settings and a backup
+  file sits beside them; the session started after the merge shows `finished` / `session_end` in `multi-link
+  sessions --json` (proof the merged hooks actually run, critique 10); the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` (owner chose 2026-11-09): a read-only command that compares `~/.claude/settings.json` (or `--scope local`) with the current snippet and lists the missing or outdated multi-link entries, never writing the file; it also prints one ready-to-run command that adds only those entries after backing the file up (the user runs it; multi-link itself still never writes). README install steps use that command, never hand-editing JSON (owner, 2026-11-09: "make it as simple and easy as possible"). Keeps the read-only rule absolute (no `--write`) · `codex exec resume --last` fix rounds are unlinked (Phase 8 finding, step 6.6; needs an evidence study) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` is Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · board 11 "where it is now" (mockup awaiting approval) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-09 — Phase 10 plan critique (Codex, read-only, Codex loop)
+Quota check: `primary 6%, secondary 33%, CODEX: OK`. Ten points; outcome:
+1. `cat > T` can leave half-written JSON → **accepted**: H6 writes a `mktemp` file and `mv`s it onto the resolved
+   target (atomic, symlink kept, `chmod` keeps the mode).
+2. Fixed temp names collide; lost updates → **accepted in part**: `mktemp` for temp and backup, absent-file branch
+   checks `[ ! -e ]` before `mv`. **Rejected**: a lock or source hash check. No lock is shared with Claude Code, and
+   the window is milliseconds on a single-user file; documented as a limit instead.
+3. Replacing entries drops user fields (`if`, `shell`, `args`) → **accepted**: such entries are `customized`, never
+   changed, named for a hand edit.
+4. Numbers and duplicate keys silently change → **accepted**: refuse (exit 2) on the source text. Not
+   `arbitrary_precision`: it changes `Number` equality workspace-wide and could break answer-key comparisons.
+5. Shell quoting and file privacy → **accepted**: absolute paths, the existing `'\''` quoting, newline paths refused,
+   `mktemp` 0600, tests for space, apostrophe, `$(…)`, backtick, leading `-`.
+6. `--merged` exit 1 would stop the `&&` chain; stdout must be JSON only → **accepted** (H7).
+7. `""`/`"*"`/absent matchers are equal; a narrower matcher is intent → **accepted**: equal forms normalised; other
+   matchers are `customized`.
+8. One file cannot prove hooks are active; `CLAUDE_CONFIG_DIR` → **accepted in part**: `CLAUDE_CONFIG_DIR` honoured,
+   output names the file, exit 0 wording limited to that file, `disableAllHooks` reported. **Rejected**: reading other
+   settings levels and managed policy (non-goal; out of proportion to the need).
+9. Verify misses failure cases → **accepted in part**: failing merge (stub binary), non-regular, dangling and
+   unreadable targets added. **Rejected**: a concurrent-run test (not deterministic; the race is documented).
+10. 10.2 proves agreement with the checker, not running hooks → **accepted**: 10.2 Verify needs a post-merge session
+    that ends `finished` / `session_end`.
 
 ### 2026-11-08 — Step 9.4 scope amendment (Claude)
 Codex stopped before coding: R5 clears an `ended` record only on a later main-transcript *turn*, and `Transcript`

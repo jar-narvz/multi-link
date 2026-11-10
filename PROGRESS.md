@@ -1,11 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 10 (hook setup in one command, Release 1.7) is planned (2026-11-09); Step 10.1 is next (Codex).** Owner chose
+`hook check` over board 11. Codex critiqued the plan (10 points, 7 accepted, 3 in part; PLAN.md Review log). Key
+rules: multi-link still never writes settings; `hook check` reports per event (`ok`/`missing`/`outdated`/`duplicate`/
+`customized`/`unknown event`) and prints one POSIX command (`mktemp` → `--merged` → `chmod` → atomic `mv`, backup
+first). Real settings today: four entries run `target/release/multi-link`, `SessionEnd` runs `~/.cargo/bin/multi-link`.
+Board 11 (mockup on canvas artifact R5Bh9iX6bsn3jSu8F8D58C) is in the backlog awaiting approval. Owner-facing manual
+steps must be one ready-to-run command, never hand-edited JSON (owner, 2026-11-09). The owner pushes `main`.
+
 **Phase 9 is closed (2026-11-09): the owner confirmed it on real data** ("looks good") after reinstalling and adding
-`SessionEnd` to `~/.claude/settings.json`. Next, owner to choose: board 11 ("where it is now": bright now line in the
-repo view, highlighted live box in the step graph; mockup on the canvas artifact R5Bh9iX6bsn3jSu8F8D58C, awaiting
-approval), then the backlog (`hook check` first). Owner-facing manual steps must be one ready-to-run command, never
-hand-edited JSON (owner, 2026-11-09). `main` is not pushed past 0d490ce; the owner pushes.
+`SessionEnd` to `~/.claude/settings.json`.
 
 **Step 9.7 (2026-11-08, Claude step, no Codex) is committed: Phase 9 real check, README, re-shot images. Phase 9 waited
 on the owner's check (done 2026-11-09, above)** (stop-and-ask in `docs/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
