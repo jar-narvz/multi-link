@@ -2080,6 +2080,7 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
   the owner's answer recorded.
 
 ### Phase 12 — Settle ambiguous links with evidence (Release 1.9)
+Closed 2026-11-10 (owner confirmed after Step 12.2).
 Need (design need 1: see which Codex run came from which Claude session, and how sure that is): 9 real hand-offs
 are `ambiguous` because two or more Codex runs in the same checkout started within the 60 s creation window. The
 TUI says "2 possible runs" and links nothing, though in most of them the answer is plain from the data. Owner chose

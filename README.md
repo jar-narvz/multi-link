@@ -172,6 +172,9 @@ in [docs/phase9-check.md](docs/phase9-check.md).
   when two runs qualify. An observed id (stdout or a redirect log) still wins and makes it exact. The 10 s window was
   not calibrated in advance; on real data all 13 such hand-offs had their turn 0.8–2.7 s later. A `cd` before the
   launch keeps the hand-off unlinked (3 real cases), as it does for the creation-time match.
+- **Nearest run.** A launch hand-off with several Codex runs in its window gets the nearest one when the evidence is
+  clear (rules above under Limitations); the link says `matched by time · nearest run`. On 2026-11-10 this settled 8
+  of the 9 ambiguous real hand-offs ([details](docs/phase12-check.md)).
 - **Session folder (R8).** The first folder a Claude session's own records name is its home folder (records inherited
   from a resumed session do not set it). After that, a record's folder counts only if it is the home folder or inside
   it, so a shell `cd` elsewhere (Claude Code stamps later records with it) is ignored and the session stays in its
@@ -259,10 +262,14 @@ state rules.
   relies on the undocumented `cost-state` record; `session_end` needs the hook with `SessionEnd` (`multi-link hook check`
   reports it). On 2026-11-08, 72 finished desktop sessions had no single app record, so
   `o` shows Unavailable with the command for them.
-- Ambiguous links rose from 1 to 9 once compressed rollouts were read: on 2026-10-30 several Codex runs started
-  in one checkout within the 60 s creation window. In each case one run started 0.5–1.8 s after the hand-off and
-  another 3.0–58.7 s after it. multi-link does not pick the nearest run, so these stay ambiguous
-  ([details](docs/phase9-check.md#why-ambiguous-links-rose-from-1-to-9)).
+- Links matched by time can be wrong. When several Codex runs start in one checkout within the 60 s window,
+  multi-link picks the nearest run only when the evidence is clear: a run that another hand-off would itself pick at a
+  smaller gap goes to that hand-off, and of the runs left the nearest is picked if it started within 5 s and every
+  other run 10 s or more after the hand-off (`matched by time · nearest run`, never `confirmed`). These margins are
+  provisional: on 2026-11-10, 30 hand-offs with an observed child gave 0 wrong answers with the id hidden, but few of
+  them had rival runs. It assumes Codex starts a run within seconds of its launch, so a run that starts late can be
+  given to a later hand-off. 1 real hand-off stays ambiguous (runs 0.9 s and 7.9 s after it)
+  ([details](docs/phase12-check.md)).
 - A keypress arriving together with a terminal resize can be delayed until the next key
   (crossterm 0.29).
 - Activity is inferred from record timestamps: a tool call that writes nothing for over 5 minutes

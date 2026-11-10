@@ -1,13 +1,9 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 12: Step 12.1 is committed (2026-11-10); Step 12.2 (Claude: real check, `docs/phase12-check.md`, README
-limitation, owner confirm) is next.** The resolver applies K1 (a run leaves a hand-off when another launch hand-off
-would itself choose it at a smaller gap), K2 (nearest ≤ 5 s, others ≥ 10 s) and K3 (`nearest_run` evidence, never
-exact); R7 and exact links unchanged. Graph `Edge.nearest_run` (omitted when false); TUI words `matched by time ·
-nearest run` (the 19-cell graph box shows `matched by time · …`; full words on the origin line). Real data at 12.1
-(scratch, counts only): transitions equal PLAN K4 (8 ambiguous → nearest_run, 1 stays, 1 heuristic → unlinked).
-12.2 still owes the masked check with the built resolver (stop gate) and the owner's look.
+**Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
+hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
+never exact); real check in `docs/phase12-check.md`. Next is the backlog (PLAN.md).
 
 **Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
 draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
@@ -733,6 +729,21 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 ## Log (newest first)
 
+### 2026-11-10 — Step 12.2: Real check, README, owner confirm — Claude
+- Did: real before/after transitions by hand-off (release builds 04b4233 and 437adf4, scratch, counts and gaps only);
+  masked check with the built resolver (scratch harness: per exact launch link, that checkout's real transcripts in a
+  temp root, child id replaced in the parent transcript); `docs/phase12-check.md`; README nearest-run bullet and the
+  ambiguous-links limitation rewritten; corrected "59 exact" to 53 in the 12.1 Review line.
+- Changed: `docs/phase12-check.md`, `README.md`, `PROGRESS.md`.
+- Verify: transitions on the 233 exported ids equal K4 (53 exact, 6 resume_turn, 117 heuristic, 47 unlinked
+  unchanged; 1 heuristic → unlinked, own gap 9.4 s vs 2.2 s to a later hand-off that picks it; 8 ambiguous →
+  nearest_run; 1 ambiguous stays at 0.91 s / 7.88 s). Masked: 30 links, 23 + 2 right, 0 wrong, 3 unlinked (1 child
+  before the hand-off, 2 claimed by a second exact launch of the same child), 2 still exact. Code unchanged since
+  437adf4 (tests 619/0/1 there). W10 scan of the changed files: nothing.
+- Review: Claude step. Owner looked and answered "Looks good" (2026-11-10).
+- Gotchas: the masked unlinked count (3) is higher than the planning simulation (1) because the harness keeps other
+  exact launches, which claim a shared child (plugin wrapper + inner exec). Correct under the existing claim rule.
+
 ### 2026-11-10 — Step 12.1: K1–K3 in the link resolver (key correction pending) — Codex
 - Did: Implemented K1 with original-choice minimum gaps per checkout/run, followed by K2/K3 on survivors.
   Exact reservations and R7 turn matching retain their existing paths. Added `LinkEvidence::NearestRun`, optional
@@ -1024,7 +1035,7 @@ diff --git a/fixtures/expected/phase12/overview.json b/fixtures/expected/phase12
   `phase9/check.sh 6` 47/47; `git diff a746a8d -- fixtures/expected` = only that key fix. Resolver read against K1–K3:
   own-choice map from original lists, one pass, ties kept, R7 single-candidate only. Real run (release build, scratch,
   counts only): 236 links now (3 new since the export); transitions on the exported ones equal K4: 8 ambiguous →
-  heuristic / nearest_run, 1 ambiguous stays, 1 heuristic → unlinked, 117 heuristic, 59 exact + 6 resume_turn + 47
+  heuristic / nearest_run, 1 ambiguous stays, 1 heuristic → unlinked, 117 heuristic, 53 exact + 6 resume_turn + 47
   unlinked unchanged. Minor, not fixed: the graph's 19-cell hand-off box cuts the new words to `matched by time · …`.
 - Gotchas: Changed `heuristic_window_is_inclusive_and_checkout_is_an_exact_string` in `core/tests/links.rs`:
   its two candidates have gaps 0 and 60000 ms, so K2 chooses A and K3 requires `nearest_run` (original list size 2).
