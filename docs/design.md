@@ -1015,3 +1015,24 @@ settings, but it now checks them and prints the command that does.
 Non-goals: `--write` or any write by multi-link; `--json` for `check`; removing hooks (`uninstall` still prints what to
 remove); keeping whitespace; merging customized entries; reading other settings levels or managed policy;
 `--scope project`; locking; Windows; checking that the binary path exists.
+
+### Phase 11 decisions (where is now?, Steps 11.1–11.2)
+Planned 2026-11-10 (PLAN.md → Phase 11), from board 11 (approved by the owner 2026-11-10). Need: make it clear where
+the agents and the current task are, in the repo swimlanes and the step graph. Comparables: calendar/Gantt "today"
+lines, CI graphs that mark the running job on its node, htop/k9s (one colour per state).
+
+| # | Decision | Why |
+|---|---|---|
+| N0 | One colour, `Theme::now` (`#E58AE5`, indexed 176), means now and nothing else, in both views. | A colour reused for two meanings stops meaning either. NO_COLOR keeps the glyphs. |
+| N1 | Repo view: `▼` on the axis rule and `┃` from the grid row under it to the last lane row, at a presentation-only now column (axis end → last cell; inside a fold → the fold's last cell). | Board 11b; bar and link time mapping stay untouched. |
+| N2 | Paint order grid → links → now line → lanes: grid, link and fold glyphs give way; bars, `✓`, `◆` and text draw over it. | A bar that reaches now plugs into the line; text is never cut. |
+| N3 | The now label is placed first, shifted left to stay inside the axis, and replaces the end clock when now is the end. | Board 11e: a trailing fold label used to hide `now`. |
+| N4 | Now off the axis (panned, past window, below 80 columns) → today's view. Home unchanged. | The line only claims what is on screen. |
+| L1 | Live parts (core, presentation only, no JSON change): Codex `Working` and its child's newest window; Claude = its session's newest part, session `Busy`, last activity within 5 min, and no live Codex part later in its chain. | Evidence-bound: an old step whose session is busy elsewhere is not live; a superseded run window is not live. |
+| L2 | A live part's box: heavy border in its harness colour, bold, `● now` badge in the top border. | Board 11d. |
+| L3 | With a live part, others' borders and `●` use the dim harness colour; harness words and text keep theirs; grey (missing-run) boxes stay grey. | Board 11d dimmed the harness word too, but on the selected background that is 3.06:1 / 3.61:1, under the 4.5:1 text rule. |
+| L4 | Live part off screen: `● now · N later ›` / `‹ N earlier · ● now`, N in parts, from the renderer's own slots. | Board 11g. |
+| L5 | Below 120 columns: `● now` after the live item's title (width reserved), `● now ↑/↓` when scrolled away. | Board 11i. |
+| L6 | Live never comes from a guess: only the existing Codex status and Claude session state rules. | Decision 2 (no guess presented as fact). |
+| L7 | The CLI worker computes L1 with the graph and sends `Refresh::graph_live`; the App keeps it only with an accepted graph. | The TUI crate has no core dependency and no sessions. |
+

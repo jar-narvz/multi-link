@@ -1,6 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
+draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
+`docs/phase11-check.md`. Next is the backlog (PLAN.md): `cd`-then-`resume --last`, ambiguous tie-break, lost key on
+resize, live grid. The owner pushes `main`.
+
 **Step 11.2 is committed (2026-11-10, Codex loop): step graph live box. Step 11.3 (real check, images, README, owner
 confirm) is next.** `multi_link_core::graph::live_parts` gives live part indices; the CLI worker sends them as
 `Refresh::graph_live`; `GraphOptions::live` drives the heavy border, `● now` badge, dimmed marks and off-screen
@@ -719,6 +724,24 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 11.3: Real check, README images, owner confirm — Claude
+- Did: real check of the release TUI (120×40 PTY harness, scratch only) through a real sandbox `claude -p` →
+  `codex exec` → `resume --last` cycle on a synthetic one-step plan; README sections for the now line and live parts
+  and the new image; Phase 11 decisions table in `docs/design.md`; re-shot the repo image and added the live step
+  image from fixtures; `docs/phase11-check.md` (Files amended, Review log).
+- Changed: `README.md`, `docs/design.md`, `docs/phase11-check.md`, `docs/img/repo-phase6-fixture.png`,
+  `docs/img/step-live-fixture.png`, `PLAN.md` (Files amendment), `PROGRESS.md`.
+- Verify: `cargo test --workspace` 609 passed / 0 failed / 1 ignored; clippy `-D warnings` and `fmt --check` clean;
+  JSON keys unchanged since the plan commit 2584519; `check.sh 6` 47/47 `ok`; TUI snapshots changed since 2584519:
+  `repo-phase6` (N1–N3 cells, reviewed in 11.1) and new `repo-now`, `step-live`; `step-phase8` unchanged. Image text
+  equals `repo-phase6.txt` and `step-live.txt` (40/40 lines each). Real frames (step 1.2, 20 graph frames): live part
+  was implement → plan (1 frame, between parts) → review → fix round 1 (superseded implement not live) → review →
+  none; idle frames had no now-colour cell. W10 scan over changed files: no `/Users/`, no real ids.
+- Review: Claude step (coordinator session ran it, owner asked 2026-11-10). Owner looked at the real TUI and
+  answered "Looks good" (2026-11-10).
+- Gotchas: home order changes while a repo appears, so the harness resets to the top before each ↓ walk. A working
+  bar can end one cell before `┃` (last record a few seconds old); documented, not changed.
 
 ### 2026-11-10 — Step 11.2: Step graph live box — Codex
 - Did: Implemented L1–L7 / boards 11d, 11f, 11g, 11i. Core `graph::live_parts` selects the latest

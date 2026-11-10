@@ -1956,7 +1956,7 @@ clean; every committed answer key unchanged; W10 scan over committed files.
   file sits beside them; the session started after the merge shows `finished` / `session_end` in `multi-link
   sessions --json` (proof the merged hooks actually run, critique 10); the owner's answer recorded.
 
-### Phase 11 — Where is now? (Release 1.8)
+### Phase 11 — Where is now? (Release 1.8) — closed 2026-11-10 (owner confirmed)
 Need (owner, 2026-11-08): "make it clear where the agents / current task are", in the repo swimlanes and the step
 graph. Today the repo view marks the present only with a `now` axis label (and a trailing fold can hide even that,
 board 11e), and the step graph marks a running Codex part only with the words `working now` inside its box. Board 11
@@ -2074,7 +2074,8 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
   dims) → Claude reviews (review live) → fix round via `resume` (fix live, old run not live) → idle (no live part,
   graph as today). Compared side by side with boards 11b, 11d, 11e. Re-shoot the repo and step images in `docs/img/` from fixtures. README: one line that
   magenta means now. Then stop and ask the owner to look at the real TUI and confirm the need.
-- Files: `README.md`, `docs/design.md` (N0–N4, L1–L6 as "Phase 11 decisions"), `docs/img/**`, `PROGRESS.md`
+- Files: `README.md`, `docs/design.md` (N0–N4, L1–L7 as "Phase 11 decisions"), `docs/img/**`,
+  `docs/phase11-check.md` (the real check record, as phases 6/8/9; amended 2026-11-10), `PROGRESS.md`
 - Verify: whole-phase Verify; the comparisons recorded in PROGRESS (what matches the board, what differs and why);
   the owner's answer recorded.
 
@@ -2082,6 +2083,10 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
 `hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · ambiguous tie-break (nearest run far ahead of the rest, or a run already matched elsewhere; 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Step 11.3 Files amendment (Claude, during the step)
+The real check needs a record like `docs/phase9-check.md` (method, frames, board comparison) that the README links
+to; `docs/phase11-check.md` added to the Files. Synthetic content only (W10): real frames are summarised, not pasted.
 
 ### 2026-11-10 — Step 11.2 Files amendment (Claude, during the step, Codex loop)
 Codex stopped before writing code: `Refresh` is built with exhaustive struct initializers in TUI tests outside

@@ -69,13 +69,16 @@ The real terminal uses your own font.*
   first; each Codex run sits under the Claude session that handed it work (`└▸`).
 - **Bars are recorded activity:** timestamps at most 5 minutes apart form one burst. Claude bursts are
   orange, Codex blue; `✓` marks a finished Codex run, `◆` a session waiting on you.
+- **Now line:** a magenta `┃` runs down the lanes at the current time, with `▼` and the `now` label on the axis.
+  Bars, `✓` and `◆` draw over it, so a session that is working now visibly reaches it; grid and link lines give
+  way to it. Magenta means now and nothing else, in both views. Panned into the past, the line is not drawn.
 - **Links:** a line from the hand-off point to the child, solid `│` when confirmed, dashed `╎` when matched
   by time, and the sub line says how (`matched by time · 12 s after the call`).
 - **The axis fits the work:** it starts at the first activity; idle stretches over 15 minutes with no
   activity on any lane fold to a `≈` band (at most 3), labelled with its length when there is room
-  among the fold labels. Fold lengths win over the end label, which shortens from `10:25pm now` to `now` (or
-  disappears) when it would cover one, and over ticks; a tick never repeats the end minute (or, in an explicit range, the
-  `now` minute). `z` unfolds,
+  among the fold labels. The `now` label is placed first (`10:25pm now`, or `now` when space is short), so a fold
+  never hides it; fold lengths then win over the end clock and ticks, and a tick never repeats the end or `now`
+  minute. `z` unfolds,
   `+`/`-` zoom, ←/→ pan, `0` returns to the fitted range, `i` shows hidden imports.
 - The `selected` line gives the session's short id, start, how long it was active and its hand-off; `o`
   opens it and `f` forks it. Below 80 columns the bars drop and the lanes become a list.
@@ -92,6 +95,16 @@ the approved board 9 in words and real-data differences in [docs/phase8-check.md
 *Synthetic fixture `fixtures/sessions-phase9`, step 2.1: one Codex run resumed twice with `codex exec resume --last`
 shows as implement, fix round 1 and fix round 2, with a Claude review between them
 ([docs/phase9-check.md](docs/phase9-check.md)).*
+
+![Step graph with a live fix round on the phase8 fixture](docs/img/step-live-fixture.png)
+
+*Synthetic fixture, step 1.5, while its fix round is still running ([docs/phase11-check.md](docs/phase11-check.md)).*
+
+- **Live parts:** the part working now gets a heavy border in its colour and a magenta `● now` badge; while
+  something is live, finished parts' borders and dots recede (their text keeps its colour). A Codex part is live
+  while its run is `working` and it is that run's newest window; a Claude part is live when it is its session's
+  newest part, the session is working and it was active in the last 5 minutes. A live part scrolled off screen
+  shows `● now · N later ›` (or `‹ N earlier · ● now`); below 120 columns the list marks it `● now`.
 
 - **`s`** on a repo-view lane opens that lane's latest tagged step. A coordinator lane with no hand-off of its own
   lists the steps of the sessions it started; a lane with neither says `no step on this session`. `←→` moves along
