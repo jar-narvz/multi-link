@@ -1,0 +1,168 @@
+{
+  "repos": [
+    {
+      "repo": "/home/dev/repo-p12a",
+      "latest": {
+        "invocation": "toolu_p12_12a00101_1",
+        "match": "heuristic",
+        "child": "12c00102-0000-4000-8000-000012c00102",
+        "evidence": null
+      },
+      "rows": [
+        {
+          "id": "12a00101-0000-4000-8000-000012a00101",
+          "children": [
+            {
+              "id": "12c00101-0000-4000-8000-000012c00101",
+              "children": [],
+              "handoffs": [
+                {
+                  "invocation": "toolu_p12_12a00101_0",
+                  "match": "heuristic",
+                  "child": "12c00101-0000-4000-8000-000012c00101",
+                  "evidence": "nearest_run"
+                }
+              ]
+            },
+            {
+              "id": "12c00102-0000-4000-8000-000012c00102",
+              "children": [],
+              "handoffs": [
+                {
+                  "invocation": "toolu_p12_12a00101_1",
+                  "match": "heuristic",
+                  "child": "12c00102-0000-4000-8000-000012c00102",
+                  "evidence": null
+                }
+              ]
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p12e",
+      "latest": {
+        "invocation": "toolu_p12_12a00502_0",
+        "match": "heuristic",
+        "child": "12c00501-0000-4000-8000-000012c00501",
+        "evidence": null
+      },
+      "rows": [
+        {
+          "id": "12a00501-0000-4000-8000-000012a00501",
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "12a00502-0000-4000-8000-000012a00502",
+          "children": [
+            {
+              "id": "12c00501-0000-4000-8000-000012c00501",
+              "children": [],
+              "handoffs": [
+                {
+                  "invocation": "toolu_p12_12a00502_0",
+                  "match": "heuristic",
+                  "child": "12c00501-0000-4000-8000-000012c00501",
+                  "evidence": null
+                }
+              ]
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p12f2",
+      "latest": {
+        "invocation": "toolu_p12_12a00702_0",
+        "match": "heuristic",
+        "child": "12c00701-0000-4000-8000-000012c00701",
+        "evidence": "nearest_run"
+      },
+      "rows": [
+        {
+          "id": "12a00701-0000-4000-8000-000012a00701",
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "12a00702-0000-4000-8000-000012a00702",
+          "children": [
+            {
+              "id": "12c00701-0000-4000-8000-000012c00701",
+              "children": [],
+              "handoffs": [
+                {
+                  "invocation": "toolu_p12_12a00701_0",
+                  "match": "heuristic",
+                  "child": "12c00701-0000-4000-8000-000012c00701",
+                  "evidence": "nearest_run"
+                },
+                {
+                  "invocation": "toolu_p12_12a00702_0",
+                  "match": "heuristic",
+                  "child": "12c00701-0000-4000-8000-000012c00701",
+                  "evidence": "nearest_run"
+                }
+              ]
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "id": "12c00702-0000-4000-8000-000012c00702",
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p12i",
+      "latest": {
+        "invocation": "toolu_p12_12a00a02_0",
+        "match": "ambiguous",
+        "child": null,
+        "evidence": null
+      },
+      "rows": [
+        {
+          "id": "12a00a01-0000-4000-8000-000012a00a01",
+          "children": [
+            {
+              "id": "12c00a01-0000-4000-8000-000012c00a01",
+              "children": [],
+              "handoffs": [
+                {
+                  "invocation": "toolu_p12_12a00a01_0",
+                  "match": "heuristic",
+                  "child": "12c00a01-0000-4000-8000-000012c00a01",
+                  "evidence": "nearest_run"
+                }
+              ]
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "id": "12a00a02-0000-4000-8000-000012a00a02",
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "12c00a02-0000-4000-8000-000012c00a02",
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "12c00a03-0000-4000-8000-000012c00a03",
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}

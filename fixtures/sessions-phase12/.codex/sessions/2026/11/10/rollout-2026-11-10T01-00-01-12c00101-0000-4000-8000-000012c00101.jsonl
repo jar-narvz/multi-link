@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-10T01:00:01.000Z", "payload": {"id": "12c00101-0000-4000-8000-000012c00101", "timestamp": "2026-11-10T01:00:01.000Z", "cwd": "/home/dev/repo-p12a", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T01:00:01.000Z", "payload": {"type": "task_started", "turn_id": "12c00101-0001-4000-8000-000012c00101"}}
+{"type": "event_msg", "timestamp": "2026-11-10T01:00:01.000Z", "payload": {"type": "user_message", "message": "Read AGENTS.md, then do Step 1.1 in PLAN.md.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T01:00:30.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T01:00:30.000Z", "payload": {"type": "task_complete", "turn_id": "12c00101-0001-4000-8000-000012c00101", "last_agent_message": "<text>"}}

@@ -1,11 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 12 (settle ambiguous links with evidence, Release 1.9) is planned (2026-11-10); Step 12.0 (Claude: rules,
-fixtures, keys) is next.** Owner chose it 2026-11-10. Codex critiqued the plan (10 points, 7 accepted, 2 in part,
-1 point's sub-item rejected; PLAN.md Review log). K1: a run that is another hand-off's unique nearest with a smaller
-gap goes there; K2: nearest ≤ 5 s and others ≥ 10 s (provisional); evidence `nearest_run`, never exact. Masked
-check on 29 exact links: 28 right, 0 wrong, 1 unlinked.
+**Phase 12 (settle ambiguous links with evidence, Release 1.9): Step 12.0 is committed (2026-11-10); Step 12.1
+(Codex: K1–K3 in `crates/core/src/link.rs`, `LinkEvidence::NearestRun`, graph `Edge.nearest_run`, TUI words) is
+next.** Rules K0–K4 are in `docs/design.md` (Phase 12 decisions) and `docs/output-schema.md` (Heuristic → Phase 12).
+K1 (amended in 12.0): a run leaves a hand-off when another launch hand-off would itself choose it (K2/K3 on its own
+list) at a strictly smaller gap; K2: nearest ≤ 5 s and others ≥ 10 s; launch hand-offs only, R7 untouched. TUI words
+`matched by time · nearest run`. Keys: `fixtures/expected/phase12/` (`check.sh`, `crates/cli/tests/phase12.rs`).
+Tests failing until 12.1, by name: `phase12_links_match_answer_key`, `phase12_overview_reparents_nearest_runs`,
+`phase12_graph_uses_the_nearest_run` (cli), `ambiguous_variant_equals_answer_key` (core links), and
+`every_expected_report_round_trips` (model: `nearest_run` is not a variant yet). Unit tests in
+`crates/core/tests/links.rs` that build ambiguity through the resolver may need new expectations; each change needs
+a reason tied to K1–K3.
 
 **Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
 draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
@@ -730,6 +736,26 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 12.0: Rules, fixtures and answer keys — Claude
+- Did: K0–K4 into `docs/design.md` and `docs/output-schema.md`; synthetic fixture root `fixtures/sessions-phase12/`
+  (16 checkouts, cases a–k; built by a scratch generator, ids `12a…` / `12c…`); Claude-written keys `links.json`,
+  `overview.json` (projection), `graph-1.1.json` with `check.sh` and `crates/cli/tests/phase12.rs`; the one committed
+  key value K1 changes. PLAN amended (K1 "own choice", K2 scope, K3 words + `Edge.nearest_run`, Files; Review log).
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase12/**`, `fixtures/expected/phase12/**`,
+  `crates/cli/tests/phase12.rs`, `fixtures/expected/links-amb-hidden.json`, `crates/core/tests/keys-before-phase6.json`,
+  `PLAN.md`, `PROGRESS.md`.
+- Listed key change: `links-amb-hidden.json` (and its copy in `keys-before-phase6.json`) amb-1
+  `toolu_01REKU3KvENtvGohuKSvtKD3`: `ambiguous` [d501 746, d953 1822] → `heuristic` d501, `nearest_run`, candidates
+  [d501 746]; d501 leaves `unparented`. d501 is amb-1's true child (exact in the unmasked fixture). Every other
+  committed links key: no change by simulation over all 8 fixture roots (phase 8 and 9 ambiguous cases stay).
+- Verify: `cargo test --workspace --no-fail-fast` 607 passed / 5 failed, exactly the 5 listed in Current state;
+  `fixtures/expected/phase12/check.sh` runs, FAIL on links.json, overview.json, graph-1.1.json (no code yet), and its
+  diffs touch only cases a, b, e, f2, i, j1, j2, j5; the Rust and jq overview projections agree (checked by swapping
+  in today's projection: test passed); `check.sh 6` 47/47 `ok`; W10 scan of the new files and added doc lines: nothing.
+- Review: Claude step. Real-data simulation of the amended K1: same transitions as the K4 table.
+- Gotchas: fixture ids must be uuid-shaped (36 chars) or exact evidence is silently ignored. The option-first
+  explicit-id resume form is recognised as `exec` today (case h pins it; backlog).
 
 ### 2026-11-10 — Step 11.3: Real check, README images, owner confirm — Claude
 - Did: real check of the release TUI (120×40 PTY harness, scratch only) through a real sandbox `claude -p` →

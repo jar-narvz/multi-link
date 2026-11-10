@@ -1,0 +1,13 @@
+{"type": "session_meta", "timestamp": "2026-11-10T09:00:01.000Z", "payload": {"id": "12c00901-0000-4000-8000-000012c00901", "timestamp": "2026-11-10T09:00:01.000Z", "cwd": "/home/dev/repo-p12h", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:00:01.000Z", "payload": {"type": "task_started", "turn_id": "12c00901-0001-4000-8000-000012c00901"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:00:01.000Z", "payload": {"type": "user_message", "message": "Read AGENTS.md, then do Step 1.1 in PLAN.md.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:00:55.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:00:55.000Z", "payload": {"type": "task_complete", "turn_id": "12c00901-0001-4000-8000-000012c00901", "last_agent_message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:01:40.000Z", "payload": {"type": "task_started", "turn_id": "12c00901-0002-4000-8000-000012c00901"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:01:40.000Z", "payload": {"type": "user_message", "message": "Step 1.1 fix round 1: handle the empty report.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:05.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:05.000Z", "payload": {"type": "task_complete", "turn_id": "12c00901-0002-4000-8000-000012c00901", "last_agent_message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:31.000Z", "payload": {"type": "task_started", "turn_id": "12c00901-0003-4000-8000-000012c00901"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:31.000Z", "payload": {"type": "user_message", "message": "Step 1.1 fix round 2: fix the header.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:55.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T09:02:55.000Z", "payload": {"type": "task_complete", "turn_id": "12c00901-0003-4000-8000-000012c00901", "last_agent_message": "<text>"}}

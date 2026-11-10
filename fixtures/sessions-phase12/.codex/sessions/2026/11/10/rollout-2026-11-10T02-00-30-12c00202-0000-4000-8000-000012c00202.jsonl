@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-10T02:00:30.000Z", "payload": {"id": "12c00202-0000-4000-8000-000012c00202", "timestamp": "2026-11-10T02:00:30.000Z", "cwd": "/home/dev/repo-p12b", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T02:00:30.000Z", "payload": {"type": "task_started", "turn_id": "12c00202-0001-4000-8000-000012c00202"}}
+{"type": "event_msg", "timestamp": "2026-11-10T02:00:30.000Z", "payload": {"type": "user_message", "message": "Summarise the synthetic log.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T02:00:45.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T02:00:45.000Z", "payload": {"type": "task_complete", "turn_id": "12c00202-0001-4000-8000-000012c00202", "last_agent_message": "<text>"}}

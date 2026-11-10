@@ -1036,3 +1036,21 @@ lines, CI graphs that mark the running job on its node, htop/k9s (one colour per
 | L6 | Live never comes from a guess: only the existing Codex status and Claude session state rules. | Decision 2 (no guess presented as fact). |
 | L7 | The CLI worker computes L1 with the graph and sends `Refresh::graph_live`; the App keeps it only with an accepted graph. | The TUI crate has no core dependency and no sessions. |
 
+### Phase 12 decisions (settle ambiguous links with evidence, Step 12.0)
+Planned 2026-11-10 (PLAN.md → Phase 12). Need (design need 1): see which Codex run came from which Claude session, and
+how sure that is. 9 real hand-offs were `ambiguous` though the data made the answer plain in 8. Ground truth: 29 exact
+launch links (child observed); the true child started 0.45–3.18 s after the hand-off in 27, 6.2 s in one, and was the
+nearest run in 4 of the 4 with rivals. Hiding each observed id and running K1–K3: 28 right, 0 wrong, 1 unlinked.
+
+| # | Decision | Why |
+|---|---|---|
+| K0 | Link `evidence` gains `"nearest_run"`, only on `heuristic`. `candidates` becomes the runs left after K1 (survivors); a stated contract revision. Never `exact`. | `exact` means an observed id (decision 2); a choice by time stays `matched by time`. |
+| K1 | Competitors = launch hand-offs using the 60 s creation window (not exact, not `dir_moved`, no resume id, not `resume --last`). A run leaves hand-off h when another competitor would itself choose it (K2/K3 on its own original list) at a strictly smaller gap. One pass over original lists. | Codex creates a run within seconds of its launch. Using what the other hand-off would choose (not just its nearest) means a run is never taken away for a hand-off that then picks nothing. One pass: order cannot matter. |
+| K2 | With two or more runs left, choose the nearest when it is ≤ 5 s and every other is ≥ 10 s (inclusive, ms). Launch hand-offs only; id-less `resume --last` keeps R7. | 27 of 28 true gaps ≤ 3.2 s; rivals ≥ 17 s. Margins wider than the data, provisional; a borderline case stays ambiguous. |
+| K3 | One run chosen → `heuristic`, `evidence: "nearest_run"` when the original list had more than one run; none left → `unlinked`; else `ambiguous`. Overview and the graph treat the child like any heuristic child. Graph Edge gains `nearest_run: true` (omitted otherwise). TUI words: `matched by time · nearest run`. | The edge's candidate count is the survivor count, so the graph needs its own flag; omitted when false keeps every existing key. |
+| K4 | Real-data changes are listed (PLAN.md K4, phase12-check), never hidden. Committed fixture change: `links-amb-hidden.json` amb-1 → `heuristic` d501 / `nearest_run`. | amb-1's true child is d501 (exact in the unmasked fixture): the masked case gets the right answer. |
+
+**Assumption and its failure case.** K1 trusts creation order: if A's run starts late (background, slow start) just after
+B launches and B starts none, A's run is given to B. Today both would claim it; K1 removes the duplicate, and the link
+still says `matched by time`. K2's known failure: a manual run at +1 s and a slow true child at +12 s picks the manual run.
+

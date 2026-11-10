@@ -52,6 +52,13 @@ below carry the rules. Existing keys change only where R2 applies (12 `fixtures/
 `cost-state` after their last turn; the values are listed in PROGRESS.md, Step 9.0). New isolated fixture root
 `fixtures/sessions-phase9/` with answer keys `fixtures/expected/phase9/` (Phase 9 fixture results, at the end).
 
+**Phase 12 changes (Step 12.0, design K0–K4):** Link `evidence` gains `"nearest_run"` (only on `heuristic`); for launch
+hand-offs `candidates` now lists the runs left after the K1 rule (a contract revision: runs a closer hand-off would choose
+are not listed). Graph Edge `handoff` gains `nearest_run: true`, omitted when false. Heuristic below carries the rules.
+Committed key change: `links-amb-hidden.json` amb-1 (and its copy in `crates/core/tests/keys-before-phase6.json`). New
+isolated fixture root `fixtures/sessions-phase12/` with answer keys `fixtures/expected/phase12/` (Phase 12 fixture results,
+at the end).
+
 **Phase 3 changes (Step 3.2):** Session gains `checkout` and `host_session_id`; new sections "Overview"
 (`multi-link overview`, design T2, T5, T11) and "Open" (`multi-link open`, design T7). New fixture: the
 synthetic busy record `.claude/sessions/70001.json` (a second busy session in `/home/dev/repo-c`, for the
@@ -280,8 +287,8 @@ Subagent transcripts are scanned too. A skipped line never stops the file; later
 | `checkout` | string | `cwd` of that record. |
 | `match` | `"exact"` \| `"heuristic"` \| `"ambiguous"` \| `"unlinked"` | |
 | `child` | string \| null | Codex id for `exact` / `heuristic`; `null` otherwise. |
-| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| `"resume_turn"` \| null | What made it exact; `null` unless `exact`, with one exception: `"resume_turn"` (Phase 9, R7) appears only on a `heuristic` link, for a `codex exec resume --last` hand-off matched to a later turn (not the first) of an existing run in the same checkout starting 0–10 s after it; `gap_ms` is turn start − hand-off. `hook` since Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
-| `candidates` | `{"id": string, "gap_ms": int}`[] | Heuristic candidates (1 for `heuristic`, ≥ 2 for `ambiguous`); `[]` for `exact` and `unlinked`. Ordered by `gap_ms`, then `id`. |
+| `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| `"resume_turn"` \| null | What made it exact; `null` unless `exact`, with two exceptions, both only on a `heuristic` link: `"nearest_run"` (Phase 12, K3) for a launch hand-off chosen by time from more than one run; `"resume_turn"` (Phase 9, R7) appears only on a `heuristic` link, for a `codex exec resume --last` hand-off matched to a later turn (not the first) of an existing run in the same checkout starting 0–10 s after it; `gap_ms` is turn start − hand-off. `hook` since Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
+| `candidates` | `{"id": string, "gap_ms": int}`[] | Heuristic candidates left after K1 (Phase 12): 1 for `heuristic` without evidence, ≥ 1 for `nearest_run` (`child` = the first), ≥ 2 for `ambiguous`; `[]` for `exact` and `unlinked`. Ordered by `gap_ms`, then `id`. |
 | `step` | string \| null | Step tag of the launch segment (Step tags), set on every link whatever its `match`. `null` when the segment has no tag. |
 
 ### Recognised invocations
@@ -356,6 +363,14 @@ Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_
 `form` ≠ `resume` (that invocation created them). `gap_ms` = `started_at − at`. 0 → `unlinked`; 1 → `heuristic`; ≥ 2 → `ambiguous`.
 `gap_ms` is a ranking value, not a probability.
 
+**Phase 12 (design K1–K3).** For launch hand-offs (the creation candidates above; not R7), in one pass over every
+competitor's original list: a competitor is a non-exact, non-`dir_moved` hand-off using these creation candidates. Each
+competitor's *own choice* is its single candidate, or its nearest when that is ≤ 5000 ms and every other is ≥ 10000 ms,
+or none. (K1) A run leaves hand-off h when it is another competitor's own choice at a strictly smaller `gap_ms`; equal
+gaps keep it. (K2) Of the runs left, 1 → it; ≥ 2 → the nearest when ≤ 5000 ms and every other ≥ 10000 ms. (K3) A chosen
+run → `heuristic` (`evidence: "nearest_run"` when the original list had ≥ 2 runs, else `null`); no run left →
+`unlinked`; otherwise `ambiguous`. `candidates` = the runs left.
+
 **Phase 9 (design R7, built in Step 9.6):** a `codex exec resume --last` segment is a resume without an id. It
 skips the creation candidates above; its candidates are existing Codex sessions with `cwd` == `checkout` that have a
 non-imported turn, not their first, starting in `[at, at + 10 s]` (exact-launch claims ignored, no fallback to the 60 s
@@ -400,9 +415,10 @@ The amb pair is exact in the fixtures because both results show the child id. Ph
 ambiguous case in a test: copy `fixtures/sessions` to a temp dir and, in
 `11bf1b58-….jsonl` line 28 and `f4d83303-….jsonl` line 27, replace the `session id: <uuid>` line with
 `<stdout>` in both `message.content[].content` and `toolUseResult.stdout`. `links` on that copy must equal
-`links-amb-hidden.json`: amb-1 → `ambiguous` (candidates d501 at 746 ms, d953 at 1822 ms); amb-2 →
-`heuristic` d953 (447 ms; d501 started before amb-2's call, so it is outside the window); d501 joins
-`unparented`. Everything else is unchanged.
+`links-amb-hidden.json`: amb-2 → `heuristic` d953 (447 ms; d501 started before amb-2's call, so it is outside
+the window). Until Phase 12 amb-1 was `ambiguous` (d501 at 746 ms, d953 at 1822 ms) and d501 was `unparented`; since
+Phase 12 (K1) d953 is amb-2's own choice at a smaller gap, so amb-1 → `heuristic` d501, `evidence: "nearest_run"`,
+candidates d501 only, which is amb-1's true child in the unmasked fixture. Everything else is unchanged.
 
 ### Tagged variant (`fixtures/expected/links-tagged.json`)
 Built in a test like the Ambiguous variant: copy `fixtures/sessions` to a temp dir and, in the exec case
@@ -915,7 +931,8 @@ Edge is one of:
 - `{"kind": "handoff", "at": timestamp, "match": "exact"|"heuristic"|"ambiguous"|"unlinked", "parent": string, "parent_part":
   int|null, "gap_ms": int|null, "candidates": int}` on every Codex part. `at`, `match`, `parent` are the link's; `parent_part`
   is the index in `parts` of the Claude part that holds or precedes the hand-off (`null` when the chain has none yet);
-  `gap_ms` = `from − at`, `null` with no run; `candidates` = the link's `candidates` length.
+  `gap_ms` = `from − at`, `null` with no run; `candidates` = the link's `candidates` length. Phase 12: `"nearest_run": true`
+  when the link's evidence is `nearest_run`; the key is omitted otherwise.
 - `{"kind": "return", "at": timestamp}` on a Claude part that starts at a run's end; `at` = that part's `from`.
 
 ### Calls and turns (internal, Step 8.2)
@@ -1091,3 +1108,23 @@ Decoded size is capped at 64 MiB (`.zst` only); over the cap or failing to decod
 
 `skipped` is `[]`: the five `ended` lines and the `redirect_file` hand-off line are valid from 9.4 / 9.3 on (until
 then each is one `unknown_type` entry).
+
+## Phase 12 fixture results (Step 12.0)
+Root `fixtures/sessions-phase12/`, `--now 2026-11-10T12:00:00Z`, `--since all`; one checkout per case, Claude ids
+`12a<case><n>…`, Codex ids `12c<case><n>…`. Gaps are run start − hand-off. Keys: `links.json`, `overview.json` (a
+projection, the `OV` filter in `check.sh`), `graph-1.1.json` (repo-p12a).
+
+| Case | Hand-offs and runs | Expected |
+|---|---|---|
+| (a) repo-p12a | one session hands off Step 1.1 at 0 s and 1.2 at 40 s; runs at +1 s and +41 s | 1.1 → `heuristic` `12c00101` / `nearest_run`, candidates [1000] (the 41 s run is 1.2's own choice at 1 s); 1.2 unchanged; graph 1.1 gains the implement part (01:00:01–01:00:30) and a return edge |
+| (b) repo-p12b | runs at +1 s and +30 s | `heuristic` / `nearest_run`, candidates [1000, 30000] |
+| (c) repo-p12c, (d) repo-p12d | +1 s and +7 s; +6 s and +30 s | stay `ambiguous` |
+| (e) repo-p12e | E1 at 0 s, E2 at 20 s, one run at +21 s | E1 → `unlinked`, candidates []; E2 `heuristic`, unchanged |
+| (f1) repo-p12f1 | two sessions hand off at the same instant; one run at +1 s | both `heuristic` to it, unchanged (equal gaps) |
+| (f2) repo-p12f2 | the same with runs at +1 s and +30 s | both `heuristic` `12c00701` / `nearest_run`, candidates [1000, 30000] |
+| (g) repo-p12g | heuristic G2 at 0 s, exact G1 (id in stdout) at 0.5 s; G1's run at +1.5 s, G2's at +3 s | unchanged: G2 `heuristic`, candidates [3000] |
+| (h) repo-p12h | launch at 0 s, `resume --last` at 99 s, `resume -c model=x <id>` at 150 s; one run, three turns | unchanged; the option-first id form is not recognised as a resume today (an `exec`, `unlinked`) |
+| (i) repo-p12i | I1 at 0 s; I2 at 20 s with runs at +1 s and +6 s after it; I1's run at +1 s | I2 stays `ambiguous` and chooses nothing, so I1 keeps all three: `heuristic` `12c00a01` / `nearest_run`, candidates [1000, 21000, 26000] |
+| (j) repo-p12j1–j5 | 4999/10000, 5000/10000, 5001/10001, 1000/9999, 1000/10001 ms | j1, j2, j5 → `heuristic` / `nearest_run`; j3, j4 stay `ambiguous` |
+| (k) repo-p12k | `cd … && codex exec` at 0 s; plain hand-off at 10 s, run at +11 s | unchanged: first `unlinked`, second `heuristic` |
+

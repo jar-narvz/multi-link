@@ -11,12 +11,11 @@
     {"parent": "07c80c2e-780f-462d-8e04-581cad43339f", "invocation": "toolu_0144KDn1BNUdZqEFz2MT8wLF", "subagent": null, "form": "exec", "background": true, "at": "2026-10-29T22:59:39.748Z", "checkout": "/home/dev/multi-link-sandbox/repo-b", "match": "exact", "child": "01a189e3-f419-79a1-b801-38f3fecd7480", "evidence": "task_output", "candidates": [], "step": null},
     {"parent": "80cce3e4-bbbc-42cd-999b-856685f1b3f7", "invocation": "toolu_0156Vy182S5YkG5vNygEs72F", "subagent": null, "form": "exec", "background": false, "at": "2026-10-29T23:00:15.374Z", "checkout": "/home/dev/multi-link-sandbox/repo-a", "match": "exact", "child": "01a189e4-7f31-7293-8ee6-516b81099fb5", "evidence": "stdout", "candidates": [], "step": null},
     {"parent": "c86d374f-cab2-4f76-9b58-e59d5a43b09f", "invocation": "toolu_01D79oaZN5yedVq16EGQ4MPy", "subagent": null, "form": "exec", "background": false, "at": "2026-10-29T23:00:15.714Z", "checkout": "/home/dev/multi-link-sandbox/repo-a-wt", "match": "exact", "child": "01a189e4-8084-7fc2-93b5-0b202360b109", "evidence": "stdout", "candidates": [], "step": null},
-    {"parent": "11bf1b58-17d9-48e6-988d-aa0cf951751d", "invocation": "toolu_01REKU3KvENtvGohuKSvtKD3", "subagent": null, "form": "exec", "background": false, "at": "2026-10-29T23:00:37.084Z", "checkout": "/home/dev/multi-link-sandbox/repo-b", "match": "ambiguous", "child": null, "evidence": null, "candidates": [{"id": "01a189e4-d501-71d2-97d8-0192e844ec5d", "gap_ms": 746}, {"id": "01a189e4-d953-7b63-b9b5-088a72542eb3", "gap_ms": 1822}], "step": null},
+    {"parent": "11bf1b58-17d9-48e6-988d-aa0cf951751d", "invocation": "toolu_01REKU3KvENtvGohuKSvtKD3", "subagent": null, "form": "exec", "background": false, "at": "2026-10-29T23:00:37.084Z", "checkout": "/home/dev/multi-link-sandbox/repo-b", "match": "heuristic", "child": "01a189e4-d501-71d2-97d8-0192e844ec5d", "evidence": "nearest_run", "candidates": [{"id": "01a189e4-d501-71d2-97d8-0192e844ec5d", "gap_ms": 746}], "step": null},
     {"parent": "f4d83303-be58-4964-b60a-64470e01f0c7", "invocation": "toolu_01KX71Um4R1gYv1cX8VUcCEL", "subagent": null, "form": "exec", "background": false, "at": "2026-10-29T23:00:38.459Z", "checkout": "/home/dev/multi-link-sandbox/repo-b", "match": "heuristic", "child": "01a189e4-d953-7b63-b9b5-088a72542eb3", "evidence": null, "candidates": [{"id": "01a189e4-d953-7b63-b9b5-088a72542eb3", "gap_ms": 447}], "step": null}
   ],
   "unparented": [
     "00000000-0000-4000-8000-00000000000f",
-    "01a189e4-d501-71d2-97d8-0192e844ec5d",
     "01a189e5-5b32-7f13-b365-8737dca7a4fb"
   ]
 }

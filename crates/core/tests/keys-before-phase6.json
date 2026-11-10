@@ -822,17 +822,13 @@
         "background": false,
         "at": "2026-10-29T23:00:37.084Z",
         "checkout": "/home/dev/multi-link-sandbox/repo-b",
-        "match": "ambiguous",
-        "child": null,
-        "evidence": null,
+        "match": "heuristic",
+        "child": "01a189e4-d501-71d2-97d8-0192e844ec5d",
+        "evidence": "nearest_run",
         "candidates": [
           {
             "id": "01a189e4-d501-71d2-97d8-0192e844ec5d",
             "gap_ms": 746
-          },
-          {
-            "id": "01a189e4-d953-7b63-b9b5-088a72542eb3",
-            "gap_ms": 1822
           }
         ],
         "step": null
@@ -859,7 +855,6 @@
     ],
     "unparented": [
       "00000000-0000-4000-8000-00000000000f",
-      "01a189e4-d501-71d2-97d8-0192e844ec5d",
       "01a189e5-5b32-7f13-b365-8737dca7a4fb"
     ]
   },

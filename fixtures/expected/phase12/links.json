@@ -1,0 +1,535 @@
+{
+  "links": [
+    {
+      "step": "1.1",
+      "parent": "12a00101-0000-4000-8000-000012a00101",
+      "invocation": "toolu_p12_12a00101_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T01:00:00.000Z",
+      "checkout": "/home/dev/repo-p12a",
+      "match": "heuristic",
+      "child": "12c00101-0000-4000-8000-000012c00101",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00101-0000-4000-8000-000012c00101",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00101-0000-4000-8000-000012a00101",
+      "invocation": "toolu_p12_12a00101_1",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T01:00:40.000Z",
+      "checkout": "/home/dev/repo-p12a",
+      "match": "heuristic",
+      "child": "12c00102-0000-4000-8000-000012c00102",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00102-0000-4000-8000-000012c00102",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00201-0000-4000-8000-000012a00201",
+      "invocation": "toolu_p12_12a00201_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T02:00:00.000Z",
+      "checkout": "/home/dev/repo-p12b",
+      "match": "heuristic",
+      "child": "12c00201-0000-4000-8000-000012c00201",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00201-0000-4000-8000-000012c00201",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00202-0000-4000-8000-000012c00202",
+          "gap_ms": 30000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00301-0000-4000-8000-000012a00301",
+      "invocation": "toolu_p12_12a00301_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T03:00:00.000Z",
+      "checkout": "/home/dev/repo-p12c",
+      "match": "ambiguous",
+      "child": null,
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00301-0000-4000-8000-000012c00301",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00302-0000-4000-8000-000012c00302",
+          "gap_ms": 7000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00401-0000-4000-8000-000012a00401",
+      "invocation": "toolu_p12_12a00401_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T04:00:00.000Z",
+      "checkout": "/home/dev/repo-p12d",
+      "match": "ambiguous",
+      "child": null,
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00401-0000-4000-8000-000012c00401",
+          "gap_ms": 6000
+        },
+        {
+          "id": "12c00402-0000-4000-8000-000012c00402",
+          "gap_ms": 30000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00501-0000-4000-8000-000012a00501",
+      "invocation": "toolu_p12_12a00501_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T05:00:00.000Z",
+      "checkout": "/home/dev/repo-p12e",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00502-0000-4000-8000-000012a00502",
+      "invocation": "toolu_p12_12a00502_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T05:00:20.000Z",
+      "checkout": "/home/dev/repo-p12e",
+      "match": "heuristic",
+      "child": "12c00501-0000-4000-8000-000012c00501",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00501-0000-4000-8000-000012c00501",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00601-0000-4000-8000-000012a00601",
+      "invocation": "toolu_p12_12a00601_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T06:00:00.000Z",
+      "checkout": "/home/dev/repo-p12f1",
+      "match": "heuristic",
+      "child": "12c00601-0000-4000-8000-000012c00601",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00601-0000-4000-8000-000012c00601",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00602-0000-4000-8000-000012a00602",
+      "invocation": "toolu_p12_12a00602_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T06:00:00.000Z",
+      "checkout": "/home/dev/repo-p12f1",
+      "match": "heuristic",
+      "child": "12c00601-0000-4000-8000-000012c00601",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00601-0000-4000-8000-000012c00601",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00701-0000-4000-8000-000012a00701",
+      "invocation": "toolu_p12_12a00701_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T07:00:00.000Z",
+      "checkout": "/home/dev/repo-p12f2",
+      "match": "heuristic",
+      "child": "12c00701-0000-4000-8000-000012c00701",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00701-0000-4000-8000-000012c00701",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00702-0000-4000-8000-000012c00702",
+          "gap_ms": 30000
+        }
+      ]
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00702-0000-4000-8000-000012a00702",
+      "invocation": "toolu_p12_12a00702_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T07:00:00.000Z",
+      "checkout": "/home/dev/repo-p12f2",
+      "match": "heuristic",
+      "child": "12c00701-0000-4000-8000-000012c00701",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00701-0000-4000-8000-000012c00701",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00702-0000-4000-8000-000012c00702",
+          "gap_ms": 30000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00801-0000-4000-8000-000012a00801",
+      "invocation": "toolu_p12_12a00801_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T08:00:00.000Z",
+      "checkout": "/home/dev/repo-p12g",
+      "match": "heuristic",
+      "child": "12c00802-0000-4000-8000-000012c00802",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00802-0000-4000-8000-000012c00802",
+          "gap_ms": 3000
+        }
+      ]
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00802-0000-4000-8000-000012a00802",
+      "invocation": "toolu_p12_12a00802_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T08:00:00.500Z",
+      "checkout": "/home/dev/repo-p12g",
+      "match": "exact",
+      "child": "12c00801-0000-4000-8000-000012c00801",
+      "evidence": "stdout",
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00901-0000-4000-8000-000012a00901",
+      "invocation": "toolu_p12_12a00901_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T09:00:00.000Z",
+      "checkout": "/home/dev/repo-p12h",
+      "match": "heuristic",
+      "child": "12c00901-0000-4000-8000-000012c00901",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00901-0000-4000-8000-000012c00901",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00901-0000-4000-8000-000012a00901",
+      "invocation": "toolu_p12_12a00901_1",
+      "subagent": null,
+      "form": "resume",
+      "background": false,
+      "at": "2026-11-10T09:01:39.000Z",
+      "checkout": "/home/dev/repo-p12h",
+      "match": "heuristic",
+      "child": "12c00901-0000-4000-8000-000012c00901",
+      "evidence": "resume_turn",
+      "candidates": [
+        {
+          "id": "12c00901-0000-4000-8000-000012c00901",
+          "gap_ms": 1000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00901-0000-4000-8000-000012a00901",
+      "invocation": "toolu_p12_12a00901_2",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T09:02:30.000Z",
+      "checkout": "/home/dev/repo-p12h",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00a01-0000-4000-8000-000012a00a01",
+      "invocation": "toolu_p12_12a00a01_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T10:00:00.000Z",
+      "checkout": "/home/dev/repo-p12i",
+      "match": "heuristic",
+      "child": "12c00a01-0000-4000-8000-000012c00a01",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00a01-0000-4000-8000-000012c00a01",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00a02-0000-4000-8000-000012c00a02",
+          "gap_ms": 21000
+        },
+        {
+          "id": "12c00a03-0000-4000-8000-000012c00a03",
+          "gap_ms": 26000
+        }
+      ]
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00a02-0000-4000-8000-000012a00a02",
+      "invocation": "toolu_p12_12a00a02_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T10:00:20.000Z",
+      "checkout": "/home/dev/repo-p12i",
+      "match": "ambiguous",
+      "child": null,
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00a02-0000-4000-8000-000012c00a02",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00a03-0000-4000-8000-000012c00a03",
+          "gap_ms": 6000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00b01-0000-4000-8000-000012a00b01",
+      "invocation": "toolu_p12_12a00b01_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:05:00.000Z",
+      "checkout": "/home/dev/repo-p12j1",
+      "match": "heuristic",
+      "child": "12c00b01-0000-4000-8000-000012c00b01",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00b01-0000-4000-8000-000012c00b01",
+          "gap_ms": 4999
+        },
+        {
+          "id": "12c00b02-0000-4000-8000-000012c00b02",
+          "gap_ms": 10000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00b02-0000-4000-8000-000012a00b02",
+      "invocation": "toolu_p12_12a00b02_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:10:00.000Z",
+      "checkout": "/home/dev/repo-p12j2",
+      "match": "heuristic",
+      "child": "12c00b03-0000-4000-8000-000012c00b03",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00b03-0000-4000-8000-000012c00b03",
+          "gap_ms": 5000
+        },
+        {
+          "id": "12c00b04-0000-4000-8000-000012c00b04",
+          "gap_ms": 10000
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00b03-0000-4000-8000-000012a00b03",
+      "invocation": "toolu_p12_12a00b03_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:15:00.000Z",
+      "checkout": "/home/dev/repo-p12j3",
+      "match": "ambiguous",
+      "child": null,
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00b05-0000-4000-8000-000012c00b05",
+          "gap_ms": 5001
+        },
+        {
+          "id": "12c00b06-0000-4000-8000-000012c00b06",
+          "gap_ms": 10001
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00b04-0000-4000-8000-000012a00b04",
+      "invocation": "toolu_p12_12a00b04_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:20:00.000Z",
+      "checkout": "/home/dev/repo-p12j4",
+      "match": "ambiguous",
+      "child": null,
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00b07-0000-4000-8000-000012c00b07",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00b08-0000-4000-8000-000012c00b08",
+          "gap_ms": 9999
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00b05-0000-4000-8000-000012a00b05",
+      "invocation": "toolu_p12_12a00b05_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:25:00.000Z",
+      "checkout": "/home/dev/repo-p12j5",
+      "match": "heuristic",
+      "child": "12c00b09-0000-4000-8000-000012c00b09",
+      "evidence": "nearest_run",
+      "candidates": [
+        {
+          "id": "12c00b09-0000-4000-8000-000012c00b09",
+          "gap_ms": 1000
+        },
+        {
+          "id": "12c00b0a-0000-4000-8000-000012c00b0a",
+          "gap_ms": 10001
+        }
+      ]
+    },
+    {
+      "step": "1.1",
+      "parent": "12a00c01-0000-4000-8000-000012a00c01",
+      "invocation": "toolu_p12_12a00c01_0",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:30:00.000Z",
+      "checkout": "/home/dev/repo-p12k",
+      "match": "unlinked",
+      "child": null,
+      "evidence": null,
+      "candidates": []
+    },
+    {
+      "step": "1.2",
+      "parent": "12a00c01-0000-4000-8000-000012a00c01",
+      "invocation": "toolu_p12_12a00c01_1",
+      "subagent": null,
+      "form": "exec",
+      "background": false,
+      "at": "2026-11-10T11:30:10.000Z",
+      "checkout": "/home/dev/repo-p12k",
+      "match": "heuristic",
+      "child": "12c00c01-0000-4000-8000-000012c00c01",
+      "evidence": null,
+      "candidates": [
+        {
+          "id": "12c00c01-0000-4000-8000-000012c00c01",
+          "gap_ms": 1000
+        }
+      ]
+    }
+  ],
+  "unparented": [
+    "12c00101-0000-4000-8000-000012c00101",
+    "12c00201-0000-4000-8000-000012c00201",
+    "12c00202-0000-4000-8000-000012c00202",
+    "12c00301-0000-4000-8000-000012c00301",
+    "12c00302-0000-4000-8000-000012c00302",
+    "12c00401-0000-4000-8000-000012c00401",
+    "12c00402-0000-4000-8000-000012c00402",
+    "12c00701-0000-4000-8000-000012c00701",
+    "12c00702-0000-4000-8000-000012c00702",
+    "12c00a01-0000-4000-8000-000012c00a01",
+    "12c00a02-0000-4000-8000-000012c00a02",
+    "12c00a03-0000-4000-8000-000012c00a03",
+    "12c00b01-0000-4000-8000-000012c00b01",
+    "12c00b02-0000-4000-8000-000012c00b02",
+    "12c00b03-0000-4000-8000-000012c00b03",
+    "12c00b04-0000-4000-8000-000012c00b04",
+    "12c00b05-0000-4000-8000-000012c00b05",
+    "12c00b06-0000-4000-8000-000012c00b06",
+    "12c00b07-0000-4000-8000-000012c00b07",
+    "12c00b08-0000-4000-8000-000012c00b08",
+    "12c00b09-0000-4000-8000-000012c00b09",
+    "12c00b0a-0000-4000-8000-000012c00b0a"
+  ]
+}

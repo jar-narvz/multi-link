@@ -2106,14 +2106,16 @@ Decisions:
   the 60 s creation window today: not `exact`, not `dir_moved`, no `resume_id`, and not an id-less `resume --last`
   (R7 compares later turns, not creation, so its gaps cannot compete). Exact launches keep reserving their observed
   child (`claimed`, unchanged). Run r is removed from hand-off h when, for some other competitor h', r is h''s
-  unique nearest original candidate and gap(h', r) < gap(h, r). Equal gaps, or r not h''s unique nearest, → r stays.
+  own choice (K2/K3 applied to h''s original list alone) and gap(h', r) < gap(h, r). Equal gaps, or h' choosing
+  nothing or another run, → r stays. *(Amended in 12.0: was "h''s unique nearest"; see Review log.)*
   One pass over the original candidate lists, so hand-off order cannot matter. **An assumption, stated:** Codex
   creates a run within seconds of its launch (27 of 28 ground-truth gaps ≤ 3.2 s). It can be wrong: A launches in
   the background at 0 s and its run appears at 11 s, while B launched at 10 s failed to start one; K1 then gives
   A's run to B. Today both A and B would claim that run (two `heuristic` links to one child), so K1 removes a
   duplicate attribution rather than adding a new risk; the link still says `matched by time`, never confirmed.
 - **K2 A clear nearest (provisional margins).** If two or more runs remain after K1, the nearest is chosen when its
-  gap is ≤ 5 s and every other remaining run's gap is ≥ 10 s (inclusive, in ms). Why these: 27 of 28 true gaps are
+  gap is ≤ 5 s and every other remaining run's gap is ≥ 10 s (inclusive, in ms). K1–K3 apply to launch hand-offs
+  only; an id-less `resume --last` keeps R7 exactly (12.0 clarification). Why these: 27 of 28 true gaps are
   ≤ 3.2 s, and the 4 ground-truth rivals started ≥ 17 s after; the margins are chosen wider than that, not fitted to
   the 9. Known failure: a manual run at +1 s and a slow true child at +12 s picks the manual run. 12.2 re-runs the
   masked check; any wrong answer there stops the phase.
@@ -2121,8 +2123,9 @@ Decisions:
   original list had more than one run (else `null`, as today). None left → `unlinked`. Otherwise `ambiguous`, as
   today. Every child change flows on as today's heuristic links do: overview reparents the run under its parent,
   and the step graph uses it for run windows, prompts and return edges. Words in the TUI: `matched by time ·
-  nearest of N runs` (N = original candidates) where the sub line says `matched by time` today; the graph derives
-  it from the edge's candidate count, so `Edge` needs no evidence field.
+  nearest run` where the sub line says `matched by time` today. The graph `Edge` (handoff) gains `nearest_run:
+  true`, omitted when false, so no existing key changes. *(Amended in 12.0: the edge's candidate count is the
+  survivor count, so "nearest of N runs" could not be derived from it.)*
 - **K4 Changes to today's answers are listed, not hidden.** Expected transitions on today's data (descriptive; the
   data grows, so these are not acceptance targets): 53 exact → unchanged; 48 unlinked → unchanged; 6 heuristic
   `resume_turn` → unchanged; 118 heuristic launch → 117 unchanged, 1 `unlinked` (its only run is a closer hand-off's
@@ -2151,7 +2154,8 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
   reparented by K1) and one `graph-*.json` (its run window and return edge), all with one fixed `--now`; a
   `crates/cli/tests/phase12.rs` compares them in `cargo test`. Existing keys that change are listed value by value.
 - Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase12/**`, `fixtures/expected/phase12/**`,
-  `crates/cli/tests/phase12.rs`, `fixtures/expected/**` (only the listed values), `PROGRESS.md`
+  `crates/cli/tests/phase12.rs`, `fixtures/expected/**` (only the listed values), `crates/core/tests/keys-before-phase6.json`
+  (the same listed value; amended in 12.0), `PROGRESS.md`
 - Verify: `cargo test --workspace` → all `ok` except `phase12` tests and tests comparing changed keys, listed by
   name in PROGRESS (all pass by 12.1); `fixtures/expected/phase12/check.sh` runs (`cargo run`, fixed `--now`, `jq -S`
   comparison) and fails only on the new cases; W10 scan: `git grep -n -E '/Users/|jarednarvaez' -- fixtures docs`
@@ -2160,11 +2164,12 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 ### Step 12.1 — K1–K3 in the link resolver (Codex)
 - Depends on: 12.0. K0–K3.
 - Files: `crates/model/src/lib.rs` (`LinkEvidence::NearestRun`), `crates/core/src/link.rs` and its unit tests,
-  `crates/core/tests/**`, `crates/tui/src/{view,timeline,graph}.rs` (the `nearest of N runs` words only),
+  `crates/core/src/graph.rs` (`Edge` `nearest_run`, amended in 12.0), `crates/core/tests/**`,
+  `crates/tui/src/{view,timeline,graph}.rs` (the `nearest run` words only),
   `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
 - Verify: tests and clippy clean (`phase12` tests compare every Phase 12 key); `fixtures/expected/phase12/check.sh`
   all `ok`; `fixtures/expected/phase9/check.sh 6` 47/47; `git diff 04b4233 -- fixtures/expected` shows only 12.0's
-  keys; unit tests: K1 (strictly smaller gap and unique nearest only, ties kept, result independent of hand-off
+  keys; unit tests: K1 (strictly smaller gap and the other's own choice only, ties kept, result independent of hand-off
   order, other checkouts ignored), K2 (boundaries as written), K3 (evidence only with more than one original
   candidate), exact and R7 links unchanged; the longer words survive the lane's truncation at 120 and 80 columns.
   Real run in scratch, counts only: transitions against K4's table.
@@ -2178,9 +2183,24 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 - Verify: whole-phase Verify; real counts match K4 or each difference is explained; the owner's answer recorded.
 
 ### Backlog (ordered, uncommitted)
+- Option-first explicit-id resume (`codex exec resume -c k=v <id> "…"`) is recognised as a plain `exec` (found in 12.0,
+  fixture case h); only `--last` was tested with options first in Phase 9.
 `hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Step 12.0 amendments (Claude, while writing the keys)
+- **K1 tightened.** Writing case (i) showed "h''s unique nearest" removes a run even when h' itself stays ambiguous and
+  takes nothing, then can hand h a far run (critique point 2 only half closed). K1 now removes r only when r is h''s
+  own choice (K2/K3 on its original list). Real data: identical transitions to the K4 table (simulated on the
+  2026-11-10 export, counts only).
+- **K3 words and graph edge.** With `candidates` = survivors, a K1 pick has an edge count of 1, so "nearest of N runs"
+  could not come from it. Words are now `matched by time · nearest run`; the graph `Edge` gains `nearest_run: true`,
+  omitted when false (no existing graph key changes). 12.1 Files gain `crates/core/src/graph.rs`.
+- **K2 scope** stated: launch hand-offs only; R7 unchanged (was implied by K4 and the 12.1 Verify).
+- **Files.** `crates/core/tests/keys-before-phase6.json` holds a copy of `links-amb-hidden.json`, so its amb-1 value
+  changes with the key; added to 12.0's Files.
+- **Found:** option-first explicit-id resume is not recognised as a resume (case h pins today's behaviour); backlog.
 
 ### 2026-11-10 — Phase 12 plan critique (Codex, read-only, Codex loop)
 Quota check: `primary 0%, secondary 39%, CODEX: OK`. Ten points; outcome:
