@@ -1,0 +1,352 @@
+<title>Board 15 Loading Screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: a dark wall; three live terminal frames pinned side by side, rules underneath. Single dark look on purpose (terminal art). */
+:root {
+  --wall: #0f1115;
+  --panel: #171a20;
+  --term: #08090c;
+  --ink: #e9e6e1;
+  --muted: #8f949e;
+  --line: #262a32;
+  --claude: #e8875a;
+  --codex: #5a9ae8;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--wall); color: var(--ink); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 32px; }
+header { display: grid; gap: 10px; max-width: 72ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4vw, 46px); line-height: 1.05; margin: 0; text-wrap: balance; }
+h1 .o { color: var(--claude); } h1 .b { color: var(--codex); }
+header p { margin: 0; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls button { font: 500 13px var(--mono); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.controls button[aria-pressed="true"] { border-color: var(--claude); color: var(--claude); }
+.controls button:focus-visible { outline: 2px solid var(--codex); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 22px; }
+figure { margin: 0; display: grid; gap: 12px; min-width: 0; align-content: start; }
+.hero { max-width: 980px; }
+.frame { background: var(--term); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); font: 12px var(--mono); color: var(--muted); }
+.bar i { width: 9px; height: 9px; border-radius: 50%; background: #2c313a; display: inline-block; }
+.bar b { margin-left: 8px; font-weight: 400; }
+canvas { display: block; width: 100%; height: auto; }
+figcaption { display: grid; gap: 4px; }
+figcaption h2 { font: 700 21px/1.2 var(--display); margin: 0; display: flex; gap: 10px; align-items: baseline; }
+figcaption h2 small { font: 500 12px var(--mono); color: var(--muted); letter-spacing: .08em; }
+figcaption p { margin: 0; color: var(--muted); max-width: 60ch; }
+.rules { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; display: grid; gap: 10px; }
+.rules h3 { font: 700 18px var(--display); margin: 0; }
+.rules ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
+.rules li strong { color: var(--ink); font-weight: 500; }
+code { font-family: var(--mono); font-size: .92em; color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">multi-link · board 15 · round 3 · for approval</div>
+    <h1>First-load screen in <span class="o">orange</span> and <span class="b">blue</span></h1>
+    <p>Round 2 uses two colours only: Claude orange and Codex blue, plus pale light where they meet. The art is made from ASCII characters, with shade standing in for depth. Each frame is a live terminal at the app's size (76 × 22). The counter is staged to loop for the board; in the app it counts real files.</p>
+    <div class="controls">
+      <button id="c256" aria-pressed="false">256-colour terminal</button>
+      <button id="pause" aria-pressed="false">Pause</button>
+    </div>
+  </header>
+
+  <figure class="hero">
+    <div class="frame"><div class="bar"><i></i><i></i><i></i><b>multi-link tui</b></div><canvas id="d"></canvas></div>
+    <figcaption><h2>F · Echo <small>ROUND 3 · DOLPHINS</small></h2>
+      <p>An orange dolphin (Claude) and a blue dolphin (Codex) swim past each other. Each one clicks out sonar rings that ripple the faint background field. When a ring reaches the other dolphin, a pale dotted link flashes between them, and that is the product in one picture. The bodies follow the style you sent: dense character clumps with filled colour cells at the core, thinning to scattered glyphs at the tail and in the wake.</p></figcaption>
+  </figure>
+
+  <div class="eyebrow">Round 2, kept for comparison</div>
+  <div class="grid">
+    <figure>
+      <div class="frame"><div class="bar"><i></i><i></i><i></i><b>multi-link tui</b></div><canvas id="a"></canvas></div>
+      <figcaption><h2>B · Bloom, calm <small>FROM ROUND 1</small></h2>
+        <p>Your pick from round 1, now in two colours and drawn with ASCII shade characters. An orange bloom and a blue bloom pulse, and their rings turn pale where they cross.</p></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><div class="bar"><i></i><i></i><i></i><b>multi-link tui</b></div><canvas id="b"></canvas></div>
+      <figcaption><h2>D · Manta <small>ASCII SEA</small></h2>
+        <p>A manta ray glides and turns through drifting specks, beating its wings slowly. Its lit side is orange and its shadow side is blue, so the colour moves as the wings move.</p></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><div class="bar"><i></i><i></i><i></i><b>multi-link tui</b></div><canvas id="c"></canvas></div>
+      <figcaption><h2>E · School <small>ASCII SEA</small></h2>
+        <p>Two schools of tiny fish. The orange school circles while the blue school swims a figure-eight through it, so the two keep passing through each other. Closer fish are brighter.</p></figcaption>
+    </figure>
+  </div>
+
+  <section class="rules">
+    <h3>Rules that apply to whichever one you pick</h3>
+    <ul>
+      <li><strong>When it shows:</strong> while the first scan runs, and for at least about 1 s. Any key skips it, and <code>q</code> quits.</li>
+      <li><strong>Honest counter:</strong> the numbers are real files read so far, never a fake progress bar.</li>
+      <li><strong>Any terminal:</strong> it falls back to 256 colours (try the button) and needs nothing installed. With <code>NO_COLOR</code> set, it drops to plain shade characters.</li>
+      <li><strong>Hand-over:</strong> when loading ends the art fades out and the home screen appears, with no extra wait.</li>
+      <li><strong>Small windows:</strong> below 60 × 16 the art shrinks to fit and the counter stays.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const COLS = 76, ROWS = 22, TOTAL = 871;
+  const ORANGE = [232, 135, 90], BLUE = [90, 154, 232], PALE = [238, 228, 214], DIM = [52, 60, 74];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let use256 = false, paused = reduce;
+
+  const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  const dim = (c, k) => c.map(v => v * k);
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const lv = [0, 95, 135, 175, 215, 255];
+  const q = v => { let b = 0; for (let i = 1; i < 6; i++) if (Math.abs(lv[i] - v) < Math.abs(lv[b] - v)) b = i; return lv[b]; };
+  const css = ([r, g, b]) => use256 ? `rgb(${q(r)},${q(g)},${q(b)})` : `rgb(${r | 0},${g | 0},${b | 0})`;
+
+  // 5-row pixel font for the big wordmark.
+  const F = {
+    M:["#...#","##.##","#.#.#","#...#","#...#"], U:["#...#","#...#","#...#","#...#",".###."],
+    L:["#...","#...","#...","#...","####"], T:["#####","..#..","..#..","..#..","..#.."],
+    I:["###",".#.",".#.",".#.","###"], "-":["...","...","###","...","..."],
+    N:["#...#","##..#","#.#.#","#..##","#...#"], K:["#..#","#.#.","##..","#.#.","#..#"]
+  };
+  const WORD = "MULTI-LINK";
+  const wordW = [...WORD].reduce((s, ch) => s + F[ch][0].length + 1, -1);
+  const wx0 = Math.floor((COLS - wordW) / 2), wy0 = 6;
+  const wordCells = new Set();
+  { let x = wx0; for (const ch of WORD) { const g = F[ch]; g.forEach((row, y) => [...row].forEach((p, i) => { if (p === "#") wordCells.add((wy0 + y) * COLS + x + i); })); x += g[0].length + 1; } }
+  const inWordBox = (x, y) => x >= wx0 - 2 && x < wx0 + wordW + 2 && y >= wy0 - 1 && y <= wy0 + 5;
+
+  function setup(id) {
+    const cv = document.getElementById(id), dpr = Math.min(devicePixelRatio || 1, 2);
+    const cw = 9, ch = 18; cv.width = COLS * cw * dpr; cv.height = ROWS * ch * dpr;
+    const g = cv.getContext("2d"); g.scale(dpr, dpr); g.textBaseline = "middle";
+    return { g, cw, ch };
+  }
+  const put = (s, x, y, glyph, rgb, bold) => { if (glyph === " " || x < 0 || x >= COLS) return;
+    s.g.font = `${bold ? 700 : 400} 15px "JetBrains Mono", Menlo, monospace`;
+    s.g.fillStyle = css(rgb); s.g.fillText(glyph, x * s.cw, y * s.ch + s.ch / 2 + 1); };
+  const text = (s, x, y, str, rgb, bold) => [...str].forEach((c, i) => put(s, x + i, y, c, rgb, bold));
+  const clear = s => s.g.clearRect(0, 0, COLS * s.cw, ROWS * s.ch);
+
+  function chrome(s, t, big) {
+    const cyc = t % 4.2, n = Math.min(TOTAL, Math.floor((cyc / 3.4) * TOTAL)), done = cyc > 3.4;
+    if (big) for (const k of wordCells) { const x = k % COLS, y = (k / COLS) | 0;
+      const along = (x - wx0) / wordW, glow = .82 + .18 * Math.sin(t * 1.6 - x * .15);
+      put(s, x, y, "█", dim(mix(ORANGE, BLUE, along), glow)); }
+    else { const w = "m u l t i · l i n k", x0 = Math.floor((COLS - w.length) / 2);
+      [...w].forEach((c, i) => put(s, x0 + i, 15, c, mix(ORANGE, BLUE, i / (w.length - 1)), true)); }
+    const w = 30, x0 = Math.floor((COLS - w) / 2), fill = Math.round(w * n / TOTAL);
+    for (let i = 0; i < w; i++) put(s, x0 + i, 17, i < fill ? "━" : "─", i < fill ? mix(ORANGE, BLUE, i / (w - 1)) : [40, 44, 52]);
+    const label = done ? "ready ✓  opening home" : `reading transcripts  ${String(n).padStart(3)} / ${TOTAL}`;
+    text(s, Math.floor((COLS - label.length) / 2), 19, label, done ? PALE : [190, 186, 180]);
+    const hint = "any key skips · q quits";
+    text(s, Math.floor((COLS - hint.length) / 2), 20, hint, [92, 98, 108]);
+  }
+
+  const A = setup("a"), B = setup("b"), C = setup("c");
+  const ramp = " .·:-=+*#%";
+
+  // B · Bloom, calm
+  function drawA(t) {
+    const s = A; clear(s);
+    const cx1 = 21 + Math.sin(t * .35) * 3, cx2 = 55 - Math.sin(t * .35) * 3, cy = 7.5;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < COLS; x++) {
+      if (inWordBox(x, y)) continue;
+      const d1x = x - cx1, d2x = x - cx2, dy = (y - cy) * 2.1;
+      const r1 = Math.hypot(d1x, dy), r2 = Math.hypot(d2x, dy);
+      const a1 = Math.atan2(dy, d1x), a2 = Math.atan2(dy, d2x);
+      const w1 = Math.max(0, Math.sin(r1 * .55 - t * 2.0 + Math.sin(a1 * 6 + t * .7) * 1.1)) * Math.exp(-r1 * .05);
+      const w2 = Math.max(0, Math.sin(r2 * .5 - t * 1.6 + Math.sin(a2 * 5 - t * .7) * 1.1)) * Math.exp(-r2 * .05);
+      const v = w1 + w2; if (v < .06) continue;
+      const lvl = Math.min(ramp.length - 1, 1 + Math.floor(v * 7));
+      const k = w2 / (w1 + w2 + 1e-6);
+      let c = mix(ORANGE, BLUE, k);
+      const both = Math.min(w1, w2) * 2.4; c = mix(c, PALE, clamp(both));
+      put(s, x, y, ramp[lvl], dim(c, .45 + .55 * clamp(v * 1.4)));
+    }
+    chrome(s, t, true);
+  }
+
+  // shared drifting specks (plankton)
+  const specks = Array.from({ length: 46 }, (_, i) => ({ x: (i * 37.3) % COLS, y: (i * 11.7) % 15, s: .3 + (i % 5) * .12, w: i % 3 === 0 }));
+  const drawSpecks = (s, t) => specks.forEach(p => {
+    const x = Math.round(((p.x - t * p.s * 2.2) % COLS + COLS) % COLS), y = Math.round(((p.y - t * p.s * .5) % 15 + 15) % 15);
+    put(s, x, y, p.s > .6 ? "·" : ".", p.w ? dim(ORANGE, .32) : dim(BLUE, .38));
+  });
+
+  // D · Manta
+  function drawB(t) {
+    const s = B; clear(s); drawSpecks(s, t);
+    // Seen from above, nose up, wings spread across the screen; it drifts and banks.
+    const mx = 38 + 11 * Math.sin(t * .2), my = 15 + 1.5 * Math.sin(t * .5), S = 1.6;
+    const th = -Math.PI / 2 + .28 * Math.cos(t * .2);
+    const c = Math.cos(th), sn = Math.sin(th), W = 15, A = 2.6;
+    const z = av => A * Math.sin(t * 2.1 - (av / W) * 2.0) * Math.pow(av / W, 1.5);
+    for (let y = 0; y < 15; y++) for (let x = 0; x < COLS; x++) {
+      const dx = (x - mx) / S, dy = (y * 2 - my) / S, u = dx * c + dy * sn, v = -dx * sn + dy * c, av = Math.abs(v);
+      let h = 0;
+      if (u <= 5 && u > -2) h = W * Math.pow((5 - u) / 7, .75);
+      else if (u <= -2 && u >= -6) h = W * Math.pow((u + 6) / 4, 2.2);
+      const fin = u > 4.2 && u < 7.2 && av > .9 && av < 2.6;
+      const tail = u < -6 && u > -17 && av < .55 + (u + 17) * .02;
+      if (av <= h || fin) {
+        const slope = z(av + .5) - z(Math.max(0, av - .5));
+        const ridge = av < 2.2 ? .22 * (1 - av / 2.2) : 0;
+        const l = clamp(.5 - .3 * (av / W) + slope * 1.25 + ridge + (fin ? .2 : 0) + .08 * Math.sin(u * .9 + av * .4));
+        const edge = h - av < .45 && !fin;
+        const ch = edge ? (l > .5 ? "*" : "+") : ramp[1 + Math.round(l * (ramp.length - 2))];
+        put(s, x, y, ch, mix(BLUE, ORANGE, l), l > .75);
+      } else if (tail) {
+        put(s, x, y, Math.sin(u * .9 + t * 3) > 0 ? "(" : ")", dim(BLUE, .8));
+      }
+    }
+    chrome(s, t, false);
+  }
+
+  // E · School
+  const fish = Array.from({ length: 96 }, (_, i) => ({ g: i % 2, ph: i * 2.399, r: .55 + ((i * 7) % 10) / 22, sp: .9 + ((i * 3) % 7) / 20 }));
+  function drawC(t) {
+    const s = C; clear(s); drawSpecks(s, t * .6);
+    const cx = 38, cy = 7.2, occ = new Map();
+    for (const f of fish) {
+      const a = f.ph + t * .42 * f.sp;
+      let x, y, vx, vy;
+      if (f.g === 0) { x = cx + 27 * f.r * Math.cos(a); y = cy + 5.6 * f.r * Math.sin(a) + Math.sin(t * 1.3 + f.ph) * .4;
+        vx = -Math.sin(a); vy = Math.cos(a) * .2; }
+      else { const b = -a; x = cx + 30 * f.r * Math.sin(b); y = cy + 6.2 * f.r * Math.sin(2 * b) + Math.sin(t * 1.1 + f.ph) * .4;
+        vx = -Math.cos(b); vy = -Math.cos(2 * b) * .4; }
+      const depth = .5 + .5 * Math.sin(a * 1.0 + f.ph * .5);
+      const xi = Math.round(x), yi = Math.round(y); if (yi < 0 || yi > 14) continue;
+      const col = dim(f.g ? BLUE : ORANGE, .4 + .6 * depth), dir = vx >= 0 ? 1 : -1;
+      const head = dir > 0 ? (depth > .66 ? ">" : "›") : (depth > .66 ? "<" : "‹");
+      const key = yi * COLS + xi;
+      if (occ.has(key) && occ.get(key) !== f.g) put(s, xi, yi, "*", PALE, true);
+      else { put(s, xi, yi, head, col, depth > .7); occ.set(key, f.g); }
+      put(s, xi - dir, yi, depth > .5 ? "=" : "-", dim(col, .7));
+      if (depth > .8) put(s, xi - 2 * dir, yi, "·", dim(col, .45));
+    }
+    chrome(s, t, false);
+  }
+
+  // F · Echo (dolphins). Cell buffer so layers replace each other instead of overprinting.
+  const D = setup("d");
+  const hash = (a, b, c = 0) => { let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const pick = (set, x, y, t) => set[Math.floor(hash(x, y, Math.floor(t * 7)) * set.length)];
+  // Orange swims left to right, blue right to left; both porpoise in gentle arcs and wrap around.
+  const SPAN = COLS + 44, SPEED = 6.5;
+  const pathK = k => tau => ({ x: (k ? -1 : 1) * SPEED * tau, y: (7.2 + 3.4 * Math.sin(.62 * tau + k * 2.1) + .6 * Math.sin(1.7 * tau + k)) * 2 });
+  const width = s => s < .05 ? .35 + s * 8 : s < .16 ? .75 + (s - .05) * 9 : s < .42 ? 1.75 + (s - .16) * 1.6 : s < .86 ? 2.15 - (s - .42) * 3.6 : s < .93 ? .55 : .55 + (s - .93) * 22;
+  const fin = s => s > .36 && s < .54 ? 2.4 * (s < .47 ? (s - .36) / .11 : (.54 - s) / .07) : 0;
+  const pec = s => s > .22 && s < .32 ? 1.1 * (1 - Math.abs(s - .27) / .05) : 0;
+  const wrapX = x => ((x + 22) % SPAN + SPAN) % SPAN - 22;
+
+  function spine(path, tau, len) {
+    const pts = [path(tau)]; let acc = 0, prev = pts[0], T = tau;
+    while (acc < len && T > tau - 40) { T -= .01; const p = path(T); acc += Math.hypot(p.x - prev.x, p.y - prev.y);
+      if (acc >= pts.length * .5) pts.push(p); prev = p; }
+    const shift = wrapX(pts[0].x) - pts[0].x;
+    return { pts: pts.map(p => ({ x: p.x + shift, y: p.y })), shift };
+  }
+
+  function drawD(t) {
+    const s = D; clear(s);
+    const buf = new Map(), set = (x, y, cell, z) => { if (x < 0 || x >= COLS || y < 0 || y > 14) return;
+      const k = y * COLS + x, o = buf.get(k); if (!o || o.z <= z) buf.set(k, { ...cell, z }); };
+    // faint ambient field
+    for (let y = 0; y < 15; y++) for (let x = 0; x < COLS; x++) { const h = hash(x, y); if (h < .16)
+      set(x, y, { g: pick("·.:'`", x, y, t * .15), fg: dim(DIM, .55 + .45 * Math.sin(t * .8 + h * 40)) }, 0); }
+    const dolphins = [0, 1].map(k => {
+      const path = pathK(k), tau = t + 5 + k * 2.3, sp = spine(path, tau, 27), pts = sp.pts, head = pts[0], nxt = path(tau + .05);
+      return { k, tau, path, shift: sp.shift, pts, head, dir: Math.atan2(nxt.y - (head.y), nxt.x + sp.shift - head.x), col: k ? BLUE : ORANGE };
+    });
+    // sonar rings and the echo link
+    for (const d of dolphins) {
+      const n = Math.floor((t + d.k * 1.3) / 2.6), t0 = n * 2.6 - d.k * 1.3, age = t - t0;
+      const ta = t0 + 5 + d.k * 2.3, o0 = d.path(ta), o2 = d.path(ta + .05);
+      const o = { x: wrapX(o0.x), y: o0.y }, dir = Math.atan2(o2.y - o0.y, o2.x - o0.x);
+      for (const [lag, amp] of [[0, 1], [.22, .5]]) {
+        const r = (age - lag) * 16; if (r < 2 || r > 38) continue; const fade = amp * (1 - r / 38);
+        for (let y = 0; y < 15; y++) for (let x = 0; x < COLS; x++) {
+          const dx = x - o.x, dy = y * 2 - o.y, dist = Math.hypot(dx, dy);
+          if (Math.abs(dist - r) > .7) continue;
+          let da = Math.atan2(dy, dx) - dir; da = Math.atan2(Math.sin(da), Math.cos(da)); if (Math.abs(da) > .62) continue;
+          set(x, y, { g: Math.cos(dir) >= 0 ? ")" : "(", fg: dim(d.col, .35 + .65 * fade) }, 1);
+        }
+      }
+      const other = dolphins[1 - d.k], D2 = Math.hypot(other.head.x - o.x, other.head.y - o.y), r = age * 16;
+      const ahead = Math.cos(Math.atan2(other.head.y - o.y, other.head.x - o.x) - dir) > .55;
+      if (ahead && D2 < 40)
+      if (r >= D2 && r < D2 + 14) { // ring reached the other dolphin: draw the link
+        const a = d.head, b = other.head, steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 1.2), k = 1 - (r - D2) / 14;
+        for (let i = 2; i < steps - 1; i += 2) { const x = Math.round(a.x + (b.x - a.x) * i / steps), y = Math.round((a.y + (b.y - a.y) * i / steps) / 2);
+          set(x, y, { g: "·", fg: dim(PALE, .4 + .6 * k), b: true }, 2); }
+        const hx = Math.round(b.x), hy = Math.round(b.y / 2);
+        for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) set(hx + ox, hy + oy, { g: "◦", fg: dim(PALE, k) }, 2);
+      }
+    }
+    // wake: sparse glyphs scattered behind each tail
+    for (const d of dolphins) for (let i = 0; i < 26; i++) {
+      const p0 = d.path(d.tau - 27 / SPEED - i * .1), p = { x: p0.x + d.shift, y: p0.y }, jx = hash(i, d.k, Math.floor(t * 3)) * 3 - 1.5, jy = hash(d.k, i, Math.floor(t * 3)) * 3 - 1.5;
+      if (hash(i, d.k * 7, Math.floor(t * 5)) < .45) continue;
+      set(Math.round(p.x + jx), Math.round((p.y + jy * 2) / 2), { g: pick("·:-~'", i, d.k, t), fg: dim(d.col, .5 * (1 - i / 26)) }, 3);
+    }
+    // bodies
+    for (const d of dolphins) {
+      const N = d.pts.length;
+      d.pts.forEach((p, i) => {
+        const s2 = i / (N - 1), q = d.pts[Math.min(N - 1, i + 1)], r0 = d.pts[Math.max(0, i - 1)];
+        let tx = r0.x - q.x, ty = r0.y - q.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        let nx = -ty, ny = tx; if (ny > 0) { nx = -nx; ny = -ny; } // normal pointing up = dorsal side
+        const w = width(s2), up = w + fin(s2), down = w + pec(s2);
+        for (let off = -down; off <= up; off += .6) {
+          const x = Math.round(p.x + nx * off), y = Math.round((p.y + ny * off) / 2);
+          const ext = off > w || -off > w, dens = ext ? .3 : 1 - Math.abs(off) / Math.max(w, .5);
+          const lit = clamp(.5 + off / 6), base = mix(mix(d.col, PALE, .35 * (1 - lit)), d.col, lit);
+          let cell;
+          if (dens > .62 && s2 < .8) cell = { g: pick("#%&@8", x, y, t), fg: [12, 12, 16], bg: dim(base, .7 + .3 * lit), b: true };
+          else if (dens > .38) cell = { g: pick("@%#8$", x, y, t), fg: base, b: true };
+          else if (dens > .16) cell = { g: pick("*+=x", x, y, t), fg: dim(base, .85) };
+          else cell = { g: pick(":~-·", x, y, t), fg: dim(base, .6) };
+          set(x, y, cell, 4 + dens);
+        }
+        if (i === Math.round(.09 * (N - 1))) { // eye
+          const x = Math.round(p.x + nx * .9), y = Math.round((p.y + ny * .9) / 2);
+          set(x, y, { g: "•", fg: [10, 10, 14], bg: dim(d.col, .95), b: true }, 9);
+        }
+      });
+    }
+    for (const [k, c] of buf) { const x = k % COLS, y = (k / COLS) | 0;
+      if (c.bg) { s.g.fillStyle = css(c.bg); s.g.fillRect(x * s.cw, y * s.ch, s.cw, s.ch); }
+      put(s, x, y, c.g, c.fg, c.b); }
+    chrome(s, t, false);
+  }
+
+  let t0 = performance.now(), stopAt = null;
+  const drawAll = t => { drawD(t + 4); drawA(t); drawB(t + 2); drawC(t + 1); };
+  function frame(now) {
+    if (paused) return;
+    drawAll((now - t0) / 1000);
+    requestAnimationFrame(frame);
+  }
+  const start = () => { t0 = performance.now() - (stopAt ?? 3) * 1000; requestAnimationFrame(frame); };
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { if (paused) { stopAt = 3; drawAll(3); } else start(); });
+
+  const b256 = document.getElementById("c256"), bp = document.getElementById("pause");
+  const sync = () => { bp.setAttribute("aria-pressed", String(paused)); bp.textContent = paused ? "Play" : "Pause"; };
+  sync();
+  b256.onclick = () => { use256 = !use256; b256.setAttribute("aria-pressed", String(use256)); if (paused) drawAll(stopAt ?? 3); };
+  bp.onclick = () => { paused = !paused; if (paused) stopAt = (performance.now() - t0) / 1000; else start(); sync(); };
+})();
+</script>

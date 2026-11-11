@@ -1,6 +1,26 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 15.0 is committed (2026-11-11, Claude step): Phase 15 rules, loading goldens, timing baseline. Step 15.1
+(Codex: parallel cold parse, F2 measurement, progress handle) is next.** Rules: `docs/design.md` → "Phase 15
+decisions" (F1–F8 plus "Pinned while writing the goldens"); PLAN.md F5 centre y is now 0.48 × art rows and F6 to-do
+bar cells `border` (Review log, Step 15.0 amendments).
+- **Baseline to beat (release `c29c516`, real `~`, 3 fresh processes):** F3 (a) cold `overview --json` wall 9.02 /
+  7.99 / 7.95 s (median 7.99 s; user ≈ 7.25 s, sys 0.67–0.80 s); F3 (b) first report without `--live` 9344 / 8624 /
+  8446 ms (median 8624; overview ≈ 8.0–8.8 s, all-time pass 435–524 ms), with `--live` 8510 / 8514 / 8550 ms (median
+  8514; live part 63–65 ms). Budget: (a) and (b) ≤ 2.0 s each. 15.1 re-times both the same way next to these.
+- **Timing harness for (b)** (scratch only, never in the repo): a crate with path deps on `crates/{core,plan,model}`
+  whose `main` repeats `refresh_with_live` from `crates/cli/src/tui.rs` without the graph — `Scanner::overview` with
+  `since` 2 h and `RealProcessProbe`, then `Scanner::refresh` with `since: None`, `live::started_steps` /
+  `codex_steps`, then `Scanner::live` when `--live` — one fresh process per run, timed with `Instant`.
+- **For 15.2:** `NO_COLOR` must drop BOLD on the loading screen too (`Theme::apply_no_color` removes only DIM; don't
+  change it); round with `floor(v + 0.5)`; the meet `*` uses a per-frame head map (design.md, pinned rules).
+- **Loading goldens** (`fixtures/expected/tui/`, nothing reads them until 15.2; 15.1 must leave them unchanged):
+  `loading-{120x40,76x22,60x16,59x16,50x12,29x6,28x5}.{txt,styles.txt}` (truecolor), `loading-76x22-256.styles.txt`,
+  `loading-76x22-nocolor.{txt,styles.txt}`, `loading-76x22-{ready,linking,zero,fade1}.{txt,styles.txt}`; all at
+  `drawC(4.0)`, counter `reading transcripts  612 / 871` unless named. The 76×22 art equals the board's frame glyph for
+  glyph; `-zero` is phase reading `0 / 0`.
+
 **Phase 14 is closed (2026-11-11): Step 14.4 is committed and the owner confirmed it ("look good").** The live grid
 (`l` from home or the repo view, `multi-link tui --live`) shows a card per working, waiting or stale session with its
 last prompt, state, counts and last 3 notable calls, a Claude card paired with its live Codex card, and a hand-off feed;
@@ -740,6 +760,53 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 15.0: Rules, loading goldens, timing baseline — Claude
+- Mode: Claude step (no Codex hand-off in 15.0, so no quota check was needed).
+- Did: Wrote F1–F8 and the details the goldens pin (geometry, rounding, speck wrap, draw order, role ladders, bar
+  rounding, small-size rows, fade steps) as "Phase 15 decisions" in `docs/design.md`; added the cold baseline to the
+  NFR "Speed" row. Committed the approved board source. Amended PLAN.md F5 (centre y = 0.48 × art rows, the board's
+  `cy = 7.2` of 15) and F6 (to-do bar cells `border`), logged in the Review log. Timed baseline (a) with
+  `/usr/bin/time -p` on the release binary at `c29c516` (already built; `cargo build --release` was a no-op) and (b) with
+  a scratch crate (scratchpad only, path deps on core/plan/model) that runs the worker's `refresh_with_live` body with
+  no graph: overview over the 2 h window, the all-time `refresh`, `started_steps` / `codex_steps`, then `Scanner::live`
+  when `--live`; one fresh process and `Scanner` per run. Generated the 25 goldens with a scratch Python port of
+  `drawC` + chrome that follows the pinned rules, in the existing dump format (`crates/tui/tests/support`).
+- Changed: `docs/design.md`, `docs/boards/board15-loading.html` (new, as approved), `fixtures/expected/tui/loading-*`
+  (25 new files), `PLAN.md` (F5/F6 amendment + Review log), `PROGRESS.md`.
+- Verify:
+```
+cargo test --workspace → 62 `test result: ok`, 660 passed, 0 failed, 1 ignored (nothing reads the goldens yet)
+(a) target/release/multi-link overview --json, real ~, 3 fresh processes (/usr/bin/time -p):
+    real 9.02 user 7.27 sys 0.80 | real 7.99 user 7.25 sys 0.67 | real 7.95 user 7.23 sys 0.68 → median 7.99 s
+(b) first report, scratch harness, 3 fresh processes each (ms: total = overview + all-time + live):
+    no live: 9344 = 8820+524+0 | 8624 = 8168+455+0 | 8446 = 8010+435+0          → median 8624 ms
+    --live:  8510 = 7997+447+65 | 8514 = 8007+444+63 | 8550 = 8045+439+65        → median 8514 ms
+goldens: 25 files = 7 sizes × (txt + styles) + 76x22-256.styles + 76x22-nocolor ×2 + ready/linking/zero/fade1 ×2
+board check: rows 0–14 of loading-76x22.txt vs the board's drawC(4.0) cell grid → 0 differing cells (225 glyphs)
+```
+- Board check (how): the board's Pause button freezes at the current animation time, not at 3, so a scratch copy of
+  the board with one change (`paused = true` at load, the board's own reduced-motion path, which calls `drawAll(3)` →
+  `drawC(4.0)`) plus a `put` hook that records each glyph per cell of canvas C was served from the scratchpad and opened
+  in the built-in browser; the recorded grid was compared with the golden in Python, and the canvas was screenshotted
+  (scratch `board-paused-drawC4.jpg`, `-zoom.png`) and looked over by eye: same fish, `*` and speck positions. Expected
+  differences, all from the pinned rules: the board's counter (`ready ✓`, simulated) is replaced by the fixture counter
+  and a 21-cell bar; two specks the board draws on the title row (row 15, columns 60 and 74) are dropped; 35 cells
+  where the canvas overprints two glyphs keep the later one.
+- Review: one fresh adversarial Claude subagent (wrote none of it), one round. Its own Node port of `drawC` + the
+  pinned rules regenerated all 25 goldens byte for byte, and the board's real script run in Node with a stub canvas
+  gave 0 differing art cells at 76×22; it confirmed 660/0/1 tests and the medians. 10 findings, none blocking; fixed:
+  `*` rule reworded as a per-frame head map (the "cell holds" reading changes two 60×16 cells); F7 tier order stated
+  (29×6 was ambiguous; PLAN + design); `-zero` changed to phase reading `0 / 0` (as linking it equalled `-linking`;
+  PLAN goldens list amended); "7.3 s CPU" → "7.25 s user"; "cell for cell" → "glyph for glyph (weights and
+  colours per F6)"; thresholds, centring and speck wrap stated; NO_COLOR-drops-BOLD gotcha for 15.2; board charset
+  note in design. Not changed: `.claude/` stays untracked (only the step's files are staged).
+- Gotchas: (1) `cargo build --release -p multi-link-cli` fails; the CLI package is `multi-link`. (2) The board without
+  a `<meta charset>` decodes as Windows-1252 when served by `python -m http.server` (glyphs become `Â·`); the scratch
+  copy adds one. (3) Board rounding is `Math.round` (half up); Rust's `f64::round` differs on negative halves, so 15.2
+  must use `floor(v + 0.5)`. (4) `loading-76x22-zero` is phase reading `0 / 0` (a linking `-zero` would equal `-linking`).
+  (5) The baseline (a) median is 7.99 s, below the 8.79 s in the plan text (single run, same day); both miss 2 s by 4×,
+  so the plan stands.
 
 ### 2026-11-10 — Step 14.4: Phase 14 real check, README, owner confirm — Claude
 - Mode: Claude step (no Codex hand-off in 14.4, so no quota check was needed).

@@ -1,0 +1,15 @@
+# row first-last fg bg modifiers · 0-based inclusive columns · blank cells: fg - and no BOLD/DIM/ITALIC
+0 0-28 - #0E1014 -
+1 0-28 - #0E1014 -
+2 0-6 #D7DAE0 #0E1014 -
+2 7-7 - #0E1014 -
+2 8-18 #D7DAE0 #0E1014 -
+2 19-20 - #0E1014 -
+2 21-23 #D7DAE0 #0E1014 -
+2 24-24 - #0E1014 -
+2 25-25 #D7DAE0 #0E1014 -
+2 26-26 - #0E1014 -
+2 27-28 #D7DAE0 #0E1014 -
+3 0-28 - #0E1014 -
+4 0-28 - #0E1014 -
+5 0-28 - #0E1014 -

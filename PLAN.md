@@ -2511,7 +2511,7 @@ Decisions:
   `m u l t i · l i n k` on row H-7, a 30-cell bar (`━` done, `─` to do) on row H-5, the counter on row H-3
   (`reading transcripts  N / T`, `linking sessions…`, then `ready ✓  opening home`), `any key skips · q quits` on row
   H-2, all centred by display width. The art is board 15 E's `drawC(t)` (called directly — the board draws it at
-  `t + 1`, so the board's paused frame is `drawC(4.0)`), with centre (W/2, art height/2) and the board's x radii scaled
+  `t + 1`, so the board's paused frame is `drawC(4.0)`), with centre (W/2, 0.48 × art rows) and the board's x radii scaled
   by W/76 and y radii by (art rows)/15:
   96 fish in two schools (fish i: school i mod 2, phase i·2.399, radius 0.55 + ((7i) mod 10)/22, speed
   0.9 + ((3i) mod 7)/20); school 0 (Claude orange) circles an ellipse, school 1 (Codex blue) swims a figure-eight
@@ -2521,11 +2521,12 @@ Decisions:
 - **F6 Colour, quantised.** Existing theme roles only, so the board's continuous shades become steps: a fish with
   depth > 0.66 uses its school's role bold, 0.33–0.66 the role, < 0.33 the `_dim` role; tails one step dimmer; specks
   `_dim`; the meet `*` the normal text colour bold; title letters `m u l t i` `claude`, `l i n k` `codex`, `·` text;
-  bar done cells: first half `claude`, second half `codex`, to-do cells dim text; counter text, hint dim text. No new
+  bar done cells: first half `claude`, second half `codex`, to-do cells `border`; counter text, hint dim text. No new
   colour. 256-colour terminals use the roles' existing 256 values; `NO_COLOR` keeps every glyph and drops every colour
   and the dim/bold modifiers.
-- **F7 Sizes.** Width ≥ 60 and height ≥ 16: as F5. Width 30–59 or height 6–15: no art and no title, the counter
-  and hint lines centred. Below 30 × 6: the counter line only, cut with `…`. 0 rows or 0 columns: nothing drawn, no
+- **F7 Sizes.** Checked in this order: below 30 × 6 (width < 30 or height < 6): the counter line only, cut with `…`.
+  Width ≥ 60 and height ≥ 16: as F5. Otherwise (width 30–59 or height 6–15): no art and no title, the counter
+  and hint lines centred. 0 rows or 0 columns: nothing drawn, no
   panic. Every size works at a non-zero origin. Counts are drawn in full (`0 / 0`, six-digit counts) and cut by
   display width, never bytes.
 - **F8 Fade.** 250 ms by deadline (not a frame count): the art switches to `_dim` roles, then to dim text, then home.
@@ -2546,7 +2547,7 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
   Goldens for the loading screen at `drawC(4.0)` with counter `reading transcripts  612 / 871`, hand-checked
   against the board's paused frame: `fixtures/expected/tui/loading-{120x40,76x22,60x16,59x16,50x12,29x6,28x5}.{txt,styles.txt}`
   (truecolor), `loading-76x22-256.styles.txt`, `loading-76x22-nocolor.{txt,styles.txt}`, `loading-76x22-ready`,
-  `loading-76x22-linking`, `loading-76x22-zero` (`0 / 0`, phase linking) and `loading-76x22-fade1`.
+  `loading-76x22-linking`, `loading-76x22-zero` (`0 / 0`, phase reading) and `loading-76x22-fade1`.
 - Files: `docs/design.md`, `docs/boards/board15-loading.html`, `fixtures/expected/tui/loading-*`, `PROGRESS.md`
 - Verify: `cargo test --workspace` → all `ok` (nothing reads the goldens yet); baseline (a) and (b) recorded
   (3 runs each); the 76×22 golden's art rows equal the board's `drawC(4.0)` glyphs (Claude's side-by-side screenshot
@@ -2599,6 +2600,18 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-11 — Step 15.0 amendments (Claude, while writing the goldens)
+- **F5 centre.** "Centre (W/2, art height/2)" puts the 76×22 centre at row 7.5, but the board's `drawC` uses
+  `cy = 7.2` at 15 art rows, so the 76×22 golden could not equal the board's frame (15.0 Verify). Now 0.48 × art rows
+  (7.2 / 15), scaled like the radii.
+- **F6 to-do bar cells** are `border`, not dim text: the board's track shade is rgb(40,44,52), `border` is #2A2F3A;
+  `secondary` (dim text) would make the empty bar as bright as the hint.
+- **F7 order** stated (tiny first): "width 30–59 or height 6–15" alone put 29×6 in the middle tier.
+- **`loading-76x22-zero`** is phase reading with `0 / 0`, not linking: as linking it was byte-identical to
+  `-linking` and never drew `0 / 0` or the T = 0 bar branch (adversarial review, 15.0).
+- Everything else F5–F8 left open (rounding, speck wrap, draw order, tail roles, bar rounding, small-size rows, fade
+  steps) is pinned in `docs/design.md` → Phase 15 decisions, "Pinned while writing the goldens".
 
 ### 2026-11-11 — Phase 15 plan critique (Codex, read-only, Codex loop)
 Codex gave 10 points; 8 accepted, 2 in part.

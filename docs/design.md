@@ -107,7 +107,7 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 - **Local and read-only.** No network calls; never writes to either harness's folders (`~/.claude/`, `~/.codex/`, including settings), PLAN.md or PROGRESS.md. multi-link's own state lives in `~/.multi-link/`.
 - **Fails soft.** Unknown transcript records are skipped and counted, never fatal (both formats are undocumented).
 - **Incremental reads (revised in Phase 3, T1).** A refresh re-parses only the files whose (path, length, mtime, inode) changed since the last pass, each from the start; unchanged files reuse their cached parse, and linking, state and windowing are recomputed from the cached results every pass, so an old parent is still found when a new child references it. A partial last line is buffered, never skipped; a truncated or replaced file is just a changed key. Byte-offset tailing was the original plan; it is deferred because whole-file re-parse of the few changed files was fast enough (Step 3.1), and it returns as its own step only if a later measurement misses the speed threshold.
-- **Speed (pass threshold).** The home screen refreshes in 2 s or less on my laptop with my real `~/.claude` and `~/.codex`. Step 3.1 measured the sessions + links refresh on one warm `Scanner` at 29 ms and 31 ms (passes 2 and 3, real `~`, `PROGRESS.md` 3.1); the full home refresh including the overview is measured in Step 3.8.
+- **Speed (pass threshold).** The home screen refreshes in 2 s or less on my laptop with my real `~/.claude` and `~/.codex`. Step 3.1 measured the sessions + links refresh on one warm `Scanner` at 29 ms and 31 ms (passes 2 and 3, real `~`, `PROGRESS.md` 3.1); the full home refresh including the overview is measured in Step 3.8. **Cold first pass, Phase 15 baseline (Step 15.0, 2026-11-11, release `c29c516`, real `~`, 3 fresh processes):** `multi-link overview --json` 9.02 / 7.99 / 7.95 s wall (median 7.99 s; user 7.23–7.27 s, sys 0.67–0.80 s); the TUI worker's first report 9.34 / 8.62 / 8.45 s without `--live` and 8.51 / 8.51 / 8.55 s with it (medians 8.62 s and 8.51 s). Both miss the threshold; Phase 15 F3 sets the budgets.
 - **Testable.** Parsers, repo assignment, state, linking and step assignment run on saved fixtures with a fixed clock and hand-labelled expected outputs, including negative and ambiguous cases.
 - **Swappable parsers.** Each harness's format lives behind one interface, so a format change touches one module.
 - **One core, many front ends.** Front ends contain no parsing, state or linking logic.
@@ -1175,3 +1175,65 @@ start (`1425`, `for over 2h`); a resumed child whose earlier hand-off says `code
 with no rollout (`142c`); an ambiguous untagged hand-off (2 runs); labels repeated with a changed `ok` (`1421`, `1425`,
 `1429`), a repeated hand-off label (`1416`), `✗`, label-less runs; a wide-character prompt (`1428`); a busy Codex Desktop
 import (`142f`, hidden); a stale run before the window (`142b`, not listed).
+
+### Phase 15 decisions (fast first load and a loading screen, Step 15.0)
+Planned 2026-11-11 (PLAN.md → Phase 15). Need (owner): "when I open multi-link it should be ready fast, and while it
+loads it should be fun to look at." The cold first pass misses the Speed NFR (baseline below: 8.0 s wall, 7.25 s user time on
+14 cores, 87 % of it in `Scanner::read_claude` → `multi_link_claude::parse_file`, single-threaded), and the screen
+during the wait is one footer line. The owner approved **board 15, concept E · School** on 2026-11-11 (claude.ai
+artifact 7i51gqe1AbVGFurwnkfjqM; source `docs/boards/board15-loading.html`, function `drawC`; the file has no
+`<meta charset>`, so open it from a server that sends UTF-8 or the glyphs show as mojibake): two schools of fish in
+Claude orange and Codex blue only. Where the board and these rules differ, the rules win (Codex critique, PLAN.md Review
+log): below 60 × 16 there is no art (the board's notes say it shrinks), the counter is real progress (the board
+simulates it), colours are existing theme roles (the board's shades are continuous). Binding pictures:
+`fixtures/expected/tui/loading-*` (Step 15.0, drawn from the rules below; Step 15.2 must match them cell for cell).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| F1 | Parse in parallel, same results. At the start of `Scanner::read`, list every Claude transcript and subagent file and every Codex rollout with its stamp, take the cache misses and parse them on `std::thread::available_parallelism()` scoped threads (`std::thread::scope`, no new crate); each result is stored with the stamp taken before its parse. The serial loops then run as today through `Cache::read`, which re-parses when a stamp no longer matches. A failed parallel parse is not cached and its diagnostics are dropped; the serial loop re-parses it and is the only reporter. A file deleted in between is handled by the serial loop as today | The hot spot is parallel per file; one serial assembly keeps every output's order, which the committed keys prove |
+| F2 | Clones only if they still cost: after F1, if cache-hit clones in `read_claude` / `read_codex` still take > 0.3 s cold or > 50 ms warm, cache values go behind `Arc` and assembly clones only the fields it moves out; otherwise nothing changes. Only in `crates/core/src/scanner.rs`, no public type change | The 12 % clone share was measured single-threaded |
+| F3 | Budgets (real `~`, release, median of 3 fresh processes): (a) cold `multi-link overview --json` ≤ 2.0 s wall; (b) the TUI worker's first report (`refresh_with_live` with the all-time pass, without and with `--live`) ≤ 2.0 s; (c) first home frame = max(first report, 1.0 s) + 0.25 s ≤ 2.25 s; (d) warm refresh median of 10 ≤ 2 s and ≤ 20 % above 14.4's 191–212 ms. A miss of (a) or (b) after 15.1 stops the phase for a disk-cache step (15.1a); no disk cache otherwise | Measured budgets, not a feeling; a disk cache brings invalidation and format-version risk |
+| F4 | Honest progress: an atomics handle created by the CLI worker, set on its `Scanner` (kept across the root reset), a clone sent to the UI before the first pass. One generation for the first load: `files_total` published once after F1 lists both harnesses, `files_done` counts parsed misses and only rises, phase `listing → reading → linking → done` (done when the first report is sent, after the all-time pass); zero misses goes straight to `linking`. Later passes never touch it | The counter on screen is real files, never a timer |
+| F5 | Loading screen (board 15 E). Shown until the first report has arrived and s + 1.0 s, then the fade (F8), then home. A first refresh error or a disconnected worker ends it at once (no fade) with the existing error footer. Any key but `q` skips it once (to `loading sessions…` if no report yet, else home); `q` / Ctrl-C quit as everywhere. No new timer: the CLI loop draws every iteration with its 50 ms poll, each frame from the clock. At W × H: art rows `0..=H-8`, title `m u l t i · l i n k` row H-7, a 30-cell bar row H-5, counter row H-3 (`reading transcripts  N / T`, `linking sessions…`, `ready ✓  opening home`), `any key skips · q quits` row H-2, each centred by display width. The art is `drawC(t)` (the board draws it at `t + 1`, so its paused frame is `drawC(4.0)`), x radii scaled by W/76, y radii by (art rows)/15: 96 fish, school i mod 2, an orange ellipse and a blue figure-eight in the other direction, `>`/`<` heads (`›`/`‹` when far), `=`/`-` tails, `·` when near, a pale `*` where both schools meet, 46 specks. A pure function of (time, size, progress, theme) | Testable frames; the approved picture |
+| F6 | Colour, quantised to existing roles: fish depth > 0.66 → school role BOLD, 0.33–0.66 → role, < 0.33 → `_dim`; tails one step dimmer; specks `_dim`; the meet `*` `text` BOLD; title `m u l t i` `claude`, `l i n k` `codex`, `·` `text`; bar done cells first half `claude`, second half `codex`, to-do cells `border`; counter `text`, hint `secondary`. 256-colour uses the roles' existing indexes; `NO_COLOR` keeps every glyph and drops every colour and the BOLD/DIM modifiers | No new colour to test |
+| F7 | Sizes, checked in this order: W < 30 or H < 6: the counter line only, cut with `…`; W ≥ 60 and H ≥ 16: as F5; otherwise (W 30–59 or H 6–15): no art, no title, no bar; counter and hint centred. 0 rows or columns: nothing drawn, no panic. Any origin. Counts drawn in full and cut by display width | A small terminal still says what is happening |
+| F8 | Fade: 250 ms by deadline (not frames): the art switches to `_dim` roles, then to `secondary`, then home. None under `NO_COLOR`, after a skip or after an error | The board's hand-over without a slow transition |
+
+**Pinned while writing the goldens (Step 15.0).** F5–F8 left these open; the goldens depend on them.
+- **Geometry.** Art rows A = H − 7. Centre x = W / 2 (real division), centre y = 7.2 · A / 15 (the board's `cy = 7.2`
+  at 15 rows; F5 first said A / 2, which would move every fish off the board's frame). School 0:
+  x = cx + 27·(W/76)·r·cos a, y = cy + 5.6·(A/15)·r·sin a + 0.4·sin(1.3t + ph); school 1 with b = −a:
+  x = cx + 30·(W/76)·r·sin b, y = cy + 6.2·(A/15)·r·sin 2b + 0.4·sin(1.1t + ph) (the 0.4 wobble is not scaled);
+  a = ph + 0.42·sp·t; direction from the sign of −sin a (school 0) or −cos b (school 1), ≥ 0 is right;
+  depth = 0.5 + 0.5·sin(a + ph/2). Rounding is `floor(v + 0.5)` (JavaScript `Math.round`), not Rust's `round`.
+  A fish whose rounded row is outside `0..A` is skipped; cells outside the width are dropped.
+- **Specks** at speck time t′ = 0.6 t: speck i has s = 0.3 + 0.12·(i mod 5), base x = 37.3 i mod W, base y = 11.7 i
+  mod A, position round(wrap(x − 2.2·s·t′, W)), round(wrap(y − 0.5·s·t′, A)); glyph `·` when s > 0.6 else `.`; role
+  `claude_dim` when i mod 3 = 0 else `codex_dim`. A speck that rounds to column W or row A is dropped (the board draws
+  such a speck on the title row; at `drawC(4.0)` two of them, row 15 columns 60 and 74).
+- **Cells, last write wins** (the board's canvas overprints; at `drawC(4.0)` 35 cells hold two different glyphs and the
+  goldens keep the later one): specks, then fish 0..95 (head or `*`, then tail at x − dir, then `·` at x − 2·dir when
+  depth > 0.8), then the chrome. A head becomes `*` when a head of the other school was drawn at that cell earlier in
+  this frame: a per-frame head map, not the cell's current glyph (a later tail or `·` there does not clear it; a meet
+  does not update the map; a same-school head re-records it). Reading it as "the cell's current glyph" changes two
+  cells of the 60×16 golden. Tails: `=` when depth > 0.5 else `-`.
+- **Thresholds and centring.** Head BOLD role and `>`/`<` when depth > 0.66, role when depth ≥ 0.33, else `_dim`;
+  tail `=` when depth > 0.5; the `·` when depth > 0.8. Every centred line starts at ⌊(W − width)/2⌋ (the board's
+  rule and ratatui's). Speck bases wrap at W and A; speck speeds are not scaled.
+- **Roles.** Head BOLD role / role / `_dim` as F6; its tail `role` / `_dim` / `_dim` (one step dimmer, floor `_dim`);
+  the `·` `_dim`; `*` `text` BOLD. Every cell's background is `screen`. Title glyphs BOLD.
+- **Bar.** `reading`: T = 0 → 0 cells, else min(30, (60N + T) div 2T) (round half up); `linking` and `done`: 30.
+  Done cells 0–14 `claude`, 15–29 `codex`; to-do `─` `border` (the board's track shade; `secondary` would be as bright
+  as the hint). **Counter** N is padded on the left with spaces to the digit count of T, so the line does not shift.
+- **Small sizes.** W 30–59 or H 6–15: counter on row ⌊(H − 2)/2⌋, hint on the next. Below 30 × 6: counter on row
+  ⌊(H − 1)/2⌋, cut to W − 1 glyphs plus `…` when wider than W.
+- **Fade steps.** First 125 ms: every fish cell its school's `_dim`, no BOLD, the `*` `secondary`, specks unchanged;
+  next 125 ms: every art cell `secondary`; chrome unchanged throughout.
+- **Goldens** (`fixtures/expected/tui/`), all at `drawC(4.0)`, counter `reading transcripts  612 / 871` unless named:
+  `loading-{120x40,76x22,60x16,59x16,50x12,29x6,28x5}` text + truecolor styles; `loading-76x22-256.styles.txt`;
+  `loading-76x22-nocolor` text + styles; `loading-76x22-ready` (phase done), `-linking`, `-zero` (phase reading,
+  `0 / 0`, empty bar: guards T = 0; F4 sends zero misses to linking, which `-linking` already shows), `-fade1` (phase
+  done, first fade step). The 76 × 22 art rows equal the board's own `drawC(4.0)` glyph for glyph (weights and
+  colours per F6; Step 15.0 check, PROGRESS.md). Six-digit counts are left to 15.2's bounded-buffer test.
+- **NO_COLOR** drops BOLD too, unlike `Theme::apply_no_color` (which removes only DIM, as every other screen
+  wants): the loading screen sets no BOLD under NO_COLOR rather than changing that helper.
