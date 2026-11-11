@@ -52,6 +52,12 @@ below carry the rules. Existing keys change only where R2 applies (12 `fixtures/
 `cost-state` after their last turn; the values are listed in PROGRESS.md, Step 9.0). New isolated fixture root
 `fixtures/sessions-phase9/` with answer keys `fixtures/expected/phase9/` (Phase 9 fixture results, at the end).
 
+**Phase 13 changes (Step 13.0, design C1–C3, D1):** Link gains optional `launch_dir` (omitted unless a literal `cd`
+names a folder other than `checkout`). A `cd` before the launch no longer always blocks matching (Heuristic → Phase 13).
+An explicit resume id after options (`codex exec resume -c k=v <id>`) is recognised (Recognised invocations). Committed
+key change: `fixtures/expected/phase12/links.json` case (h)'s option-first resume → `exact` / `resume_arg`. New
+isolated fixture root `fixtures/sessions-phase13/` with key `fixtures/expected/phase13/links.json`.
+
 **Phase 12 changes (Step 12.0, design K0–K4):** Link `evidence` gains `"nearest_run"` (only on `heuristic`); for launch
 hand-offs `candidates` now lists the runs left after the K1 rule (a contract revision: runs a closer hand-off would choose
 are not listed). Graph Edge `handoff` gains `nearest_run: true`, omitted when false. Heuristic below carries the rules.
@@ -285,6 +291,7 @@ Subagent transcripts are scanned too. A skipped line never stops the file; later
 | `background` | bool | `tool_use.input.run_in_background == true`. |
 | `at` | timestamp | Top-level `timestamp` of the `assistant` record holding the `tool_use`. |
 | `checkout` | string | `cwd` of that record. |
+| `launch_dir` | string, optional | Phase 13 (C2): the folder a literal `cd` before the launch moved to (Heuristic → Phase 13), only when it differs from `checkout`; omitted otherwise. Heuristic matching uses it instead of `checkout`. |
 | `match` | `"exact"` \| `"heuristic"` \| `"ambiguous"` \| `"unlinked"` | |
 | `child` | string \| null | Codex id for `exact` / `heuristic`; `null` otherwise. |
 | `evidence` | `"stdout"` \| `"resume_arg"` \| `"thread_ready"` \| `"task_output"` \| `"redirect_file"` \| `"hook"` \| `"resume_turn"` \| null | What made it exact; `null` unless `exact`, with two exceptions, both only on a `heuristic` link: `"nearest_run"` (Phase 12, K3) for a launch hand-off chosen by time from more than one run; `"resume_turn"` (Phase 9, R7) appears only on a `heuristic` link, for a `codex exec resume --last` hand-off matched to a later turn (not the first) of an existing run in the same checkout starting 0–10 s after it; `gap_ms` is turn start − hand-off. `hook` since Phase 2, `redirect_file` since Phase 9; see Exact evidence. |
@@ -362,6 +369,18 @@ Candidates: Codex sessions with `cwd` == `checkout` (exact string) and `started_
 `[at, at + 60 s]`, excluding sessions that are the child of another invocation's `exact` link with
 `form` ≠ `resume` (that invocation created them). `gap_ms` = `started_at − at`. 0 → `unlinked`; 1 → `heuristic`; ≥ 2 → `ambiguous`.
 `gap_ms` is a ranking value, not a probability.
+
+**Phase 13 (design C1–C2): a literal `cd` names the launch folder.** The "launch directory must be certain" rule above
+now has an exception. A `cd` segment before the launch, in the same command, moves the known folder when all hold:
+its one argument, after quote removal, uses only `A–Z a–z 0–9 . _ / + @ % : , = -` and spaces, does not start with
+`-`, and is absolute or starts with `./` / `../` (or is `.` / `..`); the `cd` is bare (no `env`, `nohup` or `timeout`
+before it); the operator before it is the start, `;`, a newline, `&&` or `(`, and the one after it `&&`, `;` or a
+newline; and between it and the launch there is no `pushd`, `popd`, `eval`, `source`, `.`, `exec`, `builtin`,
+`command`, other `cd`, or `)` closing a group open at the `cd`. Relative targets join the folder so far (start: the
+record's `cwd`); normalisation is lexical. Then `launch_dir` = that folder (when it differs from `checkout`), and
+the creation candidates, K1's grouping and R7's search compare a run's `cwd` with it. Anything else keeps the folder
+unknown and the link `unlinked`, as before. A launch `-C` / `--cd` other than `.` / `$PWD` still moves. After `;` the
+`cd` is assumed to have succeeded.
 
 **Phase 12 (design K1–K3).** For launch hand-offs (the creation candidates above; not R7), in one pass over every
 competitor's original list: a competitor is a non-exact, non-`dir_moved` hand-off using these creation candidates. Each
@@ -1127,4 +1146,21 @@ projection, the `OV` filter in `check.sh`), `graph-1.1.json` (repo-p12a).
 | (i) repo-p12i | I1 at 0 s; I2 at 20 s with runs at +1 s and +6 s after it; I1's run at +1 s | I2 stays `ambiguous` and chooses nothing, so I1 keeps all three: `heuristic` `12c00a01` / `nearest_run`, candidates [1000, 21000, 26000] |
 | (j) repo-p12j1–j5 | 4999/10000, 5000/10000, 5001/10001, 1000/9999, 1000/10001 ms | j1, j2, j5 → `heuristic` / `nearest_run`; j3, j4 stay `ambiguous` |
 | (k) repo-p12k | `cd … && codex exec` at 0 s; plain hand-off at 10 s, run at +11 s | unchanged: first `unlinked`, second `heuristic` |
+
+## Phase 13 fixture results (Step 13.0)
+Root `fixtures/sessions-phase13/`, `--now 2026-11-10T08:00:00Z`, `--since all`; Claude ids `13a<case><n>…`, Codex ids
+`13c<case><n>…`; every run starts 1 s after its hand-off unless noted. Key: `fixtures/expected/phase13/links.json`.
+
+| Case | Command shape | Expected |
+|---|---|---|
+| (a) | `cd /home/dev/p13t-a && codex exec …`, run in that folder | `heuristic`, `launch_dir` = it |
+| (b), (c) | `cd ./sub && …`; from `…/w`, `cd ../x/./y/ && …` | `heuristic`, `launch_dir` `…/sub`, `…/x/y` |
+| (d) | `cd /…/p13t-d && cd ./inner && …`; `cd /…/p13t-d2; export A=1; codex exec …` | both `heuristic` with `launch_dir` |
+| (e) | `cd $HOME/x`, `cd ~/x`, `cd -`, `cd sub`, `pushd /…` (tempting runs in `sub`, the pushd target and the session folder) | all `unlinked`; `pushd` was `heuristic` (session folder) and becomes `unlinked` |
+| (f) | `(cd /…/p13t-f); codex exec …`; `(cd /…/p13t-f2 && codex exec …)`; `cd /…/p13t-f3 && S=$(date +%s) && codex exec …` | `unlinked`; `heuristic`; `heuristic` |
+| (f2) | `cd /x \|\| …`, `cd /x \| …`, `false \|\| cd /x && …`, `cd /x && eval true && …`, `env cd /x && …`, `cd /…/p13t-{a,b} && …`, each with a run in the named folder | all `unlinked`; `cd /x & codex exec` is not recognised as a hand-off (unchanged) |
+| (g) | `cd /x && codex exec -C /y …`; `cd /z && codex exec -C "$PWD" …` | `unlinked`; `heuristic`, `launch_dir` /z |
+| (h) | `cd /…/p13t-h && codex exec resume --last …`, that folder's run has a later turn 1 s after | `heuristic` / `resume_turn`, `launch_dir` |
+| (i) | two sessions in different folders `cd` into one folder at 0 s and 20 s; runs 1 s after each (and with the time order reversed) | the earlier hand-off `heuristic` / `nearest_run` with its own run only (K1 groups by launch folder); the later `heuristic` |
+| (j) | `codex exec resume -c model=x <id> …`, `codex exec -s read-only resume --json <id> …`, `codex resume --oss <id>`; `codex exec resume -c k=v --last <id>`; `--unknown <id>`; `-- <id>` | three `exact` / `resume_arg` (`form: "resume"`); `resume_turn` (R7); last two `exec`, `unlinked` |
 

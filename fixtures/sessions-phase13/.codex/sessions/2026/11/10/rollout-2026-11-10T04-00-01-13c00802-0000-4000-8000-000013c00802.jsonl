@@ -1,0 +1,5 @@
+{"type": "session_meta", "timestamp": "2026-11-10T04:00:01.500Z", "payload": {"id": "13c00802-0000-4000-8000-000013c00802", "timestamp": "2026-11-10T04:00:01.500Z", "cwd": "/home/dev/p13t-g2", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:00:01.500Z", "payload": {"type": "task_started", "turn_id": "13c00802-0001-4000-8000-000013c00802"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:00:01.500Z", "payload": {"type": "user_message", "message": "Read AGENTS.md, then do Step 1.1 in PLAN.md.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:00:21.500Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:00:21.500Z", "payload": {"type": "task_complete", "turn_id": "13c00802-0001-4000-8000-000013c00802", "last_agent_message": "<text>"}}

@@ -300,13 +300,13 @@
       "parent": "12a00901-0000-4000-8000-000012a00901",
       "invocation": "toolu_p12_12a00901_2",
       "subagent": null,
-      "form": "exec",
+      "form": "resume",
       "background": false,
       "at": "2026-11-10T09:02:30.000Z",
       "checkout": "/home/dev/repo-p12h",
-      "match": "unlinked",
-      "child": null,
-      "evidence": null,
+      "match": "exact",
+      "child": "12c00901-0000-4000-8000-000012c00901",
+      "evidence": "resume_arg",
       "candidates": []
     },
     {

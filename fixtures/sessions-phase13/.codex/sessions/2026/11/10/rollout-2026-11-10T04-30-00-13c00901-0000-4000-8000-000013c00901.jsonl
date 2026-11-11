@@ -1,0 +1,9 @@
+{"type": "session_meta", "timestamp": "2026-11-10T04:30:00.000Z", "payload": {"id": "13c00901-0000-4000-8000-000013c00901", "timestamp": "2026-11-10T04:30:00.000Z", "cwd": "/home/dev/p13t-h", "originator": "codex_exec", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:30:00.000Z", "payload": {"type": "task_started", "turn_id": "13c00901-0001-4000-8000-000013c00901"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:30:00.000Z", "payload": {"type": "user_message", "message": "Summarise the synthetic log.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:30:20.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:30:20.000Z", "payload": {"type": "task_complete", "turn_id": "13c00901-0001-4000-8000-000013c00901", "last_agent_message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:31:41.000Z", "payload": {"type": "task_started", "turn_id": "13c00901-0002-4000-8000-000013c00901"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:31:41.000Z", "payload": {"type": "user_message", "message": "Step 1.1 fix round 1: x.", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:32:00.000Z", "payload": {"type": "agent_message", "message": "<text>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T04:32:00.000Z", "payload": {"type": "task_complete", "turn_id": "13c00901-0002-4000-8000-000013c00901", "last_agent_message": "<text>"}}

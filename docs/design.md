@@ -1054,3 +1054,19 @@ nearest run in 4 of the 4 with rivals. Hiding each observed id and running K1–
 B launches and B starts none, A's run is given to B. Today both would claim it; K1 removes the duplicate, and the link
 still says `matched by time`. K2's known failure: a manual run at +1 s and a slow true child at +12 s picks the manual run.
 
+### Phase 13 decisions (known folders and a key that is never lost, Step 13.0)
+Planned 2026-11-10 (PLAN.md → Phase 13). Needs: design need 1 (which run came from which session) and a TUI that
+answers every key. Measured on real data (counts only): 35 `cd`-first hand-offs were `unlinked`; the 31 with a literal
+target all resolve under C1, and each of the 29 `exec` ones has exactly one run in the resolved folder within 60 s.
+
+| # | Decision | Why |
+|---|---|---|
+| C1 | A bare `cd` with a literal absolute / `./` / `../` target, joined by `&&` / `;` / newline, with no folder-changing builtin or closing `)` before the launch, names the launch folder (lexical). Anything else stays unknown. | External commands and `$( )` run in child processes and cannot change the shell's folder; only builtins can. Plain names stay out (`CDPATH`); `$`, `~`, globs, braces are not literal. |
+| C2 | Link `launch_dir` (only when it differs from `checkout`); creation candidates, K1 grouping and R7 use it. | `checkout` stays where Claude was; the run lives where the `cd` went. Omitting the key keeps every existing answer. |
+| C3 | After `resume`, known options are skipped; `--last` keeps R7; an unknown option, `--` or redirect gives no id; else a uuid-shaped first positional is the exact resume id. | An unknown option might take the uuid as its value; an exact claim needs certainty. |
+| D1 | crossterm `use-dev-tty` (poll(2), level-triggered, tty read before the resize pipe). | 0.28.1's mio source drops edge-triggered tty readiness when SIGWINCH arrives in the same wake; `tools/resize-key-check.py` fails 5/5 without it, passes 5/5 with it. |
+
+**Assumption.** After `;` the `cd` is assumed to have succeeded. If it failed, the run starts in the old folder, the
+resolved folder usually has no run, and the hand-off stays `unlinked`; a wrong link needs an unrelated run starting
+in the target folder within 60 s.
+

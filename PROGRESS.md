@@ -1,12 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 13 (known folders and a key that is never lost, Release 1.10) is planned (2026-11-10); Step 13.0 (Claude:
-rules, fixtures, keys, resize check) is next.** Owner chose the three backlog items together and asked for them all at
-once. C1: a literal `cd` (absolute or `./`/`../`, bare, safe operators, no folder-changing builtin after it) names the
-launch folder; C2: matching uses Link `launch_dir`; C3: option-first explicit resume id; D1: crossterm `use-dev-tty`
-(a throwaway build passed `tools/resize-key-check.py` 5/5; today's build fails 5/5). Codex critique: 9 points (PLAN.md
-Review log).
+**Phase 13 (known folders and a key that is never lost, Release 1.10): Step 13.0 is committed (2026-11-10); 13.2
+(Codex, crossterm `use-dev-tty`) ran alongside and is under review; 13.1 (Codex: C1–C3 in
+`crates/claude/src/invocation.rs` and `crates/core/src/link.rs`, Link `launch_dir`) is next.** Rules in
+`docs/design.md` (Phase 13 decisions) and `docs/output-schema.md` (Heuristic → Phase 13, Link `launch_dir`). Keys:
+`fixtures/expected/phase13/links.json` (`check.sh`, `crates/cli/tests/phase13.rs`); Phase 12's case (h) option-first
+resume is now expected `exact`. Tests failing until 13.1: `phase13_links_match_answer_key`,
+`phase12_links_match_answer_key`. Recognition tests that assert `dir_moved` for a `cd` that C1 now resolves need new
+expectations, each named with its C1 reason.
 
 **Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
 hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
@@ -735,6 +737,24 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 13.0: Rules, fixtures, keys and the resize check — Claude
+- Did: C1–C3 and D1 into `docs/design.md` and `docs/output-schema.md`; synthetic root `fixtures/sessions-phase13/`
+  (cases a–j, scratch generator, ids `13a…` / `13c…`, tempting runs beside every negative form); Claude-written
+  `fixtures/expected/phase13/links.json` with `check.sh` and `crates/cli/tests/phase13.rs`; the Phase 12 key value C3
+  changes; `tools/resize-key-check.py` (revised per critique 7–8: clean exit required, third final size).
+- Changed: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase13/**`, `fixtures/expected/phase13/**`,
+  `crates/cli/tests/phase13.rs`, `fixtures/expected/phase12/links.json`, `tools/resize-key-check.py`, `PROGRESS.md`.
+- Listed key change: `phase12/links.json` `toolu_p12_12a00901_2` (`codex exec resume -c model=x <id> …`): `exec` /
+  `unlinked` → `resume` / `exact` / `resume_arg`, child `12c00901`. No other committed key has a `cd` before a codex
+  call (grep over every fixture root), so C1 changes nothing else.
+- Verify: `cargo test --workspace --no-fail-fast` 618 passed / 2 failed: `phase13_links_match_answer_key`,
+  `phase12_links_match_answer_key` (as listed); `phase12/check.sh` FAIL only on links.json; `phase13/check.sh` FAIL
+  (no code yet). Resize check at 8d2cc22's build: 5 of 5 `FAIL (key delayed until a second key)`; a throwaway
+  `use-dev-tty` build: 5 of 5 `pass`. W10 scan of the new files: nothing.
+- Review: Claude step.
+- Gotchas: today `cd /x & codex exec …` is not recognised as a hand-off at all (single `&`); the key keeps it absent.
+  `pushd` was not treated as a move before; C1 makes it unknown (case e changes `heuristic` → `unlinked`).
 
 ### 2026-11-10 — Step 12.2: Real check, README, owner confirm — Claude
 - Did: real before/after transitions by hand-off (release builds 04b4233 and 437adf4, scratch, counts and gaps only);
