@@ -2455,10 +2455,176 @@ equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0
 - Files: `docs/phase14-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts and timing recorded; the owner's answer recorded.
 
+### Phase 15 — A fast first load with a school of fish (Release 1.12)
+Need (owner, 2026-11-11): "when I open multi-link it should be ready fast, and while it loads it should be fun to
+look at." Design NFR "Speed": every refresh ≤ 2 s. Today the cold first pass takes 8.8–9.4 s (`docs/phase14-check.md`;
+re-measured 2026-11-11: `multi-link overview --json` real 8.79 s, user 7.10 s, sys 0.77 s) while reading every file
+with `cat` takes 0.38 s, so the wait is CPU, not disk. A 7 s `sample` of that run: 87 % in `Scanner::read_claude`,
+most of it `multi_link_claude::parse_file`, about 12 % inside `read_claude` itself (cache-value clones). The machine
+has 14 cores and parsing runs on one. The screen during the wait is one footer line, `loading sessions… · q quit`.
+Board 15 (claude.ai artifact 7i51gqe1AbVGFurwnkfjqM, source `docs/boards/board15-loading.html`) went through three
+rounds; the owner picked **E · School** on 2026-11-11 ("lets just go for E, school for now"): round 1 was judged too
+colourful, so it uses only Claude orange and Codex blue on the dark ground. Comparables (board notes): the owner's
+reference post of ASCII sea animals (dense glyph clusters, sparse trails), demoscene plasma (too loud, rejected in
+round 1), `cargo`'s plain progress line (honest counts, no art).
+The tmux / Herdr jump was dropped from this phase (owner, 2026-11-11): neither is installed here and the owner's
+sessions run in the Claude and Codex desktop apps, so it would have no real user and no real-data check; it stays in
+the backlog as an optional feature that never asks a user to install anything.
+
+Decisions:
+- **F1 Parse in parallel, same results.** At the start of `Scanner::read` (both harnesses at once), list every
+  Claude transcript and subagent file and every Codex rollout with its stamp, take the cache misses, and parse them on
+  `std::thread::available_parallelism()` scoped threads (`std::thread::scope`, no new crate). Each result is stored
+  with the stamp taken **before** its parse. The existing serial loops then run as today through `Cache::read`, which
+  already re-parses when the stamp no longer matches (a file appended or replaced in between) — so ordering, sorting,
+  skips and error handling are unchanged. A parse that fails in the parallel pass is not cached and its partial
+  diagnostics are dropped; the serial loop re-parses it and is the only place any diagnostic is reported, so each
+  appears exactly once and a failed parse never revives an old value (the cache entry is removed first, as today).
+  A file deleted between listing and parsing is skipped by the parallel pass and handled by the serial loop as today.
+  Why: the hot spot is parallel per file; keeping the serial loop as the only place that assembles results means no
+  output can change order, which the committed answer keys (fixed clock and probe) prove.
+- **F2 Clones only if they still cost.** After F1, 15.1 measures the serial remainder of a cold pass (and the warm
+  pass). If cache-hit clones in `read_claude` / `read_codex` still take over 0.3 s cold or over 50 ms warm, the cache
+  holds values behind `Arc` and assembly clones only the fields it moves out (transcript, invocations, skips), borrowing
+  the rest; otherwise nothing changes. Only inside `crates/core/src/scanner.rs`; no public type changes. Why: the
+  12 % clone share was measured single-threaded; whether it matters after F1 is a measurement, not a guess.
+- **F3 Budgets and the fallback.** On real `~`, release build, median of 3 fresh processes: (a) cold `multi-link
+  overview --json` ≤ 2.0 s wall; (b) the TUI worker's first report — `refresh_with_live` as the worker runs it,
+  including the all-time pass, once without and once with `--live` — ≤ 2.0 s; (c) first home frame
+  = max(first report, 1.0 s) + 0.25 s fade ≤ 2.25 s; (d) warm refresh median of 10 passes ≤ 2 s and no more than 20 %
+  above 14.4's 191–212 ms. A scratch harness (as `docs/phase14-check.md`) measures (b)–(d); the 15.0 baseline records
+  (a) and (b) before any change. If 15.1 misses (a) or (b), Claude stops and plans a disk cache step (15.1a) instead
+  of pushing on; a disk cache is not built otherwise (invalidation and format-version risk for no gain).
+- **F4 Honest progress.** A thread-safe progress handle (atomics) created by the CLI worker and given to its
+  `Scanner` with a setter that survives the root reset in `Scanner::read`; the worker sends a clone to the UI thread
+  before its first pass. One generation covers the first load: `files_total` is published once, after F1 has listed
+  both harnesses (so it never grows), `files_done` counts parsed misses and only rises, and the phase goes
+  `listing → reading → linking → done` (done when the worker sends its first report, after the all-time pass). Zero
+  misses goes straight to `linking`. Later passes never touch it. The counter on screen is these numbers, never a
+  timer.
+- **F5 The loading screen (board 15 E).** Timeline from start s: it shows until both the first report has arrived
+  and s + 1.0 s, then fades (F8), then home. A first refresh **error** or a disconnected worker ends it at once (no
+  fade) and shows the existing error footer. Any key except `q` skips it, consumed once: to the existing
+  `loading sessions…` state if no report yet, else straight to home. `q` and Ctrl-C quit as everywhere (the CLI's
+  existing terminal guard). No new timer: the CLI loop already draws every iteration with a 50 ms input poll, and a
+  frame is drawn from the current clock. Layout at width W, height H (76×22 is the board): art rows `0..=H-8`, title
+  `m u l t i · l i n k` on row H-7, a 30-cell bar (`━` done, `─` to do) on row H-5, the counter on row H-3
+  (`reading transcripts  N / T`, `linking sessions…`, then `ready ✓  opening home`), `any key skips · q quits` on row
+  H-2, all centred by display width. The art is board 15 E's `drawC(t)` (called directly — the board draws it at
+  `t + 1`, so the board's paused frame is `drawC(4.0)`), with centre (W/2, art height/2) and the board's x radii scaled
+  by W/76 and y radii by (art rows)/15:
+  96 fish in two schools (fish i: school i mod 2, phase i·2.399, radius 0.55 + ((7i) mod 10)/22, speed
+  0.9 + ((3i) mod 7)/20); school 0 (Claude orange) circles an ellipse, school 1 (Codex blue) swims a figure-eight
+  through it in the other direction; head `>`/`<` (`›`/`‹` when far), tail `=`/`-`, a `·` when near; brightness from
+  depth; where fish of both schools meet one cell, a pale `*`; 46 drifting specks `.`/`·` in the dim harness
+  colours. The art is a pure function of (time, width, height, theme) so frames are testable.
+- **F6 Colour, quantised.** Existing theme roles only, so the board's continuous shades become steps: a fish with
+  depth > 0.66 uses its school's role bold, 0.33–0.66 the role, < 0.33 the `_dim` role; tails one step dimmer; specks
+  `_dim`; the meet `*` the normal text colour bold; title letters `m u l t i` `claude`, `l i n k` `codex`, `·` text;
+  bar done cells: first half `claude`, second half `codex`, to-do cells dim text; counter text, hint dim text. No new
+  colour. 256-colour terminals use the roles' existing 256 values; `NO_COLOR` keeps every glyph and drops every colour
+  and the dim/bold modifiers.
+- **F7 Sizes.** Width ≥ 60 and height ≥ 16: as F5. Width 30–59 or height 6–15: no art and no title, the counter
+  and hint lines centred. Below 30 × 6: the counter line only, cut with `…`. 0 rows or 0 columns: nothing drawn, no
+  panic. Every size works at a non-zero origin. Counts are drawn in full (`0 / 0`, six-digit counts) and cut by
+  display width, never bytes.
+- **F8 Fade.** 250 ms by deadline (not a frame count): the art switches to `_dim` roles, then to dim text, then home.
+  None under `NO_COLOR`, after a skip, or after an error. Why: the board's hand-over without a slow transition.
+
+Non-goals: the tmux / Herdr pane jump (backlog); a disk cache unless F3 fails; the Echo (dolphins), Bloom or Manta
+art (kept on the board for later); animation after the first load; sound; a new colour; changing any report or JSON.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; clippy `-D warnings` and `fmt --check` clean; every
+committed key unchanged (`git diff <15.0 commit> -- fixtures/expected` shows 15.0's loading goldens only);
+`fixtures/expected/phase9/check.sh 6`, `phase12/check.sh`, `phase13/check.sh`, `phase14/check.sh` all `ok`;
+real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan.
+
+### Step 15.0 — Rules, loading goldens, timing baseline (Claude)
+- Depends on: 14.4. F1–F8 into `docs/design.md` ("Phase 15 decisions"; the NFR row records the baseline). Commit the
+  approved board source `docs/boards/board15-loading.html`. A scratch timing script (release build, 3 fresh
+  processes of `multi-link overview --json` on real `~`, wall/user/sys) recorded as the baseline in PROGRESS.
+  Goldens for the loading screen at `drawC(4.0)` with counter `reading transcripts  612 / 871`, hand-checked
+  against the board's paused frame: `fixtures/expected/tui/loading-{120x40,76x22,60x16,59x16,50x12,29x6,28x5}.{txt,styles.txt}`
+  (truecolor), `loading-76x22-256.styles.txt`, `loading-76x22-nocolor.{txt,styles.txt}`, `loading-76x22-ready`,
+  `loading-76x22-linking`, `loading-76x22-zero` (`0 / 0`, phase linking) and `loading-76x22-fade1`.
+- Files: `docs/design.md`, `docs/boards/board15-loading.html`, `fixtures/expected/tui/loading-*`, `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` (nothing reads the goldens yet); baseline (a) and (b) recorded
+  (3 runs each); the 76×22 golden's art rows equal the board's `drawC(4.0)` glyphs (Claude's side-by-side screenshot
+  in scratch, described in PROGRESS; the board's simulated counter is replaced by the fixture counter).
+
+### Step 15.1 — Parallel cold parse, `Arc` cache values, progress handle (Codex)
+- Depends on: 15.0. F1, F2, F4 (core side only).
+- Files: `crates/core/src/scanner.rs`, `crates/core/src/lib.rs` (re-export the progress handle only),
+  `crates/core/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; all four `check.sh` scripts `ok` and every `fixtures/expected` key unchanged
+  (the pre-change oracle, fixed clock and probe); new tests: 1 thread vs many give byte-identical `overview`,
+  `sessions` and `links` JSON, diagnostics and parse stats (thread count set through a `#[doc(hidden)]`
+  `Scanner::with_parse_threads(n)` the integration tests can reach, and a test that completes parses in reverse
+  order); a malformed record and an unreadable file each reported exactly once, same text as before; a file appended,
+  replaced or deleted between listing and the serial loop gives the same result as a serial pass of the new bytes;
+  progress snapshots are monotonic through the whole worker first load, `files_total` never changes, zero misses goes
+  straight to `linking`; the handle survives the first root reset; a warm pass parses nothing. F2's measurement
+  recorded and its branch taken. Real `~` timing (F3 (a), (b) with and without `--live`, (d)), recorded next to the
+  baseline. (a) or (b) over 2.0 s → stop (F3).
+
+### Step 15.2 — TUI loading screen render (Codex)
+- Depends on: 15.1. F5–F7 drawing as a pure render from (time, progress snapshot, size, theme).
+- Files: `crates/tui/src/loading.rs` (new), `crates/tui/src/lib.rs`, `crates/tui/tests/**`, `crates/tui/examples/home_html.rs`
+  (a loading variant for the README image), `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; renders equal every 15.0 golden cell for cell (truecolor, 256, NO_COLOR);
+  a property test over 200 frames at 76×22 finds only the allowed glyphs and only F6's roles; NO_COLOR frames have the
+  same glyphs as truecolor and no colour or modifier; bounded-buffer tests at 0×0, 1×1, 29/30 columns, 5/6 rows,
+  59/60 × 15/16, a non-zero origin and a six-digit counter draw inside the area without panic; every existing
+  snapshot unchanged.
+
+### Step 15.3 — Wiring: show, skip, fade, progress (Codex)
+- Depends on: 15.2. F4 (UI side), F5 timing and keys, F8.
+- Files: `crates/tui/src/app.rs`, `crates/cli/src/tui.rs`, `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; app tests with an injected clock: report at 0.3 s → loading until 1.0 s, fade
+  1.0–1.25 s, home at 1.25 s; report at 1.6 s → fade 1.6–1.85 s; a key at 0.2 s (consumed, not passed to home) →
+  `loading sessions…` until the report, then home with no fade; a key after the report → home at once; a refresh
+  error at 0.5 s → error footer at once; worker disconnected → same; NO_COLOR → no fade; progress shown is the
+  handle's snapshot. CLI: the existing terminal guard tests still pass, and a test that `q` during loading returns
+  without joining a blocked worker. Existing app tests unchanged.
+
+### Step 15.4 — Real check, README, owner confirm (Claude)
+- Depends on: 15.3. Release build on real `~`: F3 (a)–(d) (3 fresh runs; warm median of 10); a PTY smoke run
+  (loading shows, the counter rises, skip, resize across 60×16 and 30×6, `q` and Ctrl-C during loading and during the
+  fade restore the terminal; `--live` start).
+  README: the loading screen with an image from the fixture render, the new cold time. `docs/phase15-check.md`.
+- Files: `docs/phase15-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Verify: whole-phase Verify; timings recorded; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load (9 s today, NFR 2 s) · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-11 — Phase 15 plan critique (Codex, read-only, Codex loop)
+Codex gave 10 points; 8 accepted, 2 in part.
+1. F2 `Arc` cannot avoid clones where assembly moves fields out — **accepted in part**: F2 is now measurement-gated
+   (only if clones still cost > 0.3 s cold / 50 ms warm after F1), clone only the moved fields.
+2. Progress lifecycle (two readers, worker's all-time pass, root reset drops the handle) — **accepted**: one
+   generation, total published once after listing both harnesses, handle set by the worker and kept across the reset,
+   phases listing → reading → linking → done, monotonic tests.
+3. Splash could hide a failed first refresh; terminal restore is CLI-side — **accepted**: error / disconnect end it
+   at once with the error footer; CLI test that `q` returns without joining; PTY check in 15.4.
+4. Retry policy for failed or changed files — **accepted**: results stored with the pre-parse stamp, failed parses
+   uncached and their diagnostics dropped, the serial loop the only reporter; append/replace/delete/malformed/
+   unreadable tests. Simulating a failure in the middle of a read is rejected (no seam without a fault-injecting
+   reader); an unreadable file covers the error path.
+5. One-thread mode is not an independent oracle — **accepted in part**: the committed answer keys (pre-change
+   outputs) are the oracle; 1-vs-many and reverse-completion tests compare diagnostics and stats too; a
+   `#[doc(hidden)]` thread-count constructor reachable from integration tests.
+6. Board time and geometry mismatch (`drawC(t + 1)`) — **accepted**: goldens at `drawC(4.0)`, exact rows H-7/H-5/
+   H-3/H-2 and radius scaling.
+7. Continuous board shades vs discrete theme roles — **accepted**: F6 quantisation rules; truecolor, 256 and
+   NO_COLOR style goldens.
+8. Tiny-size coverage — **accepted**: boundary goldens and bounded-buffer tests (0×0 … 60×16, origin, big counts).
+9. Fade vs timing; no runtime seam — **accepted**: deadline-based 250 ms fade, explicit timeline, no new timer (the
+   existing 50 ms loop draws from the clock), skip key consumed once.
+10. Gate does not prove the TUI's readiness — **accepted**: F3 budgets (a)–(d), worker path with and without
+   `--live`, baseline recorded in 15.0, numeric warm rule.
 
 ### 2026-11-10 — Step 14.3 Files amendment (Claude, during the step, Codex loop)
 - Codex stopped before coding: L9's per-session call cache needs the scanner's transcript list (core-private) and
