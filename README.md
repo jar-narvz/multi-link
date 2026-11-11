@@ -194,6 +194,44 @@ machine, 1069 files), and the TUI's first home frame came up in 1.82–1.99 s (3
 - Uses only the existing theme colours; 256-colour terminals get their 256-colour values, and `NO_COLOR` keeps the
   glyphs with no colour, bold, dim or fade. A refresh error ends it at once with the error footer.
 
+## Claude Code pane
+
+A mod for Claude Code that shows this repo's sessions in a pane beside the chat (board 16 option C), so you can see
+what is running without leaving Claude Code. Captured from a real session in this repo (Claude Code 2.1.322, terminal,
+2026-11-11; `docs/phase16-check.md`):
+
+```text
+multi-link · multi-link
+working ─
+ ● Continuing previous work  16.3
+  └ codex 01a1cc93 ✓
+  └ codex 01a1cc8a ✓
+  └ codex 01a1cc4d ✓
+  └ codex 01a1cc4b ✓
+waiting ─
+recent (2h) ─
+▌● this session
+updated 18s ago
+```
+
+- **Rows** are the repo view's (same labels and status words as the TUI), in three groups: `working`, `waiting`
+  (waiting or stale) and `recent (2h)`. **This session** is marked `▌`, and the Codex runs a Claude session handed off
+  sit under it with `└`; a link matched by time says `likely`, and a hand-off with several possible runs says
+  `N possible runs` instead of guessing.
+- **How it gets data:** the mod starts one `multi-link pane --json --watch` per session, which keeps its cache warm
+  and prints a line only when something changes (or every 30 s). On the owner's machine the pane had data 1.7–2.1 s
+  after it opened (3 runs) and each 3 s refresh cost about 140 ms of CPU. The watcher stops when the session ends and
+  exits on its own if Claude Code goes away.
+- **States:** `reading sessions…` before the first line; `multi-link isn't on PATH` and `This multi-link is too old
+  for the pane` say what to fix; errors keep the last data and show in the footer; a stopped watcher retries.
+- **Load it** in a terminal session (needs `multi-link` 1.13 on `PATH`):
+
+  ```bash
+  claude --plugin-dir /path/to/multi-link/mod/multi-link-pane
+  ```
+
+  `/multi-link` reopens the pane if you close it. The pane is read-only.
+
 ## States and links (Release 1.6)
 
 Each rule below reads a format that Claude Code or Codex does not document; only the `SessionEnd` hook event is
@@ -321,6 +359,10 @@ Hooks are set up with `hook check` ([above](#hook-setup)). See the [design](docs
 state rules.
 
 ## Limitations and validation
+
+- The Claude Code pane (Release 1.13) relies on Claude Code's mod API (checked on 2.1.322). It was checked for real
+  in the terminal only; the Claude desktop app has not been checked yet. It needs `multi-link` on the `PATH` that
+  Claude Code sees.
 
 - Claude Code and Codex transcript formats are undocumented and may change. Unknown records
   are skipped and counted; missing evidence can leave states or links unknown.

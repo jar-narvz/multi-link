@@ -1,13 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 16.3 is committed (Codex loop, 2026-11-11): the mod in `mod/multi-link-pane/`.** `/multi-link` opens the pane,
-the 16.2 watcher streams into an atom, board 16 C layout, every G4 state; `claude plugin validate` passes and
-`claude plugin test` is 46 / 46 on terminal and desktop. **For 16.4:** load it with
-`claude --plugin-dir /Users/jarednarvaez/multi-link/mod/multi-link-pane` in this repo (a PTY, as 16.0's harness);
-`multi-link` on PATH must be the 16.2 build (`cargo install --path crates/cli --locked`, an owner command since it
-replaces the installed binary); check unload kills the watcher (`ps`), no orphan 5 s after `/exit`; desktop app via
-`CLAUDE_CODE_PLUGIN_DIRS` is the owner's one paste.
+**Step 16.4 is committed (Claude step, 2026-11-11): real check in the terminal, README "Claude Code pane",
+`docs/phase16-check.md`. Waiting on the owner: the desktop-app check (G5 (a)/(b) desktop half) and the confirm.**
+Real terminal session (Claude Code 2.1.322, 3 runs): pane data 1.87 s median after the pane opens (2.81 s from
+launching `claude`), 140 ms CPU per warm tick, one watcher per session, none left 5 s after `/exit`, the old 1.12
+binary shows `too old`. **Next:** the owner installs the 1.13 binary and turns the mod on for the desktop app (two
+commands in the 16.4 entry); record the result and answer in `docs/phase16-check.md` → "Owner check" and the entry's
+Review line; then Phase 16 is closed.
 
 **Step 16.2 is committed (Codex loop, 2026-11-11): `multi-link pane --watch --json`.** One long-lived `Scanner`;
 compact, flushed NDJSON on a data change (ignoring `now` and every `phrase`) or a 30 s heartbeat, 3 s ticks;
@@ -812,6 +812,36 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 ## Log (newest first)
 
+### 2026-11-11 — Step 16.4: Real check, README, owner confirm — Claude
+- Did: Release build of `93194cc`. Scratch PTY harness (session scratchpad, not in the repo): `claude --plugin-dir
+  /Users/jarednarvaez/multi-link/mod/multi-link-pane` at 150 × 44 in this repo, `target/release` first on `PATH`,
+  a draining reader thread and a screen model; timed first pane text and first data, `ps` after start and 5 s after
+  `/exit`, saved screens. Run 1 inherited `CLAUDE_CODE_CHILD_SESSION` (no transcript saved → `not seen yet`, correct);
+  runs 2–4 cleared `CLAUDE_CODE_*` and set `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`. One run with the installed 1.12
+  binary. Watcher CPU per tick: a fresh watcher, `ps -o time` after its first line and 30 s later. README section
+  "Claude Code pane" (the captured pane text, not an image) and a limitation line; `docs/phase16-check.md`.
+- Changed: `README.md`, `docs/phase16-check.md`, `PROGRESS.md` (also corrects the 16.2 Review note about a phase9
+  FAIL: it was my zsh loop, not the check).
+- Verify: whole-phase Verify: `TZ=UTC cargo test --workspace` → 698 passed, 0 failed, 1 ignored; clippy `-D warnings`
+  and `fmt --check` clean; `bash fixtures/expected/phase9/check.sh 6` rc 0, `phase12`, `phase13`, `phase14` ok;
+  `git diff --name-only c29c516 -- fixtures/expected` shows only Phase 15 `tui/loading-*` and Phase 16 `pane/*`;
+  `claude plugin validate mod/multi-link-pane` → `✔ Validation passed`; `claude plugin test` → 46 pass, 0 fail;
+  W10 scan → nothing (rc 1). Real check: pane text first seen 0.94 / 0.83 / 0.84 s and data 2.81 / 2.90 / 2.53 s
+  after launching `claude` (from the pane opening: 1.87 / 2.07 / 1.69 s, median 1.87 s ≤ 2.5 s); run 2 after one
+  prompt: `▌● this session` under `recent (2h)`, the coordinator under `working` with its four Codex runs nested `✓`;
+  `ps` one watcher with parent `claude`, none 5 s after `/exit` in all five runs; old binary → `This multi-link is too
+  old for the pane. Update it.`; warm CPU 1.40 s over 10 ticks = 140 ms per tick (≤ 250 ms).
+- Owner steps (pending; one command each, absolute paths): install the 1.13 binary
+  `cargo install --path /Users/jarednarvaez/multi-link/crates/cli --locked`; turn the mod on for every Claude Code
+  session including the desktop app `python3 -c 'import json,os;p=os.path.expanduser("~/.claude/settings.json");d=json.load(open(p)) if os.path.exists(p) else {};d.setdefault("env",{})["CLAUDE_CODE_PLUGIN_DIRS"]="/Users/jarednarvaez/multi-link/mod/multi-link-pane";json.dump(d,open(p,"w"),indent=2)'`,
+  then restart the desktop app.
+- Review: Claude's own step (docs only; no code), as 15.4. Numbers in README and the check doc are from the scratch
+  `events.txt` of runs 1–4 and `old`, and the CPU script output. Board check: the captured pane has board 16 C's
+  header, rules, `▌` row and `└` children. Desktop half and owner's answer: pending.
+- Gotchas: a `claude` started from a Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION` and saves no
+  transcript, so the pane cannot find it; clear `CLAUDE_CODE_*` for real checks. In zsh, `bash dir/$s` with
+  `s="check.sh 6"` is one word.
+
 ### 2026-11-11 — Step 16.3: The mod — Codex
 - Did: Added the `multi-link-pane` mod (0.1.0), `/multi-link`, pane `multi-link` on session start, and the exact
   `multi-link pane --json --watch --cwd <cwd> --session <id>` argument vector. Buffered stdout until newlines;
@@ -1019,8 +1049,8 @@ pass 10 158.223084 ms
   backstop off; Windows is a non-goal). Re-review clean. Checked by reading: the change key drops `now` and every
   nested `phrase`; an error resets the key so the next success prints; a broken stdout pipe exits (the mod is gone).
   Re-ran Verify: `TZ=UTC cargo test --workspace` → 698 passed, 0 failed, 1 ignored; clippy `-D warnings` and
-  `fmt --check` clean; `phase9/check.sh 6` rc 0 (one earlier run in my session printed FAIL and passed twice on
-  re-run with no change; not reproduced), `phase12`, `phase13`, `phase14` ok; `git diff HEAD -- fixtures/expected`
+  `fmt --check` clean; `phase9/check.sh 6` rc 0 (an earlier FAIL was my zsh loop passing `check.sh 6` as one file
+  name, not the check; found in 16.4), `phase12`, `phase13`, `phase14` ok; `git diff HEAD -- fixtures/expected`
   empty. Codex timed in its sandbox, where `ps` probes fail soft, so I re-timed outside it (release, real `~`, this
   repo and this coordinator session, 3 fresh watchers): first line 2012 / 1569 / 1640 ms, **median 1640 ms** (≤ 2500),
   `seen: true`, the session under `working`. The 163 ms refresh median is Codex's sandbox figure.
