@@ -2184,12 +2184,135 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 - Files: `docs/phase12-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts match K4 or each difference is explained; the owner's answer recorded.
 
+### Phase 13 — Known folders and a key that is never lost (Release 1.10)
+Need (design need 1: see which Codex run came from which Claude session; and the TUI must answer every key). Three
+backlog items, chosen together by the owner on 2026-11-10. Measured 2026-11-10 on real data (release build at
+8d2cc22; scratch, counts only; tool calls read from `assistant` records only, since `api-request-blob` copies can
+differ):
+- **`cd` before the launch.** 35 hand-offs run `cd <dir>` before `codex exec` and are `unlinked` by the `dir_moved`
+  rule: 33 `exec`, 2 `resume --last`. In 31 the target is a literal path (no `$`, no `~`); each of the 29 literal
+  `exec` ones has exactly one Codex run whose `cwd` is the resolved target, starting 0–60 s after the hand-off.
+  Targets: 9 the session's own folder, 2 inside it, 22 elsewhere (before excluding the 4 non-literal).
+- **Option-first explicit id.** `codex exec resume -c k=v <id> "…"` is read as a plain `exec` (found in 12.0, fixture
+  case h); the id grammar requires the id right after `resume`.
+- **Lost key on resize.** `tools/resize-key-check.py` (new, synthetic fixture) blocks the TUI in a write, resizes,
+  and sends `q` with one more resize: 5 of 5 rounds FAIL at 8d2cc22 (the key waits for a second key). Cause
+  (Phase 3): crossterm 0.28.1's mio source returns `Resize` when SIGWINCH and tty readiness arrive in one wake and
+  drops the edge-triggered tty readiness. Its `use-dev-tty` source polls with `poll(2)` (level-triggered) and reads
+  the tty before the resize pipe. A throwaway build with that feature passed 5 of 5 (reverted; not committed).
+
+Decisions:
+- **C1 A literal `cd` names the launch folder.** A `cd` segment before the launch, in the same command, moves the
+  known folder when all of these hold, else the folder is unknown (`dir_moved`, as today):
+  - its one argument is literal: after quote removal only `A–Z a–z 0–9 . _ / + @ % : , = -` and spaces, not
+    starting with `-`, and absolute or starting `./` / `../` (or exactly `.` / `..`). Plain names (`cd sub`) stay
+    unknown because `CDPATH` can redirect them; `$`, `~`, backticks, globs and braces are not literal.
+  - it is a bare `cd` (no wrapper such as `env`/`nohup`/`timeout` before it, which would run it in a child).
+  - the operator before it is the start, `;`, a newline, `&&` or `(`; the operator after it is `&&`, `;` or a
+    newline (`||`, `|`, `&` → unknown).
+  - between it and the launch there is no builtin that can change the shell's folder (`cd` that is not itself C1,
+    `pushd`, `popd`, `eval`, `source`, `.`, `exec`, `builtin`, `command`), and no `)` closing a group that was open
+    at the `cd`. Groups opened and closed after it (`( … )`, `$( … )`) do not matter.
+  Absolute → that path; relative → joined to the folder so far (start: the record's `cwd`); lexical normalisation
+  only (`.`, `..`, repeated and trailing `/`); no file-system access, no symlinks. A launch `-C` / `--cd` other than
+  `.` / `$PWD` still moves (U1). Why: external commands and `$( … )` run in child processes and cannot change the
+  shell's folder; only the listed builtins can. **Assumption, stated:** after `;` the `cd` is assumed to have
+  succeeded; if it failed, the run is in the old folder and the resolved folder usually has no run (→ `unlinked`).
+  Measured: these rules keep all 31 literal real cases (29 `exec` with exactly one run, 2 `resume --last`).
+- **C2 Matching uses the launch folder.** `Invocation` gains the resolved folder; link `checkout` keeps the session's
+  folder (where Claude was), and Link gains `launch_dir` (string, only when C1 resolved a folder different from
+  `checkout`; omitted otherwise, so no existing key changes). Creation candidates (60 s), K1's competitor grouping
+  (today keyed by `checkout`, `link.rs` K1 map) and R7's later-turn search all use `launch_dir` when present. Exact evidence and the `claimed`
+  rule are unchanged. Redirect rules are unchanged (a relative redirect after a `cd` still gives no evidence).
+- **C3 Option-first explicit id.** After `resume` (in `codex exec [opts] resume` and `codex resume`), read options
+  before the first positional word: a value option from the existing table takes the next word; `--name=value`
+  takes none; a known flag (`--last`, `--json`, `--skip-git-repo-check`, `--full-auto`,
+  `--dangerously-bypass-approvals-and-sandbox`, `--ephemeral`, `--all`, `--oss`) takes none. `--last` anywhere among
+  them → id-less (R7, unchanged). Any unknown option, `--`, `-` or a redirect before the first positional → no id
+  (today's `exec`), because the option might take the uuid as its value. Otherwise a uuid-shaped first positional is
+  the resume id (`resume_arg`, exact). The existing `resume <uuid> …` form is unchanged (out of scope).
+- **D1 Read keys with crossterm's `use-dev-tty` source.** Workspace `crossterm = { version = "0.28.1", features =
+  ["use-dev-tty"] }` (adds the `filedescriptor` crate). No TUI code change. Why: the upstream fix is not released
+  for 0.28; a vendored fork costs maintenance; the feature is crossterm's own and fixes the case in the check.
+
+Non-goals: expanding `~` or variables; `pushd`; following symlinks; trusting relative redirects after `cd`; changing
+K1–K3 or R7's window; upgrading ratatui or crossterm's major version.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; clippy `-D warnings` and `fmt --check` clean; committed keys
+equal except 13.0's list; `python3 -I tools/resize-key-check.py target/release/multi-link 5` → 5 of 5 `pass`; W10 scan.
+
+### Step 13.0 — Rules, fixtures, keys and the resize check (Claude)
+- Depends on: 12.2. C1–C3 and D1 into `docs/design.md` ("Phase 13 decisions") and `docs/output-schema.md` (Link
+  `launch_dir`, Heuristic, Invocation forms). Synthetic fixtures (W10) in `fixtures/sessions-phase13/`, fixed `--now`,
+  keys in `fixtures/expected/phase13/` (`links.json`, `check.sh`) and `crates/cli/tests/phase13.rs`, before code:
+  (a) `cd /abs && codex exec` to another folder with one run there (→ `heuristic`, `launch_dir`); (b) `cd ./sub && …`
+  (resolved under the record's cwd); (c) `cd ../x/./y/ && …` (normalised); (d) two `cd` segments chained, and
+  `cd /x; export A=1; codex exec`; (e) `cd $HOME/x`, `cd ~/x`, `cd -`, `cd sub`, `pushd /x` (unknown, `unlinked` as
+  today); (f) `(cd /x); codex exec` (closed group → unknown) beside `(cd /x && codex exec …)` and
+  `cd /x && S=$(date +%s) && codex exec` (resolved); (f2) `cd /x || codex exec`, `cd /x | codex exec`,
+  `cd /x & codex exec`, `false || cd /x && codex exec`, `cd /x && eval true && codex exec`, `env cd /x && codex
+  exec`, `cd /repo/{a,b} && …` (all unknown), each with a tempting run in the named folder; (g) `cd /x && codex exec
+  -C /y` (moves, unknown) and `cd /x && codex exec -C "$PWD"` (resolved); (h) `cd /x && codex exec resume --last`
+  with a later turn in x's run (→ `heuristic` / `resume_turn`, `launch_dir`); (i) two hand-offs from different
+  session folders whose launch folders are the same, unequal gaps, in both invocation orders (K1 groups by launch
+  folder); (j) option-first `codex exec resume -c k=v <id>`, `codex exec -s x resume --json <id> "p"`, `codex resume
+  --oss <id>` (→ `exact` / `resume_arg`); `codex exec resume -c k=v --last <id>` (R7); `codex exec resume --unknown
+  <id>` and `codex exec resume -- <id>` (stay `exec`). Phase 12 case (h)'s
+  option-first resume becomes `exact` / `resume_arg`: listed. `tools/resize-key-check.py` committed (5/5 FAIL today).
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase13/**`, `fixtures/expected/phase13/**`,
+  `crates/cli/tests/phase13.rs`, `fixtures/expected/phase12/links.json` (the listed value), `tools/resize-key-check.py`,
+  `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` except the `phase13` tests and `phase12_links_match_answer_key` (listed);
+  `fixtures/expected/phase13/check.sh` fails only on the new cases; the resize check 5 of 5 FAIL at 8d2cc22 (recorded);
+  W10 scan of the new files finds nothing.
+
+### Step 13.1 — Launch folder and option-first id in the resolver (Codex)
+- Depends on: 13.0. C1–C3.
+- Files: `crates/claude/src/invocation.rs` and `crates/claude/tests/**`, `crates/model/src/lib.rs` (Link
+  `launch_dir`), `crates/model/tests/**`, `crates/core/src/link.rs` (with its unit tests,
+  which build `Invocation`), `crates/core/src/overview.rs` (test helper building `Link`), `crates/core/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; `fixtures/expected/phase13/check.sh` and `phase12/check.sh` all `ok`
+  (`phase13` includes every C1 negative form with a tempting run);
+  `fixtures/expected/phase9/check.sh 6` 47/47; `git diff 8d2cc22 -- fixtures/expected` = 13.0's keys only; unit tests
+  for C1 (each literal form, each unknown form, closed group, normalisation) and C3 (option-first id, `--last` wins,
+  non-uuid stays `exec`); existing recognition tests changed only where C1 resolves a folder, each named in PROGRESS.
+
+### Step 13.2 — Keys read with `use-dev-tty` (Codex)
+- Depends on: 13.0 (the check). D1.
+- Files: `Cargo.toml`, `Cargo.lock`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; every TUI snapshot unchanged; `cargo build --release -p multi-link` then
+  `python3 -I tools/resize-key-check.py target/release/multi-link 5` → 5 of 5 `pass`.
+
+### Step 13.3 — Real check, README, owner confirm (Claude)
+- Depends on: 13.1, 13.2. Real counts before/after (the 35 `cd` hand-offs by outcome, option-first resumes found), a
+  masked check of `cd` links where an id was observed (if any), the resize check on the release build and a real TUI
+  smoke run (PTY harness, scratch). README: remove the lost-key limitation, describe `cd` handling and its limits.
+- Files: `docs/phase13-check.md`, `README.md`, `PROGRESS.md`
+- Verify: whole-phase Verify; real counts explained; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-- Option-first explicit-id resume (`codex exec resume -c k=v <id> "…"`) is recognised as a plain `exec` (found in 12.0,
-  fixture case h); only `--last` was tested with options first in Phase 9.
-`hook check` shipped in Phase 10 · `cd`-then-`codex exec resume --last` stays unlinked (3 real, 9.7) · Lost key on resize: crossterm 0.29 drops tty readiness when SIGWINCH and a key arrive in one wake (upgrade or workaround; 3.8) · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Phase 13 plan critique (Codex, read-only, Codex loop)
+Quota check: `CODEX: OK`. Nine points; outcome:
+1. C1 ignored control flow (`|`, `||`, `;` after a failed `cd`) → **accepted in part**: operator rules added (`||`,
+   `|`, `&` → unknown; `||` before the `cd` → unknown). `;` is kept with the stated assumption that the `cd`
+   succeeded: 10 real cases use it, and a failed `cd` to a literal path usually leaves no run in that folder.
+2. `CDPATH` redirects plain relative names → **accepted**: only absolute, `./` and `../` targets resolve.
+3. Brace expansion → **accepted**: literal grammar is an allow-list of characters.
+4. Opaque commands and wrapped `cd` → **accepted** as a deny-list of folder-changing builtins plus "bare `cd`
+   only". An allow-list of commands was **rejected**: real commands put `export`, `$(date)`, `timeout`, `cat <<EOF`
+   between the `cd` and the launch, and external commands cannot change the shell's folder.
+5. C3 precedence and unknown options → **accepted**: known flags listed; unknown option, `--`, `-` or redirect → no id.
+6. `overview.rs` builds `Link` → **accepted**: added to 13.1's Files.
+7. Resize check passes on a crash → **accepted**: startup and a zero exit status are required.
+8. Final resize repeated the same size → **accepted**: the last resize goes to a third size. Proving the write
+   stalled **rejected**: no portable signal; the 5/5 FAIL at 8d2cc22 shows the condition is reached.
+9. K1 grouping must use the launch folder → **accepted**: fixture (i) uses different session folders converging.
+Real effect of the stricter C1, recomputed (scratch, counts only): all 31 literal cases still resolve.
+
 
 ### 2026-11-10 — Step 12.0 amendments (Claude, while writing the keys)
 - **K1 tightened.** Writing case (i) showed "h''s unique nearest" removes a run even when h' itself stays ambiguous and

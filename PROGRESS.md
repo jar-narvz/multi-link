@@ -1,6 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 13 (known folders and a key that is never lost, Release 1.10) is planned (2026-11-10); Step 13.0 (Claude:
+rules, fixtures, keys, resize check) is next.** Owner chose the three backlog items together and asked for them all at
+once. C1: a literal `cd` (absolute or `./`/`../`, bare, safe operators, no folder-changing builtin after it) names the
+launch folder; C2: matching uses Link `launch_dir`; C3: option-first explicit resume id; D1: crossterm `use-dev-tty`
+(a throwaway build passed `tools/resize-key-check.py` 5/5; today's build fails 5/5). Codex critique: 9 points (PLAN.md
+Review log).
+
 **Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
 hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
 never exact); real check in `docs/phase12-check.md`. Next is the backlog (PLAN.md).
