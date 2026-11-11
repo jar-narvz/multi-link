@@ -1,14 +1,10 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 13 (known folders and a key that is never lost, Release 1.10): Steps 13.0 and 13.2 are committed (2026-11-10);
-13.1 (Codex: C1–C3 in
-`crates/claude/src/invocation.rs` and `crates/core/src/link.rs`, Link `launch_dir`) is next.** Rules in
-`docs/design.md` (Phase 13 decisions) and `docs/output-schema.md` (Heuristic → Phase 13, Link `launch_dir`). Keys:
-`fixtures/expected/phase13/links.json` (`check.sh`, `crates/cli/tests/phase13.rs`); Phase 12's case (h) option-first
-resume is now expected `exact`. Tests failing until 13.1: `phase13_links_match_answer_key`,
-`phase12_links_match_answer_key`. Recognition tests that assert `dir_moved` for a `cd` that C1 now resolves need new
-expectations, each named with its C1 reason.
+**Phase 13: Steps 13.0, 13.1 and 13.2 are committed (2026-11-10); Step 13.3 (Claude: real check,
+`docs/phase13-check.md`, README, owner confirm) is next.** C1 resolves a literal `cd` into Link `launch_dir` (omitted
+when equal to `checkout`); C3 reads option-first explicit resume ids; D1 reads keys with crossterm `use-dev-tty`. Real
+data at 13.1 (scratch, counts only): unlinked 48 → 12, ambiguous 1 → 0, nothing lost a link.
 
 **Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
 hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
@@ -737,6 +733,459 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 13.1: Launch folder resolver — fix round 1 — Codex
+- Did: Addressed all three findings from Claude review. Single `&` is a distinct tokenizer operator and cannot
+  be a C1 cd boundary; a launch immediately after it remains unsupported, preserving the existing
+  `cd /x & codex exec` no-hand-off rule. Restricted eval/source/./exec/builtin/command invalidation to after
+  a C1 cd. Non-literal cd (after wrappers), pushd and popd still make the folder unknown even without an earlier
+  C1 cd, per the clarified pushd/popd exception. Interactive `codex resume` requires an explicit UUID;
+  id-less `--last` remains exclusive to `codex exec resume`. Explicit option-first interactive UUIDs still work.
+  Added one unit-style regression test per finding in `crates/claude/tests/invocation.rs`, covering both sides
+  of each boundary. Each was observed failing before its fix and passing afterward.
+- Changed (this round only): `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`, `PROGRESS.md`.
+- Verify: All cargo commands used AGENTS.md's Rust PATH export. Targeted RED→GREEN commands:
+  `cargo test -p multi-link-claude --test invocation single_ampersand`,
+  `cargo test -p multi-link-claude --test invocation folder_builtin_deny`, and
+  `cargo test -p multi-link-claude --test invocation interactive_resume_requires`.
+  Actual test/result lines before and after each fix:
+
+```text
+test single_ampersand_is_not_a_literal_cd_boundary ... FAILED
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+test single_ampersand_is_not_a_literal_cd_boundary ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+test folder_builtin_deny_list_is_scoped_to_a_prior_literal_cd ... FAILED
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+test folder_builtin_deny_list_is_scoped_to_a_prior_literal_cd ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+test interactive_resume_requires_an_explicit_uuid_without_last ... FAILED
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+test interactive_resume_requires_an_explicit_uuid_without_last ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+```
+
+  `cargo test -p multi-link-claude --test invocation` → exit 0 (actual test/result lines):
+
+```text
+test help_options_are_not_launches ... ok
+test folder_builtin_deny_list_is_scoped_to_a_prior_literal_cd ... ok
+test directory_options_distinguish_current_directory_from_moves ... ok
+test interactive_resume_requires_an_explicit_uuid_without_last ... ok
+test earlier_unquoted_directory_words_refuse_relative_redirects ... ok
+test literal_cd_tracks_only_groups_open_at_the_move ... ok
+test option_first_resume_id_obeys_known_option_boundaries ... ok
+test redirect_targets_are_literal_and_on_the_launch_segment ... ok
+test recognition_table ... ok
+test resume_last_after_exec_options_preserves_directory_and_prompt_boundaries ... ok
+test resume_last_recognition_obeys_option_and_segment_boundaries ... ok
+test single_ampersand_is_not_a_literal_cd_boundary ... ok
+test shell_groups_heredocs_and_wrappers ... ok
+test resume_last_skips_all_supported_option_values_without_consuming_equals_forms ... ok
+test unknown_cd_forms_and_folder_builtins_disable_heuristics ... ok
+test redirect_hard_links_are_refused_until_only_one_link_remains ... ok
+test repeated_tool_use_ids_keep_the_first_occurrence_in_each_file ... ok
+test extracts_only_assistant_bash_and_pairs_results_by_id_within_each_file ... ok
+test redirect_outside_roots_is_refused_before_open_and_missing_is_retriable ... ok
+test literal_cd_resolves_against_record_cwd_without_filesystem_access ... ok
+test step_comes_from_raw_text_of_the_first_launch_segment_only ... ok
+test fixture_invocations_match_all_answer_key_tuples ... ok
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+```
+
+  `cargo test --workspace --no-fail-fast` → exit 0; 628 passed, 0 failed, 1 ignored.
+  Actual result lines from the complete workspace run:
+
+```text
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.69s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+
+```text
+    Checking multi-link-model v0.1.0 (/Users/jarednarvaez/multi-link/crates/model)
+    Checking multi-link-plan v0.1.0 (/Users/jarednarvaez/multi-link/crates/plan)
+    Checking multi-link-codex v0.1.0 (/Users/jarednarvaez/multi-link/crates/codex)
+    Checking multi-link-tui v0.1.0 (/Users/jarednarvaez/multi-link/crates/tui)
+    Checking multi-link-claude v0.1.0 (/Users/jarednarvaez/multi-link/crates/claude)
+    Checking multi-link-core v0.1.0 (/Users/jarednarvaez/multi-link/crates/core)
+    Checking multi-link-hook v0.1.0 (/Users/jarednarvaez/multi-link/crates/hook)
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.52s
+```
+
+  `cargo fmt --all -- --check` → no output, exit 0.
+  `fixtures/expected/phase13/check.sh` → exit 0:
+
+```text
+ok   links.json
+```
+
+  `fixtures/expected/phase12/check.sh` → exit 0:
+
+```text
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+```
+
+  `fixtures/expected/phase9/check.sh 6` → exit 0, 47/47 checks:
+
+```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+```
+
+  Re-ran `git diff 8d2cc22 -- fixtures/expected` (saved the full patch). Its stat:
+
+```text
+ fixtures/expected/phase12/links.json |  11 +-
+ fixtures/expected/phase13/check.sh   |  17 ++
+ fixtures/expected/phase13/links.json | 569 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 592 insertions(+), 5 deletions(-)
+```
+
+  Relative to Claude's Step 13.0 commit (`git diff b13656d -- fixtures/expected`), the only extra change
+  is Claude's case (k) correction, already present when this fix round began:
+
+```diff
+diff --git a/fixtures/expected/phase12/links.json b/fixtures/expected/phase12/links.json
+index e6c2022..165b12a 100644
+--- a/fixtures/expected/phase12/links.json
++++ b/fixtures/expected/phase12/links.json
+@@ -486,7 +486,8 @@
+       "match": "unlinked",
+       "child": null,
+       "evidence": null,
+-      "candidates": []
++      "candidates": [],
++      "launch_dir": "/home/dev/repo-p12k/sub"
+     },
+     {
+       "step": "1.2",
+```
+
+  Compared `git diff -- fixtures/expected` at the start and end of this round with `cmp`:
+
+```text
+Answer-key diff unchanged during fix round: exit 0
+git diff --check: exit 0
+git diff --cached --name-only: exit 0
+```
+
+  Both git checks produced no diff/file output. No existing recognition test expectations changed in this round.
+  The original C1/C3 expectation changes remain named in the previous Step 13.1 entry.
+- Review: Claude, 1 fix round. Round 0: Codex stopped on a Claude key error: Phase 12 case (k) runs
+  `cd /home/dev/repo-p12k/sub && codex exec …`, which C1 resolves, so its link gains `launch_dir` (still
+  `unlinked`, no run there); Claude fixed the key. Claude's 13.0 entry was wrong to say no other committed key had a
+  `cd` before a codex call (the grep missed it). Findings sent in round 1, all fixed with tests: a single `&` was
+  read as a newline boundary; the builtin deny-list fired with no earlier C1 `cd` (would have unlinked e.g.
+  `command -v codex && codex exec`); interactive `codex resume --last` became an R7 resume. Existing test changes
+  accepted (C1: `cd /elsewhere;` resolves; C3: `codex exec -s read-only resume <id>` is a resume). Claude re-ran:
+  `cargo test --workspace` 628 passed / 0 failed / 1 ignored; clippy, fmt clean; phase12 and phase13 `check.sh` all
+  `ok`; phase9 47/47; `git diff 8d2cc22 -- fixtures/expected` = 13.0's keys plus the case (k) fix. Real run (release,
+  scratch, counts only), per hand-off against the 8f643fd build: 31 `exec` unlinked → heuristic (mostly `cd` into the
+  session's own folder, so no `launch_dir`), 1 with `launch_dir`, 1 unlinked → `nearest_run`, 3 `resume` unlinked →
+  `resume_turn`, the last ambiguous → `nearest_run`, 1 exact `exec` → exact `resume` / `resume_arg`; none lost a link.
+- Gotchas: At the start of this round the tokenizer retained a single `&` as a word rather than an operator;
+  it now explicitly records `&` without broadening launch recognition immediately after it. The pushd/popd
+  exception in the review instruction is preserved, as the Phase 13 negative fixture requires.
+  Claude's Phase 12 key amendment was pre-existing and was not edited by Codex. PLAN.md and all other
+  pre-existing worktree changes were left untouched this round.
+
+
+### 2026-11-10 — Step 13.1: Launch folder and option-first id in the resolver — Codex
+- Did: Implemented C1 literal `cd` resolution from the record cwd with lexical normalisation, strict path/operator
+  rules and invalidating folder builtins. Tokenizer tracks group depth: closing a group open at the cd invalidates
+  it; groups opened later and opaque command substitutions do not. Added C3 known-option scanning for explicit
+  resume UUIDs, preserving option-value consumption, equals forms, `--last`, and first-positional boundaries.
+  C2 carries optional `launch_dir` through Invocation and Link, omits it when None, and uses launch folder for
+  creation candidates, both K1 map accesses and R7 later turns. Redirect evidence rules stay intact.
+  Added literal/unknown/group/normalisation/C3 tables and JSON omission/round-trip coverage. The new
+  `literal_cd_tracks_only_groups_open_at_the_move` and `option_first_resume_id_obeys_known_option_boundaries`
+  tests were observed failing before implementation and passing afterward.
+- Changed: `crates/claude/src/invocation.rs`, `crates/claude/tests/invocation.rs`, `crates/model/src/lib.rs`,
+  `crates/model/tests/model.rs`, `crates/core/src/link.rs`, `crates/core/src/overview.rs`,
+  `crates/core/tests/graph.rs`, `crates/core/tests/links.rs`, `PROGRESS.md`.
+- Verify: All cargo commands used the AGENTS.md Rust PATH export. Every Step 13.1 Verify item was run;
+  this step is blocked, not complete. Final `cargo test --workspace --no-fail-fast` exited 101: 624 passed,
+  1 failed, 1 ignored. Below are the actual result/error lines from that run (not the very large JSON assertion):
+
+```text
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.51s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.13s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.06s
+test phase12_links_match_answer_key ... FAILED
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+error: test failed, to rerun pass `-p multi-link --test phase12`
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: 1 target failed:
+    `-p multi-link --test phase12`
+```
+
+  `fixtures/expected/phase13/check.sh` → exit 0:
+
+```text
+ok   links.json
+```
+
+  `fixtures/expected/phase12/check.sh` → exit 1:
+
+```text
+FAIL links.json
+485a486
+>       "launch_dir": "/home/dev/repo-p12k/sub",
+ok   overview.json
+ok   graph-1.1.json
+```
+
+  `fixtures/expected/phase9/check.sh 6` → exit 0, 47/47 checks:
+
+```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+
+```text
+    Checking multi-link-model v0.1.0 (/Users/jarednarvaez/multi-link/crates/model)
+    Checking multi-link-plan v0.1.0 (/Users/jarednarvaez/multi-link/crates/plan)
+    Checking multi-link-codex v0.1.0 (/Users/jarednarvaez/multi-link/crates/codex)
+    Checking multi-link-tui v0.1.0 (/Users/jarednarvaez/multi-link/crates/tui)
+    Checking multi-link-claude v0.1.0 (/Users/jarednarvaez/multi-link/crates/claude)
+    Checking multi-link-core v0.1.0 (/Users/jarednarvaez/multi-link/crates/core)
+    Checking multi-link-hook v0.1.0 (/Users/jarednarvaez/multi-link/crates/hook)
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.85s
+```
+
+  `cargo fmt --all -- --check` → no output, exit 0. `git diff --check` → no output, exit 0.
+  `git diff 8d2cc22 -- fixtures/expected` was saved and compared with
+  `git diff 8d2cc22 b13656d -- fixtures/expected` (Claude's Step 13.0 commit) using `cmp`:
+
+```text
+Key diff matches Step 13.0 exactly: exit 0
+```
+
+  `git diff b13656d --exit-code -- fixtures/expected` and
+  `git diff HEAD --exit-code -- fixtures/expected` both produced no diff and exited 0.
+  Existing recognition tests changed (no other existing recognition expectations changed):
+  - `resume_last_recognition_obeys_option_and_segment_boundaries`: C1 now resolves the bare absolute
+    `cd /elsewhere;` before resume; expects `dir_moved == false` and `launch_dir == "/elsewhere"`.
+  - `resume_last_after_exec_options_preserves_directory_and_prompt_boundaries`: C3 now recognises
+    `codex exec -s read-only resume <uuid>` as Resume with the explicit id, rather than Exec.
+- Review: Pending Claude (the non-author). No staging, commits or key edits. Existing untracked `.claude/`
+  was present at the start and left untouched.
+- Gotchas: The only remaining failure is a binding schema/key conflict: Phase 12 case (k),
+  `toolu_p12_12a00c01_0`, has a valid bare absolute cd to `/home/dev/repo-p12k/sub`, with no matching rollout there.
+  C1/C2 and the Link launch_dir row require the resolved folder even though the link remains unlinked; its key
+  omits that field (check diff above). Suppressing the field merely because no child matched would violate the
+  schema. Stopped implementation and asked for Claude's key correction or clarification of an intended exception;
+  did not edit the key or weaken the comparison. PLAN.md was not edited.
+
 
 ### 2026-11-10 — Step 13.2: Keys read with `use-dev-tty` — Codex
 - Did: enabled crossterm's `use-dev-tty` feature (D1); lockfile regenerated. Ran alongside Claude's 13.0 (Codex told

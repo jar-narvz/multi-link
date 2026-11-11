@@ -460,6 +460,7 @@ mod tests {
             background: false,
             at: at(minute),
             checkout: String::new(),
+            launch_dir: None,
             r#match: Match::Exact,
             child: Some(child.into()),
             evidence: None,

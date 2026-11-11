@@ -667,7 +667,8 @@ fn resume_last_recognition_obeys_option_and_segment_boundaries() {
     assert!(recognise("codex exec resume --last -h").is_none());
     let launch = recognise("cd /elsewhere; codex exec resume --last x").unwrap();
     assert_eq!(launch.form, Resume);
-    assert!(launch.dir_moved);
+    assert!(!launch.dir_moved);
+    assert_eq!(launch.launch_dir.as_deref(), Some("/elsewhere"));
 }
 
 #[test]
@@ -694,7 +695,6 @@ fn resume_last_after_exec_options_preserves_directory_and_prompt_boundaries() {
         "codex exec --json -- resume --last",
         "codex exec --json > resume --last",
         "codex exec -c resume --last prompt",
-        "codex exec -s read-only resume 01a189e2-d57f-7a91-b74c-ae85abd1a6a1",
     ] {
         let launch = recognise(command).unwrap();
         assert_eq!(launch.form, Exec, "{command}");
@@ -709,6 +709,7 @@ fn resume_last_after_exec_options_preserves_directory_and_prompt_boundaries() {
     }
     let id = "01a189e2-d57f-7a91-b74c-ae85abd1a6a1";
     for command in [
+        format!("codex exec -s read-only resume {id}"),
         format!("codex exec resume {id}"),
         format!("codex resume {id}"),
     ] {
@@ -758,4 +759,192 @@ fn resume_last_skips_all_supported_option_values_without_consuming_equals_forms(
             assert_eq!(recognise(&command).unwrap().form, Resume, "{command}");
         }
     }
+}
+
+#[test]
+fn literal_cd_tracks_only_groups_open_at_the_move() {
+    for command in [
+        "cd /target && codex exec x",
+        "(cd /target && codex exec x)",
+        "cd /target && (true) && codex exec x",
+        "cd /target && S=$(date +%s) && codex exec x",
+        "(cd /target && (true) && codex exec x)",
+    ] {
+        assert!(!recognise(command).unwrap().dir_moved, "{command}");
+    }
+    for command in [
+        "(cd /target); codex exec x",
+        "((cd /target) && codex exec x)",
+        "(cd /target); (codex exec x)",
+    ] {
+        assert!(recognise(command).unwrap().dir_moved, "{command}");
+    }
+}
+
+#[test]
+fn option_first_resume_id_obeys_known_option_boundaries() {
+    for prefix in [
+        "codex exec resume -c model=x",
+        "codex exec -s read-only resume --json",
+        "codex resume --oss",
+        "codex exec resume --config=k=v --ephemeral --all",
+    ] {
+        let command = format!("{prefix} {UUID} prompt");
+        let launch = recognise(&command).unwrap();
+        assert_eq!(launch.form, Resume, "{command}");
+        assert_eq!(launch.resume_id.as_deref(), Some(UUID), "{command}");
+    }
+    for options in ["--unknown", "--", "-", "> out", "-c", "--json non-uuid"] {
+        let command = format!("codex exec resume {options} {UUID}");
+        let launch = recognise(&command).unwrap();
+        assert_eq!(launch.form, Exec, "{command}");
+        assert_eq!(launch.resume_id, None, "{command}");
+    }
+    let launch = recognise(&format!("codex exec resume -c k=v --last {UUID}")).unwrap();
+    assert_eq!(launch.form, Resume);
+    assert_eq!(launch.resume_id, None);
+}
+
+#[test]
+fn literal_cd_resolves_against_record_cwd_without_filesystem_access() {
+    for (prefix, expected) in [
+        ("cd /target &&", "/target"),
+        ("cd ./sub &&", "/checkout/sub"),
+        ("cd ../x/./y/ &&", "/x/y"),
+        ("cd /target && cd ./inner &&", "/target/inner"),
+        ("cd /target; export A=1;", "/target"),
+        ("cd /target\n", "/target"),
+        (
+            "cd '/target with spaces/+@%:,=-_0' &&",
+            "/target with spaces/+@%:,=-_0",
+        ),
+        ("cd /../../target//./ &&", "/target"),
+        ("cd .. &&", "/"),
+        ("cd /target && (true) &&", "/target"),
+        ("cd /target && S=$(date +%s) &&", "/target"),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        write_records(
+            root.path(),
+            ".claude/projects/p/main.jsonl",
+            &[call(
+                "launch",
+                &format!("{prefix} codex exec -C \"$PWD\" x"),
+            )],
+        );
+        let calls = invocations(root.path(), &scan(root.path()).unwrap()).unwrap();
+        assert_eq!(calls.len(), 1, "{prefix}");
+        assert_eq!(calls[0].checkout, "/checkout");
+        assert_eq!(calls[0].launch_dir.as_deref(), Some(expected), "{prefix}");
+        assert!(!calls[0].dir_moved, "{prefix}");
+    }
+    for prefix in ["cd . &&", "cd /checkout/sub/.. &&"] {
+        let root = tempfile::tempdir().unwrap();
+        write_records(
+            root.path(),
+            ".claude/projects/p/main.jsonl",
+            &[call("launch", &format!("{prefix} codex exec x"))],
+        );
+        let calls = invocations(root.path(), &scan(root.path()).unwrap()).unwrap();
+        assert_eq!(calls[0].launch_dir, None, "{prefix}");
+        assert!(!calls[0].dir_moved, "{prefix}");
+    }
+}
+
+#[test]
+fn unknown_cd_forms_and_folder_builtins_disable_heuristics() {
+    for prefix in [
+        "cd $HOME/x &&",
+        "cd ~/x &&",
+        "cd - &&",
+        "cd sub &&",
+        "cd &&",
+        "cd /x /y &&",
+        "cd /x/{a,b} &&",
+        "cd /x/* &&",
+        "cd /x? &&",
+        "cd /x ||",
+        "cd /x |",
+        "false || cd /x &&",
+        "false | cd /x &&",
+        "env cd /x &&",
+        "nohup cd /x &&",
+        "timeout 3 cd /x &&",
+        "pushd /x &&",
+        "popd;",
+        "cd /x && eval true &&",
+        "cd /x && source f;",
+        "cd /x && . f;",
+        "cd /x && exec true;",
+        "cd /x && builtin true;",
+        "cd /x && command true;",
+        "cd /x && cd sub &&",
+        "(cd /x);",
+    ] {
+        let command = format!("{prefix} codex exec x");
+        let launch = recognise(&command).unwrap();
+        assert!(launch.dir_moved, "{command}");
+        assert_eq!(launch.launch_dir, None, "{command}");
+    }
+    assert!(recognise("cd /x & codex exec x").is_none());
+}
+
+#[test]
+fn single_ampersand_is_not_a_literal_cd_boundary() {
+    for command in [
+        "true & cd /target && codex exec x",
+        "cd /target & (true); codex exec x",
+        "cd /target &\ncodex exec x",
+    ] {
+        let launch = recognise(command).unwrap();
+        assert!(launch.dir_moved, "{command}");
+        assert_eq!(launch.launch_dir, None, "{command}");
+    }
+    assert!(recognise("cd /target & codex exec x").is_none());
+}
+
+#[test]
+fn folder_builtin_deny_list_is_scoped_to_a_prior_literal_cd() {
+    for builtin in [
+        "command -v codex",
+        "source env.sh",
+        ". env.sh",
+        "eval true",
+        "exec true",
+        "builtin true",
+    ] {
+        let command = format!("{builtin} && codex exec x");
+        let launch = recognise(&command).unwrap();
+        assert!(!launch.dir_moved, "{command}");
+        assert_eq!(launch.launch_dir, None, "{command}");
+
+        let command = format!("cd /target && {builtin} && codex exec x");
+        let launch = recognise(&command).unwrap();
+        assert!(launch.dir_moved, "{command}");
+        assert_eq!(launch.launch_dir, None, "{command}");
+    }
+    for builtin in ["cd sub", "env cd sub", "pushd /target", "popd"] {
+        let command = format!("{builtin} && codex exec x");
+        let launch = recognise(&command).unwrap();
+        assert!(launch.dir_moved, "{command}");
+        assert_eq!(launch.launch_dir, None, "{command}");
+    }
+}
+
+#[test]
+fn interactive_resume_requires_an_explicit_uuid_without_last() {
+    for command in [
+        "codex resume --last".to_owned(),
+        "codex resume --last prompt".to_owned(),
+        format!("codex resume --last {UUID}"),
+        format!("codex resume -c model=x --last {UUID}"),
+    ] {
+        assert!(recognise(&command).is_none(), "{command}");
+    }
+    let launch = recognise(&format!("codex resume --oss {UUID}")).unwrap();
+    assert_eq!(launch.form, Resume);
+    assert_eq!(launch.resume_id.as_deref(), Some(UUID));
+    let launch = recognise("codex exec resume --last").unwrap();
+    assert_eq!(launch.form, Resume);
+    assert_eq!(launch.resume_id, None);
 }

@@ -54,6 +54,7 @@ pub(crate) fn resolve(
             background: invocation.background,
             at: invocation.at,
             checkout: invocation.checkout.clone(),
+            launch_dir: invocation.launch_dir.clone(),
             r#match: if exact.is_some() {
                 Match::Exact
             } else {
@@ -79,7 +80,13 @@ pub(crate) fn resolve(
             invocation.form == InvocationForm::Resume && invocation.resume_id.is_none();
         link.candidates = rollouts
             .iter()
-            .filter(|child| child.cwd == invocation.checkout)
+            .filter(|child| {
+                child.cwd
+                    == invocation
+                        .launch_dir
+                        .as_deref()
+                        .unwrap_or(&invocation.checkout)
+            })
             .filter_map(|child| {
                 let gap_ms = if resume_last {
                     child
@@ -107,7 +114,7 @@ pub(crate) fn resolve(
         link.candidates
             .sort_by(|a, b| (a.gap_ms, &a.id).cmp(&(b.gap_ms, &b.id)));
     }
-    // K1 compares only original choices. Keep the smallest gap per checkout/run;
+    // K1 compares only original choices. Keep the smallest gap per launch folder/run;
     // ties (including a hand-off's own gap) never remove a candidate.
     let mut choices = HashMap::new();
     for (link, invocation) in links.iter().zip(invocations) {
@@ -115,7 +122,10 @@ pub(crate) fn resolve(
             && let Some(candidate) = nearest(&link.candidates)
         {
             choices
-                .entry((link.checkout.clone(), candidate.id.clone()))
+                .entry((
+                    link.launch_dir.as_ref().unwrap_or(&link.checkout).clone(),
+                    candidate.id.clone(),
+                ))
                 .and_modify(|gap: &mut i64| *gap = (*gap).min(candidate.gap_ms))
                 .or_insert(candidate.gap_ms);
         }
@@ -129,7 +139,10 @@ pub(crate) fn resolve(
         if creation {
             link.candidates.retain(|candidate| {
                 choices
-                    .get(&(link.checkout.clone(), candidate.id.clone()))
+                    .get(&(
+                        link.launch_dir.as_ref().unwrap_or(&link.checkout).clone(),
+                        candidate.id.clone(),
+                    ))
                     .is_none_or(|gap| *gap >= candidate.gap_ms)
             });
         }
@@ -289,6 +302,7 @@ mod tests {
             command: "codex exec x".into(),
             resume_id: None,
             dir_moved: false,
+            launch_dir: None,
             result_text: None,
         }
     }

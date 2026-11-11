@@ -18,6 +18,7 @@ pub struct Launch {
     pub form: InvocationForm,
     pub resume_id: Option<String>,
     pub dir_moved: bool,
+    pub launch_dir: Option<String>,
     pub stdout_redirect: Option<String>,
     pub stdout_append: bool,
 }
@@ -35,13 +36,21 @@ pub struct Invocation {
     pub command: String,
     pub resume_id: Option<String>,
     pub dir_moved: bool,
+    pub launch_dir: Option<String>,
     pub result_text: Option<String>,
 }
 
 /// Recognise the first launch segment using the Phase 1 grammar, not a shell
 /// interpreter. Only the explicitly supported wrappers are removed; nothing expands.
 pub fn recognise(command: &str) -> Option<Launch> {
-    let mut dir_moved = false;
+    recognise_in(command, ".")
+}
+
+// The transcript cwd is the starting folder; the public recogniser needs only
+// directory certainty and redirect metadata, so it uses a relative base.
+fn recognise_in(command: &str, checkout: &str) -> Option<Launch> {
+    let mut folder = Some(checkout.to_owned());
+    let mut cd_depth = None;
     let mut redirect_dir_moved = false;
     for segment in segments(command) {
         let offset = wrapper_offset(&segment.tokens);
@@ -53,26 +62,56 @@ pub fn recognise(command: &str) -> Option<Launch> {
             .tokens
             .iter()
             .any(|word| !word.quoted_or_escaped && matches!(word.text.as_str(), "cd" | "pushd"));
-        let words: Vec<_> = tokens.iter().map(|word| word.text.as_str()).collect();
+        // A single & is tracked for C1 boundaries, but does not introduce a
+        // supported launch segment in the existing recognition grammar.
+        let words: Vec<_> = if segment.before == "&" {
+            Vec::new()
+        } else {
+            tokens.iter().map(|word| word.text.as_str()).collect()
+        };
         if help_only(tokens) {
             redirect_dir_moved |= segment_moves;
             continue;
         }
+        // R7's id-less --last form belongs only to exec resume. Interactive
+        // resume still needs an explicit UUID, including after C3 options.
+        let selected_resume = resume_options(tokens)
+            .and_then(resume_selection)
+            .filter(|id| id.is_some() || words.get(1) == Some(&"exec"));
         let (form, resume_id) = match words.as_slice() {
             ["codex", "exec", "resume", id, ..] | ["codex", "resume", id, ..]
                 if uuid_shaped(id) =>
             {
                 (InvocationForm::Resume, Some((*id).to_owned()))
             }
-            ["codex", "exec", ..] if exec_resume_options(tokens).is_some_and(resume_last) => {
-                (InvocationForm::Resume, None)
+            ["codex", "exec", ..] | ["codex", "resume", ..] if selected_resume.is_some() => {
+                (InvocationForm::Resume, selected_resume.flatten())
             }
             ["codex", "exec", ..] => (InvocationForm::Exec, None),
             ["node", path, "task", ..] if path.ends_with("codex-companion.mjs") => {
                 (InvocationForm::Plugin, None)
             }
             _ => {
-                dir_moved |= words.first() == Some(&"cd");
+                if let Some(target) = literal_cd(&segment) {
+                    folder = if target.starts_with('/') {
+                        Some(normalise_folder(target))
+                    } else {
+                        folder.map(|base| normalise_folder(&format!("{base}/{target}")))
+                    };
+                    cd_depth = Some(segment.depth);
+                } else if tokens.first().is_some_and(|word| {
+                    matches!(word.text.as_str(), "cd" | "pushd" | "popd")
+                        || (cd_depth.is_some()
+                            && matches!(
+                                word.text.as_str(),
+                                "eval" | "source" | "." | "exec" | "builtin" | "command"
+                            ))
+                }) {
+                    folder = None;
+                }
+                if segment.after == ")" && cd_depth.is_some_and(|depth| segment.depth <= depth) {
+                    folder = None;
+                }
                 redirect_dir_moved |= segment_moves;
                 continue;
             }
@@ -83,7 +122,8 @@ pub fn recognise(command: &str) -> Option<Launch> {
             step: multi_link_plan::step_tag(&command[segment.span]),
             form,
             resume_id,
-            dir_moved: dir_moved || changes_directory,
+            dir_moved: folder.is_none() || changes_directory,
+            launch_dir: folder.filter(|folder| !changes_directory && folder != checkout),
             stdout_redirect: redirect_target(tokens, redirect_dir_moved),
             stdout_append: tokens
                 .iter()
@@ -91,6 +131,50 @@ pub fn recognise(command: &str) -> Option<Launch> {
         });
     }
     None
+}
+
+/// C1 deliberately accepts a small literal path alphabet, without expansion.
+fn literal_cd(segment: &Segment) -> Option<&str> {
+    let [cd, target] = segment.tokens.as_slice() else {
+        return None;
+    };
+    let path = target.text.as_str();
+    (cd.text == "cd"
+        && matches!(segment.before, "" | ";" | "\n" | "&&" | "(")
+        && matches!(segment.after, ";" | "\n" | "&&")
+        && !target.redirect
+        && (path.starts_with('/')
+            || path.starts_with("./")
+            || path.starts_with("../")
+            || matches!(path, "." | ".."))
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._/+@%:,=- ".contains(&b)))
+    .then_some(path)
+}
+
+/// Lexical only: never consult the filesystem or resolve symlinks.
+fn normalise_folder(path: &str) -> String {
+    let absolute = path.starts_with('/');
+    let mut parts = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." if parts.last().is_some_and(|part| *part != "..") => {
+                parts.pop();
+            }
+            ".." if absolute => {}
+            _ => parts.push(part),
+        }
+    }
+    let joined = parts.join("/");
+    if absolute {
+        format!("/{joined}")
+    } else if joined.is_empty() {
+        ".".into()
+    } else {
+        joined
+    }
 }
 
 /// Only literal, unambiguous stdout targets can supply evidence. Descriptor
@@ -305,6 +389,60 @@ fn exec_resume_options(words: &[Word]) -> Option<&[Word]> {
     None
 }
 
+fn resume_options(words: &[Word]) -> Option<&[Word]> {
+    if words.first()?.text == "codex" && words.get(1)?.text == "resume" {
+        Some(&words[2..])
+    } else {
+        exec_resume_options(words)
+    }
+}
+
+/// C3: skip only options whose arity is known before accepting a positional id.
+fn resume_selection(words: &[Word]) -> Option<Option<String>> {
+    let mut options = words.iter();
+    let mut last = false;
+    while let Some(word) = options.next() {
+        let text = word.text.as_str();
+        if word.redirect || matches!(text, "--" | "-") {
+            return None;
+        }
+        if !text.starts_with('-') {
+            return if last {
+                Some(None)
+            } else {
+                uuid_shaped(text).then(|| Some(text.to_owned()))
+            };
+        }
+        if text == "--last" && !word.quoted_or_escaped {
+            last = true;
+            continue;
+        }
+        if option_takes_value(text) {
+            let value = options.next()?;
+            if value.redirect {
+                return None;
+            }
+        } else if !(text.starts_with("--") && text.contains('=')
+            || text
+                .split_once('=')
+                .is_some_and(|(name, _)| option_takes_value(name)))
+            && !matches!(
+                text,
+                "--json"
+                    | "--skip-git-repo-check"
+                    | "--full-auto"
+                    | "--dangerously-bypass-approvals-and-sandbox"
+                    | "--ephemeral"
+                    | "--all"
+                    | "--oss"
+            )
+        {
+            return None;
+        }
+    }
+    last.then_some(None)
+}
+
 /// Exact option names only: an equals-form already contains its value.
 fn option_takes_value(text: &str) -> bool {
     matches!(
@@ -331,24 +469,6 @@ fn option_takes_value(text: &str) -> bool {
             | "--local-provider"
             | "--color"
     )
-}
-
-/// Only options before the positional prompt / `--` can select the last run.
-fn resume_last(words: &[Word]) -> bool {
-    let mut words = words.iter();
-    while let Some(word) = words.next() {
-        let text = word.text.as_str();
-        if word.redirect || text == "--" || !text.starts_with('-') || text == "-" {
-            break;
-        }
-        if text == "--last" && !word.quoted_or_escaped {
-            return true;
-        }
-        if option_takes_value(text) {
-            words.next();
-        }
-    }
-    false
 }
 
 /// Skip the branch introducer and narrow wrapper grammar, including stacked wrappers.
@@ -442,6 +562,9 @@ struct Segment {
     tokens: Vec<Word>,
     span: std::ops::Range<usize>,
     after_subshell: bool,
+    before: &'static str,
+    after: &'static str,
+    depth: usize,
 }
 
 #[derive(Default)]
@@ -462,6 +585,8 @@ fn segments(command: &str) -> Vec<Segment> {
     let mut chars = command.char_indices().peekable();
     let mut segment_start = 0;
     let mut after_subshell = false;
+    let mut before = "";
+    let mut depth: usize = 0;
     let mut heredocs = Vec::new();
     while let Some((index, ch)) = chars.next() {
         // Keep substitutions opaque even inside double quotes. Their quotes and
@@ -590,20 +715,38 @@ fn segments(command: &str) -> Vec<Segment> {
                 }
                 started = false;
             }
-            // A single & is not a segment separator in the supported grammar.
-            if ch == '&' && chars.peek().map(|(_, ch)| *ch) != Some('&') {
-                word.text.push(ch);
-                started = true;
-            } else if matches!(ch, ';' | '|' | '&' | '(' | ')' | '\n') {
-                if matches!(ch, '|' | '&') && chars.peek().map(|(_, next)| *next) == Some(ch) {
+            if matches!(ch, ';' | '|' | '&' | '(' | ')' | '\n') {
+                let doubled =
+                    matches!(ch, '|' | '&') && chars.peek().map(|(_, next)| *next) == Some(ch);
+                if doubled {
                     chars.next();
                 }
+                let after = match (ch, doubled) {
+                    ('&', true) => "&&",
+                    ('&', false) => "&",
+                    ('|', true) => "||",
+                    ('|', false) => "|",
+                    (';', _) => ";",
+                    ('(', _) => "(",
+                    (')', _) => ")",
+                    _ => "\n",
+                };
                 let segment_end = chars.peek().map_or(command.len(), |(index, _)| *index);
                 segments.push(Segment {
                     tokens: std::mem::take(&mut words),
                     span: segment_start..index,
                     after_subshell,
+                    before,
+                    after,
+                    depth,
                 });
+                before = after;
+                if ch == '(' {
+                    depth += 1;
+                }
+                if ch == ')' {
+                    depth = depth.saturating_sub(1);
+                }
                 after_subshell |= ch == '(';
                 segment_start = segment_end;
                 if ch == '\n' {
@@ -644,6 +787,9 @@ fn segments(command: &str) -> Vec<Segment> {
             tokens: words,
             span: segment_start..command.len(),
             after_subshell,
+            before,
+            after: "",
+            depth,
         });
     }
     segments
@@ -762,7 +908,8 @@ fn read_calls(
 
 fn parse_call(value: &Value, block: &Value, main_id: &str, subagent: bool) -> Option<Invocation> {
     let command = block.pointer("/input/command")?.as_str()?;
-    let launch = recognise(command)?;
+    let checkout = value.get("cwd")?.as_str()?;
+    let launch = recognise_in(command, checkout)?;
     Some(Invocation {
         step: launch.step,
         parent: if subagent {
@@ -790,6 +937,7 @@ fn parse_call(value: &Value, block: &Value, main_id: &str, subagent: bool) -> Op
         command: command.to_owned(),
         resume_id: launch.resume_id,
         dir_moved: launch.dir_moved,
+        launch_dir: launch.launch_dir,
         result_text: None,
     })
 }

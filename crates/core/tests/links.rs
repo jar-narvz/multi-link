@@ -170,6 +170,7 @@ fn link(
         background: false,
         at: Timestamp::parse(at).unwrap(),
         checkout: "/repo".into(),
+        launch_dir: None,
         r#match: if evidence == Some(LinkEvidence::NearestRun)
             || evidence == Some(LinkEvidence::ResumeTurn)
         {

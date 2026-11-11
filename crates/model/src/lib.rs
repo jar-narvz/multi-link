@@ -144,6 +144,8 @@ pub struct Link {
     pub background: bool,
     pub at: Timestamp,
     pub checkout: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_dir: Option<String>,
     pub r#match: Match,
     pub child: Option<String>,
     pub evidence: Option<LinkEvidence>,

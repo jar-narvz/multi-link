@@ -75,6 +75,7 @@ pub fn link(
         background: false,
         at: t(at),
         checkout: "/repo".to_string(),
+        launch_dir: None,
         r#match,
         child: child.map(str::to_string),
         evidence: None,

@@ -314,3 +314,21 @@ impl std::io::Read for FailingRead {
         ))
     }
 }
+
+#[test]
+fn link_launch_dir_is_optional_and_omitted_when_absent() {
+    let original = json!({
+        "step": null, "parent": "parent", "invocation": "call", "subagent": null,
+        "form": "exec", "background": false, "at": "2026-11-10T00:00:00.000Z",
+        "checkout": "/repo", "match": "unlinked", "child": null,
+        "evidence": null, "candidates": []
+    });
+    let mut link: Link = serde_json::from_value(original.clone()).unwrap();
+    assert_eq!(link.launch_dir, None);
+    assert_eq!(serde_json::to_value(&link).unwrap(), original);
+    link.launch_dir = Some("/target".into());
+    let mut with_folder = original;
+    with_folder["launch_dir"] = json!("/target");
+    assert_eq!(serde_json::to_value(&link).unwrap(), with_folder);
+    assert_eq!(serde_json::from_value::<Link>(with_folder).unwrap(), link);
+}
