@@ -38,6 +38,8 @@ enum Command {
     Links(CommonArgs),
     /// Home screen data: repo groups, rows, plan (one refresh pass).
     Overview(CommonArgs),
+    /// Working, waiting and stale sessions with a hand-off feed.
+    Live(CommonArgs),
     /// Resume a finished Claude session or open it in the app (FR18).
     Open(OpenArgs),
     /// One PLAN.md step across both harnesses.
@@ -582,6 +584,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Sessions(common)
         | Command::Links(common)
+        | Command::Live(common)
         | Command::Overview(common)
         | Command::Steps { common, .. } => common,
     };
@@ -628,6 +631,35 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 json(&mut stdout, &output.report)?;
             } else {
                 links_text(&mut stdout, &output.report)?;
+            }
+        }
+        Command::Live(_) => {
+            let report = multi_link_core::Scanner::default().live(&root, &options)?;
+            if common.json {
+                json(&mut stdout, &report)?;
+            } else {
+                for group in &report.groups {
+                    for card in std::iter::once(&group.head).chain(&group.children) {
+                        writeln!(
+                            stdout,
+                            "{} {} {} {}",
+                            label(card.harness),
+                            card.id,
+                            label(card.state),
+                            card.repo
+                        )?;
+                    }
+                }
+                for row in &report.feed {
+                    writeln!(
+                        stdout,
+                        "{} {} {} {}",
+                        row.at,
+                        row.repo,
+                        row.invocation,
+                        label(row.r#match)
+                    )?;
+                }
             }
         }
         Command::Overview(_) => {

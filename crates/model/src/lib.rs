@@ -594,3 +594,101 @@ pub enum Edge {
         at: Timestamp,
     },
 }
+
+/// Live grid data (L0–L5), independent of terminal layout.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveReport {
+    pub now: Timestamp,
+    pub window_from: Option<Timestamp>,
+    pub counts: LiveCounts,
+    pub groups: Vec<LiveGroup>,
+    pub idle: LiveIdle,
+    pub last_handoff: Option<Timestamp>,
+    pub feed: Vec<FeedRow>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveCounts {
+    pub waiting: usize,
+    pub busy: usize,
+    pub stale: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveIdle {
+    pub count: usize,
+    pub repos: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveGroup {
+    pub head: Card,
+    pub children: Vec<Card>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Card {
+    pub id: String,
+    pub harness: Harness,
+    pub state: State,
+    pub repo: String,
+    pub checkout: String,
+    pub started_at: Timestamp,
+    pub activity: Vec<Activity>,
+    pub last_asked: Option<String>,
+    pub step: Option<String>,
+    pub since: Option<Timestamp>,
+    pub counts: Counts,
+    pub notable: Vec<LiveNotable>,
+    pub link: Option<CardLink>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveNotable {
+    pub at: Timestamp,
+    pub label: String,
+    pub ok: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CardLink {
+    WaitingOn {
+        child: String,
+        at: Timestamp,
+    },
+    Handoff {
+        at: Timestamp,
+        #[serde(rename = "match")]
+        r#match: Match,
+        child: Option<String>,
+        candidates: usize,
+        outcome: Option<LiveOutcome>,
+        outcome_at: Option<Timestamp>,
+    },
+    From {
+        parent: String,
+        #[serde(rename = "match")]
+        r#match: Match,
+        at: Timestamp,
+    },
+    None,
+}
+
+string_enum!(LiveOutcome { Running, Done });
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeedRow {
+    pub at: Timestamp,
+    pub parent: String,
+    pub invocation: String,
+    pub form: InvocationForm,
+    pub step: Option<String>,
+    #[serde(rename = "match")]
+    pub r#match: Match,
+    pub child: Option<String>,
+    pub repo: String,
+    pub candidates: usize,
+    pub outcome: Option<LiveOutcome>,
+    pub outcome_at: Option<Timestamp>,
+}

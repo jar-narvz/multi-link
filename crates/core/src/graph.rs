@@ -347,10 +347,28 @@ const NOTABLE_MAX: usize = 3;
 /// A label seen twice keeps one entry at its latest position with the latest
 /// `ok`; then the last 3 are kept.
 fn tally(held: &[(Timestamp, &Call)], labels: &HashMap<&str, String>) -> (Counts, Vec<Notable>) {
+    let (counts, notable) = summarize(held, labels);
+    (
+        counts,
+        notable
+            .into_iter()
+            .map(|n| Notable {
+                label: n.label,
+                ok: n.ok,
+            })
+            .collect(),
+    )
+}
+
+/// G6 summary shared by graphs and live cards. Latest occurrence supplies time and result.
+pub fn summarize(
+    held: &[(Timestamp, &Call)],
+    labels: &HashMap<&str, String>,
+) -> (Counts, Vec<multi_link_model::LiveNotable>) {
     let mut held = held.to_vec();
     held.sort_by_key(|(at, _)| *at);
     let mut counts = Counts::default();
-    let mut notable: Vec<Notable> = Vec::new();
+    let mut notable: Vec<multi_link_model::LiveNotable> = Vec::new();
     for (_, call) in held {
         let count = match call.kind {
             CallKind::Read => &mut counts.reads,
@@ -359,7 +377,8 @@ fn tally(held: &[(Timestamp, &Call)], labels: &HashMap<&str, String>) -> (Counts
             CallKind::Handoff => {
                 if let Some(label) = labels.get(call.id.as_str()) {
                     notable.retain(|n| &n.label != label);
-                    notable.push(Notable {
+                    notable.push(multi_link_model::LiveNotable {
+                        at: call.at,
                         label: label.clone(),
                         ok: None,
                     });
@@ -370,7 +389,11 @@ fn tally(held: &[(Timestamp, &Call)], labels: &HashMap<&str, String>) -> (Counts
         *count += 1;
         if let Some(label) = call.label.clone() {
             notable.retain(|n| n.label != label);
-            notable.push(Notable { label, ok: call.ok });
+            notable.push(multi_link_model::LiveNotable {
+                at: call.at,
+                label,
+                ok: call.ok,
+            });
         }
     }
     let excess = notable.len().saturating_sub(NOTABLE_MAX);

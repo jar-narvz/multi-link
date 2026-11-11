@@ -1,16 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 14.0 is committed (2026-11-10, Claude step): Phase 14 rules, fixture, key and goldens. Step 14.1 (Codex:
-`core::live` and `multi-link live`) is next.** What 14.1 needs:
-- Rules: `docs/design.md` → "Phase 14 decisions" (L0–L10 plus "Pinned while writing the keys") and
-  `docs/output-schema.md` → `live` (LiveReport: `now`, `window_from`, `counts`, `groups[{head, children}]`, `idle{count,
-  repos}`, `last_handoff`, `feed`; Card and CardLink `waiting_on|handoff|from|none`; FeedRow outcome `running|done|null`).
-- Key: `fixtures/expected/phase14/check.sh` runs `cargo run -q -p multi-link -- live --root fixtures/sessions-phase14
-  --now 2026-11-10T22:20:00Z --json` (default 2h window) against `live.json`; it fails today only with
-  `unrecognized subcommand 'live'`. 21 listed sessions, 13 links, 13 cards in 6 groups, 7 idle.
-- Not reachable through the key (cover with 14.1 unit tests): the no-rollout outcome (`141a` → `142c` at 21:10), the
-  feed's 21:32 tie order, a Codex `from` link whose parent is not a card.
+**Step 14.1 is committed (2026-11-10, Codex loop): `core::live`, the `LiveReport` model and `multi-link live`.
+Step 14.2 (Codex: pure TUI render of board 14) is next.** What 14.2 needs:
+- Input: `multi_link_model::LiveReport` (groups in L2 order, head then children = flattened order; Card `since`,
+  `counts`, `notable[{at,label,ok}]`, `link` as `waiting_on|handoff|from|none|null`; FeedRow `outcome`). Build it in
+  tests with `multi_link_core::live::build(now, window_from, &sessions, &links, &calls, &codex)` (pure) or
+  `Scanner::default().live(root, &options)` on `fixtures/sessions-phase14` at `--now 2026-11-10T22:20:00Z`.
+- A Claude `handoff` link can carry `outcome: running` in the report; the card prints `codex <id8>` for it (design pin).
+- Place (`main` / `<name> worktree`) is not in the report: 14.2 derives it from Card `checkout` vs `repo` as the repo
+  view does. The `selected` line's `active about N min in K stretches` comes from Card `activity`.
+- `codex_steps` / `started_steps` now live in `multi_link_core::live` (the CLI worker imports them).
+- The key's unreachable cases are covered by core unit tests: no-rollout outcome, the 21:32 feed tie, a `from` parent
+  that is not a card.
 - Goldens for 14.2: `fixtures/expected/tui/live-phase14{,-100,-short,-tiny,-children,-stale}` with their selection and
   first row listed in design → Golden inputs. Not in any golden (14.2 unit tests): unselected waiting card, Claude
   link lines `N possible runs` / `no run found` / `codex <id8>`, untagged `▸ codex exec`, the wide-character prompt
@@ -750,6 +752,228 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 14.1: `core::live` and `multi-link live` — Codex
+- Fix round 1 (2026-11-10, Codex): windowed extra Codex turn reads (all links for `--since all`),
+  precomputed head activity lookup without `unwrap`, added boundary/all-time test (red: `0 passed; 1 failed`;
+  green: `1 passed; 0 failed`). `cargo test --workspace` → exit 0, 642 passed / 0 failed / 1 ignored
+  (actual result-line totals in `/tmp/multi-link-14.1-fix1-tests.log`);
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, ``Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.74s``;
+  `cargo fmt --all --check` → exit 0, no output; `fixtures/expected/phase14/check.sh` → exit 0, `ok   live.json`.
+  Phase 9 `check.sh 6` → 47 `ok` lines; Phase 12 → `ok   links.json`, `ok   overview.json`, `ok   graph-1.1.json`;
+  Phase 13 → `ok   links.json`; all exit 0; all 13 Phase 8 graphs equal committed keys.
+  Changed this round: `crates/core/src/live.rs`, `PROGRESS.md`; no fixture changes, staging or commits.
+- Did: implemented L0–L5 LiveReport/Card/CardLink/FeedRow types, a pure live builder and Scanner G5 reader, and
+  `live` JSON/text CLI output (overview flags, default 2h). Cards, idle counts, groups, latest incoming links,
+  latest tagged steps, feed, outcomes and notable timestamps follow the schema and pins. Extracted shared G6
+  summary with latest label time/result; graph strips the timestamp so its JSON is unchanged. Moved both step maps
+  and their two unit tests to core; the CLI worker integration tests still exercise the imported functions.
+  Mode: Codex loop. Quota check (Claude, before the hand-off): `CODEX: OK` (33% / 44%).
+- Changed: `crates/model/src/lib.rs`, `crates/model/tests/live.rs`, `crates/core/src/live.rs`,
+  `crates/core/src/lib.rs`, `crates/core/src/graph.rs`, `crates/core/tests/live.rs`, `crates/cli/src/main.rs`,
+  `crates/cli/src/tui.rs`, `crates/cli/tests/live.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md for every cargo command. Initial red test,
+  `cargo test -p multi-link --test live` → actual decisive output (exit 101):
+  ```text
+  error: unrecognized subcommand 'live'
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+  ```
+  Final `cargo test --workspace` → exit 0; 641 passed, 0 failed, 1 ignored (summed from these actual result lines,
+  pasted in command order; full output retained in scratch `/tmp/multi-link-14.1-tests.log`):
+  ```text
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  The core `tests/live.rs` target ran 12 tests: all states/import exclusion/old stale outside the window;
+  parent precedence and same-time report-position ties; three children, cross-repo parents, equal-time children
+  ordered by full id, lone heads with no `started_by` fallback; waiting/busy/stale head time/id ordering including
+  busy-without-burst and stale-without-state_since fallbacks; latest notable timestamp/result and hand-off labels;
+  every CardLink variant including non-card-parent `from`; resumed running-before-done, earliest completed turn,
+  and exact/no-rollout null outcome; inclusive feed boundaries, tie order, empty report and missing-parent repo;
+  both moved step-map tests. The CLI key test and two model shape/round-trip tests also ran in the suite.
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual final output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.87s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output.
+- Verify: `bash fixtures/expected/phase14/check.sh` → exit 0; actual output:
+  ```text
+ok   live.json
+  ```
+- Verify: `bash fixtures/expected/phase9/check.sh 6` → exit 0; actual output:
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+- Verify: `bash fixtures/expected/phase12/check.sh` → exit 0; actual output:
+  ```text
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+  ```
+- Verify: `bash fixtures/expected/phase13/check.sh` → exit 0; actual output:
+  ```text
+ok   links.json
+  ```
+- Verify: for each of the 13 Phase 8 keys, ran `target/debug/multi-link graph --root fixtures/sessions-phase8
+  --now 2026-11-06T18:00:00Z --repo <key.repo> --step <key.step.id> --json` and compared parsed JSON with
+  **`git show HEAD:fixtures/expected/phase8/graph-<id>.json`** (the committed key, not a generated baseline).
+  Every command exited 0; actual comparison output:
+  ```text
+ok   fixtures/expected/phase8/graph-1.1.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.10.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.11.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.12.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.13.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.2.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.3.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.4.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.5.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.6.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.7.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.8.json (committed HEAD key)
+ok   fixtures/expected/phase8/graph-1.9.json (committed HEAD key)
+13/13 phase 8 graphs unchanged
+  ```
+- Verify: ran the full `git diff 67cdabd -- fixtures/expected` (saved in scratch
+  `/tmp/multi-link-14.1-expected.diff`) and byte-compared it with `git diff 67cdabd HEAD -- fixtures/expected`:
+  identical (14.0's committed keys only). `git diff --stat 67cdabd -- fixtures/expected` actual output:
+  ```text
+ fixtures/expected/phase14/check.sh                 |  17 +
+ fixtures/expected/phase14/live.json                | 690 +++++++++++++++
+ fixtures/expected/tui/live-phase14-100.styles.txt  | 660 +++++++++++++++
+ fixtures/expected/tui/live-phase14-100.txt         |  40 +
+ .../expected/tui/live-phase14-children.styles.txt  | 930 +++++++++++++++++++++
+ fixtures/expected/tui/live-phase14-children.txt    |  51 ++
+ .../expected/tui/live-phase14-short.styles.txt     | 376 +++++++++
+ fixtures/expected/tui/live-phase14-short.txt       |  30 +
+ .../expected/tui/live-phase14-stale.styles.txt     | 600 +++++++++++++
+ fixtures/expected/tui/live-phase14-stale.txt       |  40 +
+ fixtures/expected/tui/live-phase14-tiny.styles.txt | 244 ++++++
+ fixtures/expected/tui/live-phase14-tiny.txt        |  20 +
+ fixtures/expected/tui/live-phase14.styles.txt      | 799 ++++++++++++++++++
+ fixtures/expected/tui/live-phase14.txt             |  40 +
+ 14 files changed, 4537 insertions(+)
+  ```
+  `git diff --exit-code HEAD -- fixtures/` → exit 0, no output;
+  `git diff --cached --exit-code` → exit 0, no output;
+  `git diff --check` → exit 0, no output.
+- Review: Claude, one round, 2 findings, both fixed in fix round 1: (1) `Scanner::live` read turns for children of
+  every link, not only windowed ones (schema Inputs, L9 cost); (2) the group sort did an `unwrap`ed linear lookup per
+  comparison. Scope: only the step's files changed; no key edited. Claude re-ran the whole Verify on the final tree:
+  `cargo test --workspace` 642 passed / 0 failed / 1 ignored; clippy `-D warnings` and `fmt --check` clean;
+  `phase14/check.sh` `ok   live.json`; `phase9/check.sh 6` 47 `ok` + 1 note; `phase12` 3 `ok`, `phase13` 1 `ok`;
+  13/13 Phase 8 `graph` outputs equal the committed keys; `git diff 67cdabd -- fixtures/expected` = 14 files, 4537
+  insertions, 0 deletions (14.0's new keys only). Matches what Codex pasted.
+- Gotchas: initial compilation caught timestamp Result/error conversion and import placement; clippy caught
+  nested-if style and a test Vec that should be an array; corrected before the final full Verify above. No fixtures
+  or PLAN edits. Existing untracked `.claude/` left alone. L3 phrases are represented by structured data here;
+  their drawing is 14.2. The refresh call cache and TUI live wiring belong to 14.3, per PLAN.md.
 
 ### 2026-11-10 — Step 14.0: Phase 14 rules, fixture, key and goldens — Claude
 - Did: wrote L0–L10 into `docs/design.md` as "Phase 14 decisions" with the pins the keys needed (report fields, live

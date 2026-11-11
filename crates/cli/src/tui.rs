@@ -1,4 +1,5 @@
 //! Terminal runtime. Only the worker touches disk; only this thread reads terminal input.
+use multi_link_core::live::{codex_steps, started_steps};
 use std::{
     collections::{HashMap, HashSet},
     io::{self, Write},
@@ -164,79 +165,6 @@ fn refresh(
         codex_steps,
         started_steps,
     }))
-}
-
-/// Latest tagged incoming hand-off per Codex session (R6), using all-time sessions to
-/// require a parent in the child's repo. Max `at` wins, ties by later link position.
-fn codex_steps(sessions: &[Session], links: &[Link]) -> HashMap<String, String> {
-    let by_id: HashMap<&str, &Session> = sessions.iter().map(|s| (s.id.as_str(), s)).collect();
-    let mut latest: HashMap<&str, (Timestamp, usize, &str)> = HashMap::new();
-    for (i, link) in links.iter().enumerate() {
-        let (Some(child), Some(step)) = (link.child.as_deref(), link.step.as_deref()) else {
-            continue;
-        };
-        let (Some(child_session), Some(parent)) =
-            (by_id.get(child), by_id.get(link.parent.as_str()))
-        else {
-            continue;
-        };
-        if child_session.harness != Harness::Codex || parent.repo != child_session.repo {
-            continue;
-        }
-        let entry = latest.entry(child).or_insert((link.at, i, step));
-        if (link.at, i) > (entry.0, entry.1) {
-            *entry = (link.at, i, step);
-        }
-    }
-    latest
-        .into_iter()
-        .map(|(id, (_, _, step))| (id.to_string(), step.to_string()))
-        .collect()
-}
-
-/// Steps a Claude session's direct started children reached (G9 amendment), keyed by the
-/// parent's id. A child is a listed Claude session whose `started_by` is a listed Claude session
-/// of the same repo (8.4c S3: cross-repo children are not children). Each child gives its own
-/// latest tagged hand-off (max `at`, ties by later position) as (child repo, step); children in
-/// `started_at` then id order; one entry per (repo, step), the first kept; untagged children
-/// skipped. Direct children only.
-fn started_steps(sessions: &[Session], links: &[Link]) -> HashMap<String, Vec<(String, String)>> {
-    let claude: HashMap<&str, &Session> = sessions
-        .iter()
-        .filter(|s| s.harness == Harness::Claude)
-        .map(|s| (s.id.as_str(), s))
-        .collect();
-    let mut latest: HashMap<&str, (Timestamp, usize, &str)> = HashMap::new();
-    for (i, link) in links.iter().enumerate() {
-        if let Some(step) = link.step.as_deref() {
-            let entry = latest
-                .entry(link.parent.as_str())
-                .or_insert((link.at, i, step));
-            if (link.at, i) > (entry.0, entry.1) {
-                *entry = (link.at, i, step);
-            }
-        }
-    }
-    let mut children: Vec<(&str, &Session)> = claude
-        .values()
-        .filter_map(|child| {
-            let parent = claude.get(child.started_by.as_deref()?)?;
-            (parent.repo == child.repo).then_some((parent.id.as_str(), *child))
-        })
-        .collect();
-    children.sort_by(|a, b| (a.1.started_at, &a.1.id).cmp(&(b.1.started_at, &b.1.id)));
-    let mut map: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    for (parent, child) in children {
-        let Some((_, _, step)) = latest.get(child.id.as_str()) else {
-            continue;
-        };
-        let entry = (child.repo.clone(), step.to_string());
-        let entries = map.entry(parent.to_string()).or_default();
-        if !entries.contains(&entry) {
-            entries.push(entry);
-        }
-    }
-    map
 }
 
 /// Steps `[` `]` walk in a repo (G9): ids tagged on hand-offs whose parent is a listed Claude
@@ -635,79 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn started_steps_are_direct_same_repo_children_by_start() {
-        use multi_link_model::Harness;
-        let root = fixtures().join("sessions-phase8");
-        let probe = multi_link_core::FixtureProcessProbe;
-        let (sessions, links) = Scanner::default()
-            .refresh(&root, &fixture_options(&probe, "2026-11-06T18:00:00Z"))
-            .unwrap();
-        let template = sessions
-            .report
-            .sessions
-            .iter()
-            .find(|s| s.harness == Harness::Claude)
-            .unwrap()
-            .clone();
-        let session = |id: &str, repo: &str, by: Option<&str>, started: &str| {
-            let mut s = template.clone();
-            s.id = id.into();
-            s.repo = repo.into();
-            s.started_by = by.map(Into::into);
-            s.started_at = started.parse().unwrap();
-            s.last_activity = s.started_at;
-            s
-        };
-        let mut codex = session("x1", "/r", Some("k"), "2026-11-06T09:01:00Z");
-        codex.harness = Harness::Codex;
-        let sessions = vec![
-            session("k", "/r", None, "2026-11-06T09:00:00Z"),
-            // Started after b: listed second. Quiet for days: no window applies here.
-            session("a", "/r", Some("k"), "2026-11-06T09:10:00Z"),
-            session("b", "/r", Some("k"), "2026-11-06T09:05:00Z"),
-            // Grandchild of k (started by a).
-            session("a2", "/r", Some("a"), "2026-11-06T09:20:00Z"),
-            // Another repo's child is not a child (8.4c S3).
-            session("o", "/other", Some("k"), "2026-11-06T09:02:00Z"),
-            // No tagged hand-off: skipped.
-            session("d", "/r", Some("k"), "2026-11-06T09:03:00Z"),
-            // Same step as b: deduped, b (earlier start) kept.
-            session("e", "/r", Some("k"), "2026-11-06T09:30:00Z"),
-            // Same start as e, later id.
-            session("f", "/r", Some("k"), "2026-11-06T09:30:00Z"),
-            // Parent not listed.
-            session("g", "/r", Some("gone"), "2026-11-06T09:00:00Z"),
-            codex,
-        ];
-        let template = links.report.links[0].clone();
-        let link = |parent: &str, step: Option<&str>, at: &str| {
-            let mut l = template.clone();
-            l.parent = parent.into();
-            l.step = step.map(Into::into);
-            l.at = at.parse().unwrap();
-            l
-        };
-        let links = vec![
-            link("a", Some("2.0"), "2026-11-06T09:15:00Z"),
-            link("a", Some("2.1"), "2026-11-06T09:16:00Z"),
-            link("a", None, "2026-11-06T09:17:00Z"),
-            link("b", Some("3.1"), "2026-11-06T09:06:00Z"),
-            link("a2", Some("9.9"), "2026-11-06T09:21:00Z"),
-            link("o", Some("7.7"), "2026-11-06T09:03:00Z"),
-            link("d", None, "2026-11-06T09:04:00Z"),
-            link("e", Some("3.1"), "2026-11-06T09:31:00Z"),
-            link("f", Some("4.0"), "2026-11-06T09:31:00Z"),
-            link("g", Some("5.0"), "2026-11-06T09:01:00Z"),
-            link("k", Some("1.0"), "2026-11-06T09:01:00Z"),
-        ];
-        let entry = |step: &str| ("/r".to_string(), step.to_string());
-        let map = started_steps(&sessions, &links);
-        assert_eq!(map["k"], [entry("3.1"), entry("2.1"), entry("4.0")]);
-        assert_eq!(map["a"], [entry("9.9")]);
-        assert_eq!(map.len(), 2, "{map:?}");
-    }
-
-    #[test]
     fn started_steps_include_children_outside_the_tui_window() {
         // sessions-started at 12:00 with the TUI's 2 h window: K (84c00001) and its child A
         // (84c00002, tagged 2.1, quiet since 09:30) are not in the overview, but K's entry is
@@ -805,52 +660,6 @@ mod tests {
         assert_eq!(
             status(&mut scanner, "2026-11-06T18:06:00Z"),
             Some(PartStatus::Stale)
-        );
-    }
-
-    #[test]
-    fn codex_steps_use_latest_tagged_same_repo_incoming_by_time_and_position() {
-        let root = fixtures().join("sessions-phase9");
-        let probe = multi_link_core::FixtureProcessProbe;
-        let (sessions, links) = Scanner::default()
-            .refresh(&root, &fixture_options(&probe, "2026-11-09T12:00:00Z"))
-            .unwrap();
-        let template = &sessions.report.sessions[0];
-        let session = |id: &str, repo: &str, harness: Harness| {
-            let mut s = template.clone();
-            s.id = id.into();
-            s.repo = repo.into();
-            s.harness = harness;
-            s
-        };
-        let sessions = vec![
-            session("p", "/r", Harness::Claude),
-            session("other", "/other", Harness::Claude),
-            session("x", "/r", Harness::Codex),
-            session("untagged", "/r", Harness::Codex),
-        ];
-        let template = &links.report.links[0];
-        let link = |parent: &str, child: &str, step: Option<&str>, at: &str| {
-            let mut l = template.clone();
-            l.parent = parent.into();
-            l.child = Some(child.into());
-            l.step = step.map(Into::into);
-            l.at = at.parse().unwrap();
-            l
-        };
-        let links = vec![
-            link("p", "x", Some("2.0"), "2026-11-09T09:00:00Z"),
-            link("p", "x", Some("2.1"), "2026-11-09T09:00:00Z"),
-            link("p", "x", Some("1.0"), "2026-11-09T08:00:00Z"),
-            link("other", "x", Some("7.1"), "2026-11-09T11:00:00Z"),
-            link("missing", "x", Some("8.1"), "2026-11-09T11:00:00Z"),
-            link("p", "x", None, "2026-11-09T12:00:00Z"),
-            link("p", "untagged", None, "2026-11-09T12:00:00Z"),
-            link("p", "p", Some("9.9"), "2026-11-09T12:00:00Z"),
-        ];
-        assert_eq!(
-            codex_steps(&sessions, &links),
-            HashMap::from([("x".into(), "2.1".into())])
         );
     }
 

@@ -2,6 +2,7 @@ pub mod graph;
 mod hook;
 mod link;
 pub mod links;
+pub mod live;
 pub mod open;
 pub mod overview;
 pub mod probe;
