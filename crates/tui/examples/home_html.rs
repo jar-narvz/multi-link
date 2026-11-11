@@ -22,13 +22,18 @@
 //! `--since` (`Ns`, `Nm`, `Nh` or `Nd`; default `2h`) so either view gets the window the TUI would
 //! give it.
 //! `--live 1,3` marks part indices live for screenshots.
+//! `--live-grid` draws a LiveReport, with `--selected N` and `--first-row N`:
+//! ```text
+//! cargo run -p multi-link-tui --example home_html -- --live-grid \
+//!     fixtures/expected/phase14/live.json /tmp/live.html --offset -8 --size 120x40
+//! ```
 //! `--graph` draws a GraphReport instead; `--selected` is its zero-based part index (default 0).
 use std::{env, fmt::Write, fs, time::Duration};
 
-use multi_link_model::{GraphReport, LinksReport, OverviewReport};
+use multi_link_model::{GraphReport, LinksReport, LiveReport, OverviewReport};
 use multi_link_tui::{
-    DEFAULT_WINDOW, GraphOptions, HomeOptions, RepoOptions, TimeWindow, render_graph,
-    render_home_with_options, render_repo, view,
+    DEFAULT_WINDOW, GraphOptions, HomeOptions, LiveOptions, RepoOptions, TimeWindow, render_graph,
+    render_home_with_options, render_live, render_repo, view,
 };
 use ratatui::{
     buffer::Buffer,
@@ -157,13 +162,15 @@ fn parse_since(value: &str) -> Result<Duration, String> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
     let (input, links, out) = match args.get(..3) {
-        Some([mode, report, out]) if mode == "--graph" => (report, None, out),
+        Some([mode, report, out]) if mode == "--graph" || mode == "--live-grid" => (report, None, out),
         Some([a, b, c]) => (a, Some(b), c),
         _ => return Err(
             "usage: home_html OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local] \
              [--repo NAME] [--since 30m|2h|1d]\n\
              or: home_html --graph REPORT.json OUT.html [--size WxH] \
-             [--offset H[:MM]|local] [--selected N]"
+             [--offset H[:MM]|local] [--selected N]\n\
+             or: home_html --live-grid REPORT.json OUT.html [--size WxH] \
+             [--offset H[:MM]|local] [--selected N] [--first-row N]"
                 .into(),
         ),
     };
@@ -171,6 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut repo_arg: Option<String> = None;
     let mut since = DEFAULT_WINDOW;
     let mut selected = 0;
+    let mut first_row = 0;
     let mut live = Vec::new();
     let mut rest = args[3..].iter();
     while let Some(flag) = rest.next() {
@@ -183,12 +191,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--offset" => offset_arg = value.clone(),
             "--repo" if links.is_some() => repo_arg = Some(value.clone()),
             "--since" if links.is_some() => since = parse_since(value)?,
-            "--live" if links.is_none() => {
+            "--live" if args[0] == "--graph" => {
                 live = value
                     .split(',')
                     .map(str::parse::<usize>)
                     .collect::<Result<_, _>>()?;
             }
+            "--first-row" if args[0] == "--live-grid" => first_row = value.parse()?,
             "--selected" if links.is_none() => {
                 selected = value
                     .parse::<usize>()
@@ -199,6 +208,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
+    if args[0] == "--live-grid" {
+        let report: LiveReport = serde_json::from_str(&fs::read_to_string(input)?)?;
+        let count: usize = report.groups.iter().map(|g| 1 + g.children.len()).sum();
+        if count > 0 && selected >= count {
+            return Err(
+                format!("--selected: index {selected} is out of range for {count} cards").into(),
+            );
+        }
+        let offset = if offset_arg == "local" {
+            view::local_offset(report.now)
+        } else {
+            parse_offset(&offset_arg)?
+        };
+        let options = LiveOptions {
+            selected,
+            first_row,
+            offset,
+            theme: multi_link_tui::theme::Theme::from_env(Some("truecolor"), None),
+        };
+        render_live(&report, &options, area, &mut buf);
+        fs::write(out, html(&buf, "multi-link live")?)?;
+        return Ok(());
+    }
     let Some(links) = links else {
         let report: GraphReport = serde_json::from_str(&fs::read_to_string(input)?)?;
         if !report.parts.is_empty() && selected >= report.parts.len() {

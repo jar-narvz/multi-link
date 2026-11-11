@@ -1,24 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 14.1 is committed (2026-11-10, Codex loop): `core::live`, the `LiveReport` model and `multi-link live`.
-Step 14.2 (Codex: pure TUI render of board 14) is next.** What 14.2 needs:
-- Input: `multi_link_model::LiveReport` (groups in L2 order, head then children = flattened order; Card `since`,
-  `counts`, `notable[{at,label,ok}]`, `link` as `waiting_on|handoff|from|none|null`; FeedRow `outcome`). Build it in
-  tests with `multi_link_core::live::build(now, window_from, &sessions, &links, &calls, &codex)` (pure) or
-  `Scanner::default().live(root, &options)` on `fixtures/sessions-phase14` at `--now 2026-11-10T22:20:00Z`.
-- A Claude `handoff` link can carry `outcome: running` in the report; the card prints `codex <id8>` for it (design pin).
-- Place (`main` / `<name> worktree`) is not in the report: 14.2 derives it from Card `checkout` vs `repo` as the repo
-  view does. The `selected` line's `active about N min in K stretches` comes from Card `activity`.
-- `codex_steps` / `started_steps` now live in `multi_link_core::live` (the CLI worker imports them).
-- The key's unreachable cases are covered by core unit tests: no-rollout outcome, the 21:32 feed tie, a `from` parent
-  that is not a card.
-- Goldens for 14.2: `fixtures/expected/tui/live-phase14{,-100,-short,-tiny,-children,-stale}` with their selection and
-  first row listed in design → Golden inputs. Not in any golden (14.2 unit tests): unselected waiting card, Claude
-  link lines `N possible runs` / `no run found` / `codex <id8>`, untagged `▸ codex exec`, the wide-character prompt
-  (ratatui resets the cell after a wide character, so no hand-drawn styles file freezes it).
-- Fixture mode has no git, so every card's place is `main`; the worktree place form is untested by goldens.
-- Home and repo footer goldens are untouched (14.3 changes them with the code).
+**Step 14.2 is committed (2026-11-10, Codex loop): pure live grid render. Step 14.3 (Codex: wiring — `l`,
+`--live`, keys, refresh, call cache) is next.** What 14.3 needs:
+- `multi_link_tui::{render_live, LiveOptions}`: `render_live(&LiveReport, &LiveOptions{selected, first_row, theme,
+  offset}, area, buf)`. `selected` is the flattened card index (group order, head then children). `first_row` is the
+  first wide card row (a head and its first child share a row; each further child is its own row) at width ≥ 120, or
+  the first flattened card below 120. The renderer does NOT scroll to the selection: 14.3 must pick `first_row` so the
+  selected card is visible (L7), and recompute it after a resize (the row model changes at 120 columns).
+- Rows that fit: feed 4 rows at height ≥ 40, 2 at ≥ 32, none below; cards from row `4 + feed` (3 with no feed) to
+  `height - 12`, 11 rows per card row; when none fits, the selected card is drawn clipped (see `live.rs`).
+- `home_html --live-grid REPORT.json OUT.html [--selected N] [--first-row N]` renders the fixture for README images
+  (`--live` stays the graph's live-part flag).
+- Home and repo footer goldens are still untouched (14.3 adds `l live` with the code).
+- The `✓` label rule is duplicated in `live.rs` and `graph.rs` (not shared); a card without `last_asked` prints
+  `no prompt`.
 
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
@@ -752,6 +748,201 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 14.2: TUI render to board 14 — Codex
+- Did: Implemented the pure live grid renderer: header, packed feed, wide paired rows and extra children, narrow
+  indented cards, clipped selection, remaining-card count, idle line, selected/asked details, legend and footer.
+  Reuses existing theme roles, applies the fixed offset, cuts styled text by grapheme/display width and preserves
+  glyphs in NO_COLOR. Added the fixture-backed HTML live variant (`--live-grid` avoids colliding with graph `--live`).
+  All six goldens are compared as text and styles without an update path. Added exact tests for unselected waiting,
+  Claude link outcomes, untagged notable hand-offs, the fixture's wide prompt and combining marks, worktree place,
+  empty reports/feed, clipped children, small/offset areas, NO_COLOR bounds and replacement of old cell modifiers.
+- Changed: `crates/tui/src/live.rs`, `crates/tui/src/lib.rs`, `crates/tui/tests/live.rs`,
+  `crates/tui/examples/home_html.rs`, `PROGRESS.md`.
+- Verify: Mode `Codex loop`; quota check `CODEX: OK 48%/47%` (run by Claude before the hand-off).
+  Rust PATH set per AGENTS.md. `cargo test --workspace` → exit 0; actual target/result lines pasted below
+  (individual passing test names omitted except the new renderer suite). Computed from this run: 62 targets,
+  654 passed, 0 failed, 1 ignored (`real_counts`, existing real-data test).
+  ```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-7cedda362c6e1306)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+     Running tests/cli.rs (target/debug/deps/cli-e0787a43f85482d2)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.73s
+     Running tests/graph.rs (target/debug/deps/graph-d837f77b20803abc)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+     Running tests/hook_check.rs (target/debug/deps/hook_check-2c16d8f4ae4adc11)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+     Running tests/live.rs (target/debug/deps/live-c6d920ae5b40705e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/phase12.rs (target/debug/deps/phase12-a59e2b11bb6caddf)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/phase13.rs (target/debug/deps/phase13-7e99d17abc451c6e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/phase9.rs (target/debug/deps/phase9-10b001eb96b77347)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-3007d227ffc8769a)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/app_record.rs (target/debug/deps/app_record-c6763d08001f1e6c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/calls.rs (target/debug/deps/calls-45eb22dd6795bdda)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-499f3a2e254ccd24)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+     Running tests/invocation.rs (target/debug/deps/invocation-3e16b8bc37be96e1)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running tests/last_turn.rs (target/debug/deps/last_turn-b71057714a3b5979)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/phase6.rs (target/debug/deps/phase6-e2db30bd15f79be3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase7.rs (target/debug/deps/phase7-2c8b6d1063153907)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-e78d5e99d41da51c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-586748b917de5a55)
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compressed.rs (target/debug/deps/compressed-a0fe57bc51027b49)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.71s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-ba5f82572d1c4a8d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/phase6.rs (target/debug/deps/phase6-d1fad84a09bb2e55)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-b9f5577635e977c9)
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+     Running tests/compressed.rs (target/debug/deps/compressed-23fd67b2786194f6)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/graph.rs (target/debug/deps/graph-367a1c66ea7fcc9e)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/graph_commit.rs (target/debug/deps/graph_commit-413fc54f4401db0c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/hook.rs (target/debug/deps/hook-9d2c70dbcc7efb25)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+     Running tests/links.rs (target/debug/deps/links-f8b4f67c998fff9c)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running tests/live.rs (target/debug/deps/live-e242d43fd303903b)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/overview.rs (target/debug/deps/overview-958464a7d8ad16d7)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+     Running tests/phase6.rs (target/debug/deps/phase6-a939478b5426845c)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-489df8ea92fb062c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/session_end.rs (target/debug/deps/session_end-97da6fcc150d54f9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/sessions.rs (target/debug/deps/sessions-59bcd1019b17c9c4)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/started.rs (target/debug/deps/started-d7b62c3a1b08ef27)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/transcript_exit.rs (target/debug/deps/transcript_exit-27b68d6dc1e2bf21)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-62ceaf9ce3262d6f)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-312d13ac9a0e316c)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/settings.rs (target/debug/deps/settings-22861df00bc1ebd7)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-df157fa80d5a3417)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-5289ef8606320dd4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/graph.rs (target/debug/deps/graph-bb878fdee95626eb)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/live.rs (target/debug/deps/live-9d6ecd5fdabf883c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/model.rs (target/debug/deps/model-452af6df96c138b7)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-b5ab79d96e45b0d3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-1edf5b4804af5d92)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-21d83cafd7849385)
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+     Running tests/graph.rs (target/debug/deps/graph-005a83afaca3727a)
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+     Running tests/home.rs (target/debug/deps/home-5a2605d8fc0f75cd)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/live.rs (target/debug/deps/live-5cd55c828b339aac)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/phase6_shape.rs (target/debug/deps/phase6_shape-e35530f2f0f05366)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase8_shape.rs (target/debug/deps/phase8_shape-abfb141048af4856)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/started.rs (target/debug/deps/started-da6f7bfb46539738)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/theme.rs (target/debug/deps/theme-501b876d9ddbbc6b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/timeline.rs (target/debug/deps/timeline-e7b6c91cdfec15b4)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/view.rs (target/debug/deps/view-065c7d3f4df7468d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  New renderer suite from that same workspace run:
+  ```text
+     Running tests/live.rs (target/debug/deps/live-5cd55c828b339aac)
+
+running 12 tests
+test clipped_selected_child_keeps_its_indent_and_connector ... ok
+test wide_and_combining_prompt_is_cut_at_display_width_with_ellipsis ... ok
+test fixture_wide_prompt_cuts_without_splitting_a_character ... ok
+test no_color_respects_the_render_area ... ok
+test waiting_card_without_selection_uses_waiting_background_and_light_border ... ok
+test worktree_place_and_promptless_card ... ok
+test empty_report_and_feed_have_explicit_messages ... ok
+test redraw_replaces_previous_cells_and_modifiers ... ok
+test claude_handoff_link_variants_and_untagged_notable ... ok
+test render_is_bounded_for_small_and_offset_areas ... ok
+test six_live_goldens_text_and_styles ... ok
+test no_color_keeps_all_glyphs_and_words_in_each_layout ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual completion:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.79s
+  ```
+  `cargo fmt --all -- --check`, `git diff --check`, and
+  `git diff --exit-code -- PLAN.md docs/design.md docs/output-schema.md fixtures/expected` → no output, exit 0.
+  `cargo run -q -p multi-link-tui --example home_html -- --live-grid fixtures/expected/phase14/live.json
+  /tmp/multi-link-live.html --offset -8 --size 120x40` → no output, exit 0. Parsed the HTML rows and compared
+  them with `live-phase14.txt`; actual output:
+  ```text
+HTML live variant: 40 rows match live-phase14.txt
+  ```
+- Review: Claude, diff + Step 14.2, no fix round needed. Re-ran Verify: `cargo test --workspace` 654 passed,
+  0 failed, 1 ignored (matches the paste); clippy `-D warnings` and `fmt --check` clean; `git diff 67cdabd --
+  fixtures/expected/tui` outside `live-phase14*` is empty (every existing snapshot unchanged); all six goldens
+  compared as text and styles in `six_live_goldens_text_and_styles`. Files match the step. Non-blocking notes:
+  (1) `live.rs` repeats graph.rs's `✓` label rule (cargo/pytest/npm test) instead of sharing it; (2) the renderer
+  does not scroll to the selection itself: the caller passes `first_row` (14.3 must keep the selection visible);
+  (3) a card with no `last_asked` prints `no prompt` (grey), a fallback the design does not name. Board check: the
+  fixture render (`home_html --live-grid`, 120×40, UTC-8) against board 14a (`project/B14Live.dc.html`): same
+  backgrounds (selected #262C3A, busy Claude #17130F, Codex #121A26), heavy border on the selection, harness border
+  colours, `──▸` joint at the card's 5th row, feed columns at x 75/93. Differences are all decided in PLAN.md, not
+  bugs: header counts order `◆ waiting · ● working · ○ stale` (L5; board: `● working · waiting · idle`); Codex line 1
+  is `last_asked`, not a G3 part kind like `fix round 1` (L3); no chain words (`· continue 9.6a`, critique 5); the
+  feed has no `codex back T` (critique 4); `↓ N more` when cards overflow (L7). The HTML export draws box lines with
+  small gaps (export font), not a TUI difference.
+- Gotchas: Initial empty renderer failed the golden comparison, then passed after implementation. Boundary tests
+  caught NO_COLOR modifying outside the requested area, clipped children losing their indent/connector, and redraws
+  retaining modifiers; each was observed failing before its fix. Two wide-text assertions initially budgeted one
+  extra character and were corrected to the actual display-cell budget. An initial clippy `int_plus_one` finding
+  was fixed; final checks above are clean. Goldens pin inner `┄` rules to the theme's `border` role and selected
+  title glyph/bottom-label text without BOLD; the renderer follows those cell styles. Theme unchanged. Existing
+  untracked `.claude/` left untouched. Selection retention, moving and refresh/call caching remain 14.3.
+
 
 ### 2026-11-10 — Step 14.1: `core::live` and `multi-link live` — Codex
 - Fix round 1 (2026-11-10, Codex): windowed extra Codex turn reads (all links for `--since all`),

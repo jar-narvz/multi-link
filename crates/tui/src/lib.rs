@@ -2,6 +2,9 @@
 //! and never read the disk or the clock (design T3, T4). Home presentation derives windowed
 //! lanes from core reports; the repo view orders recorded activity into swimlanes.
 
+mod live;
+pub use live::{LiveOptions, render_live};
+
 mod graph;
 mod home;
 mod timeline;
