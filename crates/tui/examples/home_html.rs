@@ -27,13 +27,18 @@
 //! cargo run -p multi-link-tui --example home_html -- --live-grid \
 //!     fixtures/expected/phase14/live.json /tmp/live.html --offset -8 --size 120x40
 //! ```
+//! `--loading` draws fixed progress at a supplied animation time (no input reports):
+//! ```text
+//! cargo run -p multi-link-tui --example home_html -- --loading 4.0 /tmp/loading.html --size 76x22
+//! ```
 //! `--graph` draws a GraphReport instead; `--selected` is its zero-based part index (default 0).
 use std::{env, fmt::Write, fs, time::Duration};
 
 use multi_link_model::{GraphReport, LinksReport, LiveReport, OverviewReport};
 use multi_link_tui::{
-    DEFAULT_WINDOW, GraphOptions, HomeOptions, LiveOptions, RepoOptions, TimeWindow, render_graph,
-    render_home_with_options, render_live, render_repo, view,
+    DEFAULT_WINDOW, Fade, GraphOptions, HomeOptions, LiveOptions, LoadPhase, LoadingOptions,
+    RepoOptions, TimeWindow, render_graph, render_home_with_options, render_live, render_loading,
+    render_repo, view,
 };
 use ratatui::{
     buffer::Buffer,
@@ -162,13 +167,14 @@ fn parse_since(value: &str) -> Result<Duration, String> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().skip(1).collect();
     let (input, links, out) = match args.get(..3) {
-        Some([mode, report, out]) if mode == "--graph" || mode == "--live-grid" => (report, None, out),
+        Some([mode, report, out]) if mode == "--graph" || mode == "--live-grid" || mode == "--loading" => (report, None, out),
         Some([a, b, c]) => (a, Some(b), c),
         _ => return Err(
             "usage: home_html OVERVIEW.json LINKS.json OUT.html [--size WxH] [--offset H[:MM]|local] \
              [--repo NAME] [--since 30m|2h|1d]\n\
              or: home_html --graph REPORT.json OUT.html [--size WxH] \
              [--offset H[:MM]|local] [--selected N]\n\
+             or: home_html --loading SECONDS OUT.html [--size WxH]\n\
              or: home_html --live-grid REPORT.json OUT.html [--size WxH] \
              [--offset H[:MM]|local] [--selected N] [--first-row N]"
                 .into(),
@@ -208,6 +214,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
+    if args[0] == "--loading" {
+        let options = LoadingOptions {
+            time: input.parse()?,
+            phase: LoadPhase::Reading,
+            files_done: 612,
+            files_total: 871,
+            fade: Fade::None,
+            theme: multi_link_tui::theme::Theme::from_env(Some("truecolor"), None),
+        };
+        render_loading(&options, area, &mut buf);
+        fs::write(out, html(&buf, "multi-link loading")?)?;
+        return Ok(());
+    }
     if args[0] == "--live-grid" {
         let report: LiveReport = serde_json::from_str(&fs::read_to_string(input)?)?;
         let count: usize = report.groups.iter().map(|g| 1 + g.children.len()).sum();

@@ -22,3 +22,6 @@ pub use app::{App, Effect, Event, Refresh};
 
 /// Explicit Phase 5 palette and pure environment selection.
 pub mod theme;
+
+mod loading;
+pub use loading::{Fade, LoadPhase, LoadingOptions, render_loading};

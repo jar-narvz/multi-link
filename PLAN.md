@@ -2602,6 +2602,18 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
 
 ## Review log
 
+### 2026-11-11 — Step 15.2 input type (Claude, Codex blocker, Codex loop)
+- Codex stopped before coding: rendering from `multi_link_core::LoadSnapshot` needs `multi-link-core` in
+  `crates/tui/Cargo.toml`, outside 15.2's files. **Rejected the manifest change**: `multi-link-tui` depends only on
+  `multi-link-model` and ratatui, and the CLI already translates core results into tui-owned types (`app::Refresh`).
+  Pulling core (scanner, readers) into the presentation crate for three numbers would break that layering. Instead
+  `loading.rs` defines its own plain input (`LoadPhase` enum `Listing | Reading | Linking | Done`, `files_done`,
+  `files_total`); in 15.3 the CLI maps `LoadSnapshot` (phase string) to it each frame. F5's "pure function of (time,
+  progress, size, theme)" is unchanged; 15.2's Files are unchanged.
+- **Listing counter (review).** F5 names no counter for phase `listing` (totals hidden as 0 / 0 by 15.1). Codex drew
+  `listing transcripts…` with an empty bar. **Accepted**: it says what is happening, where `reading transcripts  0 / 0`
+  would claim a total of zero before one exists. No golden covers it; a test pins the text.
+
 ### 2026-11-11 — Step 15.1 F1 amendment (Claude, during review, Codex loop)
 - **F1 now also prefetches Claude desktop-app records** (`multi_link_claude::app_record_paths` /
   `read_app_record`, the `app_records` cache). Measured on real `~` after the first 15.1 implementation: 166 records,

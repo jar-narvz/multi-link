@@ -1,17 +1,27 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 15.2 is committed (2026-11-11, Codex loop): pure loading screen render. Step 15.3 (Codex: wiring — show,
+skip, fade, progress) is next.** `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}`;
+`render_loading(&LoadingOptions { time, phase, files_done, files_total, fade, theme }, area, buf)` replaces exactly
+`area` and reads no clock. The tui crate does not depend on core (PLAN.md Review log, "Step 15.2 input type"): in 15.3
+the CLI maps `LoadSnapshot.phase` (`"listing" | "reading" | "linking" | "done"`) to `LoadPhase` and passes the counts
+each frame. `time` is seconds since loading began (no board `+1`). The caller picks `Fade::{None, School, Text}` from
+the 250 ms deadline (first 125 ms `School`, next 125 ms `Text`, then home); `NO_COLOR`, a skip or an error never fade.
+Phase `listing` draws `listing transcripts…` with an empty bar (Review log). `home_html --loading SECONDS OUT.html
+--size WxH` draws the fixture frame (reading 612 / 871) for the 15.4 README image.
+
 **Step 15.1 is committed (2026-11-11, Codex loop): parallel cold parse, F2 measurement (no `Arc`), progress
-handle. Step 15.2 (Codex: TUI loading screen render) is next.** F3 passed after review round 2 (Claude, release, real
+handle.** F3 passed after review round 2 (Claude, release, real
 `~`, 3 fresh processes): (a) cold `overview --json` median **0.97 s** (was 7.99 s); (b) worker first report median
 **1397 ms** without `--live`, **1408 ms** with (was 8624 / 8514 ms); (d) warm median 110 / 169 ms. PLAN.md F1 was
 amended in review to prefetch Claude desktop-app records too (Review log). No disk cache (15.1a) is needed.
-- **Progress handle for 15.2/15.3:** `multi_link_core::{LoadProgress, LoadSnapshot}`. The worker creates a
+- **Core progress handle for 15.3:** `multi_link_core::{LoadProgress, LoadSnapshot}`. The worker creates a
   `LoadProgress`, calls `scanner.set_progress(p.clone())` before its first pass (survives the root reset), sends a
   clone to the UI thread, and calls `p.finish()` after sending its first report (after the all-time pass). The UI reads
   `p.snapshot()` → `LoadSnapshot { phase: &'static str ("listing" | "reading" | "linking" | "done"), files_total,
   files_done }`; totals are hidden (0 / 0) while phase is listing; zero misses go straight to linking; later passes
-  never touch it. 15.2's pure render can take a `LoadSnapshot` directly.
+  never touch it. In 15.3 the CLI maps the phase string and counts into TUI-owned `LoadingOptions`.
 - **Where the cold time still goes (if it ever matters again):** overview ≈ 0.93–1.04 s; the all-time pass ≈ 390 ms
   cold, mostly serial `git rev-parse` per new cwd (`RepoMode::map`), not parsing — the next lever, not a disk cache.
 - **Baseline to beat (release `c29c516`, real `~`, 3 fresh processes):** F3 (a) cold `overview --json` wall 9.02 /
@@ -24,7 +34,7 @@ amended in review to prefetch Claude desktop-app records too (Review log). No di
   `codex_steps`, then `Scanner::live` when `--live` — one fresh process per run, timed with `Instant`.
 - **For 15.2:** `NO_COLOR` must drop BOLD on the loading screen too (`Theme::apply_no_color` removes only DIM; don't
   change it); round with `floor(v + 0.5)`; the meet `*` uses a per-frame head map (design.md, pinned rules).
-- **Loading goldens** (`fixtures/expected/tui/`, nothing reads them until 15.2; 15.1 must leave them unchanged):
+- **Loading goldens** (`fixtures/expected/tui/`, read-only answer keys tested by 15.2):
   `loading-{120x40,76x22,60x16,59x16,50x12,29x6,28x5}.{txt,styles.txt}` (truecolor), `loading-76x22-256.styles.txt`,
   `loading-76x22-nocolor.{txt,styles.txt}`, `loading-76x22-{ready,linking,zero,fade1}.{txt,styles.txt}`; all at
   `drawC(4.0)`, counter `reading transcripts  612 / 871` unless named. The 76×22 art equals the board's frame glyph for
@@ -769,6 +779,78 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 15.2: TUI loading screen render — Codex
+- Did: Implemented the pure loading renderer with TUI-owned `LoadPhase` / `LoadingOptions`, the pinned fish
+  geometry, per-frame head map, last-write-wins cells, size tiers, rounded progress bar and both fade palettes.
+  NO_COLOR preserves glyphs and drops all modifiers without changing the shared theme helper. Added the HTML
+  example's `--loading SECONDS OUT.html --size WxH` variant. Tests read every loading text/style answer key,
+  use the existing `support::dump_styles` format without any updater, check 200 frames and NO_COLOR parity,
+  bounded sizes/origins, redraws, six-digit counts and overflow-safe bar rounding.
+- Changed: `crates/tui/src/loading.rs`, `crates/tui/src/lib.rs`, `crates/tui/tests/loading.rs`,
+  `crates/tui/examples/home_html.rs`, `PROGRESS.md`.
+- Verify: All cargo commands used `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` first.
+  Test-first run against an empty render: `cargo test -p multi-link-tui --test loading` → exit 101:
+  ```text
+  test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Final `cargo test -p multi-link-tui > /tmp/multi-link-15-2-tui.log 2>&1` → exit 0; actual loading output:
+  ```text
+  running 5 tests
+  test listing_padding_bar_rounding_and_second_fade ... ok
+  test bar_clamps_counts_without_overflow ... ok
+  test all_loading_goldens ... ok
+  test sizes_origins_redraw_and_six_digit_counts_are_bounded ... ok
+  test two_hundred_frames_use_only_f6_roles_and_no_color_preserves_glyphs ... ok
+
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  ```
+  `cargo test --workspace > /tmp/multi-link-15-2-workspace.log 2>&1` → exit 0; actual summary of result lines
+  from both logs (parsed and checked for failures/errors/warnings):
+  ```text
+  workspace: 64 test suites; 676 passed; 0 failed; 1 ignored
+  tui: 12 test suites; 242 passed; 0 failed; 0 ignored
+  ```
+  Existing ignored test: `real_counts`; not run. Every existing TUI snapshot passed.
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+      Checking multi-link-tui v0.1.0 (/Users/jarednarvaez/multi-link/crates/tui)
+      Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.95s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output.
+  `cargo run -q -p multi-link-tui --example home_html -- --loading 4.0 /tmp/multi-link-loading.html --size 76x22`
+  → exit 0, no output; `wc -c /tmp/multi-link-loading.html` → actual output:
+  ```text
+    110592 /tmp/multi-link-loading.html
+  ```
+  `git diff --exit-code -- fixtures/expected crates/tui/Cargo.toml crates/tui/src/app.rs crates/tui/src/theme.rs`
+  and `git diff --check` → exit 0, no output.
+- Review: Claude, 2026-11-11, mode Codex loop (`codex-quota.py` → `primary: 20%`, `secondary: 54%`, `CODEX: OK`).
+  Round 0: Codex stopped on a `crates/tui/Cargo.toml` dependency on core; Claude rejected the manifest change and
+  gave tui its own input type (PLAN.md Review log). Diff review of the 4 named files plus PROGRESS.md: in scope, no
+  manifest, `app.rs`, `theme.rs` or golden change; pinned rules followed (`floor(v + 0.5)`, speck wrap and drop,
+  last-write-wins, per-frame head map, tail one step dimmer, bar `(60N + T) div 2T` with clamp, small-size rows,
+  fade steps, NO_COLOR drops BOLD locally). No fix round. Notes, none blocking: (1) the `listing` counter text is
+  not in F5 — accepted, Review log; (2) the 200-frame role check also allows `Color::Reset`, which truecolor never
+  uses (harmless, looser than needed); (3) the example's loading variant fixes phase and counts (enough for the
+  README image). Claude's re-run: `cargo test --workspace` → every result `ok`, 677 passed, 0 failed, 1 ignored (my
+  sum over all `test result:` lines; Codex's parsed 676, a counting difference, no failure either way);
+  `cargo test -p multi-link-tui --test loading` → 5 passed; clippy `-D warnings` and `fmt --check` clean;
+  `git diff 8a7e892 -- fixtures/expected` → empty (goldens unchanged since 15.0). **Board 15 E comparison
+  (styled):** the browser pane was hidden, so instead of screenshots Claude ran a copy of the board (scratch) with
+  `paused = true` (frame `drawC(4.0)`) and `put` logging every canvas-C write with glyph, RGB and weight, kept the
+  last write per cell, and compared art rows 0–14 with `loading-76x22.{txt,styles.txt}` (which the render equals
+  cell for cell): **225 / 225 art cells same glyph, 0 differ**; every cell's colour family matches (board orange →
+  `claude*`, blue → `codex*`, pale `*` → `text` BOLD, 6 meets); quantisation is monotone in the board's brightness
+  (max channel): BOLD heads 187–232, plain-role heads 142–183 and tails 131–162, `_dim` cells 65–138. Known,
+  rule-made differences: the board bolds heads at depth > 0.7, F6 at > 0.66 (one blue `<` at 187 is BOLD here, not on
+  the board); the board's title and bar are continuous orange→blue gradients, here `claude` / `text` / `codex` and
+  two halves (F6); the counter is real progress, not the board's simulated one.
+- Gotchas: No manifest dependency needed (PLAN Review log, "Step 15.2 input type"). Step 15.3 must translate
+  the core phase string/counts, select the fade stage by deadline, and wire the screen into the app. No app wiring,
+  theme-helper or answer-key changes. Pre-existing PLAN.md edits and `.claude/` were left untouched. Nothing staged,
+  committed or pushed.
 
 ### 2026-11-11 — Step 15.1: Parallel cold parse, F2 measurement, progress handle — Codex
 - Did: Parallel speculative prefill with pre-read stamps, original serial assembly/revalidation/diagnostics,
