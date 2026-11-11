@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "repo": "/home/dev/repo-q",
+  "now": "2026-11-10T22:20:00.000Z",
+  "this": "14150000-0000-4000-8000-000000001415",
+  "seen": false,
+  "sections": [
+    {
+      "name": "working",
+      "rows": [
+        {
+          "id": "14270000-0000-4000-8000-000000001427",
+          "harness": "codex",
+          "label": "step 3.2",
+          "step": "3.2",
+          "state": "busy",
+          "phrase": "working now · for 54 min",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "name": "waiting",
+      "rows": []
+    },
+    {
+      "name": "recent",
+      "rows": []
+    }
+  ]
+}

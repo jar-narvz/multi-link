@@ -98,7 +98,7 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 | FR13 | Optional hook records exact links when the child id is observable, and explicit step tags. | 2, 3, 6 |
 | FR14 | Optional alert, fired only on a supported "waiting on me" signal: terminal bell or macOS notification. | 1, 5 |
 | FR15 | Backlog: desktop / menu-bar app on the same core, with native notifications. | 1, 5 |
-| FR16 | Backlog: Claude Code mod with a strip above the prompt. | 1 |
+| FR16 | Claude Code pane (Phase 16): a mod beside the chat showing the current repo's sessions by state (working, waiting, recent), this session marked, its Codex runs nested with `exact` / `likely`; data from `multi-link pane --watch --json`. Read-only. | 1, 2 |
 | FR17 | Warn about concurrent activity in one checkout: 2+ busy sessions with the same working folder. Detecting actual file writes is out of scope. | 1, 6 |
 | FR18 | Open a session where it came from (`open_in = origin \| terminal \| app`): finished → resume; running → jump to it, or show "unavailable" if it can't be reached; never resume a running session. `f` forks. | 1, 4, 5 |
 
@@ -602,7 +602,8 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 | FR9, FR10 | `tui/`: home overview and repo timeline |
 | FR11 (need 4) | `core::graph` builds the report from tagged hand-offs, Codex turns and on-demand calls (G0–G6); `multi-link graph` prints it; the TUI draws it (G8–G10) |
 | FR12 | Phase 14: `multi-link live` and the live grid screen (`l`, `tui --live`); Phase 14 decisions |
-| FR15, FR16 | Backlog |
+| FR15 | Backlog |
+| FR16 | Phase 16: `multi-link pane` (`crates/cli`) and the mod in `mod/multi-link-pane/`; Phase 16 decisions |
 | FR13 | `multi-link hook install` prints the hook entry for the owner to paste; the hook writes to `~/.multi-link/` (H2, H4, H10); step tags from hand-off commands (H6) |
 | FR17 | Core compares the working folders of busy sessions |
 | FR18 | See "Opening a session" below; Phase 3 |
@@ -1237,3 +1238,77 @@ simulates it), colours are existing theme roles (the board's shades are continuo
   colours per F6; Step 15.0 check, PROGRESS.md). Six-digit counts are left to 15.2's bounded-buffer test.
 - **NO_COLOR** drops BOLD too, unlike `Theme::apply_no_color` (which removes only DIM, as every other screen
   wants): the loading screen sets no BOLD under NO_COLOR rather than changing that helper.
+
+### Phase 16 decisions (a multi-link pane inside Claude Code, Step 16.0)
+Planned 2026-11-11 (PLAN.md → Phase 16). Need (owner): "while I work in Claude Code I want to see what's running in
+this repo, and the Codex runs this session handed off, without switching to the TUI." The owner picked a side pane
+over a strip above the prompt, then **board 16 C · Repo view** on 2026-11-11 (claude.ai artifact
+2ksgLic1phpGMUD9yojosg, source `docs/boards/board16-mod-pane.html`). Comparables: repo-sessions (a mod with swimlanes;
+busy/idle only, Codex rows not tied to the Claude session that started them), the TUI's live grid (Phase 14; C is its
+one-repo cousin), Claude Code's built-in tasks pane (one list, state as a glyph). None nests a Codex run under the
+Claude session that started it with `exact` vs `likely` said out loud. Measured (release `a97bd1a`, real `~`): a fresh
+process is a cold pass (1.16 s), a warm in-process refresh 130–194 ms, so the pane keeps one long-lived process.
+Binding answer keys: `fixtures/expected/pane/*.json` (Step 16.0, hand-checked; 16.1 must print them byte for byte).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| G1 | `multi-link pane --json --cwd <dir> --session <id>` prints exactly what the pane draws: the TUI repo view's rows (W6, W8) for the repo the cwd maps to (`RepoMode::map`), split into `working` (busy), `waiting` (waiting or stale) and `recent` (every other row); a Codex child nested under its placing parent, appearing once; an ambiguous or unlinked hand-off never a child but a `handoffs` entry on its parent (`N possible runs` / `no codex run found`); `match` is `exact` only for an exact link. Shape `{ v, repo, now, this, seen, sections: [ { name, rows: [ { id, harness, label, step, state, phrase, is_this, children: [ { id, harness, state, phrase, match } ], handoffs: [ { step, outcome, candidates } ] } ] } ] }`. Built in `crates/cli` from the TUI's repo-view model with the TUI worker's refresh and one shared `now`; no core type change | The rules exist, are tested and were chosen with the owner; a second derivation would let the two screens drift |
+| G2 | `pane --watch --json` keeps one `Scanner` warm and prints one G1 object per line (NDJSON) every 3 s, only when the object minus `now` and every time phrase changed, or every 30 s (heartbeat); first line right after the cold pass; errors print `{ v: 1, error }` and it goes on; it exits when killed, and within one tick when its parent pid changes (or was 1 at start) | Warm ~0.15 s against ~1.2 s cold; the pid check is a backstop if the mod's teardown is missed |
+| G3 | The mod (`mod/multi-link-pane/`: `plugin.json`, `hooks/hooks.json`, `hooks/register.tsx`, `types/index.d.ts`) registers `/multi-link`, opens pane `multi-link` on `session.start`, spawns the G2 watcher with `$.process.spawn` for the session's life, keeps the latest object in a `$.state` atom and draws board 16 C (header `multi-link · <repo name>`; `working`, `waiting`, `recent (2h)`; `●` live / `✓` done in harness colour; `▌` this session; `└` children; `likely`; footer `updated Ns ago`). Teardown on `session.end` and unload ends the loop and cancels retry timers. Overflow keeps header, this session (≤ 3 children, then `+N runs`) and footer; other rows drop from the bottom of `recent`, then `waiting`, then `working`, with `+N more` (sessions) | The owner's pick; it shows the coordinator plus one session per step |
+| G4 | States: no line yet `reading sessions…`; spawn rejects `multi-link isn't on PATH. See the README.`; unknown command `This multi-link is too old for the pane. Update it.`; `seen: false` pins `▌ this session · not seen yet` at the top of `working`; an `error` line keeps the last data, error dimmed in the footer; watcher exit restarts after 2, 4, 8 … 60 s with `watcher stopped, retrying`; empty `No sessions in this repo in the last 2 h.` | Every failure says what to do |
+| G5 | The mod API was confirmed by a spike before any code (results below) | The API is new to this project |
+| G6 | No new installs: `claude plugin validate` and `claude plugin test` only; loading is `claude --plugin-dir <repo>/mod/multi-link-pane` (terminal) or `CLAUDE_CODE_PLUGIN_DIRS` (desktop app), the owner's one paste | Stop-and-ask rule on installs |
+
+**G5 spike results (Step 16.0, 2026-11-11, Claude Code 2.1.322, terminal).** A throwaway mod in the session
+scratchpad, loaded with `claude --plugin-dir` in an interactive session in a PTY (draining reader thread) in a sandbox
+repo, run under `env -i HOME USER LOGNAME TERM LANG PATH` (inherited `CLAUDE_CODE_*` variables make a child session
+that writes no transcript). Logged values are in PROGRESS.md (Step 16.0).
+- (a) **Pass (terminal).** `$.session.id()` in `session.start`, `session.end`'s `sessionId` and the classic
+  `SessionStart` hook's `session_id` are one id, equal to the transcript file name and to every record's `sessionId`
+  in it; `transcript_path` = `~/.claude/projects/<encoded cwd>/<id>.jsonl`. G1 keeps `--session <id>`. The transcript
+  file appears only after the first prompt, so a new session is `seen: false` until then (G4's placeholder).
+- (b) **Pass (terminal).** `$.ui.open` resolved `{ isPlaced: true }`; the pane docks at the right (`placement: "dock"`,
+  71 × 43 body in a 160 × 50 terminal); a `$.clock.every(1000)` timer updating an atom re-ran the `ui.render` hook each
+  second (ticks 0, 5, 10, 15, 20 logged from inside the render).
+- (c) **Pass.** `$.command.register` → `{ command }`; typing it ran the `command.run` hook and printed its text.
+- (d) **Pass.** `$.process.spawn` streamed a long-lived child: chunks `{ stream: "stdout", text: "line 1\n" }` (raw
+  text, not lines, so the mod buffers to newlines, as G3 says). The child's parent pid is the `claude` process (G2's
+  check works). A hot reload (unload) killed the old child and the new module started one (`ps`: only the new child);
+  `/exit` ended the loop before `session.end` and no child was left 5 s later. `$.state` atoms survive a reload;
+  module variables do not.
+- (e) **Pass.** `claude plugin test` mounted the pane on `terminal`, `desktop`, `vscode` and `mobile`. 16.3 tests
+  `terminal` and `desktop`. The test kit has no `fs.write` implementation unless the test answers it.
+- **Pending for 16.4:** the desktop-app half of (a) and (b) (needs the owner to turn the mod on).
+
+**Pinned while writing the keys (Step 16.0).** G1 left these open; the keys depend on them.
+- **Rows.** The repo view's lanes (`timeline.rs` `lanes`, imports off) with one change: a row is visible when not
+  imported and either has activity in the 2 h window or is `waiting` or `stale` (the repo view hides a quiet waiting
+  session; the pane must not, or a session waiting on the owner, or the owner's own session after 2 h quiet, would
+  vanish; home attention and `live` list them too). A row nests under its overview parent only when that parent is
+  visible. Every Claude lane, at any depth, is a pane row: a started Claude child (S3, a step session started by the
+  coordinator) is its own row, not nested, because sections are by state and the coordinator plus its step sessions
+  are what the pane is for. A Codex lane under a Claude lane is that row's child; any other Codex lane is a row. A
+  child's parent is the overview's placement (T11: the latest hand-off whose parent is a listed Claude session in the
+  child's repo); a child whose only parents are in another repo is a top-level row in its own repo and is absent
+  from the parent's repo (unlike `live`, which nests across repos; showing it on the parent's pane is a backlog
+  candidate).
+- **Order.** Sections always appear, in the order `working`, `waiting`, `recent`, possibly with no rows. Within a
+  section: the `this` row first, then a flat sort by `started_at` newest first, then id (a started child does not
+  follow its parent, unlike the repo view's pre-order); children newest first, then id.
+- **Fields.** `repo` = the cwd mapped by `RepoMode::map` (the overview group's `repo` string; in fixture mode the
+  cwd itself), also when no group exists (`empty`); `now` = the report's `now`; `this` = `--session` as given;
+  `seen` = the id is a row's or child's id in this object (an id that exists only in another repo is `false`; this
+  narrows G1's "in the data"); `is_this` only on rows. `label` = the repo view's own label (`view::home_label`:
+  title, else W3), where a Codex row's step comes from `view::placing(row, P)` with P its overview parent (visible or
+  not) or, with none, its latest hand-off of any parent (`handoffs` sorted by `at`, invocation, last one), which is
+  how `95c00002` and `14270000` get `step 7.1` / `step 3.2`; `step` = that same step (Claude `made[0]`), also when
+  a title wins the label, else null; `state` as the reports spell it; `phrase` = W5 (`view::status`) without the
+  repo view's `<place> · ` prefix or its ` · N possible runs` suffix on candidate rows (minutes from a burst start
+  clipped to the window, as the TUI: a run longer than 2 h reads `for 120 min`); child `match` from its placing link
+  (`exact` / `likely` for heuristic). `handoffs` = the 2 h `links` report's links with this Claude row as parent and
+  match `ambiguous` or `unlinked`, by (`at`, invocation): `step` (or null), `outcome` (W5 words), `candidates` = the
+  candidate ids in the links report's order (empty when unlinked); Codex rows have `[]`.
+- **Times.** Phrases use the local offset at `now`, as the TUI; the keys are UTC and their commands run with
+  `TZ=UTC`.
+- **Text.** `pane --json` prints pretty JSON (2-space indent, non-ASCII as is, trailing newline) like every other
+  `--json`; `--watch` prints each object compact on one line.

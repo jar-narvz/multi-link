@@ -1,6 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 16 (Claude Code pane) is in progress. Step 16.0 is committed (Claude step, 2026-11-11): G1–G6 and the pins are
+in `docs/design.md` → "Phase 16 decisions"; ten answer keys in `fixtures/expected/pane/`. Next: Step 16.1
+(`multi-link pane --json`, Codex).**
+- **G5 spike passed in the terminal** (Claude Code 2.1.322): `$.session.id()` = transcript file id (G1 keeps
+  `--session`); pane docks right and redraws from an atom on a timer; `/command` registers; `$.process.spawn` streams
+  raw text chunks (buffer to newlines) and unload / `/exit` kill the child (its ppid is `claude`); `claude plugin test`
+  mounts on all four surfaces. Desktop-app half of (a)/(b) pending for 16.4.
+- **For 16.1:** each key's exact command is in the Step 16.0 log entry below (`TZ=UTC`, `--root`, `--now`, `--cwd`,
+  `--session`); print pretty JSON byte for byte. Rules that differ from the plain repo view (all pinned in design.md):
+  quiet `waiting`/`stale` rows stay visible; every Claude lane (also a started child) is a row, only Codex lanes nest;
+  flat `started_at` sort per section with `this` first; placement is the overview's T11 rule (a cross-repo child is a
+  top-level row in its own repo); label = `view::home_label`; `handoffs` from the 2 h links report (ambiguous /
+  unlinked only); `repo` = mapped cwd even with no group. No key covers a started child or an unlinked hand-off:
+  unit-test both.
+
 **Phase 15 is closed (2026-11-11): owner confirmed the loading screen ("Looks good"). Step 15.4 is committed
 (Claude step): Phase 15 real check and README.** All F3 budgets pass on real `~` (release `5a63110`, series 2, load 4.7–6.2): (a) cold `overview --json`
 median **1.16 s**; (b) worker first report **1525 ms** without `--live`, **1613 ms** with; (c) first home frame in
@@ -782,6 +797,90 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 16.0: Rules, pane goldens, API check — Claude
+- Did: **G5 spike first** (mode check `python3 -I tools/codex-quota.py` → `primary: 2%`, `secondary: 57%`, `CODEX: OK`;
+  16.0 is a Claude step, so no Codex hand-off). A throwaway mod `mlspike` in this session's scratchpad (never in the
+  repo; `session.start` logs ids, registers `/mlspike`, opens pane `mlspike`, a `$.clock.every(1000)` atom tick, a
+  `$.process.spawn` child `/bin/sh -c 'while :; do echo line $i; sleep 1; done' mlspike-child-<v>`; `classic.SessionStart`
+  and `session.end` log ids; `ui.render` logs the tick it read) loaded with `claude --plugin-dir <mod>` in an
+  interactive Claude Code 2.1.322 session in a Python PTY (160 × 50, reader thread draining the master) in
+  `~/multi-link-sandbox/repo-a`. The harness sent one prompt, typed `/mlspike`, edited the module's `VERSION`
+  (`v1` → `v2`, a hot reload = unload + load), ran `ps` after start, after the reload and 5 s after `/exit`.
+  Logged values (run 4, `a64ec0fe-9409-4ef6-a2f7-70f3f658bfa4`):
+  - (a) `classic.SessionStart session_id=a64ec0fe-… transcript_path=~/.claude/projects/<encoded sandbox cwd>/a64ec0fe-9409-4ef6-a2f7-70f3f658bfa4.jsonl source=startup`;
+    `session.start sessionId=a64ec0fe-… surface=terminal interactive=true surfaces=["terminal"]`; `session.end
+    sessionId=a64ec0fe-… reason=prompt_input_exit`. The file exists (49 records) and every record's `sessionId` is
+    `a64ec0fe-9409-4ef6-a2f7-70f3f658bfa4`. **Pass; G1 keeps `--session <id>`.** The file appears only after the first
+    prompt (runs 1–3 without a prompt or with inherited env had none).
+  - (b) `ui.open -> {"isPlaced":true}`; render props `{"title":"mlspike","isFocused":false,"bodyColumns":71,
+    "placement":"dock","scroll":{"offset":0,"bodyRows":43},"view":{}}`; renders logged at `tick=0,5,10,15,20` one per
+    5 s (18:55:32.570, :37.595, :42.609, :47.621, :52.634Z), plus one per child line. The PTY shows the pane at the
+    right edge with `MLSPIKE tick=…` updating. **Pass (terminal).**
+  - (c) `command.register -> {"command":"mlspike"}`; `/mlspike` printed `mlspike:mlspikecommandran;paneplaced=true`
+    (spaces lost to cursor moves) and logged `command.run mlspike`. **Pass.**
+  - (d) chunks `{"stream":"stdout","text":"line 1\n"}` … `line 5`; `ps` after start: `16957 16902 /bin/sh -c … mlspike-child-v1`
+    (ppid 16902 = `claude`); after the reload: only `17199 16902 … mlspike-child-v2`; v2 logged `spawn loop ended`
+    (18:57:41.492Z) before `session.end` (18:57:41.747Z); 5 s after exit: none. **Pass.**
+  - (e) `claude plugin test <mod>` with a test mounting the pane per surface → `(pass) pane mounts on terminal`,
+    `desktop`, `vscode`, `mobile`; `4 pass 0 fail`. **Pass.** (Needs `on('fs.write', …)` in the test, since the mod
+    writes its log.)
+  - Desktop-app half of (a) and (b): **pending for 16.4** (owner turns the mod on).
+  Then wrote "Phase 16 decisions" (G1–G6, G5 results, pins) into `docs/design.md`, FR16 moved from Backlog to the pane,
+  and the nine G1 keys by hand from the `overview`/`links` JSON with a scratch script written from the pins, each
+  checked against the TUI repo view (`home_html --repo`, 140 × 30, `--offset 0`) and `live`/`links`. PLAN.md Review
+  log: "Step 16.0 amendments" (started Claude children are rows; placement is the overview's T11 rule).
+- Changed: `docs/design.md`, `fixtures/expected/pane/{busy,waiting-stale,done-2h,children-exact-likely,unseen,ambiguous,child-other-repo,idle-recent,empty,waiting-quiet}.json`,
+  `PLAN.md` (Review log only), `PROGRESS.md`. Board 16 was already committed (53e2268), unchanged.
+- Key commands (16.1 must print each key byte for byte; run with `TZ=UTC`):
+  - `busy`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-p --session 14150000-0000-4000-8000-000000001415`
+  - `waiting-stale`: `pane --json --root fixtures/sessions-phase9 --now 2026-11-09T07:30:00Z --cwd /home/dev/repo-p9c --session 92000012-0000-4000-8000-00009200000c`
+  - `done-2h`: `pane --json --root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z --cwd /home/dev/repo-p9l --session 95000004-0000-4000-8000-000095000004`
+  - `children-exact-likely`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-m --session 14120000-0000-4000-8000-000000001412`
+  - `unseen`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-m --session aaaaaaaa-0000-4000-8000-000000000000`
+  - `ambiguous`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-r --session 141a0000-0000-4000-8000-00000000141a`
+  - `child-other-repo`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-q --session 14150000-0000-4000-8000-000000001415`
+  - `idle-recent`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-m --session 14180000-0000-4000-8000-000000001418`
+  - `empty`: `pane --json --root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-none --session aaaaaaaa-0000-4000-8000-000000000000`
+  - `waiting-quiet` (added in review): `pane --json --root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z --cwd /home/dev/repo-p9c --session 92000012-0000-4000-8000-00009200000c`
+- Trace (rows → `live` / `links` for the same root and `--now`):
+  - phase14 `live`: heads `14130000` waiting (repo-n), `14110000`/`14120000`/`14160000` busy (repo-m), `14150000` busy
+    (repo-p), `14240000` stale (repo-p). Pane: repo-m working = `14120000`, `14110000`, `14160000` (busy, by
+    `started_at` 21:52, 21:20, 21:03); repo-p working `14150000`, waiting `14240000` (`stale since 9:50pm`). ✓
+  - phase14 `links`: `14120000 → 14220000 heuristic` → child `likely`; `14110000 → 14210000 exact` (22:10, latest over
+    `14170000`'s 21:40) → under `14110000`, once; `14160000 → 14280000/14290000 exact` (the 21:32 tie on 14290000 goes
+    to `14160000`, as T11 and `parent_links` both pick) → `exact`; `14150000 → 14250000/14260000 exact` (repo-p) →
+    children; `14150000 → 14270000 exact` crosses to repo-q: `live` nests it under `14150000`, the pane keeps it a
+    top-level `step 3.2` row in repo-q and leaves it out of repo-p (`child-other-repo`, `seen: false` there).
+  - phase14 `links`: `141a0000` ambiguous at 21:58, candidates `142d0000`, `142e0000` → `handoffs: [{ step: null,
+    outcome: "2 possible runs", candidates: [both ids] }]`; the candidates stay rows (`done 10:01pm`/`10:02pm`); the
+    TUI shows ` · 2 possible runs` on those rows. `142f0000` (imported, repo-m) is absent.
+  - phase9 at 07:30 `live`: `92000012` waiting, `92000009` stale (repo-p9c) → waiting section; no repo-p9c links.
+    Recent: `92000014`, `92000013` unknown, `92000011` finished, `92000010` idle (`last active 5:40am`).
+  - phase9 at 12:00 `live`: `92000012` waiting, `92000009` stale, neither with activity in 10:00–12:00 →
+    `waiting-quiet`: both in `waiting`, `working`/`recent` empty (the repo view would show nothing).
+  - phase9 at 12:00 `links`: `95000004 → 95c00004 exact` → child `exact` (`done 11:01am`); `95c00001` (from
+    `95000001`) and `95c00002` (latest from `95000003`, step 7.1) have parents outside the repo → top-level `done` rows.
+  - Every label and phrase equals the TUI repo view's text for the same lane (W3/W5; minus `main · ` and the
+    candidate suffix); `confirmed` ↔ `exact`, `matched by time` ↔ `likely`.
+- Not covered by a committed fixture (16.1 unit tests instead, no invented data): a started Claude child (S3) as its
+  own row; an `unlinked` hand-off (`no codex run found`; no phase14/phase9 key repo has one in its window).
+  Covered: merged home rows flatten (phase9 repo-p9c at 07:30 has a merged row of quiet sessions; `waiting-stale`).
+- Verify: `cargo test --workspace` → 65 `test result: ok`, 686 passed, 0 failed, 1 ignored (nothing reads the keys
+  yet); G5 (a)–(e) recorded above with logged values (desktop half pending for 16.4); every key's rows traced above.
+  W10 scan `rg -l "/Users/|\bsk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` → nothing (rc 1).
+- Review: one fresh adversarial Claude subagent (wrote none of it), one round. Its own script from the pins and the
+  Rust code regenerated all nine keys byte for byte; `home_html` renders of repo-m/p/q/r/p9c/p9l and `live` agree
+  (differences only where pinned). 9 findings: 7 accepted (quiet waiting/stale rows stay visible → new
+  `waiting-quiet` key; flat sort order; `seen`, Codex step, `repo`, titled `step`, candidate order pinned), 2 rejected
+  with reasons (PLAN.md Review log, "Step 16.0 amendments"). After the fixes the scratch script regenerates all ten
+  keys unchanged.
+- Gotchas: a `claude` child started from a Claude Code session inherits `CLAUDECODE` / `CLAUDE_CODE_*` and writes no
+  transcript: run it under `env -i HOME USER LOGNAME TERM LANG PATH`. The transcript file appears only after the
+  first prompt. Spawn chunks are raw text, not lines. `claude plugin test` needs `on('fs.write', …)` (or any `$`
+  call the mod makes) answered in the test. `time`'s local offset worked on macOS with threads running (reviewer
+  check), but the keys still run with `TZ=UTC`.
+
 
 ### 2026-11-11 — Step 15.4: Phase 15 real check, README, owner confirm — Claude
 - Mode: Claude step (no Codex hand-off). Quota check anyway: `python3 -I tools/codex-quota.py` → `primary: 0%`,

@@ -1,0 +1,109 @@
+{
+  "v": 1,
+  "repo": "/home/dev/repo-m",
+  "now": "2026-11-10T22:20:00.000Z",
+  "this": "aaaaaaaa-0000-4000-8000-000000000000",
+  "seen": false,
+  "sections": [
+    {
+      "name": "working",
+      "rows": [
+        {
+          "id": "14120000-0000-4000-8000-000000001412",
+          "harness": "claude",
+          "label": "step 2.4",
+          "step": "2.4",
+          "state": "busy",
+          "phrase": "working now · for 28 min",
+          "is_this": false,
+          "children": [
+            {
+              "id": "14220000-0000-4000-8000-000000001422",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 12 min",
+              "match": "likely"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "id": "14110000-0000-4000-8000-000000001411",
+          "harness": "claude",
+          "label": "step 2.3",
+          "step": "2.3",
+          "state": "busy",
+          "phrase": "working now · for 35 min",
+          "is_this": false,
+          "children": [
+            {
+              "id": "14210000-0000-4000-8000-000000001421",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 9 min",
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "id": "14160000-0000-4000-8000-000000001416",
+          "harness": "claude",
+          "label": "step 2.5",
+          "step": "2.5",
+          "state": "busy",
+          "phrase": "working now · for 20 min",
+          "is_this": false,
+          "children": [
+            {
+              "id": "14280000-0000-4000-8000-000000001428",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 49 min",
+              "match": "exact"
+            },
+            {
+              "id": "14290000-0000-4000-8000-000000001429",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 47 min",
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "name": "waiting",
+      "rows": []
+    },
+    {
+      "name": "recent",
+      "rows": [
+        {
+          "id": "14170000-0000-4000-8000-000000001417",
+          "harness": "claude",
+          "label": "step 2.3",
+          "step": "2.3",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "14180000-0000-4000-8000-000000001418",
+          "harness": "claude",
+          "label": "step 2.5",
+          "step": "2.5",
+          "state": "idle",
+          "phrase": "idle · last active 47 min ago",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}

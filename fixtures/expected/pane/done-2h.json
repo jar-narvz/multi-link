@@ -1,0 +1,63 @@
+{
+  "v": 1,
+  "repo": "/home/dev/repo-p9l",
+  "now": "2026-11-09T12:00:00.000Z",
+  "this": "95000004-0000-4000-8000-000095000004",
+  "seen": true,
+  "sections": [
+    {
+      "name": "working",
+      "rows": []
+    },
+    {
+      "name": "waiting",
+      "rows": []
+    },
+    {
+      "name": "recent",
+      "rows": [
+        {
+          "id": "95000004-0000-4000-8000-000095000004",
+          "harness": "claude",
+          "label": "“Synthetic lane parent 4.”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "state unknown",
+          "is_this": true,
+          "children": [
+            {
+              "id": "95c00004-0000-4000-8000-000095c00004",
+              "harness": "codex",
+              "state": "unknown",
+              "phrase": "done 11:01am",
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "id": "95c00001-0000-4000-8000-000095c00001",
+          "harness": "codex",
+          "label": "step 2.1",
+          "step": "2.1",
+          "state": "unknown",
+          "phrase": "done 11:30am",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "95c00002-0000-4000-8000-000095c00002",
+          "harness": "codex",
+          "label": "step 7.1",
+          "step": "7.1",
+          "state": "unknown",
+          "phrase": "done 10:31am",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}

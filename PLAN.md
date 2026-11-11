@@ -2745,6 +2745,30 @@ committed key unchanged except the new `fixtures/expected/pane/` files; `fixture
 
 ## Review log
 
+### 2026-11-11 — Step 16.0 amendments (Claude, G5 spike and while writing the keys)
+- **G5 (a) passed in the terminal**, so G1 keeps `--session <id>` (no `--transcript` change). The desktop-app half of
+  (a) and (b) is pending for 16.4 (owner turns the mod on). (e): the test kit mounts the pane on all four surfaces;
+  16.3 tests `terminal` and `desktop` as planned.
+- **Started Claude children are rows.** G1 said "top-level sessions", but in the repo view a step session started by
+  the coordinator (S3) nests under it at any depth. Every Claude lane is now a pane row (only Codex lanes nest), or the
+  coordinator's step sessions, the reason board C was picked, would hide inside the coordinator's row. No fixture key
+  has a started child (none of the nine cases needs one); 16.1 tests it.
+- **Placement is the overview's (T11)**, the repo view's own rule: G1 named `live.rs` `parent_links`, which nests a
+  child under a parent in another repo; the repo view keeps such a child top-level in its own repo, which is what G1's
+  "a child whose parent is in another repo stays top-level" asks for. In the phase14 fixture the two rules pick the
+  same parent for every same-repo child, including the 21:32 tie on `14290000`.
+- **Quiet waiting and stale sessions stay** (review finding 1): the repo view's "activity in the window" rule hid a
+  waiting session after 2 h quiet, so G1's `waiting` section and the owner's own row could go empty. Visible now also
+  means `waiting` or `stale`. New key `waiting-quiet.json` (phase9 at 12:00, both rows have no activity in the window).
+- **Review round 1** (fresh adversarial Claude subagent; rebuilt all nine keys from the pins: byte for byte equal).
+  Accepted: 1 (above); 2 order is a flat `started_at` sort, not pre-order; 3 `seen` = in this object (narrows G1's
+  "in the data"); 5 Codex step = `home_label`'s placing link, else latest hand-off, stated; 6 `repo` = mapped cwd
+  even with no group; 7 `step` set even when a title wins; 9 candidates in links-report order. Rejected: 4 a
+  cross-repo run missing from its parent's pane (G1 chose "a child appears once, in its own repo"; backlog
+  candidate); 8 durations clipped to the window (the TUI shows the same words; the pane matches the TUI).
+- **Pinned** (field rules, order, `TZ=UTC` for the keys, pretty vs compact JSON) in `docs/design.md` → Phase 16
+  decisions, "Pinned while writing the keys".
+
 ### 2026-11-11 — Phase 16 plan critique (Codex, read-only, Codex loop)
 `codex-quota.py` → `primary: 0%`, `secondary: 56%`, `CODEX: OK`. Ten findings; all accepted, most by reusing rules
 the TUI already has.

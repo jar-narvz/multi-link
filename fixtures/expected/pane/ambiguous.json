@@ -1,0 +1,64 @@
+{
+  "v": 1,
+  "repo": "/home/dev/repo-r",
+  "now": "2026-11-10T22:20:00.000Z",
+  "this": "141a0000-0000-4000-8000-00000000141a",
+  "seen": true,
+  "sections": [
+    {
+      "name": "working",
+      "rows": []
+    },
+    {
+      "name": "waiting",
+      "rows": []
+    },
+    {
+      "name": "recent",
+      "rows": [
+        {
+          "id": "141a0000-0000-4000-8000-00000000141a",
+          "harness": "claude",
+          "label": "step 5.1",
+          "step": "5.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "is_this": true,
+          "children": [],
+          "handoffs": [
+            {
+              "step": null,
+              "outcome": "2 possible runs",
+              "candidates": [
+                "142d0000-0000-4000-8000-00000000142d",
+                "142e0000-0000-4000-8000-00000000142e"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "142e0000-0000-4000-8000-00000000142e",
+          "harness": "codex",
+          "label": "“check the bridge script”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "done 10:02pm",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "id": "142d0000-0000-4000-8000-00000000142d",
+          "harness": "codex",
+          "label": "“try the bridge check again”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "done 10:01pm",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}

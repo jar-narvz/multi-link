@@ -1,0 +1,60 @@
+{
+  "v": 1,
+  "repo": "/home/dev/repo-p",
+  "now": "2026-11-10T22:20:00.000Z",
+  "this": "14150000-0000-4000-8000-000000001415",
+  "seen": true,
+  "sections": [
+    {
+      "name": "working",
+      "rows": [
+        {
+          "id": "14150000-0000-4000-8000-000000001415",
+          "harness": "claude",
+          "label": "step 3.2",
+          "step": "3.2",
+          "state": "busy",
+          "phrase": "working now · for 22 min",
+          "is_this": true,
+          "children": [
+            {
+              "id": "14260000-0000-4000-8000-000000001426",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 59 min",
+              "match": "exact"
+            },
+            {
+              "id": "14250000-0000-4000-8000-000000001425",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 120 min",
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "name": "waiting",
+      "rows": [
+        {
+          "id": "14240000-0000-4000-8000-000000001424",
+          "harness": "codex",
+          "label": "“run the roads checks by hand”",
+          "step": null,
+          "state": "stale",
+          "phrase": "stale since 9:50pm",
+          "is_this": false,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "name": "recent",
+      "rows": []
+    }
+  ]
+}
