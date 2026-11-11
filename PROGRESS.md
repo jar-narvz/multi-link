@@ -1,10 +1,10 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 13: Steps 13.0, 13.1 and 13.2 are committed (2026-11-10); Step 13.3 (Claude: real check,
-`docs/phase13-check.md`, README, owner confirm) is next.** C1 resolves a literal `cd` into Link `launch_dir` (omitted
-when equal to `checkout`); C3 reads option-first explicit resume ids; D1 reads keys with crossterm `use-dev-tty`. Real
-data at 13.1 (scratch, counts only): unlinked 48 → 12, ambiguous 1 → 0, nothing lost a link.
+**Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
+literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
+reads keys with crossterm `use-dev-tty`. Real check in `docs/phase13-check.md`: unlinked 49 → 12, ambiguous 1 → 0,
+masked 0 wrong, resize check 5/5. Next is the backlog (PLAN.md). The owner pushes `main`.
 
 **Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
 hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
@@ -733,6 +733,25 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 13.3: Phase 13 real check and README — Claude
+- Did: Ran the real check (scratch, counts only, W10): 8f643fd vs 46b4a36 release links, paired per hand-off; masked
+  check of the 32 exact launch links; `tools/resize-key-check.py` 5 rounds; real TUI smoke. Wrote
+  `docs/phase13-check.md`. README: `resume --last` paragraph (interactive resume needs an id; option-first ids), new
+  "Launch folder" paragraph with C1's limits, the ambiguous-limitation now says 0 real ambiguous, removed the
+  resize/key limitation (fixed by D1), added the "no hidden-id test for `cd`" limitation.
+- Changed: `docs/phase13-check.md` (new), `README.md`, `PROGRESS.md`.
+- Verify:
+```
+python3 -I tools/resize-key-check.py target/release/multi-link 5   → round 1–5: pass, exit 0
+masked13.py (scratch) → right heuristic 26, right nearest_run 3, wrong 0, unlinked 1, still exact 2
+links before/after (scratch) → unlinked 49 → 12, exact 58 → 59 (1 new hand-off), heuristic 132 → 170, ambiguous 1 → 0
+smoke.py (scratch) → first frame 2975 bytes, redraw 10709 bytes, exit 0 on one q
+```
+- Review: Claude's own step (docs only). Owner's answer: "Looks good" (Phase 13 confirmed).
+- Gotchas: Recounting the saved link files gives 32 `exec` unlinked → heuristic without `launch_dir` and 49 unlinked
+  before; the 13.1 entry's 31 and 48 were off by one. All 37 newly linked hand-offs have a `cd` in the real command
+  (36 tool calls; one call holds two hand-offs).
 
 ### 2026-11-10 — Step 13.1: Launch folder resolver — fix round 1 — Codex
 - Did: Addressed all three findings from Claude review. Single `&` is a distinct tokenizer operator and cannot

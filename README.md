@@ -170,8 +170,16 @@ in [docs/phase9-check.md](docs/phase9-check.md).
   writes no new rollout and adds a turn to the run it resumes. multi-link links it to a run in the same checkout whose
   later turn (not its first) starts 0–10 s after the hand-off: `heuristic` with evidence `resume_turn`, or ambiguous
   when two runs qualify. An observed id (stdout or a redirect log) still wins and makes it exact. The 10 s window was
-  not calibrated in advance; on real data all 13 such hand-offs had their turn 0.8–2.7 s later. A `cd` before the
-  launch keeps the hand-off unlinked (3 real cases), as it does for the creation-time match.
+  not calibrated in advance; on real data all 13 such hand-offs had their turn 0.8–2.7 s later (before Phase 13).
+  Only `codex exec resume --last` is matched this way; interactive `codex resume` needs an explicit id. Options
+  before the id (`codex exec resume -c k=v <id>`, `--skip-git-repo-check`, …) are read when multi-link knows them;
+  an unknown option leaves the id unread.
+- **Launch folder.** A literal `cd` before the launch (`cd /abs/path && codex exec …`, also `./` and `../` paths)
+  names the folder the run starts in, and the link records it as `launch_dir` when it differs from the session's
+  folder. It is read only when it is certain: `$VAR`, `~`, plain names, `pushd`/`popd`, a `cd` joined with `||`, `|`
+  or `&`, a wrapper (`builtin cd`), or `eval`/`source`/`exec` after the `cd` leave the folder unknown, and the hand-off
+  stays unlinked. A `cd` joined with `;` is assumed to succeed. On 2026-11-10 the Phase 13 rules linked 34 real launch
+  and 3 resume hand-offs that were unlinked ([details](docs/phase13-check.md)).
 - **Nearest run.** A launch hand-off with several Codex runs in its window gets the nearest one when the evidence is
   clear (rules above under Limitations); the link says `matched by time · nearest run`. On 2026-11-10 this settled 8
   of the 9 ambiguous real hand-offs ([details](docs/phase12-check.md)).
@@ -268,10 +276,11 @@ state rules.
   other run 10 s or more after the hand-off (`matched by time · nearest run`, never `confirmed`). These margins are
   provisional: on 2026-11-10, 30 hand-offs with an observed child gave 0 wrong answers with the id hidden, but few of
   them had rival runs. It assumes Codex starts a run within seconds of its launch, so a run that starts late can be
-  given to a later hand-off. 1 real hand-off stays ambiguous (runs 0.9 s and 7.9 s after it)
-  ([details](docs/phase12-check.md)).
-- A keypress arriving together with a terminal resize can be delayed until the next key
-  (crossterm 0.29).
+  given to a later hand-off. On 2026-11-10 no real hand-off stays ambiguous: the last one was settled once a `cd`
+  linked its rival run to another hand-off ([details](docs/phase12-check.md), [Phase 13](docs/phase13-check.md)).
+- `cd` resolution has no hidden-id test: only 1 real hand-off with an observed child used a `cd`, and its child started
+  before the hand-off, so it stays unlinked with the id hidden. Each folder resolved on real data had exactly one run
+  in the window.
 - Activity is inferred from record timestamps: a tool call that writes nothing for over 5 minutes
   shows as a gap, and screens say "active", never "worked".
 - Codex "done" means its last turn completed; there is no process-exit evidence.

@@ -2185,6 +2185,7 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
 - Verify: whole-phase Verify; real counts match K4 or each difference is explained; the owner's answer recorded.
 
 ### Phase 13 — Known folders and a key that is never lost (Release 1.10)
+Closed 2026-11-10 (owner confirmed after Step 13.3).
 Need (design need 1: see which Codex run came from which Claude session; and the TUI must answer every key). Three
 backlog items, chosen together by the owner on 2026-11-10. Measured 2026-11-10 on real data (release build at
 8d2cc22; scratch, counts only; tool calls read from `assistant` records only, since `api-request-blob` copies can
