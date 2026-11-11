@@ -2741,8 +2741,119 @@ committed key unchanged except the new `fixtures/expected/pane/` files; `fixture
 - Files: `docs/phase16-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
 
+### Phase 17 — The pane shows the step, acts on rows, and says when Codex finishes (Release 1.14)
+Need (owner, 2026-11-11): "in the pane I want to see how my step is going across both tools, do something with a row,
+and know when a Codex run I handed off is done without watching for it." Backlog items "pane step strip and actions
+(board 16 B)" and "notifications", plus the owner's two Phase 16 polish notes (`docs/phase16-check.md` →
+Observations: empty section rules stay drawn; `updated Ns ago` counts from the last printed line, up to ~30 s).
+Board 17 (claude.ai artifact P8y29q3iki7kbmCWKWytfJ, source `docs/boards/board17-pane-strip.html`): the owner picked
+**S1 · Chain** (strip), **A1 · Expand in place** (row actions) and **N2 · What it said** (notification) on 2026-11-11.
+Comparables: the TUI's own step graph (Phase 9; S1 is its parts folded to a list), Claude Code's built-in "waiting on
+you" notification (so that case is not repeated here), GitHub Actions' "workflow finished" notification (one per run,
+the outcome in the body). Facts checked 2026-11-11: `multi-link graph --json --repo --step` already returns the step's
+parts in order (`kind` plan/implement/review, `harness`, `status`, `from`/`to`, `active_ms`, `asked`, `said`);
+`multi-link open <id>` opens a finished Claude session in the app (FR18) and Codex opening is unsupported (README);
+Claude Code's `$.ui.notify` answers `no-surface` in the desktop app (mod API types), so notifications go through
+macOS's built-in `osascript`, which needs no install.
+
+Decisions:
+- **H1 Strip data in the pane JSON (additive).** `pane --json` gains `strip`: null unless this session is seen and its
+  row has a step; else `{ step, title, parts: [ { harness, kind, status, active_min, is_this } ] }` from the same
+  graph model `multi-link graph` uses, for (repo, this row's step), in graph order. `status`: `done`, `running` (the
+  part's session is busy, or a Codex part with an open turn), `waiting`, or `null` when unknown (W5 words: no guess).
+  `active_min` = `active_ms` rounded down to whole minutes, at least 1. Rebuilt every tick as the TUI does (G11).
+  Rows and children also gain `asked` (W3, already ≤ 120 characters) and `said` (the session's last final message as
+  the graph reports it, cut at 120 characters on a char boundary, else null), and `openable` (true only when
+  `multi-link open` would open that session in the app: a Claude session with the same evidence FR18 requires; always
+  false for Codex). JSON `v` stays 1: every change is a new field (W0 additive rule); the ten 16.0 keys gain the new
+  fields and nothing else changes in them. Why: the rules exist in Rust already (graph, FR18); the mod stays a drawer.
+- **H2 Strip layout (S1).** Under the header: `step <id> <title>` (title cut to fit), then one line per part:
+  harness (in its colour), kind, `✓` done / `●` running / `◆` waiting / `·` unknown, then `Nm`; the part of this session
+  marked `▌`. At most 4 part lines: older parts fold into `+N earlier` on top. Overflow (G3) keeps header, strip
+  heading, this-session row and footer; strip part lines drop before `recent` rows.
+- **H3 Row actions (A1).** Every session and child line is a `Button` keyed by its id (one press target per row).
+  Pressing a row toggles it open (one open row at a time); an open row shows `asked` and `said` lines (dim, cut to the
+  pane width, `—` when null) and its buttons: `Open in app` when `openable` (runs `multi-link open <id>` by argv;
+  its error text goes to the footer), and `Copy id` always (`$.ui.copy`, result said in the footer). The open row
+  survives redraws by id; it closes if its row leaves the data. Keys: the surface's own focus and Enter.
+- **H4 Codex-done notifications (N2).** The watcher (`pane --watch`) emits one event line
+  `{ "v": 1, "event": { "kind": "codex_done", "id", "step", "said" } }` when a Codex session that is a child of a
+  Claude session in this repo (exact or time-matched link) goes from not done to done (`turns_complete`) **while the
+  watcher runs**; runs already done at its first pass are known, never announced. Across several panes, only the first
+  watcher to create `<state dir>/notified/<codex id>` with `create_new` emits it, so one run gives one notification;
+  marker files older than 7 days are removed at start. The mod shows it with `osascript` by argv (`on run argv` …
+  `display notification (item 2 of argv) with title (item 1 of argv)`: no shell, no quoting of the text into
+  script), title `codex finished (<step>)` (or `codex finished` without a step), body `said` (or `no final message`).
+  A `notify` mod option (default on) turns it off. macOS only; elsewhere nothing is shown. Why `said` in the body: the
+  owner's pick (N2); the README says notifications show Codex's final message.
+- **H5 Polish.** A section with no rows draws no rule (a pinned `this session` row still shows). The watcher prints
+  `{ "v": 1, "tick": "<now>" }` on every tick with no data line, and the footer reads `checked Ns ago` from the last
+  line of any kind, so it stays under ~3 s while the watcher lives.
+- **H6 Confirmed first.** 17.0 checks in a PTY terminal session that `osascript` posts a notification from a mod's
+  `$.process.run` (and what app it is credited to), that a pane `Button` press reaches `ui.press` and `$.ui.copy`
+  answers, and that `multi-link graph`'s `said` exists for Codex parts and Claude parts on real data. The desktop app
+  half is the owner's, in 17.4.
+
+NFRs: the watcher's warm tick (now with the graph rebuild) ≤ 250 ms CPU on real `~` (16.4: 140 ms); a notification
+within one tick (3 s) of the watcher seeing the run done; at most one notification per Codex run on this machine.
+
+Non-goals: notifications for "waiting on you" (Claude Code already sends them); notifications on Linux or Windows;
+opening Codex sessions; clicking a notification; sound; a strip for other rows' steps; changing the TUI or any
+existing JSON field; any core type change beyond what the graph and open logic already expose.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; clippy `-D warnings` and `fmt --check` clean; every
+committed key unchanged except the pane keys' new fields (17.0) and new `fixtures/expected/pane/` keys;
+`bash fixtures/expected/phase9/check.sh 6`, `phase12`, `phase13`, `phase14` all `ok`; `claude plugin validate` and
+`claude plugin test` clean; real check in 17.4; W10 scan.
+
+### Step 17.0 — Rules, pane keys, API check (Claude)
+- Depends on: 16.4. H1–H6 into `docs/design.md` ("Phase 17 decisions"). Commit board 17. H6 checks with a throwaway
+  mod in the session scratchpad (never in the repo), logged values recorded. The ten pane keys regenerated by hand
+  with the H1 fields (each new value traced to `graph` / `open --dry-run` output for the same fixture), plus new keys
+  `fixtures/expected/pane/{strip-chain,strip-none,openable}.json` and watcher keys
+  `fixtures/expected/pane/watch-{tick,codex-done}.jsonl` (the exact lines for a scripted tick sequence). PROGRESS lists
+  each key's command.
+- Files: `docs/design.md`, `docs/boards/board17-pane-strip.html`, `fixtures/expected/pane/**`, `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` except the pane golden test, which now fails on exactly the new fields
+  (recorded); H6 results recorded with logged values; each key traced in PROGRESS.
+
+### Step 17.1 — Pane JSON: strip, asked/said, openable (Codex)
+- Depends on: 17.0. H1.
+- Files: `crates/cli/src/pane.rs`, `crates/cli/src/main.rs` (only if the graph or open logic needs a `pub(crate)`),
+  `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; every 17.0 `pane --json` key byte for byte; tests: strip null without a step or
+  unseen, parts in graph order, `status` null when unknown, `said` cut on a char boundary, `openable` equals
+  `open --dry-run`'s answer for each row in the keys and false for Codex; every other key and `check.sh` unchanged.
+
+### Step 17.2 — Watcher: ticks, Codex-done events, one notification per run (Codex)
+- Depends on: 17.1. H4 (watcher side), H5 (tick lines).
+- Files: `crates/cli/src/pane.rs`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; with the injected runtime: the watch keys line for line; a tick line on every
+  unchanged tick; a run done at the first pass gives no event; a not-done → done change gives one event; two watchers
+  on one state dir give one event in total (the `create_new` marker), including when both see the change on the same
+  tick; markers older than 7 days are removed and newer ones kept; real `~` release: warm tick CPU over 10 ticks
+  recorded (≤ 250 ms, else stop and plan).
+
+### Step 17.3 — The mod: strip, row actions, notifications, polish (Codex)
+- Depends on: 17.2. H2, H3, H4 (mod side), H5.
+- Files: `mod/multi-link-pane/**`, `PROGRESS.md`
+- Verify: `claude plugin validate` clean; `claude plugin test` → all pass on terminal and desktop: the strip from
+  each 17.0 key as H2 (4-part cap, `+N earlier`, `▌` on this session's part), a press opens and closes a row, one open
+  row at a time, `Open in app` only when `openable` and it runs `multi-link open <id>` by argv, `Copy id` calls
+  `$.ui.copy`, an event line runs `osascript` with exactly the H4 argv (and not when `notify` is off), empty sections
+  have no rule, the footer says `checked Ns ago` from a tick line; every Phase 16 test still passes.
+
+### Step 17.4 — Real check, README, owner confirm (Claude)
+- Depends on: 17.3. Real terminal session (PTY, as 16.4): strip and actions match board 17 S1/A1, a real Codex
+  hand-off (sandbox repo) gives exactly one notification with two panes open, tick CPU measured. The owner: the
+  desktop app shows the strip and acts on a row, and macOS shows the notification (allowing notifications for the
+  sender if macOS asks). README: the pane section updated (strip, actions, notifications and what they show).
+  `docs/phase17-check.md`.
+- Files: `docs/phase17-check.md`, `README.md`, `PROGRESS.md`
+- Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · pane step strip and actions (board 16 B).
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · tmux / Herdr jump (optional, never a required install) · desktop menu-bar app.
 
 ## Review log
 

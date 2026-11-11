@@ -1,0 +1,136 @@
+<title>Board 17 · Pane Strip</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: header, then option cards in a wrapping grid; each card shows the pane as it would draw (dark mono column). */
+:root{
+  --bg:#f3f2f0; --card:#ffffff; --fg:#1d1c1a; --muted:#6b6863; --line:#dedbd6;
+  --pane:#171614; --pane-fg:#e8e4dc; --pane-dim:#8c867c; --pane-sel:#2a2723;
+  --claude:#df9b79; --codex:#8cb9f1; --ok:#7fbf8e; --warn:#d6a243;
+  --note:#2b2a28; --note-fg:#f1eee8;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:Inter,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121110;--card:#1b1a18;--fg:#ece8e1;--muted:#9a948a;--line:#2e2c28;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121110;--card:#1b1a18;--fg:#ece8e1;--muted:#9a948a;--line:#2e2c28;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-size:1.9rem;margin:0 0 6px;text-wrap:balance}
+h2.sec{font-family:var(--display);font-size:1.3rem;margin:36px 0 4px}
+.lede,.sub{color:var(--muted);max-width:70ch;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.opt h3{font-family:var(--display);font-size:1.08rem;margin:0;display:flex;gap:10px;align-items:baseline}
+.tag{font:600 .7rem var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opt p{margin:0;color:var(--muted);font-size:.9rem}
+.pane{background:var(--pane);color:var(--pane-fg);font:12.5px/1.65 var(--mono);padding:10px 12px;border-radius:8px;white-space:pre;overflow-x:auto}
+.d{color:var(--pane-dim)} .c{color:var(--claude)} .x{color:var(--codex)} .ok{color:var(--ok)} .w{color:var(--warn)} .b{font-weight:600}
+.sel{background:var(--pane-sel);display:inline-block;min-width:100%}
+.btn{border:1px solid var(--pane-dim);border-radius:3px;padding:0 4px;color:var(--pane-fg)}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:.84rem}
+.notes div{min-width:0}.notes b{display:block;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.toast{background:var(--note);color:var(--note-fg);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:start;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:380px}
+.toast .ic{width:34px;height:34px;border-radius:8px;background:#3a3835;display:grid;place-items:center;font:600 13px var(--mono);color:var(--codex)}
+.toast .t{font-weight:600;font-size:.88rem}.toast .m{font-size:.84rem;opacity:.85}.toast .when{font-size:.75rem;opacity:.6}
+.fix{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.foot{margin-top:28px;font-size:.82rem;color:var(--muted)}
+@media (max-width:620px){.notes{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+<h1>Board 17 · step strip, actions and notifications</h1>
+<p class="lede">These build on the pane you approved in Phase 16 (board 16 C). There are three parts: a strip for this session's PLAN.md step, row actions, and a notification when a Codex hand-off finishes. Pick one option in each part. The rows are example data in the shape of real <code>pane</code> and <code>graph</code> output.</p>
+
+<h2 class="sec">1 · Step strip</h2>
+<p class="sub">It sits just under the header and shows how this session's step is going across both tools. It reuses the TUI step graph's parts (plan → implement → review).</p>
+<div class="grid">
+<section class="opt"><h3><span class="tag">S1</span>Chain</h3>
+<p>One line per part, in order: who did it, what kind of work it was, and its status. It reads like the TUI's step graph, folded down to fit the pane.</p>
+<div class="pane"><span class="b">multi-link</span> <span class="d">· multi-link</span>
+<span class="d">step</span> <span class="b">16.3</span> <span class="d">The mod (Codex)</span>
+ <span class="c">claude</span> plan       <span class="ok">✓</span> <span class="d">2m</span>
+ <span class="x">codex </span> implement  <span class="ok">✓</span> <span class="d">9m</span>
+ <span class="c">claude</span> review     <span class="w">●</span> <span class="d">now</span>
+<span class="d">working ─</span>
+<span class="c b">▌● this session  16.3</span>
+<span class="c">▌</span> <span class="x">└ codex 01a1cc93 ✓</span></div>
+<div class="notes"><div><b>Good</b>Says exactly where the step stands. Works at any width.</div><div><b>Weak</b>Takes 4 rows; no sense of time.</div></div></section>
+
+<section class="opt"><h3><span class="tag">S2</span>Time bars</h3>
+<p>One bar row per tool, laid out across the step's time span. It's the shape of board 16 B.</p>
+<div class="pane"><span class="b">multi-link</span> <span class="d">· multi-link</span>
+<span class="d">step</span> <span class="b">16.3</span> <span class="d">· 21:44 → now</span>
+<span class="c">claude</span> <span class="c">━━</span>              <span class="c">━━━</span><span class="w">▸</span>
+<span class="x">codex </span>   <span class="x">━━━━━━━━━━━━</span><span class="ok">✓</span>
+<span class="d">working ─</span>
+<span class="c b">▌● this session  16.3</span>
+<span class="c">▌</span> <span class="x">└ codex 01a1cc93 ✓</span></div>
+<div class="notes"><div><b>Good</b>Shows hand-off timing at a glance; 3 rows.</div><div><b>Weak</b>Needs about 30 columns; it falls back to S1 when narrower. Doesn't name the kind of work.</div></div></section>
+
+<section class="opt"><h3><span class="tag">S3</span>One line</h3>
+<p>The whole chain on one line, with a glyph per part.</p>
+<div class="pane"><span class="b">multi-link</span> <span class="d">· multi-link</span>
+<span class="b">16.3</span> <span class="c">plan</span><span class="ok">✓</span> <span class="d">›</span> <span class="x">impl</span><span class="ok">✓</span> <span class="d">›</span> <span class="c">review</span><span class="w">●</span>
+<span class="d">working ─</span>
+<span class="c b">▌● this session  16.3</span>
+<span class="c">▌</span> <span class="x">└ codex 01a1cc93 ✓</span></div>
+<div class="notes"><div><b>Good</b>Costs one row.</div><div><b>Weak</b>Cut short in a narrow pane; less to read.</div></div></section>
+</div>
+
+<h2 class="sec">2 · Row actions</h2>
+<p class="sub">Clicking a row selects it and shows what's known about it, with buttons. Codex sessions can't be opened automatically (a limit already stated in the README), so Codex rows only get Copy id.</p>
+<div class="grid">
+<section class="opt"><h3><span class="tag">A1</span>Expand in place</h3>
+<p>The clicked row grows two detail lines and its buttons. Clicking it again folds it back.</p>
+<div class="pane"><span class="d">working ─</span>
+<span class="c b">▌● this session  16.3</span>
+<span class="sel"> <span class="x">└ codex 01a1cc93 ✓</span>              </span>
+<span class="sel">   <span class="d">asked</span> Read AGENTS.md, then do Step…</span>
+<span class="sel">   <span class="d">said </span> Implemented the pane; 46 tests…</span>
+<span class="sel">   <span class="btn">Copy id</span>                          </span>
+<span class="d">recent (2h) ─</span>
+ <span class="ok">✓</span> step-16-0  <span class="d">16.0</span>
+<span class="sel">   <span class="btn">Open in app</span> <span class="btn">Copy id</span>              </span></div>
+<div class="notes"><div><b>Good</b>The details stay next to the row they belong to.</div><div><b>Weak</b>Pushes rows below it down.</div></div></section>
+
+<section class="opt"><h3><span class="tag">A2</span>Detail at the bottom</h3>
+<p>The clicked row is highlighted, and a fixed detail box above the footer shows it. The list itself doesn't move.</p>
+<div class="pane"><span class="d">working ─</span>
+<span class="c b">▌● this session  16.3</span>
+<span class="sel"> <span class="x">└ codex 01a1cc93 ✓</span>              </span>
+<span class="d">recent (2h) ─</span>
+ <span class="ok">✓</span> step-16-0  <span class="d">16.0</span>
+<span class="d">─ codex 01a1cc93 · done 21:55 ──</span>
+<span class="d">asked</span> Read AGENTS.md, then do Step…
+<span class="d">said </span> Implemented the pane; 46 tests…
+<span class="btn">Copy id</span>
+<span class="d">checked 2s ago</span></div>
+<div class="notes"><div><b>Good</b>The list stays still; it's like the TUI's selected line.</div><div><b>Weak</b>Costs 4 rows whenever a row is selected.</div></div></section>
+</div>
+
+<h2 class="sec">3 · Notification</h2>
+<p class="sub">It fires once when a Codex run that a Claude session handed off finishes. Claude Code already notifies you when it's waiting on you, so that case isn't repeated here. One notification per run, even with several panes open.</p>
+<div class="grid">
+<section class="opt"><h3><span class="tag">N1</span>Step first</h3>
+<div class="toast"><div class="ic">ml</div><div><div class="t">codex done · step 16.3</div><div class="m">handed off by "Continuing previous work"</div></div><div class="when">now</div></div>
+<div class="notes"><div><b>Good</b>The step is what you track in this workflow.</div><div><b>Weak</b>Hand-offs without a step get a weaker title.</div></div></section>
+<section class="opt"><h3><span class="tag">N2</span>What it said</h3>
+<div class="toast"><div class="ic">ml</div><div><div class="t">codex finished (16.3)</div><div class="m">Implemented the pane; 46 tests pass on terminal and desktop…</div></div><div class="when">now</div></div>
+<div class="notes"><div><b>Good</b>You learn the outcome without opening anything.</div><div><b>Weak</b>Shows prompt text on screen, where others might see it.</div></div></section>
+</div>
+
+<h2 class="sec">Fixes from your Phase 16 notes</h2>
+<div class="fix">
+<div class="pane"><span class="d">before</span>                <span class="d">after</span>
+<span class="d">working ─</span>             <span class="c b">▌● this session  16.3</span>
+<span class="d">waiting ─</span>             <span class="d">recent (2h) ─</span>
+<span class="d">recent (2h) ─</span>          <span class="ok">✓</span> step-16-0  <span class="d">16.0</span>
+<span class="c b">▌● this session</span>
+<span class="d">Empty groups drop their heading. A pinned this-session row still shows.</span></div>
+<div class="pane"><span class="d">before</span>  <span class="d">updated 26s ago</span>
+<span class="d">after</span>   <span class="d">checked 2s ago</span>
+<span class="d">The watcher sends a small "still here" line every tick (3 s). The footer counts from the last check, not the last change.</span></div>
+</div>
+
+<p class="foot">Colours are the same theme roles as Phase 16. The notification is drawn as macOS shows it. On this Mac it will come from <code>osascript</code>, which ships with macOS, so it may show the Script Editor icon instead of "ml". Step 17.0 checks that first.</p>
+</div>
