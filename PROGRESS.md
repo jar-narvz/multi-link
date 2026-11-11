@@ -1,11 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 16.1 is committed (Codex loop, 2026-11-11): `multi-link pane --json` in `crates/cli/src/pane.rs`.** It runs
-`tui::refresh_with_live` (now `pub(crate)`) once with the 2 h window and projects with `view::{sessions, home_label,
-placing, status, outcome}`; all ten keys match byte for byte. **For 16.2:** `project(&Refresh, cwd, RepoMode, this)`
-is the pure part a watcher can call on each tick with one long-lived `Scanner`; `run` builds a fresh `Scanner` today.
-The change test must ignore `now` and every `phrase` (G2).
+**Step 16.2 is committed (Codex loop, 2026-11-11): `multi-link pane --watch --json`.** One long-lived `Scanner`;
+compact, flushed NDJSON on a data change (ignoring `now` and every `phrase`) or a 30 s heartbeat, 3 s ticks;
+`{ "v": 1, "error": "…" }` lines keep going; exits when its parent pid changes (or is 1 at start) and on a broken
+stdout pipe. Real `~` first line median 1640 ms (Claude, outside the sandbox). **For 16.3:** spawn
+`multi-link pane --json --watch --cwd <session cwd> --session <$.session.id()>`; buffer chunks to newlines; an
+`error` line keeps the last data; the process ends with the spawn loop (G5 (d)).
 
 **Phase 16 (Claude Code pane) is in progress. Step 16.0 is committed (Claude step, 2026-11-11): G1–G6 and the pins are
 in `docs/design.md` → "Phase 16 decisions"; ten answer keys in `fixtures/expected/pane/`.**
@@ -802,6 +803,158 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 16.2: `pane --watch` — Codex
+- Did: Added `--watch` around the existing pane projection and exact `tui::refresh_with_live` pass, with one
+  long-lived Scanner and one shared timestamp per pass. Used monotonic elapsed time for the heartbeat and
+  subtracted pass time from the 3 s wait. Change detection removes `now` and every nested `phrase` only;
+  errors produce escaped compact `{ v: 1, error }` lines and the next good pass restores the data.
+  Every emitted line ends in a newline and flush. Captured parent pid before setup, checked before/after passes,
+  and exited before a pass if already orphaned. Added injectable clock, wait and parent checks and deterministic
+  tests for immediate/flush ordering, suppression of row/child phrases and now, a child's real state change,
+  the 30 s heartbeat, error recovery and pid 1. Real process tests launch via an exiting Python parent and
+  check watcher pipe closure; the orphan-at-start child waits for getppid == 1 before exec.
+- Changed: `crates/cli/src/pane.rs`, `crates/cli/tests/pane.rs`, `PROGRESS.md`.
+- Verify: Each cargo command used `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` first.
+  `cargo test --workspace` → exit 0 after review fix round 1; actual result lines
+  (full log in `/tmp/multi-link-16.2-r1-tests.log`):
+```text
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.03s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.65s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+  Sum from those result lines: 698 passed, 0 failed, 1 ignored. Actual watcher/key test output:
+```text
+test pane::watch_tests::watch_parent_one_exits_before_clock_or_pass ... ok
+test pane::watch_tests::watch_errors_continue_and_unchanged_success_restores_data ... ok
+test pane::watch_tests::watch_first_change_heartbeat_and_all_phrases_are_filtered_and_flushed ... ok
+test watcher_started_with_parent_one_exits_immediately ... ok
+test pane_matches_all_ten_pretty_json_keys_byte_for_byte ... ok
+test watcher_exits_within_one_tick_after_parent_exits ... ok
+```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0 after review fix round 1; actual final output:
+```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.57s
+```
+  `cargo fmt --all -- --check` → exit 0 after review fix round 1, no output.
+  The check.sh, release build and timing results below are retained from initial verification; not rerun for
+  this parent-API-only review fix.
+  `fixtures/expected/phase14/check.sh` → exit 0, actual output:
+```text
+ok   live.json
+```
+  `cargo build --release -p multi-link` → exit 0, actual final output:
+```text
+    Finished `release` profile [optimized] target(s) in 1.88s
+```
+  `python3 /tmp/multi-link-16.2-measure.py` → exit 0, actual output:
+```text
+release real-home first line: 1774.634417 ms; v=1; compact NDJSON=True
+pass 0 1591.376167 ms
+pass 1 161.857917 ms
+pass 2 161.893958 ms
+pass 3 156.428542 ms
+pass 4 162.767042 ms
+pass 5 174.744083 ms
+pass 6 195.196458 ms
+pass 7 174.229459 ms
+pass 8 164.117541 ms
+pass 9 181.272209 ms
+pass 10 158.223084 ms
+10-tick exact pane refresh median: 163.442292 ms
+```
+  Timing method: real home (no `--root`, no fixed `--now`), current checkout, `--session phase16-measurement`.
+  Python measured process spawn through the first complete stdout line from the unmodified release binary,
+  parsed it, then terminated/reaped it. A scratch crate in `/tmp/multi-link-16.2-timing` copied the exact CLI
+  sources, used this workspace's path dependencies and lockfile, and was built with `cargo build --release
+  --manifest-path /tmp/multi-link-16.2-timing/Cargo.toml` (CARGO_TARGET_DIR set to this checkout's target).
+  Its only instrumentation surrounded the watch pass closure (refresh_with_live + project + JSON conversion)
+  with Instant, wrote each duration to stderr, and exited after the cold pass plus ten real 3 s ticks.
+  The median excludes pass 0 and includes exactly passes 1–10. Raw timings are in
+  `/tmp/multi-link-16.2-pass-times.log`; measurement output in `/tmp/multi-link-16.2-timing-results.log`.
+  First-line ≤ 2500 ms and refresh median ≤ 250 ms both pass. No timing hooks or harness sources added to the repo.
+- Review: Claude, 2026-11-11, mode Codex loop (`codex-quota.py` → `CODEX: OK`). Diff read: `pane.rs` (watch loop,
+  runtime trait, `without_times`), `tests/pane.rs` (two process tests). Round 1, one finding: a hand-written `unsafe
+  extern "C" getppid` → replaced with the safe `std::os::unix::process::parent_id()` under `cfg(unix)` (non-Unix:
+  backstop off; Windows is a non-goal). Re-review clean. Checked by reading: the change key drops `now` and every
+  nested `phrase`; an error resets the key so the next success prints; a broken stdout pipe exits (the mod is gone).
+  Re-ran Verify: `TZ=UTC cargo test --workspace` → 698 passed, 0 failed, 1 ignored; clippy `-D warnings` and
+  `fmt --check` clean; `phase9/check.sh 6` rc 0 (one earlier run in my session printed FAIL and passed twice on
+  re-run with no change; not reproduced), `phase12`, `phase13`, `phase14` ok; `git diff HEAD -- fixtures/expected`
+  empty. Codex timed in its sandbox, where `ps` probes fail soft, so I re-timed outside it (release, real `~`, this
+  repo and this coordinator session, 3 fresh watchers): first line 2012 / 1569 / 1640 ms, **median 1640 ms** (≤ 2500),
+  `seen: true`, the session under `working`. The 163 ms refresh median is Codex's sandbox figure.
+- Gotchas: Initial new unit tests failed to compile because WatchRuntime/watch did not exist yet. The first
+  process-test version failed at spawning `ps` with EPERM in the sandbox; replaced its exit observation with
+  inherited-pipe EOF (no ps dependency in the tests). Real-home measurement used this same sandbox, where process
+  probes fail soft when ps is unavailable. Pre-existing untracked `.claude/` left untouched. A broken output pipe
+  returns an error/exits because it cannot deliver an error line; refresh and clock errors keep retrying.
+  Workspace unsafe search also found pre-existing `unsafe extern` / `unsafe` fcntl calls in
+  `crates/claude/src/invocation.rs:319,325`; left untouched per this review's scope. The pane now has no unsafe;
+  the entire workspace is not unsafe-free. Non-Unix compilation was not run; the Unix parent process tests passed.
 
 ### 2026-11-11 — Step 16.1: `multi-link pane --json` — Codex
 - Did: Implemented the pane projection from the TUI worker's `refresh_with_live` and public
