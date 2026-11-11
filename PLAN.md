@@ -2597,10 +2597,181 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
 - Files: `docs/phase15-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; timings recorded; the owner's answer recorded.
 
+### Phase 16 — A multi-link pane inside Claude Code (Release 1.13)
+Need (owner, 2026-11-11): "while I work in Claude Code I want to see what's running in this repo, and the Codex runs
+this session handed off, without switching to the TUI." Design FR16 (backlog: a Claude Code mod) and the bridge
+decision "mod runs `multi-link` and reads JSON" (design § Solution design). Board 16 (claude.ai artifact
+2ksgLic1phpGMUD9yojosg, source `docs/boards/board16-mod-pane.html`) offered A · Tree, B · Tree + step strip and
+C · Repo view; the owner first picked a side pane over a strip above the prompt, then **C · Repo view** on 2026-11-11.
+Comparables (board and design § comparables): repo-sessions (a mod with swimlanes; busy/idle only, Codex rows not tied
+to the Claude session that started them), the TUI's own live grid (Phase 14; C is its one-repo cousin), Claude Code's
+built-in tasks pane (one list, state as a glyph). What none does: nest a Codex run under the Claude session that
+started it, with `exact` vs `likely` said out loud.
+Measured 2026-11-11 (release `a97bd1a`, real `~`): a fresh `multi-link` process is a cold pass (1.16 s wall, all
+cores), while a warm in-process refresh is 130–194 ms. So polling a fresh process every few seconds would cost a cold
+pass each time; the pane needs one long-lived process per session.
+
+Decisions:
+- **G1 One CLI command shapes the pane, from the repo view's rules.** `multi-link pane --json --cwd <dir> --session
+  <id>` prints exactly what the pane draws. Rows are the TUI repo view's (W6, W8), for the repo the cwd maps to
+  (`RepoMode::map`; a cwd outside git is its own group, as today): top-level non-imported sessions with activity in
+  the 2 h window; each Codex child nested under the Claude session of its latest placing link (the existing
+  `parent_links` rule in `crates/core/src/live.rs`: latest `at`, then index), so a child appears once; a child whose
+  parent is absent or in another repo stays top-level; an ambiguous or unlinked hand-off is never a child: it shows on
+  the parent as `N possible runs` / `no codex run found` (W5, W8). Sections by state: `working` = busy; `waiting` =
+  waiting or stale (stale marked); `recent` = every other row (idle, finished, unknown, Codex `turns_complete`), so
+  every row has a section and no "ended at" time is invented (Codex "done" = its last turn completed, W5; Claude has no
+  end time). Shape: `{ v: 1, repo, now, this: <id>, seen: bool, sections: [ { name, rows: [ { id, harness, label,
+  step, state, phrase, is_this, children: [ { id, harness, state, phrase, match: "exact" | "likely" } ], handoffs:
+  [ { step, outcome, candidates } ] } ] } ] }`; `label` and `phrase` are W3 and W5 (the same words the TUI shows);
+  `match` is `exact` only for an exact link (project rule). `seen` = the session id is in the data; `this` sorts first
+  in its section, and when `seen` is false the mod pins a placeholder row (G4). Built in `crates/cli` from the TUI's
+  existing repo-view model (the CLI already depends on `multi-link-tui`); no core or tui type changes beyond making
+  that model reachable. Passes: the same refresh the TUI worker runs (`refresh_with_live` in `crates/cli/src/tui.rs`:
+  the 2 h pass, the all-time step pass, live), one shared `now`, so the pane and the TUI agree. Why: the rules already
+  exist, are tested and were chosen with the owner; re-deriving them in a second place would let the two screens
+  drift.
+- **G2 A long-lived watcher, not polling.** `multi-link pane --watch --json …` keeps one `Scanner` warm and prints one
+  G1 object per line (NDJSON) every 3 s, and only when the object minus `now` and every time phrase differs from the last
+  one printed, or 30 s have passed (heartbeat), so the change test is not defeated by the clock. It prints its first line as soon as the first (cold) pass ends. Errors print
+  `{ v: 1, error: "<text>" }` and the watcher keeps going. It exits when killed (the mod's teardown, G3), and on its own within one tick when
+  its parent process is gone (the parent pid captured at start changed, or was already 1 at start), so it never
+  outlives Claude Code even if the mod's teardown is missed. Why: a warm refresh is ~0.15 s against
+  ~1.2 s cold (measured above); one process per session is the cheapest correct shape.
+- **G3 The mod draws C.** In the repo under `mod/multi-link-pane/` (design: repo shape lists `mod/`): `plugin.json`,
+  `hooks/hooks.json`, `hooks/register.tsx`, `types/index.d.ts`. On `session.start` it registers `/multi-link` (opens
+  the pane) and opens a pane `multi-link`. It spawns the G2 watcher with `$.process.spawn` for the session's life (the
+  engine kills it when the loop ends or the module unloads), parses each complete line, keeps the latest object in a
+  `$.state` atom and redraws the pane from it. Teardown: on `session.end` and on module unload it ends the spawn loop
+  (which kills the child) and cancels any pending retry timer, so no watcher is restarted after the session ends. Layout as board 16 C: header `multi-link · <repo name>`, then
+  `working`, `waiting`, `recent (2h)` rules, one row per session (glyph `●` live / `✓` done in its harness colour, short
+  id or session name, step), `this session` highlighted with a `▌` bar, its children indented with `└`, a likely link
+  shown as `likely`, footer `updated Ns ago`. Overflow: the header, the `this session` row
+  (with up to 3 children, then `+N runs`) and the footer are always kept; other rows drop from the bottom of `recent`,
+  then `waiting`, then `working`, each section ending `+N more` (N counts sessions; a parent's children go with it);
+  every text is cut by display width with `…`; below 4 rows only `this session` and the footer. Colours: Claude orange, Codex blue, done green, running amber,
+  through the surface's own text colours where it has them. Why C: the owner's pick; it shows the parallel
+  sessions the owner actually runs (the coordinator plus one session per step).
+- **G4 States.** No watcher line yet: `reading sessions…`. `multi-link` not on PATH (spawn rejects): `multi-link isn't
+  on PATH. See the README.` A watcher that answers an unknown command (an older `multi-link`): `This multi-link is too
+  old for the pane. Update it.` `seen: false`: the repo view as usual with a pinned `▌ this session · not seen yet` row at the
+  top of `working`.
+  An `error` line: the last good data stays, with the error dimmed in the footer. The watcher exiting: restart after
+  2 s, then 4, 8, up to 60 s, and say `watcher stopped, retrying` in the footer. Empty repo: `No sessions in this repo
+  in the last 2 h.`
+- **G5 Undocumented, so confirmed first.** Claude Code's mod API is new to this project, so 16.0 runs a spike in an
+  interactive terminal session (a PTY, as 15.4's harness) before any code: (a) the engine's `sessionId` equals the
+  Claude transcript id multi-link reads (the file name under `~/.claude/projects/`), in the desktop app as well as the
+  terminal; (b) a pane opens and redraws from a `$.state` atom, in the terminal and in the desktop app; (c) a slash
+  command registers; (d) `$.process.spawn` streams a long-lived child's lines and unloading the module kills it;
+  (e) `claude plugin test` mounts the pane on both `terminal` and `desktop`. 16.3's surface list follows what (b) and
+  (e) found. If (a) fails, the mod passes the session's `transcript_path` instead and G1 takes
+  `--transcript <path>`; if (b) fails in the desktop app, the phase still ships for the terminal and says so in the
+  README. Either is a plan change logged in the Review log, not a stop, unless no surface draws the pane.
+- **G6 No new installs.** The mod is checked with `claude plugin validate` and `claude plugin test` (both ship with
+  Claude Code); no TypeScript compiler, npm package or bundler is added. Loading it for real uses
+  `claude --plugin-dir <repo>/mod/multi-link-pane` (terminal) or `CLAUDE_CODE_PLUGIN_DIRS` (desktop app), which is
+  the owner's one paste (stop-and-ask, one ready command).
+
+NFRs: the pane's first data ≤ 2.5 s after a session starts on real `~` (cold pass 1.16 s plus spawn); the watcher's
+refresh median ≤ 250 ms (a warm pass, 14.4/15.4 range); the watcher costs no CPU between ticks; no network; no orphan
+watcher 5 s after its Claude Code process exits.
+
+Non-goals: the step strip (board 16 B) and the step graph in the pane; actions from the pane (open, resume, jump):
+read-only for now; a strip above the prompt; notifications; publishing the mod to a marketplace or GitHub (an owner
+decision later); changes to `overview`, `live`, `links` or any existing JSON; any core type change; Windows.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; clippy `-D warnings` and `fmt --check` clean; every
+committed key unchanged except the new `fixtures/expected/pane/` files; `fixtures/expected/phase9/check.sh 6`,
+`phase12/check.sh`, `phase13/check.sh`, `phase14/check.sh` all `ok`; `claude plugin validate mod/multi-link-pane` and
+`claude plugin test mod/multi-link-pane` clean; real pane check in 16.4; W10 scan.
+
+### Step 16.0 — Rules, pane goldens, API check (Claude)
+- Depends on: 15.4. G1–G6 into `docs/design.md` ("Phase 16 decisions"; FR16 updated to the pane). Commit board 16.
+  G5 spike in a throwaway mod in the session scratchpad (never in the repo), loaded with `--plugin-dir` in an
+  interactive `claude` session in a PTY and, if the owner turns it on, in the desktop app: log `sessionId` and
+  `transcript_path` and compare with the transcript file; open a pane that redraws from an atom on a timer; register
+  a command; spawn `sleep`-style child and check it dies on unload; run `claude plugin test` on both surfaces.
+  If (a) fails, G1 takes `--transcript <path>` instead (a logged plan change). Hand-written answer keys for G1 on the
+  committed fixtures (fixed `--now`): `fixtures/expected/pane/{busy,waiting-stale,done-2h,children-exact-likely,
+  unseen,ambiguous,child-other-repo,idle-recent,empty}.json`, each checked by hand against the TUI repo
+  view (`home_html` render) and `live` / `links` output for the same fixture. PROGRESS lists the exact command for
+  each key (`--root`, `--cwd`, `--session`, `--now`).
+- Files: `docs/design.md`, `docs/boards/board16-mod-pane.html`, `fixtures/expected/pane/**`, `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` (nothing reads the keys yet); G5 (a)–(e) results recorded in
+  PROGRESS with the logged values; each key's rows traced to the matching `live`/`links` JSON in PROGRESS.
+
+### Step 16.1 — `multi-link pane --json` (Codex)
+- Depends on: 16.0. G1.
+- Files: `crates/cli/src/pane.rs` (new), `crates/cli/src/main.rs`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; each 16.0 key's command (as listed in PROGRESS) prints that key byte for byte;
+  tests: `is_this` sorts first, a child appears once under its latest placing link, an ambiguous hand-off is never a
+  child, `exact` only for exact links, idle and Codex-done rows land in `recent`, imported rows are absent, an
+  unknown session gives `seen: false`; a temporary git repo with a worktree (built in the test) maps two cwds to one
+  repo, since fixture mode skips git; rows and phrases equal the TUI repo view's for the same input; every existing
+  key and `check.sh` unchanged.
+
+### Step 16.2 — `pane --watch` (Codex)
+- Depends on: 16.1. G2.
+- Files: `crates/cli/src/pane.rs`, `crates/cli/src/main.rs`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; tests with an injected clock and tick: the first line after the first pass, no
+  line on a tick where only times moved, a line on a real state change, a heartbeat at 30 s, an error line and the watcher keeps running, every line parses as one G1 object; a
+  process test that the watcher exits within one tick once its parent is gone (spawn it from a child process that
+  exits), and one that starts with parent pid 1 exits at once; real `~` release: first line time and a 10-tick
+  refresh median of the exact pane pass recorded (NFRs: ≤ 2.5 s, ≤ 250 ms; over budget → stop and plan, as F3).
+
+### Step 16.3 — The mod (Codex)
+- Depends on: 16.2. G3, G4.
+- Files: `mod/multi-link-pane/**` (manifest, hooks, types, `*.test.tsx`), `PROGRESS.md`
+- Verify: `claude plugin validate mod/multi-link-pane` clean; `claude plugin test mod/multi-link-pane` → all pass on
+  each surface 16.0 found the kit mounts (both, unless G5 (e) said otherwise): the pane draws each 16.0 key as board 16 C (sections, `▌` this session,
+  `└` children, `likely`), every G4 state (spawn rejects, too-old answer, no line yet, `seen: false`, error line keeps
+  data, watcher exit → retry with backoff on the mocked clock, empty repo), overflow as G3 at 20×6, 30×12 and a
+  working-only list taller than the pane (this session and footer kept, `+N more` counts sessions); a line split
+  across two chunks parses once; `session.end` and unload during streaming and during a backoff wait leave no running
+  child and no pending timer.
+
+### Step 16.4 — Real check, README, owner confirm (Claude)
+- Depends on: 16.3. Load the mod with `--plugin-dir` in a real terminal session in this repo and (owner paste) in the
+  desktop app: the pane matches board 16 C (screenshot side by side), the coordinator and a step session show under
+  `working`, a Codex hand-off appears nested with the right `exact`/`likely`, NFRs measured (first data, refresh
+  median, no orphan 5 s after quit). README: a "Claude Code pane" section with the screenshot and the one load
+  command. `docs/phase16-check.md`.
+- Files: `docs/phase16-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · pane step strip and actions (board 16 B).
 
 ## Review log
+
+### 2026-11-11 — Phase 16 plan critique (Codex, read-only, Codex loop)
+`codex-quota.py` → `primary: 0%`, `secondary: 56%`, `CODEX: OK`. Ten findings; all accepted, most by reusing rules
+the TUI already has.
+1. **"Done" had no evidence behind it** (Claude has no end time; Codex "done" is `turns_complete`). **Accepted**: the
+   third section is `recent` = every other row with activity in the window, using W5's phrases; no end time invented.
+   Board 16 C relabelled `recent (2h)`.
+2. **Nesting could duplicate a child or pick an old parent.** **Accepted**: G1 uses the existing `parent_links` rule
+   (latest placing link, then index), a child appears once, and an absent or other-repo parent leaves it top-level.
+3. **No place for ambiguous or unlinked hand-offs.** **Accepted**: they are never children; they show on the parent as
+   `N possible runs` / `no codex run found` (W5, W8) through a `handoffs` field.
+4. **Idle and unknown sessions had no section; `seen` was vague.** **Accepted**: they go in `recent`; `seen` means
+   found in the data; an unseen session gets a pinned placeholder row; imported rows are left out as the TUI does.
+5. **Change suppression compared clock fields.** **Accepted**: compare the object minus `now` and time phrases, with a
+   30 s heartbeat; tests split "only time moved" from a real change.
+6. **The API check was too narrow and `-p` is not interactive.** **Accepted**: 16.0 is a spike in an interactive PTY
+   session covering session id, pane redraw, command, long-lived spawn and its kill on unload, and the test kit's
+   surfaces; 16.3's surface list follows what it finds.
+7. **Parent-pid alone is not session cleanup.** **Accepted**: the mod ends the spawn loop and cancels retry timers on
+   `session.end` and unload; the pid check stays as a backstop (and covers a parent pid of 1 at start); tests for
+   unload during streaming and during backoff.
+8. **Answer-key commands were not reproducible, and fixture mode skips git.** **Accepted**: PROGRESS lists each key's
+   full command; 16.1 adds a test that builds a temporary git repo with a worktree.
+9. **The refresh path was unspecified.** **Accepted**: the pane runs the TUI worker's exact refresh with one shared
+   `now`, and 16.2 measures that exact pass against the 250 ms budget (over → stop and plan).
+10. **Overflow undefined when working rows alone overflow.** **Accepted**: header, this session (with up to 3
+   children) and footer are always kept; other rows drop from `recent`, then `waiting`, then `working`; `+N more`
+   counts sessions; display-width cuts; tests at small sizes and a working-only overflow.
 
 ### 2026-11-11 — Step 15.2 input type (Claude, Codex blocker, Codex loop)
 - Codex stopped before coding: rendering from `multi_link_core::LoadSnapshot` needs `multi-link-core` in

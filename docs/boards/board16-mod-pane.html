@@ -1,0 +1,141 @@
+<title>Board 16 · Mod Pane</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: board header, then option cards in a wrapping grid; each card is a chat column with the pane beside it. */
+:root{
+  --bg:#f3f2f0; --card:#ffffff; --fg:#1d1c1a; --muted:#6b6863; --line:#dedbd6;
+  --pane:#171614; --pane-fg:#e8e4dc; --pane-dim:#8c867c; --pane-line:#2c2a26;
+  --claude:#d97757; --codex:#5b8def; --ok:#5fae74; --warn:#d6a243;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:Inter,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121110; --card:#1b1a18; --fg:#ece8e1; --muted:#9a948a; --line:#2e2c28; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121110; --card:#1b1a18; --fg:#ece8e1; --muted:#9a948a; --line:#2e2c28; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-size:1.9rem;margin:0 0 6px;text-wrap:balance}
+.lede{color:var(--muted);max-width:68ch;margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:22px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.opt h2{font-family:var(--display);font-size:1.15rem;margin:0;display:flex;gap:10px;align-items:baseline}
+.tag{font:600 .7rem var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opt p{margin:0;color:var(--muted);font-size:.92rem}
+.stage{display:grid;grid-template-columns:1fr 250px;border:1px solid var(--line);border-radius:8px;overflow:hidden;min-height:300px}
+.chat{padding:14px;display:flex;flex-direction:column;gap:10px;font-size:.82rem;color:var(--muted);min-width:0}
+.bubble{background:var(--bg);border-radius:8px;padding:8px 10px}
+.bubble.me{align-self:flex-end;color:var(--fg)}
+.prompt{margin-top:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--muted)}
+.pane{background:var(--pane);color:var(--pane-fg);font:12px/1.65 var(--mono);padding:10px 12px;white-space:pre;overflow-x:auto}
+.d{color:var(--pane-dim)} .c{color:var(--claude)} .x{color:var(--codex)} .ok{color:var(--ok)} .w{color:var(--warn)}
+.b{font-weight:600}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:.84rem}
+.notes div{min-width:0} .notes b{display:block;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.states{margin-top:28px}
+.states h2{font-family:var(--display);font-size:1.15rem;margin:0 0 12px}
+.srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+.srow figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.srow figcaption{font-size:.82rem;color:var(--muted)}
+.srow .pane{border-radius:8px;min-height:120px}
+.foot{margin-top:28px;font-size:.82rem;color:var(--muted)}
+@media (max-width:620px){.stage{grid-template-columns:1fr}.notes{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+<h1>Board 16 · multi-link pane in Claude Code</h1>
+<p class="lede">The pane sits beside the chat in Claude Code. It shows this session's Codex hand-offs while you work, so you don't have to switch to the TUI. Every option reads the same data the TUI does, by running <code>multi-link … --json</code>. The rows are example data drawn in the shape of real links output.</p>
+
+<div class="grid">
+
+<section class="opt">
+  <h2><span class="tag">A</span>Tree</h2>
+  <p>The shape you picked. This session at the top, then each Codex run it started, newest first. <span class="b">exact</span> links show a solid line; guessed links show a dotted one and the word "likely".</p>
+  <div class="stage">
+    <div class="chat"><div class="bubble me">do step 15.4</div><div class="bubble">Handing 15.4 to Codex…</div><div class="prompt">&gt; _</div></div>
+<div class="pane"><span class="b">multi-link</span>        <span class="d">↻ 4s</span>
+<span class="c">●</span> this session
+  <span class="d">multi-link · Step</span> <span class="b">15.4</span>
+
+<span class="x">├─</span> codex <span class="b">01a1ca09</span>
+<span class="x">│</span>   <span class="w">● running</span>  <span class="d">3m</span>
+<span class="x">├─</span> codex <span class="b">01a1c9f8</span>
+<span class="x">│</span>   <span class="ok">✓ done</span>     <span class="d">12m</span>
+<span class="x">┆</span>  codex <span class="b">01a1c7e2</span>
+    <span class="ok">✓ done</span>  <span class="d">likely · 40m</span>
+
+<span class="d">enter open · g graph</span></div>
+  </div>
+  <div class="notes"><div><b>Good</b>Answers "what did I hand off and is it finished" in one look.</div><div><b>Weak</b>Step context is one line; nothing about the other harness's work on the same step.</div></div>
+</section>
+
+<section class="opt">
+  <h2><span class="tag">B</span>Tree + step strip</h2>
+  <p>A's tree, plus a short strip for the PLAN.md step: every session on that step, from both tools, laid out by time. It's a small version of the TUI's step graph.</p>
+  <div class="stage">
+    <div class="chat"><div class="bubble me">do step 15.4</div><div class="bubble">Handing 15.4 to Codex…</div><div class="prompt">&gt; _</div></div>
+<div class="pane"><span class="b">multi-link</span>        <span class="d">↻ 4s</span>
+<span class="c">●</span> this session  <span class="d">· 15.4</span>
+<span class="x">├─</span> codex 01a1ca09 <span class="w">●</span>
+<span class="x">└─</span> codex 01a1c9f8 <span class="ok">✓</span>
+
+<span class="d">step 15.4 ────────────</span>
+<span class="c">claude</span> <span class="c">━━━━━━━━━━━━</span><span class="d">·</span>
+<span class="x">codex </span>   <span class="x">━━━━</span>  <span class="x">━━━</span><span class="w">▸</span>
+<span class="d">       09:30     09:58</span>
+<span class="d">2 runs · 1 still running</span>
+
+<span class="d">enter open · g graph</span></div>
+  </div>
+  <div class="notes"><div><b>Good</b>Shows how the step is going across both tools, the thing multi-link is for.</div><div><b>Weak</b>Tight in 250 columns of space; the strip needs a fallback when the pane is narrow.</div></div>
+</section>
+
+<section class="opt">
+  <h2><span class="tag">C</span>Repo view <span class="tag">· picked 2026-11-11</span></h2>
+  <p>Every live session in this repo, from both tools. This session is highlighted and its own Codex runs are nested under it. It's closest to the TUI's live grid.</p>
+  <div class="stage">
+    <div class="chat"><div class="bubble me">do step 15.4</div><div class="bubble">Handing 15.4 to Codex…</div><div class="prompt">&gt; _</div></div>
+<div class="pane"><span class="b">multi-link</span> <span class="d">· multi-link</span>
+<span class="d">working ─────────────</span>
+<span class="c b">▌● this session  15.4</span>
+<span class="c">▌</span> <span class="x">└</span> codex 01a1ca09 <span class="w">●</span>
+ <span class="c">●</span> step-15-4     <span class="d">15.4</span>
+<span class="d">waiting ─────────────</span>
+ <span class="x">●</span> codex 01a1bb10 <span class="d">14.2</span>
+<span class="d">recent (2h) ─────────</span>
+ <span class="c">✓</span> step-15-3     <span class="d">15.3</span>
+ <span class="x">✓</span> codex 01a1c9f8 <span class="d">15.3</span>
+
+<span class="d">updated 2s ago</span></div>
+  </div>
+  <div class="notes"><div><b>Good</b>Useful when several sessions run in parallel, as the coordinator does.</div><div><b>Weak</b>Repeats the TUI; this session's own hand-offs are less prominent.</div></div>
+</section>
+
+</div>
+
+<div class="states">
+  <h2>States every option needs</h2>
+  <div class="srow">
+<figure><div class="pane"><span class="b">multi-link</span>
+<span class="c">●</span> this session
+
+<span class="d">No Codex hand-offs yet.
+They appear here when this
+session runs codex exec.</span></div><figcaption>No links yet</figcaption></figure>
+<figure><div class="pane"><span class="b">multi-link</span>
+
+<span class="w">multi-link isn't on PATH.</span>
+<span class="d">Install it, then the pane
+fills in on its own.</span>
+<span class="d">See the README.</span></div><figcaption>CLI missing (the mod needs it)</figcaption></figure>
+<figure><div class="pane"><span class="b">multi-link</span>        <span class="d">↻ …</span>
+
+<span class="d">reading transcripts</span>
+<span class="x">━━━━━━━━━</span><span class="d">─────</span>  <span class="d">612 / 871</span></div><figcaption>First load (cold cache)</figcaption></figure>
+  </div>
+</div>
+
+<p class="foot">Colours are the TUI's theme roles: Claude orange, Codex blue, green for done and amber for running. The pane is drawn with Claude Code's own elements (Box, Text), so the final look follows the surface: terminal, desktop or VS Code. Width and refresh rate are open questions for the plan.</p>
+</div>
