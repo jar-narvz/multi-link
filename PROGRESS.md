@@ -1,8 +1,8 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 13 (known folders and a key that is never lost, Release 1.10): Step 13.0 is committed (2026-11-10); 13.2
-(Codex, crossterm `use-dev-tty`) ran alongside and is under review; 13.1 (Codex: C1–C3 in
+**Phase 13 (known folders and a key that is never lost, Release 1.10): Steps 13.0 and 13.2 are committed (2026-11-10);
+13.1 (Codex: C1–C3 in
 `crates/claude/src/invocation.rs` and `crates/core/src/link.rs`, Link `launch_dir`) is next.** Rules in
 `docs/design.md` (Phase 13 decisions) and `docs/output-schema.md` (Heuristic → Phase 13, Link `launch_dir`). Keys:
 `fixtures/expected/phase13/links.json` (`check.sh`, `crates/cli/tests/phase13.rs`); Phase 12's case (h) option-first
@@ -737,6 +737,18 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 13.2: Keys read with `use-dev-tty` — Codex
+- Did: enabled crossterm's `use-dev-tty` feature (D1); lockfile regenerated. Ran alongside Claude's 13.0 (Codex told
+  to touch only `Cargo.toml` / `Cargo.lock` and report its entry instead of editing PROGRESS.md; Claude pasted it).
+- Changed: `Cargo.toml`, `Cargo.lock` (adds `filedescriptor 0.8.3`, `thiserror 1.0.69`, `thiserror-impl 1.0.69`).
+- Verify (Codex): `cargo build --release -p multi-link` exit 0; `python3 -I tools/resize-key-check.py
+  target/release/multi-link 5` → rounds 1–5 `pass`, exit 0; `cargo test --workspace --no-fail-fast` 619 passed / 0
+  failed (before Claude's Phase 13 tests existed); clippy `-D warnings` and `fmt --check` clean; no snapshot changed.
+- Review: Claude, clean (one-line feature change). Claude re-ran: release build, resize check 5 of 5 `pass`
+  (8d2cc22's build: 5 of 5 FAIL); clippy and fmt clean; with 13.0's files present `cargo test` 618 passed / 2
+  failed, exactly 13.0's two listed tests; no TUI snapshot or key changed.
+- Gotchas: `use-dev-tty` reads keys from `/dev/tty` with poll(2); the TUI already requires a terminal.
 
 ### 2026-11-10 — Step 13.0: Rules, fixtures, keys and the resize check — Claude
 - Did: C1–C3 and D1 into `docs/design.md` and `docs/output-schema.md`; synthetic root `fixtures/sessions-phase13/`
