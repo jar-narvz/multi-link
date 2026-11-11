@@ -1,9 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 16.1 is committed (Codex loop, 2026-11-11): `multi-link pane --json` in `crates/cli/src/pane.rs`.** It runs
+`tui::refresh_with_live` (now `pub(crate)`) once with the 2 h window and projects with `view::{sessions, home_label,
+placing, status, outcome}`; all ten keys match byte for byte. **For 16.2:** `project(&Refresh, cwd, RepoMode, this)`
+is the pure part a watcher can call on each tick with one long-lived `Scanner`; `run` builds a fresh `Scanner` today.
+The change test must ignore `now` and every `phrase` (G2).
+
 **Phase 16 (Claude Code pane) is in progress. Step 16.0 is committed (Claude step, 2026-11-11): G1–G6 and the pins are
-in `docs/design.md` → "Phase 16 decisions"; ten answer keys in `fixtures/expected/pane/`. Next: Step 16.1
-(`multi-link pane --json`, Codex).**
+in `docs/design.md` → "Phase 16 decisions"; ten answer keys in `fixtures/expected/pane/`.**
 - **G5 spike passed in the terminal** (Claude Code 2.1.322): `$.session.id()` = transcript file id (G1 keeps
   `--session`); pane docks right and redraws from an atom on a timer; `/command` registers; `$.process.spawn` streams
   raw text chunks (buffer to newlines) and unload / `/exit` kill the child (its ppid is `claude`); `claude plugin test`
@@ -797,6 +802,273 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 16.1: `multi-link pane --json` — Codex
+- Did: Implemented the pane projection from the TUI worker's `refresh_with_live` and public
+  `view::{sessions,home_label,placing,status,outcome}` functions, with a single `Options.now` and the fixed 2 h
+  window. Retained quiet waiting/stale rows, flattened started Claude children into rows, preserved overview
+  placement and cross-repo boundaries, and sorted sections/children per the pins. Local serializable pane types;
+  no core type changes. `tui.rs` changes only `refresh_with_live` to `pub(crate)`.
+  Added all ten exact Step 16.0 command/key comparisons (pretty JSON including the final newline, `TZ=UTC`),
+  unit tests for started Claude children and unlinked hand-offs, ordering/imports, hidden-parent promotion,
+  public repo-view labels/phrases, and a test building a temporary git repo plus worktree and refreshing in real
+  repo mode from two nested cwds. Initial golden test failed with `unrecognized subcommand 'pane'` before implementation.
+- Changed: `crates/cli/src/{pane.rs,main.rs,tui.rs}`, `crates/cli/tests/pane.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. All commands below exited 0; pasted actual output (workspace output reduced
+  to target headings and result lines). Workspace totals from those lines: 693 passed, 0 failed, 1 ignored
+  (the pre-existing optional real-file test).
+  - `TZ=UTC cargo test --workspace`:
+
+```text
+     Running unittests src/main.rs (target/debug/deps/multi_link-7cedda362c6e1306)
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running tests/cli.rs (target/debug/deps/cli-e0787a43f85482d2)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.89s
+     Running tests/graph.rs (target/debug/deps/graph-d837f77b20803abc)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+     Running tests/hook_check.rs (target/debug/deps/hook_check-2c16d8f4ae4adc11)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+     Running tests/live.rs (target/debug/deps/live-c6d920ae5b40705e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/pane.rs (target/debug/deps/pane-178a448141df46ab)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/phase12.rs (target/debug/deps/phase12-a59e2b11bb6caddf)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/phase13.rs (target/debug/deps/phase13-7e99d17abc451c6e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/phase9.rs (target/debug/deps/phase9-10b001eb96b77347)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_claude-3007d227ffc8769a)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/app_record.rs (target/debug/deps/app_record-c6763d08001f1e6c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/calls.rs (target/debug/deps/calls-45eb22dd6795bdda)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-499f3a2e254ccd24)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+     Running tests/invocation.rs (target/debug/deps/invocation-3e16b8bc37be96e1)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running tests/last_turn.rs (target/debug/deps/last_turn-b71057714a3b5979)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/phase6.rs (target/debug/deps/phase6-e2db30bd15f79be3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase7.rs (target/debug/deps/phase7-2c8b6d1063153907)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_codex-e78d5e99d41da51c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-586748b917de5a55)
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/compressed.rs (target/debug/deps/compressed-a0fe57bc51027b49)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-ba5f82572d1c4a8d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/phase6.rs (target/debug/deps/phase6-d1fad84a09bb2e55)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_core-b9f5577635e977c9)
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+     Running tests/compressed.rs (target/debug/deps/compressed-23fd67b2786194f6)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/graph.rs (target/debug/deps/graph-367a1c66ea7fcc9e)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/graph_commit.rs (target/debug/deps/graph_commit-413fc54f4401db0c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/hook.rs (target/debug/deps/hook-9d2c70dbcc7efb25)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+     Running tests/links.rs (target/debug/deps/links-f8b4f67c998fff9c)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+     Running tests/live.rs (target/debug/deps/live-e242d43fd303903b)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/overview.rs (target/debug/deps/overview-958464a7d8ad16d7)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/parallel_scan.rs (target/debug/deps/parallel_scan-e4e2339dd6a5af37)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+     Running tests/phase6.rs (target/debug/deps/phase6-a939478b5426845c)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/repo_probe.rs (target/debug/deps/repo_probe-489df8ea92fb062c)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/session_end.rs (target/debug/deps/session_end-97da6fcc150d54f9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/sessions.rs (target/debug/deps/sessions-59bcd1019b17c9c4)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests/started.rs (target/debug/deps/started-d7b62c3a1b08ef27)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/transcript_exit.rs (target/debug/deps/transcript_exit-27b68d6dc1e2bf21)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_hook-62ceaf9ce3262d6f)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook.rs (target/debug/deps/hook-312d13ac9a0e316c)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/settings.rs (target/debug/deps/settings-22861df00bc1ebd7)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_model-df157fa80d5a3417)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/calls.rs (target/debug/deps/calls-5289ef8606320dd4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/graph.rs (target/debug/deps/graph-bb878fdee95626eb)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/live.rs (target/debug/deps/live-9d6ecd5fdabf883c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/model.rs (target/debug/deps/model-452af6df96c138b7)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_plan-b5ab79d96e45b0d3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fixtures.rs (target/debug/deps/fixtures-1edf5b4804af5d92)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/multi_link_tui-21d83cafd7849385)
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/graph.rs (target/debug/deps/graph-005a83afaca3727a)
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+     Running tests/home.rs (target/debug/deps/home-5a2605d8fc0f75cd)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/live.rs (target/debug/deps/live-5cd55c828b339aac)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/loading.rs (target/debug/deps/loading-0fd56bea0a6c1888)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/loading_app.rs (target/debug/deps/loading_app-5bd2efe9d42b5517)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/phase6_shape.rs (target/debug/deps/phase6_shape-e35530f2f0f05366)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/phase8_shape.rs (target/debug/deps/phase8_shape-abfb141048af4856)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/started.rs (target/debug/deps/started-da6f7bfb46539738)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/theme.rs (target/debug/deps/theme-501b876d9ddbbc6b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/timeline.rs (target/debug/deps/timeline-e7b6c91cdfec15b4)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/view.rs (target/debug/deps/view-065c7d3f4df7468d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_claude
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_codex
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_hook
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_model
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_plan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests multi_link_tui
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  New unit tests from that run:
+
+```text
+test pane::tests::unlinked_handoff_has_words_and_no_child ... ok
+test pane::tests::this_first_then_flat_newest_first_then_id_and_no_imports ... ok
+test pane::tests::started_claude_child_is_its_own_row_in_its_state_section ... ok
+test pane::tests::hidden_parent_promotes_codex_but_preserves_placing_step_and_label ... ok
+test pane::tests::rows_labels_and_phrases_equal_public_repo_view_functions ... ok
+test pane::tests::temporary_git_worktree_cwds_share_one_pane_from_real_refresh ... ok
+```
+
+  - `TZ=UTC cargo test -p multi-link --test pane -- --nocapture` (runs each of the ten exact commands listed in 16.0):
+
+```text
+Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/pane.rs (target/debug/deps/pane-178a448141df46ab)
+
+running 1 test
+test pane_matches_all_ten_pretty_json_keys_byte_for_byte ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+```
+
+  - `cargo clippy --workspace --all-targets -- -D warnings`:
+
+```text
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.46s
+```
+
+  - `cargo fmt --all -- --check`, `git diff --check`, `git diff --exit-code -- fixtures/expected`:
+    no output, exit 0 each (keys and check scripts unchanged).
+  - `TZ=UTC bash fixtures/expected/phase9/check.sh 6`:
+
+```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+```
+
+  - `TZ=UTC bash fixtures/expected/phase12/check.sh`:
+
+```text
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+```
+
+  - `TZ=UTC bash fixtures/expected/phase13/check.sh`:
+
+```text
+ok   links.json
+```
+
+  - `TZ=UTC bash fixtures/expected/phase14/check.sh`:
+
+```text
+ok   live.json
+```
+
+- Review: Claude, 2026-11-11, mode Codex loop (`codex-quota.py` → `primary: 2%`, `CODEX: OK`). Round 0 was a
+  file-scope stop (Review log "Step 16.1 file scope"); round 1 implemented. Diff read: `pane.rs`, `main.rs` wiring,
+  `tui.rs` (one `pub(crate)`), `tests/pane.rs`; no other file touched. No findings. Notes, not defects: `seen` is
+  true only for a visible row (a session with no activity in the window and not waiting reads as unseen; a new session
+  has activity after its first prompt, so G4's placeholder covers the gap); `--json` is `required` so 16.2's
+  `--watch` sits beside it. Re-ran Verify: `TZ=UTC cargo test --workspace` → 693 passed, 0 failed, 1 ignored; clippy
+  `-D warnings` and `fmt --check` clean; all ten 16.0 key commands → `cmp` equal 10/10; `phase9/check.sh 6` (bash),
+  `phase12`, `phase13`, `phase14` all `ok`; `git diff HEAD -- fixtures/expected` empty. Matches Codex's paste.
+- Gotchas: `--root` selects fixture mapping; the worktree test explicitly uses `RepoMode::Real` with synthetic
+  transcripts under a temporary root. No network or real agent data needed. Existing PLAN.md edits and untracked
+  `.claude/` left untouched. No files staged or committed. `--watch` remains Step 16.2.
 
 ### 2026-11-11 — Step 16.0: Rules, pane goldens, API check — Claude
 - Did: **G5 spike first** (mode check `python3 -I tools/codex-quota.py` → `primary: 2%`, `secondary: 57%`, `CODEX: OK`;

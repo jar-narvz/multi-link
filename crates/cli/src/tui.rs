@@ -111,7 +111,7 @@ impl<M: Modes> Drop for Suspended<'_, M> {
 /// One refresh for the App: the overview, and the step graph it asked for (G11: rebuilt on every
 /// refresh, so a stale turn or a new rollout shows without a key press). A failed graph build fails
 /// the whole refresh, so the App keeps its last screen and shows the error.
-fn refresh_with_live(
+pub(crate) fn refresh_with_live(
     scanner: &mut Scanner,
     root: &Path,
     options: &Options<'_>,

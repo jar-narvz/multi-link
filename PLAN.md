@@ -2703,7 +2703,8 @@ committed key unchanged except the new `fixtures/expected/pane/` files; `fixture
 
 ### Step 16.1 — `multi-link pane --json` (Codex)
 - Depends on: 16.0. G1.
-- Files: `crates/cli/src/pane.rs` (new), `crates/cli/src/main.rs`, `crates/cli/tests/**`, `PROGRESS.md`
+- Files: `crates/cli/src/pane.rs` (new), `crates/cli/src/main.rs`, `crates/cli/src/tui.rs` (visibility of
+  `refresh_with_live` only, Review log), `crates/cli/tests/**`, `PROGRESS.md`
 - Verify: tests, clippy, fmt clean; each 16.0 key's command (as listed in PROGRESS) prints that key byte for byte;
   tests: `is_this` sorts first, a child appears once under its latest placing link, an ambiguous hand-off is never a
   child, `exact` only for exact links, idle and Codex-done rows land in `recent`, imported rows are absent, an
@@ -2744,6 +2745,12 @@ committed key unchanged except the new `fixtures/expected/pane/` files; `fixture
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · pane step strip and actions (board 16 B).
 
 ## Review log
+
+### 2026-11-11 — Step 16.1 file scope (Claude, Codex blocker, Codex loop)
+- Codex stopped before coding: G1 says the pane runs the TUI worker's exact refresh, but `refresh_with_live` in
+  `crates/cli/src/tui.rs:114` is private. **Accepted**: 16.1's Files gain `crates/cli/src/tui.rs` for one change,
+  `refresh_with_live` becomes `pub(crate)`, with no behaviour change. Why: copying the pass into `pane.rs` would let
+  the pane and the TUI drift, which is what G1 exists to prevent.
 
 ### 2026-11-11 — Step 16.0 amendments (Claude, G5 spike and while writing the keys)
 - **G5 (a) passed in the terminal**, so G1 keeps `--session <id>` (no `--transcript` change). The desktop-app half of
