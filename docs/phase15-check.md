@@ -103,4 +103,4 @@ the board's counter is simulated (`ready ✓  opening home`), the render's is th
 
 ## Owner check (stop and ask)
 
-Pending.
+2026-11-11: the owner tried the loading screen and answered "Looks good". Phase 15 is closed.

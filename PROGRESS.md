@@ -1,15 +1,13 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 15.4 is committed (2026-11-11, Claude step): Phase 15 real check and README; waiting on the owner's
-answer.** All F3 budgets pass on real `~` (release `5a63110`, series 2, load 4.7–6.2): (a) cold `overview --json`
+**Phase 15 is closed (2026-11-11): owner confirmed the loading screen ("Looks good"). Step 15.4 is committed
+(Claude step): Phase 15 real check and README.** All F3 budgets pass on real `~` (release `5a63110`, series 2, load 4.7–6.2): (a) cold `overview --json`
 median **1.16 s**; (b) worker first report **1525 ms** without `--live`, **1613 ms** with; (c) first home frame in
 the real TUI (PTY) **1.952 s** (`--live` 1.969 s); (d) warm **130 / 194 ms**. Under load 12–17 one `--live` first report
 took 2212 ms (median 1853 ms). PTY smoke 14/14 ok (resize 60×16 / 30×6, skip, `--live`, `q` and Ctrl-C during
 loading and the fade restore the terminal). README has a "Loading screen" section with
-`docs/img/loading-phase15-fixture.png`; details in `docs/phase15-check.md`. **Next:** record the owner's answer in
-`docs/phase15-check.md` → "Owner check" and the 15.4 entry's Review line, then Phase 15 is closed and the backlog
-(PLAN.md) is next. Scratch tools (not in the repo): PTY harness with a draining reader thread and screen model, and
+`docs/img/loading-phase15-fixture.png`; details in `docs/phase15-check.md`. **Next:** the backlog (PLAN.md). Scratch tools (not in the repo): PTY harness with a draining reader thread and screen model, and
 the (b)/(d) timing crate, in this step's session scratchpad.
 
 Step 15.2 is committed: `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}` is the pure renderer;
@@ -815,7 +813,8 @@ smoke15.py → 14/14 ok, twice (counter 36 → 176 / 1069; 60x16 title row 9; 30
 - Review: Claude's own step (docs and image only; no code), so no Codex review, as in 14.4. Numbers in README and
   the check doc were checked against the scratch logs (`f3-run1.log`, `f3-run2.log`, `f3-warm.log`,
   `home-run2.log`, `smoke-run2.log`). Board check: same fish, six `*` meets and specks as the board's paused
-  `drawC(4.0)`; rule-made differences only (F6 title and bar colours, fixture counter). Owner's answer: pending.
+  `drawC(4.0)`; rule-made differences only (F6 title and bar colours, fixture counter). Owner's answer
+  (2026-11-11): "Looks good". Phase 15 closed.
 - Gotchas: (1) Both series are 0.1–0.2 s slower than 15.1's (load ≈ 3.7 then, 1049 → 1069 files); not isolated.
   (2) One series-1 `--live` run took 2212 ms at load 17: F3 uses medians, so it passes, but it is disclosed in the
   README limits. (3) "During the fade" is inferred from timing (`ready ✓` after 1.0 s means the fade has started);
