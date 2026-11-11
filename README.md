@@ -13,6 +13,8 @@ ended Claude sessions say `finished`, compressed Codex rollouts are read, and mo
 confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 replaces hand-merging hook JSON with
 `multi-link hook check`, which reports your hooks and prints one command that updates them ([hook setup](#hook-setup)).
 Release 1.11 adds the [live grid](#live-grid): what every working, waiting or stale agent is doing now, on one screen.
+Release 1.12 makes the first load fast (the first home frame came up in 1.82–1.99 s on real data, down from about 9 s)
+and shows a [loading screen](#loading-screen) while it runs.
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -22,6 +24,7 @@ Release 1.11 adds the [live grid](#live-grid): what every working, waiting or st
   action before executing. Unsupported actions show a command for you to run.
 - Draws one PLAN.md step as boxes along time: who planned, implemented, reviewed and fixed, in order.
 - Shows every live session at once as a card: its state, for how long, its last few calls and the run it handed to.
+- Opens in about 2 s, with a school of fish and a real file counter while the first load runs.
 
 ## Home screen
 
@@ -167,6 +170,29 @@ with `multi-link tui --live`.
 - **Sizes:** below 120 columns cards stack in one column, a Codex card under its parent (`└▸`); below 40 rows the feed
   shrinks, then goes; cards that do not fit leave `↓ N more` and the view scrolls with the selection.
 - The same report is on the CLI: `multi-link live [--json]`.
+
+## Loading screen
+
+![Loading screen on the fixture frame](docs/img/loading-phase15-fixture.png)
+
+*HTML render of the loading screen at 76×22 with the fixture counter (`home_html --loading 4.0`; real check in
+[docs/phase15-check.md](docs/phase15-check.md)).*
+
+The first load reads every transcript once; later refreshes reuse what is cached. Release 1.12 parses those files on
+every core, so the cold `multi-link overview --json` went from 7.99 s to 1.16 s (median of 3 runs on the owner's
+machine, 1069 files), and the TUI's first home frame came up in 1.82–1.99 s (3 runs; 1.94–2.09 s with `--live`).
+
+- **While it loads**, two schools of ASCII fish swim through each other: the Claude-orange school circles, the
+  Codex-blue school swims a figure-eight; where they meet, a pale `*`. Below them: the title, a progress bar and a
+  counter of real work, `reading transcripts  612 / 871`, then `linking sessions…`, then `ready ✓  opening home`. The
+  counter is files parsed out of files listed, never a timer.
+- **It stays at least 1 second** (so it never flashes), then fades out over 250 ms into home.
+- **Any key skips it**: to the plain `loading sessions…` footer if the data is not ready yet, otherwise straight home.
+  `q` and Ctrl-C quit at any point and restore the terminal.
+- **Sizes:** the fish need 60×16 or more; from 30×6 up to that only the counter and hint show; below 30×6 just the
+  counter line.
+- Uses only the existing theme colours; 256-colour terminals get their 256-colour values, and `NO_COLOR` keeps the
+  glyphs with no colour, bold, dim or fade. A refresh error ends it at once with the error footer.
 
 ## States and links (Release 1.6)
 
@@ -347,6 +373,11 @@ state rules.
   cards, no Codex card and nothing waiting or stale, so pairing, waiting and stale cards are tested on the fixture
   only. With the grid open, later refreshes took 187–248 ms on real data; the first refresh after start took 9.2 s,
   of which the grid was 102 ms and the rest the overview's first full parse ([timing](docs/phase14-check.md)).
+  Release 1.12 cut that first refresh to 1.58–1.63 s with the grid ([timing](docs/phase15-check.md)).
+- Loading screen limits. Its 256-colour and `NO_COLOR` forms and the fade's colour steps are tested against
+  answer keys only; the real check ran in a truecolor PTY and read text, not colours. The first-load times above are
+  from one machine (14 cores) with other sessions running; on a busy machine one `--live` first report took 2.2 s,
+  over the 2 s target ([timing](docs/phase15-check.md)).
 
 Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4, 8.6 and 9.7 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);

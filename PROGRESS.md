@@ -1,17 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 15.3 is committed (2026-11-11, Codex loop): the loading screen is wired in. Step 15.4 (Claude: real check,
-README, owner confirm) is next.** `App::begin_loading(Instant)` starts it (the CLI calls it before spawning the
-worker); the 50 ms CLI loop calls `app.set_instant(Instant::now())` each frame and maps `LoadSnapshot` to
-`set_load_progress(LoadPhase, done, total)`; `App::loading_options()` is `Some` while the screen shows. The worker
-creates `LoadProgress`, sends it as `Message::Progress` before its first pass and calls `finish()` after sending the
-first report. A disconnected worker now shows the error footer instead of exiting. Smoke run on real `~` (release,
-76×22): counter rose 33 → 1029 / 1049, first report 1.46 s, home 1.75 s, `q` exit 11 ms, skip and Ctrl-C work.
-**For 15.4:** F3 (a)–(d) timings, the PTY checks not done in 15.3 (resize across 60×16 and 30×6, `--live` start,
-terminal restored after `q`/Ctrl-C during loading and during the fade), README image via `home_html --loading`,
-`docs/phase15-check.md`, owner confirm. A PTY harness must keep draining output while it waits for exit, or the TUI
-blocks on a full PTY buffer and never reads `q`.
+**Step 15.4 is committed (2026-11-11, Claude step): Phase 15 real check and README; waiting on the owner's
+answer.** All F3 budgets pass on real `~` (release `5a63110`, series 2, load 4.7–6.2): (a) cold `overview --json`
+median **1.16 s**; (b) worker first report **1525 ms** without `--live`, **1613 ms** with; (c) first home frame in
+the real TUI (PTY) **1.952 s** (`--live` 1.969 s); (d) warm **130 / 194 ms**. Under load 12–17 one `--live` first report
+took 2212 ms (median 1853 ms). PTY smoke 14/14 ok (resize 60×16 / 30×6, skip, `--live`, `q` and Ctrl-C during
+loading and the fade restore the terminal). README has a "Loading screen" section with
+`docs/img/loading-phase15-fixture.png`; details in `docs/phase15-check.md`. **Next:** record the owner's answer in
+`docs/phase15-check.md` → "Owner check" and the 15.4 entry's Review line, then Phase 15 is closed and the backlog
+(PLAN.md) is next. Scratch tools (not in the repo): PTY harness with a draining reader thread and screen model, and
+the (b)/(d) timing crate, in this step's session scratchpad.
 
 Step 15.2 is committed: `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}` is the pure renderer;
 `time` is seconds since loading began (no board `+1`). `home_html --loading SECONDS OUT.html --size WxH` draws the
@@ -785,6 +784,44 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 15.4: Phase 15 real check, README, owner confirm — Claude
+- Mode: Claude step (no Codex hand-off). Quota check anyway: `python3 -I tools/codex-quota.py` → `primary: 0%`,
+  `secondary: 56%`, `CODEX: OK`.
+- Did: Timed F3 (a)–(d) on real `~` with the release build of `5a63110`: (a) `/usr/bin/time -p` × 3; (b)/(d) with the
+  15.1 scratch timing crate copied to this session's scratchpad (3 fresh processes each; warm = passes 2–11 of one
+  process). Two series: series 1 at load 12–17, series 2 at load 4.7–6.2 (recorded). (c) and the smoke with a scratch
+  Python PTY harness (reader thread drains the PTY all the time, tiny CUP/ED/EL screen model, restore check = alt
+  screen left + cursor shown + PTY back to echo/canonical/isig). Rendered `home_html --loading 4.0 --size 76x22`,
+  screenshot with headless Chrome 2x, compared by eye with a paused scratch copy of board 15 (option E only). Wrote
+  the README "Loading screen" section, Release 1.12 line, a feature bullet and two limits lines; wrote
+  `docs/phase15-check.md`.
+- Changed: `docs/phase15-check.md` (new), `docs/img/loading-phase15-fixture.png` (new), `README.md`, `PROGRESS.md`.
+- Verify (whole phase):
+```
+cargo test --workspace → exit 0; 65 `test result: ok`, 686 passed, 0 failed, 1 ignored (real_counts)
+cargo clippy --workspace --all-targets -- -D warnings → exit 0;  cargo fmt --all -- --check → exit 0
+fixtures/expected/phase9/check.sh 6 → 47 ok, 0 FAIL;  phase12/check.sh → 3 ok;  phase13 → 1 ok;  phase14 → 1 ok
+git diff --stat c29c516 -- fixtures/expected → 25 files, all fixtures/expected/tui/loading-* (15.0's goldens only)
+W10: grep -nE "/Users/|\bsk-|api_key|local_[0-9a-f]{8}" README.md docs/phase15-check.md → nothing
+series 2 (a) overview --json: real 1.27 user 9.53 sys 1.19 | real 1.16 user 9.25 sys 1.18 | real 1.16 user 9.39 sys 1.26 → 1.16 s
+series 2 (b) no live: 1446 = 1006+440 | 1598 = 1157+441 | 1525 = 1082+443                 → median 1525 ms
+             --live:  1613 = 1098+439+75 | 1581 = 1058+444+79 | 1629 = 1113+440+77      → median 1613 ms
+series 2 (d) warm median of 10: 130 ms (126–132) no live; 194 ms (187–216) --live; bound 1.2 × 191–212 = 229–254 ms
+series 1 (load 12–17): (a) 1.54/1.18/1.13 s; (b) 1531/1641/1657 ms, --live 1716/1853/2212 ms; (d) 130 / 199 ms
+(c) PTY 76x22, first home frame: tui 1.821/1.952/1.989 s → 1.952 s; tui --live 1.969/2.086/1.939 s → 1.969 s
+smoke15.py → 14/14 ok, twice (counter 36 → 176 / 1069; 60x16 title row 9; 30x6 no art; q/Ctrl-C 2–6 ms, exit 0)
+```
+- Review: Claude's own step (docs and image only; no code), so no Codex review, as in 14.4. Numbers in README and
+  the check doc were checked against the scratch logs (`f3-run1.log`, `f3-run2.log`, `f3-warm.log`,
+  `home-run2.log`, `smoke-run2.log`). Board check: same fish, six `*` meets and specks as the board's paused
+  `drawC(4.0)`; rule-made differences only (F6 title and bar colours, fixture counter). Owner's answer: pending.
+- Gotchas: (1) Both series are 0.1–0.2 s slower than 15.1's (load ≈ 3.7 then, 1049 → 1069 files); not isolated.
+  (2) One series-1 `--live` run took 2212 ms at load 17: F3 uses medians, so it passes, but it is disclosed in the
+  README limits. (3) "During the fade" is inferred from timing (`ready ✓` after 1.0 s means the fade has started);
+  the harness reads text, not colours. (4) At 76 columns the live grid's footer does not contain `↑↓ groups`; detect
+  the `multi-link › live` header instead. (5) A shell loop over `"phase9/check.sh 6"` as one word runs nothing
+  (exit 127); call it as `bash fixtures/expected/phase9/check.sh 6`.
 
 ### 2026-11-11 — Step 15.3: Wiring: show, skip, fade, progress — Codex
 - Did: Added explicit startup state and injected instants to App, leaving default App behavior and all existing
