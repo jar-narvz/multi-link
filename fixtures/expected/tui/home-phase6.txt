@@ -37,4 +37,4 @@
 
 
  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ↑↓ move   enter repo view   o open session   q quit                       2 Codex Desktop imports hidden · times UTC-8
+ ↑↓ move   enter repo view   o open session   l live   q quit              2 Codex Desktop imports hidden · times UTC-8

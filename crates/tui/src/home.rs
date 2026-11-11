@@ -874,6 +874,7 @@ fn draw_footer(buf: &mut Buffer, report: &OverviewReport, o: &HomeOptions<'_>) {
         ("↑↓", "move"),
         ("enter", "repo view"),
         ("o", "open session"),
+        ("l", "live"),
         ("q", "quit"),
     ];
     if Span::raw(&note).width() + spans_width(&footer_spans(&keys, t)) + 5 > usize::from(w) {

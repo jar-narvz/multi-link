@@ -180,6 +180,7 @@ fn refresh(overview: OverviewReport) -> Result<Box<Refresh>, String> {
         overview,
         links: links(),
         diagnostics: String::new(),
+        live: None,
         graph: None,
         graph_live: Vec::new(),
         graph_steps: Vec::new(),

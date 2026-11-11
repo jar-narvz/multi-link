@@ -1,20 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 14.2 is committed (2026-11-10, Codex loop): pure live grid render. Step 14.3 (Codex: wiring — `l`,
-`--live`, keys, refresh, call cache) is next.** What 14.3 needs:
-- `multi_link_tui::{render_live, LiveOptions}`: `render_live(&LiveReport, &LiveOptions{selected, first_row, theme,
-  offset}, area, buf)`. `selected` is the flattened card index (group order, head then children). `first_row` is the
-  first wide card row (a head and its first child share a row; each further child is its own row) at width ≥ 120, or
-  the first flattened card below 120. The renderer does NOT scroll to the selection: 14.3 must pick `first_row` so the
-  selected card is visible (L7), and recompute it after a resize (the row model changes at 120 columns).
-- Rows that fit: feed 4 rows at height ≥ 40, 2 at ≥ 32, none below; cards from row `4 + feed` (3 with no feed) to
-  `height - 12`, 11 rows per card row; when none fits, the selected card is drawn clipped (see `live.rs`).
-- `home_html --live-grid REPORT.json OUT.html [--selected N] [--first-row N]` renders the fixture for README images
-  (`--live` stays the graph's live-part flag).
-- Home and repo footer goldens are still untouched (14.3 adds `l live` with the code).
-- The `✓` label rule is duplicated in `live.rs` and `graph.rs` (not shared); a card without `last_asked` prints
-  `no prompt`.
+**Step 14.3 is committed (2026-11-10, Codex loop): live grid wiring. Step 14.4 (Claude: real check, README,
+owner confirm) is next.** What 14.4 needs:
+- Open with `l` (home, repo view) or `multi-link tui --live`; `esc` returns to the opener (`--live`: home); `enter`
+  repo view (lane selected), `s` step graph (card step, else G9 picker), `o`/`f` fresh open; `↑↓` groups, `←→` cards
+  at width ≥ 120, both flattened below. Opening a graph from the grid pauses the live build; `esc` resumes it.
+- L9 cache: `Scanner::live` keeps per-session calls/turns in `Scanner::live_cache`, keyed by (path, len, mtime,
+  inode) of the main transcript and scanner-listed subagent files; cards are rebuilt every pass (clock-only changes
+  re-read nothing). Timing on real `~` (cold, warm median of 10, after a card grows) is 14.4's job.
+- Scrolling is stateless: `App::live_first_row` puts an off-screen selection on the last visible card row.
+- Release binary built; PTY smoke on the phase 14 fixture at 120×40 passed (open `--live`, move, esc → home with
+  `l live`, `l` → grid, esc, `q` exits 0).
+- `--live` lives on `TuiArgs` in `crates/cli/src/tui.rs` (main.rs unchanged).
 
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
@@ -748,6 +746,353 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 14.3: Wiring: `l`, `--live`, keys, refresh, call cache — Codex
+- Did: Implemented the amended step. App live state preserves the opening home/repo view, selection by full
+  session id (same flattened index, clamped, when removed), group/child arrows at wide widths and flattened
+  arrows at narrow widths. Every draw recomputes the visible row after resize. `enter` opens the card's repo
+  and selects its lane; `s` uses its step or G9 started-child picker; `o`/`f` request the existing fresh lookup.
+  Added `tui --live` in TuiArgs (main.rs already delegates clap flags to that type). The worker requests live
+  reports only while the grid is open; stepping into a graph suspends that request and esc restores it.
+  Added the per-session call/turn cache inside the worker-owned Scanner, keyed by sorted main/subagent paths,
+  lengths, mtimes and inodes. Reports are rebuilt, not cached. A test-only read counter proves per-session
+  invalidation and zero reads for clock-only changes. Added six app/worker/cache tests; existing started-test
+  Refresh constructor gains `live: None`. Home/repo drawing changes only the footer word.
+- Changed: `crates/cli/src/tui.rs`, `crates/core/src/live.rs`, `crates/core/src/scanner.rs`,
+  `crates/tui/src/app.rs`, `crates/tui/src/home.rs`, `crates/tui/src/timeline.rs`,
+  `crates/tui/tests/started.rs`, `PROGRESS.md`. Every changed home/repo golden:
+  - `fixtures/expected/tui/home-full.styles.txt`
+  - `fixtures/expected/tui/home-full.txt`
+  - `fixtures/expected/tui/home-hook-full.styles.txt`
+  - `fixtures/expected/tui/home-hook-full.txt`
+  - `fixtures/expected/tui/home-hook.styles.txt`
+  - `fixtures/expected/tui/home-hook.txt`
+  - `fixtures/expected/tui/home-phase4.styles.txt`
+  - `fixtures/expected/tui/home-phase4.txt`
+  - `fixtures/expected/tui/home-phase6.styles.txt`
+  - `fixtures/expected/tui/home-phase6.txt`
+  - `fixtures/expected/tui/home.styles.txt`
+  - `fixtures/expected/tui/home.txt`
+  - `fixtures/expected/tui/repo-now.styles.txt`
+  - `fixtures/expected/tui/repo-now.txt`
+  - `fixtures/expected/tui/repo-phase6.styles.txt`
+  - `fixtures/expected/tui/repo-phase6.txt`
+- Verify: Rust PATH set per AGENTS.md. Final `cargo test --workspace` → exit 0; 660 passed,
+  0 failed, 1 ignored (`real_counts`, the existing opt-in real-data test). Actual result lines, extracted
+  verbatim from the full run with `rg '^test result:' /tmp/multi-link-14-final-tests.log`:
+  ```text
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.77s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.54s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.72s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.64s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Actual feature/snapshot test lines from that same run:
+  ```text
+test tui::live_tests::live_flag_and_worker_report_follow_screen_request ... ok
+test live::cache_tests::per_session_call_cache_tracks_all_dependencies_and_clock_only_refresh ... ok
+test app::live_tests::live_card_open_fork_step_and_enter ... ok
+test app::live_tests::live_entry_return_and_start ... ok
+test app::live_tests::live_two_children_and_resize_scroll_to_exact_rows ... ok
+test app::live_tests::live_moves_retains_ids_and_clamps_removed_cards ... ok
+test six_live_goldens_text_and_styles ... ok
+  ```
+  Cache test covers main growth/removal/recreation/replacement and mtime-only changes; subagent addition,
+  growth/removal/replacement and mtime-only changes; Codex rollout growth/replacement; root change; and
+  a clock-only refresh that changes state counts but reads zero call/turn details. Replacement tests preserve
+  length and mtime so only inode changes. All other sessions' read counters stay unchanged.
+- Verify: `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual completion line:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.44s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output. `git diff --check` → exit 0, no output.
+- Verify: `fixtures/expected/phase9/check.sh 6` → exit 0; actual output:
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+- Verify: `fixtures/expected/phase12/check.sh` → exit 0; actual output:
+  ```text
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+  ```
+- Verify: `fixtures/expected/phase13/check.sh` → exit 0; actual output:
+  ```text
+ok   links.json
+  ```
+- Verify: `fixtures/expected/phase14/check.sh` → exit 0; actual output:
+  ```text
+ok   live.json
+  ```
+- Verify: Text non-footer lines and style runs outside the footer were compared with `67cdabd`;
+  actual check summary:
+  ```text
+PASS: 16 changed home/repo goldens; all other rows identical to 67cdabd
+  ```
+  Full footer-only diff, pasted from `git diff --unified=0 67cdabd -- 'fixtures/expected/tui/home*' 'fixtures/expected/tui/repo*'`:
+  ```diff
+diff --git a/fixtures/expected/tui/home-full.styles.txt b/fixtures/expected/tui/home-full.styles.txt
+index 9756372..9b413d3 100644
+--- a/fixtures/expected/tui/home-full.styles.txt
++++ b/fixtures/expected/tui/home-full.styles.txt
+@@ -493 +493,5 @@
+-79 52-89 - #0E1014 -
++79 52-54 - #0E1014 -
++79 55-55 #D7DAE0 #0E1014 -
++79 56-56 - #0E1014 -
++79 57-60 #9AA1AE #0E1014 -
++79 61-89 - #0E1014 -
+diff --git a/fixtures/expected/tui/home-full.txt b/fixtures/expected/tui/home-full.txt
+index d0135b1..c7330a9 100644
+--- a/fixtures/expected/tui/home-full.txt
++++ b/fixtures/expected/tui/home-full.txt
+@@ -80 +80 @@
+- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
++ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC
+diff --git a/fixtures/expected/tui/home-hook-full.styles.txt b/fixtures/expected/tui/home-hook-full.styles.txt
+index 8b0e5a2..fcecfbd 100644
+--- a/fixtures/expected/tui/home-hook-full.styles.txt
++++ b/fixtures/expected/tui/home-hook-full.styles.txt
+@@ -573 +573,5 @@
+-79 52-89 - #0E1014 -
++79 52-54 - #0E1014 -
++79 55-55 #D7DAE0 #0E1014 -
++79 56-56 - #0E1014 -
++79 57-60 #9AA1AE #0E1014 -
++79 61-89 - #0E1014 -
+diff --git a/fixtures/expected/tui/home-hook-full.txt b/fixtures/expected/tui/home-hook-full.txt
+index 33a3f7b..e394525 100644
+--- a/fixtures/expected/tui/home-hook-full.txt
++++ b/fixtures/expected/tui/home-hook-full.txt
+@@ -80 +80 @@
+- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
++ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC
+diff --git a/fixtures/expected/tui/home-hook.styles.txt b/fixtures/expected/tui/home-hook.styles.txt
+index 4b53469..0e50001 100644
+--- a/fixtures/expected/tui/home-hook.styles.txt
++++ b/fixtures/expected/tui/home-hook.styles.txt
+@@ -445 +445,5 @@
+-29 52-89 - #0E1014 -
++29 52-54 - #0E1014 -
++29 55-55 #D7DAE0 #0E1014 -
++29 56-56 - #0E1014 -
++29 57-60 #9AA1AE #0E1014 -
++29 61-89 - #0E1014 -
+diff --git a/fixtures/expected/tui/home-hook.txt b/fixtures/expected/tui/home-hook.txt
+index bd61a98..6257665 100644
+--- a/fixtures/expected/tui/home-hook.txt
++++ b/fixtures/expected/tui/home-hook.txt
+@@ -30 +30 @@
+- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
++ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC
+diff --git a/fixtures/expected/tui/home-phase4.styles.txt b/fixtures/expected/tui/home-phase4.styles.txt
+index e2e8b38..5686f9f 100644
+--- a/fixtures/expected/tui/home-phase4.styles.txt
++++ b/fixtures/expected/tui/home-phase4.styles.txt
+@@ -361 +361,5 @@
+-29 52-149 - #0E1014 -
++29 52-54 - #0E1014 -
++29 55-55 #D7DAE0 #0E1014 -
++29 56-56 - #0E1014 -
++29 57-60 #9AA1AE #0E1014 -
++29 61-149 - #0E1014 -
+diff --git a/fixtures/expected/tui/home-phase4.txt b/fixtures/expected/tui/home-phase4.txt
+index 6425bec..5051f16 100644
+--- a/fixtures/expected/tui/home-phase4.txt
++++ b/fixtures/expected/tui/home-phase4.txt
+@@ -30 +30 @@
+- ↑↓ move   enter repo view   o open session   q quit                                                                                                  times UTC
++ ↑↓ move   enter repo view   o open session   l live   q quit                                                                                         times UTC
+diff --git a/fixtures/expected/tui/home-phase6.styles.txt b/fixtures/expected/tui/home-phase6.styles.txt
+index b06f17a..b2f8af6 100644
+--- a/fixtures/expected/tui/home-phase6.styles.txt
++++ b/fixtures/expected/tui/home-phase6.styles.txt
+@@ -455 +455,5 @@
+-39 52-74 - #0E1014 -
++39 52-54 - #0E1014 -
++39 55-55 #D7DAE0 #0E1014 -
++39 56-56 - #0E1014 -
++39 57-60 #9AA1AE #0E1014 -
++39 61-74 - #0E1014 -
+diff --git a/fixtures/expected/tui/home-phase6.txt b/fixtures/expected/tui/home-phase6.txt
+index 2d39fa4..05a597c 100644
+--- a/fixtures/expected/tui/home-phase6.txt
++++ b/fixtures/expected/tui/home-phase6.txt
+@@ -40 +40 @@
+- ↑↓ move   enter repo view   o open session   q quit                       2 Codex Desktop imports hidden · times UTC-8
++ ↑↓ move   enter repo view   o open session   l live   q quit              2 Codex Desktop imports hidden · times UTC-8
+diff --git a/fixtures/expected/tui/home.styles.txt b/fixtures/expected/tui/home.styles.txt
+index 9791fc1..a7848ec 100644
+--- a/fixtures/expected/tui/home.styles.txt
++++ b/fixtures/expected/tui/home.styles.txt
+@@ -395 +395,5 @@
+-29 52-89 - #0E1014 -
++29 52-54 - #0E1014 -
++29 55-55 #D7DAE0 #0E1014 -
++29 56-56 - #0E1014 -
++29 57-60 #9AA1AE #0E1014 -
++29 61-89 - #0E1014 -
+diff --git a/fixtures/expected/tui/home.txt b/fixtures/expected/tui/home.txt
+index 69fcc2a..8cb7e35 100644
+--- a/fixtures/expected/tui/home.txt
++++ b/fixtures/expected/tui/home.txt
+@@ -30 +30 @@
+- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
++ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC
+diff --git a/fixtures/expected/tui/repo-now.styles.txt b/fixtures/expected/tui/repo-now.styles.txt
+index fe69165..3347d13 100644
+--- a/fixtures/expected/tui/repo-now.styles.txt
++++ b/fixtures/expected/tui/repo-now.styles.txt
+@@ -493 +493,5 @@
+-39 96-107 - #0E1014 -
++39 96-98 - #0E1014 -
++39 99-99 #D7DAE0 #0E1014 -
++39 100-100 - #0E1014 -
++39 101-104 #9AA1AE #0E1014 -
++39 105-107 - #0E1014 -
+diff --git a/fixtures/expected/tui/repo-now.txt b/fixtures/expected/tui/repo-now.txt
+index e1e2554..835f7da 100644
+--- a/fixtures/expected/tui/repo-now.txt
++++ b/fixtures/expected/tui/repo-now.txt
+@@ -40 +40 @@
+- ↑↓ select   o open   f fork   s step   +/- zoom   z unfold idle   i imports   esc home   q quit            times UTC-8
++ ↑↓ select   o open   f fork   s step   +/- zoom   z unfold idle   i imports   esc home   l live   q quit   times UTC-8
+diff --git a/fixtures/expected/tui/repo-phase6.styles.txt b/fixtures/expected/tui/repo-phase6.styles.txt
+index 09d187f..67de59f 100644
+--- a/fixtures/expected/tui/repo-phase6.styles.txt
++++ b/fixtures/expected/tui/repo-phase6.styles.txt
+@@ -500 +500,5 @@
+-39 96-107 - #0E1014 -
++39 96-98 - #0E1014 -
++39 99-99 #D7DAE0 #0E1014 -
++39 100-100 - #0E1014 -
++39 101-104 #9AA1AE #0E1014 -
++39 105-107 - #0E1014 -
+diff --git a/fixtures/expected/tui/repo-phase6.txt b/fixtures/expected/tui/repo-phase6.txt
+index 98e27af..9f76a8d 100644
+--- a/fixtures/expected/tui/repo-phase6.txt
++++ b/fixtures/expected/tui/repo-phase6.txt
+@@ -40 +40 @@
+- ↑↓ select   o open   f fork   s step   +/- zoom   z unfold idle   i imports   esc home   q quit            times UTC-8
++ ↑↓ select   o open   f fork   s step   +/- zoom   z unfold idle   i imports   esc home   l live   q quit   times UTC-8
+  ```
+- Review: Claude, diff + Step 14.3 (amended Files), no fix round needed. Round 1 was a scope stop (L9 cache needs
+  core files); Claude amended the Files list (Review log) and Codex redid the step. Checked: App row model matches the
+  renderer's fit and `↓ N more` rows; cache evicts on missing files and on sessions leaving; goldens footer-only.
+  Minor, not fixed: stateless bottom-anchored scroll; long Verify paste. Re-ran Verify: `cargo test --workspace`
+  660 passed, 0 failed, 1 ignored (matches); clippy `-D warnings` clean; fmt clean; phase9 `check.sh 6` 47 ok,
+  phase12/13/14 all `ok`. `cargo build --release -p multi-link` ok; PTY smoke 120×40 on `sessions-phase14`
+  (`tui --live`, ↓, →, esc → home footer `l live`, `l` → grid, esc, `q` → exit 0) passed (scratch only).
+- Gotchas: Initial red tests failed on missing live/cache APIs. An intermediate cache test exposed needless
+  eviction of an unchanged child's details when its parent disappeared; retaining details for still-listed
+  sessions fixes that, with dependencies checked on reuse. Intermediate snapshot failures were resolved by
+  the authorized footer updates; the scroll test's expected fit was corrected to the renderer's 10-row card /
+  11-row stride (two rows fit at height 40). Final Verify above is green. Live goldens and JSON keys are
+  unchanged. No reader API or dependency was added. Real timing and PTY/owner checks belong to 14.4.
 
 ### 2026-11-10 — Step 14.2: TUI render to board 14 — Codex
 - Did: Implemented the pure live grid renderer: header, packed feed, wide paired rows and extra children, narrow

@@ -2431,7 +2431,12 @@ equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0
 - Depends on: 14.2. L6, L9.
 - Files: `crates/tui/src/app.rs`, `crates/cli/src/tui.rs`, `crates/cli/src/main.rs` (`--live`), `crates/tui/src/home.rs`
   and `crates/tui/src/timeline.rs` (footer word only), the home/repo goldens under `fixtures/expected/tui/` whose footer
-  gains `l live` (each listed in PROGRESS), `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+  gains `l live` (each listed in PROGRESS), `crates/tui/tests/**`, `crates/cli/tests/**`, `crates/core/src/live.rs` and
+  `crates/core/src/scanner.rs` (the call cache, amendment below), `crates/core/tests/**`, `PROGRESS.md`
+- Amendment (2026-11-10, Codex stopped on scope): the CLI has no reader crates and `Scanner::claude_transcripts` is
+  core-private, so the L9 call cache lives in the `Scanner` the CLI worker owns (one per worker, as every other
+  cache): `Scanner::live` keeps per-session calls (and Codex turns) keyed by the L9 dependency set and re-reads only
+  sessions whose set changed; a test-only counter of reads proves it. No new public reader API, no Cargo change.
 - Verify: tests, clippy, fmt clean; app tests: `l` from home and repo view, `esc` back to each, `--live` start and
   `esc` → home, `enter`/`s`/`o` on a card, `↑↓←→` across a two-child row; the selection kept by id across a refresh
   that adds a card above it, and moved to the same flattened index when its session leaves (either column); moving
@@ -2452,6 +2457,13 @@ equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0
 `hook check` shipped in Phase 10 · live grid is Phase 14 · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Step 14.3 Files amendment (Claude, during the step, Codex loop)
+- Codex stopped before coding: L9's per-session call cache needs the scanner's transcript list (core-private) and
+  the reader crates (not CLI dependencies). Accepted. Options weighed: (a) cache inside `Scanner::live` — the worker
+  already owns one `Scanner` and every other parse cache lives there, so this keeps L9's "cached in the CLI worker"
+  meaning (the worker's state) with no API growth; (b) a public reader API plus CLI Cargo deps — more surface for
+  no gain. Chose (a): Files gain `crates/core/src/live.rs`, `crates/core/src/scanner.rs`, `crates/core/tests/**`.
 
 ### 2026-11-10 — Phase 14 plan critique (Codex, read-only, Codex loop)
 Quota check: `CODEX: OK` (31% / 44%). Ten points, each checked against the code; outcome:

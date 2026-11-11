@@ -77,4 +77,4 @@
 
 
  ──────────────────────────────────────────────────────────────────────────────────────────────────
- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
+ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC

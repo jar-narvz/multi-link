@@ -27,4 +27,4 @@
  │ ○ repo-a-wt  idle · last active 14 min ago · claude handed work to codex at 11:00pm, codex…    │
  ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
  ──────────────────────────────────────────────────────────────────────────────────────────────────
- ↑↓ move   enter repo view   o open session   q quit                                      times UTC
+ ↑↓ move   enter repo view   o open session   l live   q quit                             times UTC

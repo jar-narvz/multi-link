@@ -1,8 +1,10 @@
 //! Live cards and hand-off feed (L0–L5). `build` is pure; `Scanner::live` reads G5 details.
 use std::{
     collections::{BTreeSet, HashMap},
-    io,
-    path::Path,
+    fs, io,
+    os::unix::fs::MetadataExt,
+    path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 use crate::{CodexDetails, Options, Scanner};
@@ -297,10 +299,78 @@ fn turn_children(links: &[Link], window_from: Option<Timestamp>, now: Timestamp)
         .collect()
 }
 
+// The worker owns this through its Scanner. Cache parsed details, never clock-dependent cards.
+#[derive(PartialEq, Eq)]
+struct Dependency {
+    path: PathBuf,
+    len: u64,
+    modified: SystemTime,
+    inode: u64,
+}
+
+struct CachedCalls {
+    dependencies: Vec<Dependency>,
+    with_calls: bool,
+    details: CodexDetails,
+}
+
+#[derive(Default)]
+pub(crate) struct CallCache(HashMap<String, CachedCalls>);
+
+impl CallCache {
+    fn read(
+        &mut self,
+        id: &str,
+        mut paths: Vec<PathBuf>,
+        with_calls: bool,
+        parse: impl FnOnce() -> io::Result<CodexDetails>,
+    ) -> io::Result<(CodexDetails, bool)> {
+        paths.sort();
+        let dependencies = paths
+            .into_iter()
+            .map(|path| {
+                let meta = fs::metadata(&path)?;
+                Ok(Dependency {
+                    path,
+                    len: meta.len(),
+                    modified: meta.modified()?,
+                    inode: meta.ino(),
+                })
+            })
+            .collect::<io::Result<Vec<_>>>();
+        let dependencies = match dependencies {
+            Ok(d) => d,
+            Err(e) => {
+                self.0.remove(id);
+                return Err(e);
+            }
+        };
+        if let Some(cached) = self.0.get(id)
+            && cached.dependencies == dependencies
+            && (cached.with_calls || !with_calls)
+        {
+            return Ok((cached.details.clone(), false));
+        }
+        self.0.remove(id);
+        let details = parse()?;
+        self.0.insert(
+            id.to_owned(),
+            CachedCalls {
+                dependencies,
+                with_calls,
+                details: details.clone(),
+            },
+        );
+        Ok((details, true))
+    }
+}
+
 impl Scanner {
     /// Read calls for cards, plus turns for windowed linked children. Readers exclude imports.
     pub fn live(&mut self, root: &Path, options: &Options<'_>) -> io::Result<LiveReport> {
         let (sessions, links) = self.refresh(root, options)?;
+        #[cfg(test)]
+        self.live_reads.clear();
         let sessions = &sessions.report.sessions;
         let links = &links.report.links;
         let window_from = options
@@ -326,40 +396,62 @@ impl Scanner {
         } else {
             Vec::new()
         };
+        let retained: BTreeSet<_> = sessions.iter().map(|s| s.id.as_str()).collect();
         for s in sessions {
-            if s.harness == Harness::Claude && is_card(s) {
-                if let Some(t) = transcripts.iter().find(|t| t.id == s.id) {
-                    calls.insert(
-                        s.id.clone(),
-                        multi_link_claude::calls(root, t)
-                            .map(|c| c.calls)
-                            .unwrap_or_default(),
-                    );
-                }
-            } else if s.harness == Harness::Codex
-                && let Some(path) = &s.transcript
-            {
-                let turns = if is_card(s) {
-                    multi_link_codex::read_details(&root.join(path)).map(|(c, turns)| {
-                        calls.insert(s.id.clone(), c.calls);
-                        turns
-                    })
-                } else if turn_children.contains(s.id.as_str()) {
-                    multi_link_codex::codex_turns(&root.join(path))
-                } else {
+            let card = is_card(s);
+            let result = if s.harness == Harness::Claude && card {
+                let Some(t) = transcripts.iter().find(|t| t.id == s.id) else {
+                    self.live_cache.0.remove(&s.id);
                     continue;
                 };
-                if let Ok(turns) = turns {
-                    codex.insert(
-                        s.id.clone(),
-                        CodexDetails {
+                let paths = std::iter::once(root.join(&t.transcript))
+                    .chain(t.subagent_files.iter().map(|f| root.join(&f.transcript)))
+                    .collect();
+                self.live_cache.read(&s.id, paths, true, || {
+                    multi_link_claude::calls(root, t).map(|c| CodexDetails {
+                        calls: c.calls,
+                        turns: Vec::new(),
+                    })
+                })
+            } else if s.harness == Harness::Codex && (card || turn_children.contains(s.id.as_str()))
+            {
+                let Some(path) = &s.transcript else {
+                    self.live_cache.0.remove(&s.id);
+                    continue;
+                };
+                let path = root.join(path);
+                self.live_cache.read(&s.id, vec![path.clone()], card, || {
+                    if card {
+                        multi_link_codex::read_details(&path).map(|(c, turns)| CodexDetails {
+                            calls: c.calls,
+                            turns,
+                        })
+                    } else {
+                        multi_link_codex::codex_turns(&path).map(|turns| CodexDetails {
                             calls: Vec::new(),
                             turns,
-                        },
-                    );
+                        })
+                    }
+                })
+            } else {
+                continue;
+            };
+            if let Ok((details, _read)) = result {
+                #[cfg(test)]
+                if _read {
+                    self.live_reads.push(s.id.clone());
+                }
+                if card {
+                    calls.insert(s.id.clone(), details.calls.clone());
+                }
+                if s.harness == Harness::Codex {
+                    codex.insert(s.id.clone(), details);
                 }
             }
         }
+        self.live_cache
+            .0
+            .retain(|id, _| retained.contains(id.as_str()));
         Ok(build(
             options.now,
             window_from,
@@ -483,5 +575,169 @@ mod tests {
             turn_children(&links, None, now),
             BTreeSet::from(["old", "start", "end", "future"])
         );
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::{fs, io::Write, path::PathBuf};
+    fn copy(from: &Path, to: &Path) {
+        fs::create_dir_all(to).unwrap();
+        for e in fs::read_dir(from).unwrap() {
+            let e = e.unwrap();
+            if e.file_type().unwrap().is_dir() {
+                copy(&e.path(), &to.join(e.file_name()));
+            } else {
+                fs::copy(e.path(), to.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    #[test]
+    fn per_session_call_cache_tracks_all_dependencies_and_clock_only_refresh() {
+        let root = tempfile::tempdir().unwrap();
+        copy(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14"),
+            root.path(),
+        );
+        let mut scanner = Scanner::default();
+        let mut options = Options {
+            now: "2026-11-10T22:20:00Z".parse().unwrap(),
+            since: Some(std::time::Duration::from_secs(7200)),
+            state_dir: root.path().join("state"),
+            repo_mode: crate::RepoMode::Fixture,
+            probe: &crate::FixtureProcessProbe,
+        };
+        let first = scanner.live(root.path(), &options).unwrap();
+        assert!(!scanner.live_reads.is_empty());
+        let id = first
+            .groups
+            .iter()
+            .find(|g| g.head.harness == Harness::Claude)
+            .unwrap()
+            .head
+            .id
+            .clone();
+        let transcripts = scanner.claude_transcripts(root.path()).unwrap();
+        let t = transcripts.iter().find(|t| t.id == id).unwrap();
+        let main = root.path().join(&t.transcript);
+        let subdir = main.parent().unwrap().join(&id).join("subagents");
+        fs::create_dir_all(&subdir).unwrap();
+        let sub = subdir.join("agent-new.jsonl");
+        for (change, expected) in [
+            ("clock", false),
+            ("main grow", true),
+            ("main mtime", true),
+            ("sub add", true),
+            ("sub grow", true),
+            ("sub mtime", true),
+            ("sub replace", true),
+            ("sub remove", true),
+            ("main replace", true),
+        ] {
+            match change {
+                "clock" => options.now = "2026-11-10T22:20:01Z".parse().unwrap(),
+                "main grow" => fs::OpenOptions::new()
+                    .append(true)
+                    .open(&main)
+                    .unwrap()
+                    .write_all(b"\n")
+                    .unwrap(),
+                "sub add" => fs::write(&sub, "{}\n").unwrap(),
+                "sub grow" => fs::OpenOptions::new()
+                    .append(true)
+                    .open(&sub)
+                    .unwrap()
+                    .write_all(b"\n")
+                    .unwrap(),
+                "sub remove" => fs::remove_file(&sub).unwrap(),
+                "main mtime" | "sub mtime" => {
+                    let path = if change == "main mtime" { &main } else { &sub };
+                    let modified = fs::metadata(path).unwrap().modified().unwrap()
+                        + std::time::Duration::from_secs(1);
+                    fs::File::options()
+                        .write(true)
+                        .open(path)
+                        .unwrap()
+                        .set_times(fs::FileTimes::new().set_modified(modified))
+                        .unwrap();
+                }
+                _ => {
+                    let path = if change == "sub replace" { &sub } else { &main };
+                    let replacement = path.with_extension("replacement");
+                    fs::write(&replacement, fs::read(path).unwrap()).unwrap();
+                    fs::File::options()
+                        .write(true)
+                        .open(&replacement)
+                        .unwrap()
+                        .set_times(
+                            fs::FileTimes::new()
+                                .set_modified(fs::metadata(path).unwrap().modified().unwrap()),
+                        )
+                        .unwrap();
+                    fs::rename(replacement, path).unwrap();
+                }
+            }
+            scanner.live(root.path(), &options).unwrap();
+            assert_eq!(
+                scanner.live_reads,
+                if expected { vec![id.clone()] } else { vec![] },
+                "{change}"
+            );
+        }
+        // Removing/recreating a main file must evict its old calls even if it remains a record-only card.
+        let saved = fs::read(&main).unwrap();
+        fs::remove_file(&main).unwrap();
+        let removed = scanner.live(root.path(), &options).unwrap();
+        assert!(
+            removed
+                .groups
+                .iter()
+                .flat_map(|g| std::iter::once(&g.head).chain(&g.children))
+                .find(|c| c.id == id)
+                .is_none_or(|c| c.counts == Counts::default())
+        );
+        fs::write(&main, saved).unwrap();
+        scanner.live(root.path(), &options).unwrap();
+        assert_eq!(scanner.live_reads, vec![id]);
+        let (sessions, _) = scanner.refresh(root.path(), &options).unwrap();
+        let child = sessions
+            .report
+            .sessions
+            .iter()
+            .find(|s| s.harness == Harness::Codex && is_card(s))
+            .unwrap();
+        let path = root.path().join(child.transcript.as_ref().unwrap());
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"\n")
+            .unwrap();
+        scanner.live(root.path(), &options).unwrap();
+        assert_eq!(scanner.live_reads, vec![child.id.clone()]);
+        let replacement = path.with_extension("replacement");
+        fs::copy(&path, &replacement).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&replacement)
+            .unwrap()
+            .set_times(
+                fs::FileTimes::new().set_modified(fs::metadata(&path).unwrap().modified().unwrap()),
+            )
+            .unwrap();
+        fs::rename(&replacement, &path).unwrap();
+        let before = scanner.live(root.path(), &options).unwrap();
+        assert_eq!(scanner.live_reads, vec![child.id.clone()]);
+        options.now = "2026-11-10T22:30:00Z".parse().unwrap();
+        let after = scanner.live(root.path(), &options).unwrap();
+        assert_ne!(before.counts, after.counts, "clock alone changes state");
+        assert!(scanner.live_reads.is_empty());
+        // Changing the scanner root clears the worker's per-session cache as well.
+        let other = tempfile::tempdir().unwrap();
+        copy(root.path(), other.path());
+        options.state_dir = other.path().join("state");
+        scanner.live(other.path(), &options).unwrap();
+        assert!(!scanner.live_reads.is_empty());
     }
 }

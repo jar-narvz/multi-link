@@ -104,6 +104,9 @@ pub struct OverviewOutput {
 #[derive(Default)]
 pub struct Scanner {
     root: Option<PathBuf>,
+    pub(crate) live_cache: crate::live::CallCache,
+    #[cfg(test)]
+    pub(crate) live_reads: Vec<String>,
     claude: Cache<ParsedFile>,
     records: Cache<Option<SessionRecord>>,
     app_records: Cache<AppRecordRead>,

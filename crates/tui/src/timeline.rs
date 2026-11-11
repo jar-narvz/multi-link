@@ -1130,6 +1130,7 @@ impl RepoScene<'_> {
                 ("z", if o.fold { "unfold idle" } else { "fold idle" }),
                 ("i", "imports"),
                 ("esc", "home"),
+                ("l", "live"),
                 ("q", "quit"),
             ],
             rx.saturating_sub(2),

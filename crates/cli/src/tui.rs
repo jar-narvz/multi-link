@@ -26,6 +26,9 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 #[derive(Args)]
 pub struct TuiArgs {
+    /// Start on the live grid.
+    #[arg(long)]
+    live: bool,
     /// Home-shaped root; enables fixture mode.
     #[arg(long)]
     root: Option<PathBuf>,
@@ -42,6 +45,7 @@ enum Request {
     },
     /// The step graph to build on every refresh from now on; None stops it.
     Graph(Option<(String, String)>),
+    Live(bool),
 }
 enum Message {
     Refresh(Result<Box<Refresh>, String>),
@@ -106,11 +110,12 @@ impl<M: Modes> Drop for Suspended<'_, M> {
 /// One refresh for the App: the overview, and the step graph it asked for (G11: rebuilt on every
 /// refresh, so a stale turn or a new rollout shows without a key press). A failed graph build fails
 /// the whole refresh, so the App keeps its last screen and shows the error.
-fn refresh(
+fn refresh_with_live(
     scanner: &mut Scanner,
     root: &Path,
     options: &Options<'_>,
     graph: Option<&(String, String)>,
+    live: bool,
 ) -> io::Result<Box<Refresh>> {
     let mut plans = |folder: &Path| {
         multi_link_plan::steps_report(Path::new(""), &[folder.to_string_lossy().into_owned()])
@@ -155,7 +160,13 @@ fn refresh(
             (Some(report), steps, live)
         }
     };
+    let live = if live {
+        Some(scanner.live(root, options)?)
+    } else {
+        None
+    };
     Ok(Box::new(Refresh {
+        live,
         overview: output.report,
         links: output.links.report,
         diagnostics,
@@ -165,6 +176,16 @@ fn refresh(
         codex_steps,
         started_steps,
     }))
+}
+
+#[cfg(test)]
+fn refresh(
+    scanner: &mut Scanner,
+    root: &Path,
+    options: &Options<'_>,
+    graph: Option<&(String, String)>,
+) -> io::Result<Box<Refresh>> {
+    refresh_with_live(scanner, root, options, graph, false)
 }
 
 /// Steps `[` `]` walk in a repo (G9): ids tagged on hand-offs whose parent is a listed Claude
@@ -211,6 +232,7 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
     let mut scanner = Scanner::default();
     let mut next_refresh = Instant::now();
     let mut graph: Option<(String, String)> = None;
+    let mut live = args.live;
     loop {
         let now = match args.now.map(Ok).unwrap_or_else(super::clock_now) {
             Ok(now) => now,
@@ -232,7 +254,7 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
         };
         if Instant::now() >= next_refresh {
             let started = Instant::now();
-            let result = refresh(&mut scanner, &root, &options, graph.as_ref())
+            let result = refresh_with_live(&mut scanner, &root, &options, graph.as_ref(), live)
                 .map_err(|error| error.to_string());
             if messages.send(Message::Refresh(result)).is_err() {
                 return;
@@ -257,6 +279,10 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
                 if messages.send(Message::Open(result)).is_err() {
                     return;
                 }
+            }
+            Ok(Request::Live(value)) => {
+                live = value;
+                next_refresh = Instant::now();
             }
             Ok(Request::Graph(target)) => {
                 // Build the newly asked step at once rather than at the next 2 s tick.
@@ -311,6 +337,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Dropping the request sender stops the worker at its next boundary. Do not join a slow scan
     // on quit: the terminal must be restored immediately, even with an inaccessible filesystem.
     let history_window = args.since.0;
+    let start_live = args.live;
     thread::Builder::new()
         .name("multi-link-refresh".into())
         .spawn(move || worker(args, root, receiver, sender))?;
@@ -318,6 +345,9 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
     app.theme = Some(theme);
     app.history_window = history_window;
     app.history_all = history_window.is_none();
+    if start_live {
+        app.start_live();
+    }
     loop {
         match messages.try_recv() {
             Ok(Message::Refresh(result)) => {
@@ -368,6 +398,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
                     Effect::FreshOpen { id, fork } => requests.send(Request::Open { id, fork })?,
                     Effect::Bell => unreachable!(),
                     Effect::Graph(target) => requests.send(Request::Graph(target))?,
+                    Effect::Live(value) => requests.send(Request::Live(value))?,
                 }
             }
         }
@@ -939,5 +970,59 @@ mod tests {
         app.update(Event::Opened(String::new()));
         app.update(Event::Refresh(result));
         assert!(app.update(Event::Key(KeyCode::Char('o'))).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use clap::Parser;
+    #[test]
+    fn live_flag_and_worker_report_follow_screen_request() {
+        let super::super::Command::Tui(args) =
+            super::super::Cli::try_parse_from(["multi-link", "tui", "--live"])
+                .unwrap()
+                .command
+        else {
+            panic!("tui")
+        };
+        assert!(args.live);
+        let root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14");
+        let options = Options {
+            now: "2026-11-10T22:20:00Z".parse().unwrap(),
+            since: Some(Duration::from_secs(7200)),
+            state_dir: root.join("state"),
+            repo_mode: multi_link_core::RepoMode::Fixture,
+            probe: &multi_link_core::FixtureProcessProbe,
+        };
+        let mut scanner = Scanner::default();
+        assert!(
+            refresh_with_live(&mut scanner, &root, &options, None, false)
+                .unwrap()
+                .live
+                .is_none()
+        );
+        let report = refresh_with_live(&mut scanner, &root, &options, None, true).unwrap();
+        let expected: multi_link_model::LiveReport =
+            serde_json::from_str(include_str!("../../../fixtures/expected/phase14/live.json"))
+                .unwrap();
+        assert_eq!(report.live.as_ref(), Some(&expected));
+        let mut app = App::default();
+        app.start_live();
+        app.update(Event::Refresh(Ok(report)));
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen {
+                id: expected.groups[0].head.id.clone(),
+                fork: false
+            }]
+        );
+        assert!(
+            refresh_with_live(&mut scanner, &root, &options, None, false)
+                .unwrap()
+                .live
+                .is_none()
+        );
     }
 }

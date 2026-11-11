@@ -3,7 +3,8 @@ use std::{cell::Cell, collections::HashSet};
 
 use crossterm::event::KeyCode;
 use multi_link_model::{
-    GraphReport, Harness, Link, LinksReport, OverviewReport, RepoGroup, SessionRow, State,
+    Card, GraphReport, Harness, Link, LinksReport, LiveReport, OverviewReport, RepoGroup,
+    SessionRow, State,
 };
 use ratatui::{buffer::Buffer, layout::Rect};
 
@@ -13,6 +14,7 @@ use crate::{
 };
 
 pub struct Refresh {
+    pub live: Option<LiveReport>,
     pub overview: OverviewReport,
     pub links: LinksReport,
     pub diagnostics: String,
@@ -39,6 +41,7 @@ pub enum Event {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Effect {
     Bell,
+    Live(bool),
     FreshOpen {
         id: String,
         fork: bool,
@@ -64,6 +67,11 @@ struct GraphView {
 }
 
 #[derive(Default)]
+struct LiveView {
+    selected: usize,
+}
+
+#[derive(Default)]
 pub struct App {
     pub report: Option<Box<Refresh>>,
     /// Open result, dismissed by the next key; progress remains until Opened.
@@ -83,6 +91,7 @@ pub struct App {
     healthy: bool,
     opening: bool,
     graph: Option<GraphView>,
+    live: Option<LiveView>,
     /// Steps of a lane's direct started children (G9 amendment) and the chosen entry.
     picker: Option<(Vec<(String, String)>, usize)>,
     /// Width of the last render; 0 means never drawn and counts as wide.
@@ -247,6 +256,22 @@ impl App {
                 self.refresh_error = Some(format!("refresh failed: {error}; keeping last report"));
             }
             Event::Refresh(Ok(mut report)) => {
+                let live_id = self.live_card().map(|c| c.id.clone());
+                if self.live.is_some() && report.live.is_none() {
+                    report.live = self.report.as_ref().and_then(|r| r.live.clone());
+                }
+                if let Some(view) = &mut self.live {
+                    let cards: Vec<_> = report
+                        .live
+                        .iter()
+                        .flat_map(|r| &r.groups)
+                        .flat_map(|g| std::iter::once(&g.head).chain(&g.children))
+                        .collect();
+                    view.selected = live_id
+                        .and_then(|id| cards.iter().position(|c| c.id == id))
+                        .unwrap_or(view.selected)
+                        .min(cards.len().saturating_sub(1));
+                }
                 let graph = report.graph.take();
                 let steps = std::mem::take(&mut report.graph_steps);
                 let live = std::mem::take(&mut report.graph_live);
@@ -281,7 +306,9 @@ impl App {
             Event::Key(KeyCode::Char('q')) => return vec![Effect::Quit],
             Event::Key(key) if self.picker.is_some() => return self.picker_key(key),
             Event::Key(key) if self.graph.is_some() => return self.graph_key(key),
+            Event::Key(key) if self.live.is_some() => return self.live_key(key),
             Event::Key(key) => match key {
+                KeyCode::Char('l') => return self.start_live(),
                 KeyCode::Up => self.selection = self.selection.saturating_sub(1),
                 KeyCode::Down => {
                     let count = self.view().map_or(0, |view| self.targets(&view).len());
@@ -357,6 +384,164 @@ impl App {
         Vec::new()
     }
 
+    /// Start at home when requested by `tui --live`; opening from a view preserves it.
+    pub fn start_live(&mut self) -> Vec<Effect> {
+        self.live = Some(LiveView::default());
+        vec![Effect::Live(true)]
+    }
+
+    fn live_card(&self) -> Option<&Card> {
+        let selected = self.live.as_ref()?.selected;
+        self.report
+            .as_ref()?
+            .live
+            .as_ref()?
+            .groups
+            .iter()
+            .flat_map(|g| std::iter::once(&g.head).chain(&g.children))
+            .nth(selected)
+    }
+
+    fn live_key(&mut self, key: KeyCode) -> Vec<Effect> {
+        if key == KeyCode::Esc {
+            self.live = None;
+            return vec![Effect::Live(false)];
+        }
+        let Some(card) = self.live_card().cloned() else {
+            return Vec::new();
+        };
+        match key {
+            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+                let groups = &self.report.as_ref().unwrap().live.as_ref().unwrap().groups;
+                let count: usize = groups.iter().map(|g| 1 + g.children.len()).sum();
+                let view = self.live.as_mut().unwrap();
+                let wide = self.drawn_width.get() == 0 || self.drawn_width.get() >= 120;
+                if !wide {
+                    view.selected = if matches!(key, KeyCode::Down | KeyCode::Right) {
+                        (view.selected + 1).min(count.saturating_sub(1))
+                    } else {
+                        view.selected.saturating_sub(1)
+                    };
+                } else {
+                    let mut start = 0;
+                    let heads: Vec<_> = groups
+                        .iter()
+                        .map(|g| {
+                            let head = start;
+                            start += 1 + g.children.len();
+                            head
+                        })
+                        .collect();
+                    let group = heads.iter().rposition(|&i| i <= view.selected).unwrap_or(0);
+                    let head = heads[group];
+                    view.selected = match key {
+                        KeyCode::Up => heads[group.saturating_sub(1)],
+                        KeyCode::Down => heads[(group + 1).min(heads.len() - 1)],
+                        KeyCode::Left => view.selected.saturating_sub(1).max(head),
+                        _ => (view.selected + 1).min(head + groups[group].children.len()),
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                if self.timeline.is_none() {
+                    self.home_selection = self.selection_identity();
+                }
+                self.timeline = Some((
+                    card.repo.clone(),
+                    Self::report_window(
+                        &self.report.as_ref().unwrap().overview,
+                        self.history_window,
+                        self.history_all,
+                    ),
+                ));
+                self.explicit_range = false;
+                self.unfold = false;
+                self.imports = false;
+                self.selection = 0;
+                if let Some(view) = self.view() {
+                    self.selection = self
+                        .targets(&view)
+                        .iter()
+                        .position(|(_, t)| matches!(t, Target::Session(r) if r.id == card.id))
+                        .unwrap_or(0);
+                }
+                self.live = None;
+                return vec![Effect::Live(false)];
+            }
+            KeyCode::Char('s') if !self.opening => {
+                if let Some(step) = card.step {
+                    return self.open_graph(card.repo, step, Vec::new());
+                }
+                let entries = self
+                    .report
+                    .as_ref()
+                    .unwrap()
+                    .started_steps
+                    .get(&card.id)
+                    .cloned()
+                    .unwrap_or_default();
+                if entries.is_empty() {
+                    self.say("no step on this session");
+                } else {
+                    self.picker = Some((entries, 0));
+                }
+            }
+            KeyCode::Char('o' | 'f') if self.healthy && !self.opening => {
+                self.opening = true;
+                self.footer = "checking current session…".into();
+                return vec![Effect::FreshOpen {
+                    id: card.id,
+                    fork: key == KeyCode::Char('f'),
+                }];
+            }
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    // Compute in the renderer's row model each draw, including after a resize.
+    fn live_first_row(&self, width: u16, height: u16) -> usize {
+        let Some(report) = self.report.as_ref().and_then(|r| r.live.as_ref()) else {
+            return 0;
+        };
+        let selected = self.live.as_ref().map_or(0, |v| v.selected);
+        let mut index = 0;
+        let mut row = 0;
+        let mut selected_row = 0;
+        for g in &report.groups {
+            for child in 0..=g.children.len() {
+                if index == selected {
+                    selected_row = row
+                        + if width >= 120 {
+                            child.saturating_sub(1)
+                        } else {
+                            child
+                        };
+                }
+                index += 1;
+            }
+            row += if width >= 120 {
+                g.children.len().max(1)
+            } else {
+                1 + g.children.len()
+            };
+        }
+        let feed = if height >= 40 {
+            4
+        } else if height >= 32 {
+            2
+        } else {
+            0
+        };
+        let top = if feed == 0 { 3 } else { 4 + feed };
+        let space = usize::from(height)
+            .saturating_sub(12)
+            .saturating_add(1)
+            .saturating_sub(top);
+        let rows = space / 11 + usize::from(space % 11 >= 10);
+        selected_row.saturating_sub(rows.saturating_sub(1))
+    }
+
     /// A one-shot footer message; never hides `checking current session…`.
     fn say(&mut self, message: &str) {
         if !self.opening {
@@ -374,7 +559,11 @@ impl App {
             selected: 0,
             first_slot: 0,
         });
-        vec![Effect::Graph(Some((repo, step)))]
+        let mut effects = vec![Effect::Graph(Some((repo, step)))];
+        if self.live.is_some() {
+            effects.push(Effect::Live(false));
+        }
+        effects
     }
 
     /// `s` on a repo-view lane (G9 and its amendment).
@@ -442,7 +631,11 @@ impl App {
         match key {
             KeyCode::Esc => {
                 self.graph = None;
-                return vec![Effect::Graph(None)];
+                let mut effects = vec![Effect::Graph(None)];
+                if self.live.is_some() {
+                    effects.push(Effect::Live(true));
+                }
+                return effects;
             }
             KeyCode::Left | KeyCode::Right if wide => self.move_part(key == KeyCode::Right),
             KeyCode::Up | KeyCode::Down if !wide => self.move_part(key == KeyCode::Down),
@@ -609,6 +802,20 @@ impl App {
                 offset: self.offset.unwrap_or(time::UtcOffset::UTC),
             };
             render_graph(report, &options, area, buf);
+        } else if let Some(live) = &self.live {
+            if let Some(report) = self.report.as_ref().and_then(|r| r.live.as_ref()) {
+                crate::render_live(
+                    report,
+                    &crate::LiveOptions {
+                        selected: live.selected,
+                        first_row: self.live_first_row(area.width, area.height),
+                        theme: self.home_options().theme,
+                        offset: self.offset.unwrap_or(time::UtcOffset::UTC),
+                    },
+                    area,
+                    buf,
+                );
+            }
         } else if let (Some(view), Some(report)) = (self.view(), &self.report) {
             if let Some((repo, window)) = &self.timeline {
                 let options = RepoOptions {
@@ -633,7 +840,8 @@ impl App {
                 crate::render_home_with_options(&view, Some(self.selection), &options, area, buf);
             }
         }
-        let loading = self.graph.as_ref().is_some_and(|g| g.report.is_none());
+        let loading = self.graph.as_ref().is_some_and(|g| g.report.is_none())
+            || (self.live.is_some() && self.report.as_ref().is_none_or(|r| r.live.is_none()));
         if self.report.is_some()
             && !loading
             && self.picker.is_none()
@@ -690,11 +898,16 @@ impl App {
         if let Some(graph) = self.graph.as_ref().filter(|g| g.report.is_none()) {
             return format!("loading step {}…", graph.step);
         }
+        if self.live.is_some() && report.live.is_none() {
+            return "loading live sessions…".into();
+        }
         let width = self.drawn_width.get();
         let help = if self.graph.is_some() && width != 0 && width < GRAPH_WIDE {
             "↑↓ move along the step · [ ] prev / next step · o open · f fork · esc repo view · q quit"
         } else if self.graph.is_some() {
             "←→ move along the step · [ ] prev / next step · o open · f fork · esc repo view · q quit"
+        } else if self.live.is_some() {
+            "↑↓ groups · ←→ cards · enter repo · s step · o open · f fork · esc back · q quit"
         } else if self.timeline.is_some() {
             "↑↓ select · +/- zoom · ←→ pan · 0 reset · esc home · o open · f fork · s step · q quit"
         } else {
@@ -758,6 +971,7 @@ mod tests {
             links: serde_json::from_str(include_str!("../../../fixtures/expected/links.json"))
                 .unwrap(),
             diagnostics: String::new(),
+            live: None,
             graph: None,
             graph_live: Vec::new(),
             graph_steps: Vec::new(),
@@ -970,6 +1184,7 @@ mod phase6_tests {
                 unparented: vec![],
             },
             diagnostics: String::new(),
+            live: None,
             graph: None,
             graph_live: Vec::new(),
             graph_steps: Vec::new(),
@@ -1151,6 +1366,7 @@ mod repo_tests {
             overview,
             links,
             diagnostics: String::new(),
+            live: None,
             graph: None,
             graph_live: Vec::new(),
             graph_steps: Vec::new(),
@@ -1379,6 +1595,7 @@ mod graph_tests {
             overview: serde_json::from_str(&read("fixtures/expected/overview.json")).unwrap(),
             links: serde_json::from_str(&read("fixtures/expected/links.json")).unwrap(),
             diagnostics: String::new(),
+            live: None,
             graph: None,
             graph_live: Vec::new(),
             graph_steps: Vec::new(),
@@ -1392,6 +1609,7 @@ mod graph_tests {
                 .unwrap(),
             links: serde_json::from_str(&read("fixtures/expected/started/links.json")).unwrap(),
             diagnostics: String::new(),
+            live: None,
             graph: None,
             graph_live: Vec::new(),
             graph_steps: Vec::new(),
@@ -2206,6 +2424,7 @@ mod graph_tests {
     impl Refresh {
         fn clone_box(&self) -> Box<Refresh> {
             Box::new(Refresh {
+                live: self.live.clone(),
                 overview: self.overview.clone(),
                 links: self.links.clone(),
                 diagnostics: self.diagnostics.clone(),
@@ -2216,5 +2435,162 @@ mod graph_tests {
                 started_steps: self.started_steps.clone(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    fn refresh() -> Box<Refresh> {
+        Box::new(Refresh {
+            overview: serde_json::from_str(include_str!(
+                "../../../fixtures/expected/overview.json"
+            ))
+            .unwrap(),
+            links: serde_json::from_str(include_str!("../../../fixtures/expected/links.json"))
+                .unwrap(),
+            diagnostics: String::new(),
+            graph: None,
+            graph_live: Vec::new(),
+            graph_steps: Vec::new(),
+            codex_steps: Default::default(),
+            started_steps: Default::default(),
+            live: Some(
+                serde_json::from_str(include_str!("../../../fixtures/expected/phase14/live.json"))
+                    .unwrap(),
+            ),
+        })
+    }
+    fn app() -> App {
+        let mut app = App::default();
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('l'))),
+            [Effect::Live(true)]
+        );
+        app
+    }
+    fn draw(app: &App, w: u16, h: u16) -> String {
+        let area = Rect::new(0, 0, w, h);
+        let mut buf = Buffer::empty(area);
+        app.render(area, &mut buf);
+        buf.content.iter().map(|c| c.symbol()).collect()
+    }
+    #[test]
+    fn live_entry_return_and_start() {
+        let mut app = app();
+        assert!(draw(&app, 120, 40).contains("multi-link › live"));
+        assert_eq!(app.update(Event::Key(KeyCode::Esc)), [Effect::Live(false)]);
+        assert!(app.timeline.is_none());
+        app.update(Event::Key(KeyCode::Enter));
+        let repo = app.timeline.as_ref().unwrap().0.clone();
+        app.update(Event::Key(KeyCode::Char('l')));
+        app.update(Event::Key(KeyCode::Esc));
+        assert_eq!(app.timeline.as_ref().unwrap().0, repo);
+        let mut start = App::default();
+        assert_eq!(start.start_live(), [Effect::Live(true)]);
+        start.update(Event::Key(KeyCode::Esc));
+        assert!(start.timeline.is_none());
+    }
+    #[test]
+    fn live_moves_retains_ids_and_clamps_removed_cards() {
+        let mut app = app();
+        draw(&app, 120, 40);
+        app.update(Event::Key(KeyCode::Down));
+        let head = app.live.as_ref().unwrap().selected;
+        app.update(Event::Key(KeyCode::Right));
+        assert_eq!(app.live.as_ref().unwrap().selected, head + 1);
+        app.update(Event::Key(KeyCode::Left));
+        assert_eq!(app.live.as_ref().unwrap().selected, head);
+        let id = app.live_card().unwrap().id.clone();
+        let mut next = refresh();
+        let mut added = next.live.as_ref().unwrap().groups[0].clone();
+        added.head.id = "added".into();
+        next.live.as_mut().unwrap().groups.insert(0, added);
+        app.update(Event::Refresh(Ok(next)));
+        assert_eq!(app.live_card().unwrap().id, id);
+        for selected in [1, 2] {
+            app.update(Event::Refresh(Ok(refresh())));
+            app.live.as_mut().unwrap().selected = selected;
+            let mut next = refresh();
+            let g = &mut next.live.as_mut().unwrap().groups[1];
+            if selected == 1 {
+                g.head.id = "replacement".into();
+            } else {
+                g.children.remove(0);
+            }
+            app.update(Event::Refresh(Ok(next)));
+            assert_eq!(app.live.as_ref().unwrap().selected, selected);
+        }
+        draw(&app, 100, 40);
+        let old = app.live.as_ref().unwrap().selected;
+        app.update(Event::Key(KeyCode::Down));
+        assert_eq!(app.live.as_ref().unwrap().selected, old + 1);
+        draw(&app, 120, 30);
+        assert!(app.live_first_row(120, 30) > 0);
+    }
+    #[test]
+    fn live_two_children_and_resize_scroll_to_exact_rows() {
+        let mut app = app();
+        draw(&app, 120, 51);
+        app.live.as_mut().unwrap().selected = 9;
+        for expected in [10, 11, 11] {
+            app.update(Event::Key(KeyCode::Right));
+            assert_eq!(app.live.as_ref().unwrap().selected, expected);
+        }
+        assert_eq!(app.live_first_row(120, 51), 5);
+        app.update(Event::Key(KeyCode::Up));
+        assert_eq!(app.live.as_ref().unwrap().selected, 5);
+        app.update(Event::Key(KeyCode::Down));
+        assert_eq!(app.live.as_ref().unwrap().selected, 9);
+        app.update(Event::Key(KeyCode::Right));
+        assert_eq!(app.live_first_row(120, 40), 5);
+        draw(&app, 100, 40);
+        assert_eq!(app.live_first_row(100, 40), 9);
+        app.update(Event::Key(KeyCode::Up));
+        assert_eq!(app.live.as_ref().unwrap().selected, 9);
+        app.update(Event::Key(KeyCode::Left));
+        assert_eq!(app.live.as_ref().unwrap().selected, 8);
+        draw(&app, 120, 30);
+        assert_eq!(app.live_first_row(120, 30), 5);
+        app.update(Event::Refresh(Ok(refresh())));
+        assert_eq!(app.live.as_ref().unwrap().selected, 8);
+        assert_eq!(app.live_first_row(120, 30), 5);
+    }
+
+    #[test]
+    fn live_card_open_fork_step_and_enter() {
+        let mut app = app();
+        let card = app.live_card().unwrap().clone();
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('o'))),
+            [Effect::FreshOpen {
+                id: card.id.clone(),
+                fork: false
+            }]
+        );
+        app.update(Event::Opened("done".into()));
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('f'))),
+            [Effect::FreshOpen {
+                id: card.id.clone(),
+                fork: true
+            }]
+        );
+        app.update(Event::Opened("done".into()));
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Char('s'))),
+            [
+                Effect::Graph(Some((card.repo.clone(), card.step.unwrap()))),
+                Effect::Live(false)
+            ]
+        );
+        app.update(Event::Key(KeyCode::Esc));
+        assert!(app.live.is_some());
+        assert_eq!(
+            app.update(Event::Key(KeyCode::Enter)),
+            [Effect::Live(false)]
+        );
+        assert_eq!(app.timeline.as_ref().unwrap().0, card.repo);
     }
 }
