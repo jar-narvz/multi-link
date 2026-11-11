@@ -1,18 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 14.3 is committed (2026-11-10, Codex loop): live grid wiring. Step 14.4 (Claude: real check, README,
-owner confirm) is next.** What 14.4 needs:
-- Open with `l` (home, repo view) or `multi-link tui --live`; `esc` returns to the opener (`--live`: home); `enter`
-  repo view (lane selected), `s` step graph (card step, else G9 picker), `o`/`f` fresh open; `↑↓` groups, `←→` cards
-  at width ≥ 120, both flattened below. Opening a graph from the grid pauses the live build; `esc` resumes it.
-- L9 cache: `Scanner::live` keeps per-session calls/turns in `Scanner::live_cache`, keyed by (path, len, mtime,
-  inode) of the main transcript and scanner-listed subagent files; cards are rebuilt every pass (clock-only changes
-  re-read nothing). Timing on real `~` (cold, warm median of 10, after a card grows) is 14.4's job.
-- Scrolling is stateless: `App::live_first_row` puts an off-screen selection on the last visible card row.
-- Release binary built; PTY smoke on the phase 14 fixture at 120×40 passed (open `--live`, move, esc → home with
-  `l live`, `l` → grid, esc, `q` exits 0).
-- `--live` lives on `TuiArgs` in `crates/cli/src/tui.rs` (main.rs unchanged).
+**Step 14.4 is committed (2026-11-10, Claude step): Phase 14 real check, README, image. Phase 14 waits on the
+owner's check** (stop and ask): `cargo install --path crates/cli`, then `multi-link tui`, press `l`, and confirm the
+grid meets the need ("see what each agent is doing right now without switching terminal tabs"). Record the answer in
+`docs/phase14-check.md` (Owner check) and the 14.4 entry's Review line. Real check (release `4cd6db1`, scratch only):
+refresh with the grid open warm median 191 / 212 ms, after a card's transcript grew 197 / 205 ms; **cold first pass
+9.2–9.4 s, over the 2 s threshold**, 8.6 s of it the overview's first full parse (predates Phase 14; 6.4 s at 8.5),
+the grid's own share 102 ms. Real cards: 1–2 working Claude cards, no Codex, waiting or stale card. PTY smoke all ok.
+Next is the backlog (PLAN.md). The owner pushes `main`.
 
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
@@ -746,6 +742,40 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-10 — Step 14.4: Phase 14 real check, README, owner confirm — Claude
+- Mode: Claude step (no Codex hand-off in 14.4, so no quota check was needed).
+- Did: Timed the refresh with the grid open on real `~` with a scratch program that repeats the worker's
+  `refresh_with_live` (no graph) on one `Scanner`: cold, 10 warm passes 2 s apart, one pass after a card's transcript
+  grew; two runs, the second split by part. Counted cards from those passes and `multi-link live --json`. PTY smoke of
+  the release TUI at 120×40 (`l`, arrows, `esc`, `l`, three resizes, `q`; `--live`, `↓`, `esc`, `q`) plus a
+  forced-full-frame run for the `selected` line. Rendered the fixture report with `home_html --live-grid` and
+  headless Chrome (2x) into `docs/img/live-phase14-fixture.png`. README: Release 1.11 line and bullet, "Live grid"
+  section (image, cards, rows, feed, keys, sizes, CLI), `l` in Run, `multi-link live --json`, live-grid limits.
+  Wrote `docs/phase14-check.md` (counts and timings only).
+- Changed: `docs/phase14-check.md` (new), `docs/img/live-phase14-fixture.png` (new), `README.md`, `PROGRESS.md`.
+- Verify (whole phase):
+```
+cargo test --workspace → exit 0; 62 `test result: ok`, 660 passed, 0 failed, 1 ignored (real_counts)
+  incl. live_matches_phase14_key ... ok, six_live_goldens_text_and_styles ... ok (120×40, 100×40, 120×30, 60×20 + 2)
+cargo clippy --workspace --all-targets -- -D warnings → exit 0;  cargo fmt --all -- --check → exit 0
+fixtures/expected/phase9/check.sh 6 → 47 ok, 0 FAIL;  phase12/check.sh → ok links, overview, graph-1.1
+phase13/check.sh → ok links.json;  phase14/check.sh → ok live.json
+git diff --stat f1fbec6 -- fixtures/expected → phase14 keys, live-phase14* goldens, and the 14.3 home/repo footer
+  goldens only (16 files, 2 lines each)
+W10: rg "/Users/|\bsk-|api_key|<real ids>" README.md docs/phase14-check.md → nothing; image is the fixture render
+timing run 1 → cold 9354 ms; warm median 191 ms (174–218); after growth (+493 B) 197 ms
+timing run 2 → cold 9156 ms (overview 8607 · all-time 447 · live 102); warm median 212 ms (187–248);
+  after growth (+6638 B) 205 ms
+cards → 2 (busy 2, waiting 0, stale 0, Codex 0, no child rows), 1 during run 1 passes 6–11; idle 14–15; feed 4
+smoke14.py → 10/10 ok, `q` exit 0 both runs
+```
+- Review: Claude's own step (docs and image only; no code). **Deviation from the step's Verify:** the cold pass is
+  9.2–9.4 s, not ≤ 2 s. The live build is 102 ms of it; the rest is the overview's first parse, documented since
+  Step 8.5 (6.4 s then) and outside Phase 14's scope. Warm and changed-file passes pass. Owner's answer: pending.
+- Gotchas: real data had no Codex card, nothing waiting or stale, and at most two lone cards, so pairing, `──▸`
+  rows and moving across a row were not exercised on real data (fixture and 14.3 app tests only). The PTY harness must
+  wait out `loading sessions…` (about 9 s) before sending keys, and strip escape codes before matching text.
 
 ### 2026-11-10 — Step 14.3: Wiring: `l`, `--live`, keys, refresh, call cache — Codex
 - Did: Implemented the amended step. App live state preserves the opening home/repo view, selection by full

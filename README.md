@@ -12,6 +12,7 @@ along time; the owner approved it ([real check](docs/phase8-check.md)). Release 
 ended Claude sessions say `finished`, compressed Codex rollouts are read, and more hand-offs find their run; the owner
 confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 replaces hand-merging hook JSON with
 `multi-link hook check`, which reports your hooks and prints one command that updates them ([hook setup](#hook-setup)).
+Release 1.11 adds the [live grid](#live-grid): what every working, waiting or stale agent is doing now, on one screen.
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -20,6 +21,7 @@ confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 repl
 - Opens supported Claude desktop sessions or resumes sessions confirmed finished; rechecks the
   action before executing. Unsupported actions show a command for you to run.
 - Draws one PLAN.md step as boxes along time: who planned, implemented, reviewed and fixed, in order.
+- Shows every live session at once as a card: its state, for how long, its last few calls and the run it handed to.
 
 ## Home screen
 
@@ -136,6 +138,36 @@ shows as implement, fix round 1 and fix round 2, with a Claude review between th
   While a run is unlinked, the Claude part around it usually covers the time Codex worked, unless an earlier Codex run
   is still open (step 6.6).
 
+## Live grid
+
+![Live grid on the phase14 fixture](docs/img/live-phase14-fixture.png)
+
+*HTML render of the live grid on the synthetic fixture report `fixtures/expected/phase14/live.json` at 120×40
+(`home_html --live-grid`; real check in [docs/phase14-check.md](docs/phase14-check.md)). Real renders are not committed
+because they show prompts.*
+
+What is each agent doing right now, without switching terminal tabs? Press **`l`** on home or in a repo view, or start
+with `multi-link tui --live`.
+
+- **One card per session that is working, waiting on you or stale**, both harnesses, all repos, within the TUI's
+  window. Idle sessions are one line (`7 idle sessions (repo-m · repo-n) · home shows them`); home still lists them.
+- **Rows pair a Claude card with the Codex runs it started** (`──▸`; more children stack below with `└──▸`). A Codex
+  card's parent is the Claude session of its latest confirmed or time-matched link. Waiting rows come first (longest
+  wait first), then working, then stale.
+- **Each card** says what it was asked (its latest prompt), its state and for how long (`waiting on you · since
+  2:12pm (8 min)`, `working now · for 35 min`), its counts (`3 reads · 1 edit · 2 runs`), its last 3 notable calls with
+  fixed labels and `✓`/`✗` marks (as the step graph), and its link: `waiting on codex <id> · 10 min`, `codex <id> done
+  1:49pm`, or `└ from claude <id> · confirmed link`. The title adds `· step <id>` from its tagged hand-offs; the bottom
+  border gives its place and short id.
+- **The feed** on top lists the last 4 hand-offs in the window, all repos, with how each was linked and whether Codex
+  is `running` or `done`.
+- **Keys:** `↑↓` move between rows, `←→` along a row (both move card by card below 120 columns), `enter` opens the
+  card's repo view, `s` its step graph, `o`/`f` open or fork its session, `esc` goes back to the screen that opened the
+  grid (home for `--live`), `q` quits. The selection follows the same session across refreshes.
+- **Sizes:** below 120 columns cards stack in one column, a Codex card under its parent (`└▸`); below 40 rows the feed
+  shrinks, then goes; cards that do not fit leave `↓ N more` and the view scrolls with the selection.
+- The same report is on the CLI: `multi-link live [--json]`.
+
 ## States and links (Release 1.6)
 
 Each rule below reads a format that Claude Code or Codex does not document; only the `SessionEnd` hook event is
@@ -241,7 +273,8 @@ that binary's path. `hook install` still prints the bare snippet, and `hook unin
 
 Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open, `f` to fork, Esc to return, and
 `q` to quit. In the repo view, `+`/`-` zoom, ←/→ pan, `0` resets the range, `z` unfolds idle stretches
-and `i` shows imports; `s` opens the step graph for the selected lane. The default history window is `2h`; use
+and `i` shows imports; `s` opens the step graph for the selected lane. `l` opens the live grid from home or a repo
+view (`multi-link tui --live` starts on it); `esc` returns. The default history window is `2h`; use
 `--since all` for all history.
 
 The CLI also exposes the data and safe open previews:
@@ -252,6 +285,7 @@ multi-link sessions --json
 multi-link links --json
 multi-link steps --repo "$PWD" --json
 multi-link graph --repo "$PWD" --step 6.7 --json
+multi-link live --json
 multi-link open <session-id-prefix> --dry-run
 ```
 
@@ -305,6 +339,14 @@ state rules.
   graph open took 229–236 ms (Step 8.5). Pressing `[ ]` quickly builds every graph it passes (about 230 ms each). The repo view's footer
   drops `q quit` at 101–109 columns. With a graph open each refresh runs the all-time pass twice. The narrow list
   form (below 120 columns) and the 256-colour palette are tested on fixtures only, not checked on real data.
+- Live grid limits. Card calls use the step graph's fixed labels, so plain reads and any command without a label
+  (most of what an agent does between edits) never show on a card; a card can look quieter than its session was.
+  Codex part kinds (`implement`, `fix round N`) are not shown: they need the step's chain, which only the step graph
+  builds for tagged hand-offs. A stale Codex run last active before the window is history, not a card. Codex cards
+  are never `waiting` (Codex waiting is unsupported, above). On 2026-11-10 the real check saw only 1–2 working Claude
+  cards, no Codex card and nothing waiting or stale, so pairing, waiting and stale cards are tested on the fixture
+  only. With the grid open, later refreshes took 187–248 ms on real data; the first refresh after start took 9.2 s,
+  of which the grid was 102 ms and the rest the overview's first full parse ([timing](docs/phase14-check.md)).
 
 Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4, 8.6 and 9.7 runs. Real-home
 timing output, terminal evidence and validation limits are in [docs/phase3-check.md](docs/phase3-check.md);
