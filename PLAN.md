@@ -2292,6 +2292,8 @@ equal except 13.0's list; `python3 -I tools/resize-key-check.py target/release/m
 - Verify: whole-phase Verify; real counts explained; the owner's answer recorded.
 
 ### Phase 14 — Live grid: what is each agent doing now? (Release 1.11)
+Closed 2026-11-11 (owner confirmed after Step 14.4; the cold first pass misses the 2 s NFR, disclosed in
+`docs/phase14-check.md`).
 Need (owner, 2026-11-10): "see what each agent is doing right now (its last few actions, its state, how long it has
 been at it) without switching terminal tabs." Design needs 1, 2 and 5; FR12, screen 5. Home answers "which repo needs
 me"; the repo view and step graph answer "what happened". Neither shows, for every live session at once, what it is
@@ -2454,7 +2456,7 @@ equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0
 - Verify: whole-phase Verify; real counts and timing recorded; the owner's answer recorded.
 
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid is Phase 14 · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load (9 s today, NFR 2 s) · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
 

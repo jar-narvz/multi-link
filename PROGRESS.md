@@ -1,14 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 14.4 is committed (2026-11-10, Claude step): Phase 14 real check, README, image. Phase 14 waits on the
-owner's check** (stop and ask): `cargo install --path crates/cli`, then `multi-link tui`, press `l`, and confirm the
-grid meets the need ("see what each agent is doing right now without switching terminal tabs"). Record the answer in
-`docs/phase14-check.md` (Owner check) and the 14.4 entry's Review line. Real check (release `4cd6db1`, scratch only):
-refresh with the grid open warm median 191 / 212 ms, after a card's transcript grew 197 / 205 ms; **cold first pass
-9.2–9.4 s, over the 2 s threshold**, 8.6 s of it the overview's first full parse (predates Phase 14; 6.4 s at 8.5),
-the grid's own share 102 ms. Real cards: 1–2 working Claude cards, no Codex, waiting or stale card. PTY smoke all ok.
-Next is the backlog (PLAN.md). The owner pushes `main`.
+**Phase 14 is closed (2026-11-11): Step 14.4 is committed and the owner confirmed it ("look good").** The live grid
+(`l` from home or the repo view, `multi-link tui --live`) shows a card per working, waiting or stale session with its
+last prompt, state, counts and last 3 notable calls, a Claude card paired with its live Codex card, and a hand-off feed;
+data from `core::live` / `multi-link live`. Real check in `docs/phase14-check.md`: warm refresh ~0.2 s; **cold first
+pass 9.2–9.4 s, over the 2 s NFR**, almost all the overview's first parse (predates Phase 14). Next is the backlog
+(PLAN.md); a faster first load is a candidate. The owner pushes `main`.
 
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
@@ -772,7 +770,8 @@ smoke14.py → 10/10 ok, `q` exit 0 both runs
 ```
 - Review: Claude's own step (docs and image only; no code). **Deviation from the step's Verify:** the cold pass is
   9.2–9.4 s, not ≤ 2 s. The live build is 102 ms of it; the rest is the overview's first parse, documented since
-  Step 8.5 (6.4 s then) and outside Phase 14's scope. Warm and changed-file passes pass. Owner's answer: pending.
+  Step 8.5 (6.4 s then) and outside Phase 14's scope. Warm and changed-file passes pass. Owner's answer (2026-11-11,
+  after the cold-pass deviation was disclosed): "look good".
 - Gotchas: real data had no Codex card, nothing waiting or stale, and at most two lone cards, so pairing, `──▸`
   rows and moving across a row were not exercised on real data (fixture and 14.3 app tests only). The PTY harness must
   wait out `loading sessions…` (about 9 s) before sending keys, and strip escape codes before matching text.

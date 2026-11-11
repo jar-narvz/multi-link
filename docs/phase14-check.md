@@ -79,4 +79,5 @@ the fixture, not by real data.
 
 ## Owner check (stop and ask)
 
-Pending: the owner installs the build, opens `multi-link tui`, presses `l`, and confirms the grid meets the need.
+Done 2026-11-11: the owner installed the build (`cargo install --path …/crates/cli --locked`), opened `multi-link tui`,
+pressed `l` and answered "look good". The cold first pass (9.2–9.4 s, above) was disclosed before the check.
