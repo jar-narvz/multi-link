@@ -17,11 +17,11 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use multi_link_core::{
-    Options, Scanner,
+    LoadProgress, Options, Scanner,
     open::{self, OpenAction},
 };
 use multi_link_model::{Harness, Link, RepoSteps, Session, Timestamp};
-use multi_link_tui::{App, Effect, Event, Refresh};
+use multi_link_tui::{App, Effect, Event, LoadPhase, Refresh};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 #[derive(Args)]
@@ -48,6 +48,7 @@ enum Request {
     Live(bool),
 }
 enum Message {
+    Progress(LoadProgress),
     Refresh(Result<Box<Refresh>, String>),
     Open(Result<Option<OpenAction>, String>),
 }
@@ -230,6 +231,12 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
     let fixture = multi_link_core::FixtureProcessProbe;
     let real = multi_link_core::RealProcessProbe::default();
     let mut scanner = Scanner::default();
+    let progress = LoadProgress::default();
+    scanner.set_progress(progress.clone());
+    if messages.send(Message::Progress(progress.clone())).is_err() {
+        return;
+    }
+    let mut first_pass = true;
     let mut next_refresh = Instant::now();
     let mut graph: Option<(String, String)> = None;
     let mut live = args.live;
@@ -258,6 +265,10 @@ fn worker(args: TuiArgs, root: PathBuf, requests: Receiver<Request>, messages: S
                 .map_err(|error| error.to_string());
             if messages.send(Message::Refresh(result)).is_err() {
                 return;
+            }
+            if first_pass {
+                progress.finish();
+                first_pass = false;
             }
             next_refresh = (started + Duration::from_secs(2)).max(Instant::now());
         }
@@ -336,6 +347,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (sender, messages) = mpsc::channel();
     // Dropping the request sender stops the worker at its next boundary. Do not join a slow scan
     // on quit: the terminal must be restored immediately, even with an inaccessible filesystem.
+    let started = Instant::now();
     let history_window = args.since.0;
     let start_live = args.live;
     thread::Builder::new()
@@ -343,13 +355,50 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
         .spawn(move || worker(args, root, receiver, sender))?;
     let mut app = App::default();
     app.theme = Some(theme);
+    app.begin_loading(started);
     app.history_window = history_window;
     app.history_all = history_window.is_none();
     if start_live {
         app.start_live();
     }
+    dashboard(&mut app, &mut terminal, &screen, requests, messages, || {
+        if event::poll(Duration::from_millis(50))?
+            && let TerminalEvent::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            Ok(Some(app_key(key)))
+        } else {
+            Ok(None)
+        }
+    })
+}
+
+/// Core's phase strings stay at the CLI boundary; the presentation crate owns its enum.
+fn load_progress(app: &mut App, snapshot: multi_link_core::LoadSnapshot) {
+    let phase = match snapshot.phase {
+        "reading" => LoadPhase::Reading,
+        "linking" => LoadPhase::Linking,
+        "done" => LoadPhase::Done,
+        _ => LoadPhase::Listing,
+    };
+    app.set_load_progress(phase, snapshot.files_done, snapshot.files_total);
+}
+
+/// The existing UI loop owns no worker join handle and uses no animation timer.
+fn dashboard<M: Modes, B: ratatui::backend::Backend>(
+    app: &mut App,
+    terminal: &mut Terminal<B>,
+    screen: &Screen<M>,
+    requests: Sender<Request>,
+    messages: Receiver<Message>,
+    mut input: impl FnMut() -> io::Result<Option<KeyCode>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut progress = None;
+    let mut disconnected = false;
     loop {
+        app.set_instant(Instant::now());
         match messages.try_recv() {
+            Ok(Message::Progress(handle)) => progress = Some(handle),
             Ok(Message::Refresh(result)) => {
                 for effect in app.update(Event::Refresh(result)) {
                     if effect == Effect::Bell {
@@ -363,7 +412,7 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
                     Err(message) => message,
                     Ok(action) => {
                         // No event reader runs while status() owns inherited terminal input.
-                        let suspended = Suspended::new(&screen)?;
+                        let suspended = Suspended::new(screen)?;
                         let mut command =
                             super::open_command(&action).expect("fresh executable action");
                         let status = command.status();
@@ -381,18 +430,30 @@ pub fn run(args: TuiArgs) -> Result<(), Box<dyn std::error::Error>> {
                 };
                 app.update(Event::Opened(message));
             }
-            Err(mpsc::TryRecvError::Disconnected) => return Err("refresh worker stopped".into()),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                if !disconnected {
+                    app.update(Event::Refresh(Err("refresh worker stopped".into())));
+                    disconnected = true;
+                }
+            }
             Err(mpsc::TryRecvError::Empty) => {}
+        }
+        if let Some(progress) = &progress {
+            load_progress(app, progress.snapshot());
         }
         terminal.draw(|frame| {
             app.render(frame.area(), frame.buffer_mut());
-            theme.apply_no_color(frame.buffer_mut());
+            // Loading owns its NO_COLOR styles, including stripping BOLD.
+            // Keep the existing home postpass out of that screen.
+            if app.loading_options().is_none()
+                && let Some(theme) = app.theme
+            {
+                theme.apply_no_color(frame.buffer_mut());
+            }
         })?;
-        if event::poll(Duration::from_millis(50))?
-            && let TerminalEvent::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            for effect in app.update(Event::Key(app_key(key))) {
+        if let Some(key) = input()? {
+            app.set_instant(Instant::now());
+            for effect in app.update(Event::Key(key)) {
                 match effect {
                     Effect::Quit => return Ok(()),
                     Effect::FreshOpen { id, fork } => requests.send(Request::Open { id, fork })?,
@@ -422,6 +483,169 @@ mod tests {
         assert!(app.update(Event::Key(app_key(plain))).is_empty());
         let down = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         assert_eq!(app_key(down), KeyCode::Down);
+    }
+
+    #[test]
+    fn core_snapshots_map_to_tui_phases_and_exact_counts() {
+        let mut app = App::default();
+        app.begin_loading(Instant::now());
+        for (phase, expected) in [
+            ("listing", LoadPhase::Listing),
+            ("reading", LoadPhase::Reading),
+            ("linking", LoadPhase::Linking),
+            ("done", LoadPhase::Done),
+        ] {
+            load_progress(
+                &mut app,
+                multi_link_core::LoadSnapshot {
+                    phase,
+                    files_done: 612,
+                    files_total: 871,
+                },
+            );
+            let options = app.loading_options().unwrap();
+            assert_eq!(
+                (options.phase, options.files_done, options.files_total),
+                (expected, 612, 871)
+            );
+        }
+    }
+
+    #[test]
+    fn cli_loading_draw_preserves_no_color_and_control_c_quits() {
+        let (requests, _receiver) = mpsc::channel();
+        let (_sender, messages) = mpsc::channel();
+        let mut app = App::default();
+        app.theme = Some(multi_link_tui::theme::Theme::from_env(
+            None,
+            Some(std::ffi::OsStr::new("1")),
+        ));
+        app.begin_loading(Instant::now());
+        let screen = Screen::enter(FakeModes {
+            calls: Rc::new(RefCell::new(Vec::new())),
+            fail_enter: false,
+        })
+        .unwrap();
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(76, 22)).unwrap();
+        dashboard(&mut app, &mut terminal, &screen, requests, messages, || {
+            Ok(Some(app_key(KeyEvent::new(
+                KeyCode::Char('c'),
+                KeyModifiers::CONTROL,
+            ))))
+        })
+        .unwrap();
+        assert!(terminal.backend().buffer().content.iter().all(|cell| {
+            cell.fg == ratatui::style::Color::Reset
+                && cell.bg == ratatui::style::Color::Reset
+                && cell.modifier.is_empty()
+        }));
+        assert!(app.loading_options().is_some());
+    }
+
+    #[test]
+    fn worker_sends_progress_before_report_and_finishes_shared_handle() {
+        let root = fixtures().join("sessions");
+        let args = TuiArgs {
+            live: false,
+            root: Some(root.clone()),
+            now: Some("2026-10-29T16:20:00Z".parse().unwrap()),
+            since: super::super::HistoryWindow(Some(Duration::from_secs(7200))),
+        };
+        let (requests, receiver) = mpsc::channel();
+        let (sender, messages) = mpsc::channel();
+        let worker = thread::spawn(move || worker(args, root, receiver, sender));
+        let Message::Progress(progress) = messages.recv_timeout(Duration::from_secs(5)).unwrap()
+        else {
+            panic!("progress must arrive before the first report");
+        };
+        assert!(matches!(
+            messages.recv_timeout(Duration::from_secs(5)).unwrap(),
+            Message::Refresh(Ok(_))
+        ));
+        drop(requests);
+        worker.join().unwrap();
+        let snapshot = progress.snapshot();
+        assert_eq!(snapshot.phase, "done");
+        assert!(snapshot.files_total > 0);
+        assert_eq!(snapshot.files_done, snapshot.files_total);
+    }
+
+    #[test]
+    fn disconnected_worker_draws_error_before_quitting() {
+        let (requests, _receiver) = mpsc::channel();
+        let (sender, messages) = mpsc::channel();
+        drop(sender);
+        let mut app = App::default();
+        app.begin_loading(Instant::now());
+        let screen = Screen::enter(FakeModes {
+            calls: Rc::new(RefCell::new(Vec::new())),
+            fail_enter: false,
+        })
+        .unwrap();
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(120, 40)).unwrap();
+        dashboard(&mut app, &mut terminal, &screen, requests, messages, || {
+            Ok(Some(KeyCode::Char('q')))
+        })
+        .unwrap();
+        assert!(app.loading_options().is_none());
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
+        assert!(text.contains("refresh failed: refresh worker stopped; keeping last report"));
+    }
+
+    #[test]
+    fn loading_quit_does_not_wait_for_blocked_worker() {
+        let (requests, receiver) = mpsc::channel();
+        let (sender, messages) = mpsc::channel();
+        let (release, blocked) = mpsc::channel::<()>();
+        let worker = thread::spawn(move || {
+            let _sender = sender;
+            let _receiver = receiver;
+            blocked.recv().unwrap();
+        });
+        let mut app = App::default();
+        app.begin_loading(Instant::now());
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let screen = Screen::enter(FakeModes {
+            calls: calls.clone(),
+            fail_enter: false,
+        })
+        .unwrap();
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(76, 22)).unwrap();
+        let (finished, requests_finished) = mpsc::channel();
+        let mut result = None;
+        thread::scope(|scope| {
+            let watchdog = scope.spawn(move || {
+                // A joining quit path is released after the timeout, then fails the assertion.
+                let early = requests_finished
+                    .recv_timeout(Duration::from_secs(2))
+                    .is_ok();
+                release.send(()).unwrap();
+                early
+            });
+            result = Some(dashboard(
+                &mut app,
+                &mut terminal,
+                &screen,
+                requests,
+                messages,
+                || Ok(Some(KeyCode::Char('q'))),
+            ));
+            finished.send(()).unwrap();
+            assert!(
+                watchdog.join().unwrap(),
+                "quit waited for the blocked worker"
+            );
+        });
+        assert!(result.unwrap().is_ok());
+        worker.join().unwrap();
+        drop(screen);
+        assert_eq!(*calls.borrow(), ["enter", "leave"]);
     }
 
     #[derive(Clone)]

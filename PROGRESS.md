@@ -1,15 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 15.2 is committed (2026-11-11, Codex loop): pure loading screen render. Step 15.3 (Codex: wiring — show,
-skip, fade, progress) is next.** `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}`;
-`render_loading(&LoadingOptions { time, phase, files_done, files_total, fade, theme }, area, buf)` replaces exactly
-`area` and reads no clock. The tui crate does not depend on core (PLAN.md Review log, "Step 15.2 input type"): in 15.3
-the CLI maps `LoadSnapshot.phase` (`"listing" | "reading" | "linking" | "done"`) to `LoadPhase` and passes the counts
-each frame. `time` is seconds since loading began (no board `+1`). The caller picks `Fade::{None, School, Text}` from
-the 250 ms deadline (first 125 ms `School`, next 125 ms `Text`, then home); `NO_COLOR`, a skip or an error never fade.
-Phase `listing` draws `listing transcripts…` with an empty bar (Review log). `home_html --loading SECONDS OUT.html
---size WxH` draws the fixture frame (reading 612 / 871) for the 15.4 README image.
+**Step 15.3 is committed (2026-11-11, Codex loop): the loading screen is wired in. Step 15.4 (Claude: real check,
+README, owner confirm) is next.** `App::begin_loading(Instant)` starts it (the CLI calls it before spawning the
+worker); the 50 ms CLI loop calls `app.set_instant(Instant::now())` each frame and maps `LoadSnapshot` to
+`set_load_progress(LoadPhase, done, total)`; `App::loading_options()` is `Some` while the screen shows. The worker
+creates `LoadProgress`, sends it as `Message::Progress` before its first pass and calls `finish()` after sending the
+first report. A disconnected worker now shows the error footer instead of exiting. Smoke run on real `~` (release,
+76×22): counter rose 33 → 1029 / 1049, first report 1.46 s, home 1.75 s, `q` exit 11 ms, skip and Ctrl-C work.
+**For 15.4:** F3 (a)–(d) timings, the PTY checks not done in 15.3 (resize across 60×16 and 30×6, `--live` start,
+terminal restored after `q`/Ctrl-C during loading and during the fade), README image via `home_html --loading`,
+`docs/phase15-check.md`, owner confirm. A PTY harness must keep draining output while it waits for exit, or the TUI
+blocks on a full PTY buffer and never reads `q`.
+
+Step 15.2 is committed: `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}` is the pure renderer;
+`time` is seconds since loading began (no board `+1`). `home_html --loading SECONDS OUT.html --size WxH` draws the
+fixture frame (reading 612 / 871) for the 15.4 README image.
 
 **Step 15.1 is committed (2026-11-11, Codex loop): parallel cold parse, F2 measurement (no `Arc`), progress
 handle.** F3 passed after review round 2 (Claude, release, real
@@ -779,6 +785,93 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 15.3: Wiring: show, skip, fade, progress — Codex
+- Did: Added explicit startup state and injected instants to App, leaving default App behavior and all existing
+  app tests unchanged. Loading waits for both the first report and start + 1.0 s, then uses elapsed deadlines for
+  125 ms School / 125 ms Text, then home. Skip is consumed once; pre-report skip uses the existing loading footer;
+  errors and worker disconnect show the existing error footer immediately; NO_COLOR never fades.
+  The worker creates and installs LoadProgress before its first pass, sends a clone first, and finishes it only
+  after sending the first refresh. The CLI maps phase strings and counts every frame. Kept the existing worker
+  and 50 ms poll loop, with no new production thread or timer and no join on quit. Extracted that loop for tests.
+  The loading draw bypasses the home's NO_COLOR postpass, retaining the renderer's removal of BOLD and DIM.
+- Changed: `crates/tui/src/app.rs`, `crates/cli/src/tui.rs`, `crates/tui/tests/loading_app.rs`, `PROGRESS.md`.
+- Verify: Used `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` before cargo.
+  `cargo test --workspace` → exit 0; full output in scratch `/tmp/multi-link-15.3-tests-final.log`.
+  Summing its 65 actual `test result` lines produced:
+  ```text
+  Workspace result lines: 65
+  Totals: 686 passed; 0 failed; 1 ignored
+  ```
+  Actual output excerpts (CLI unit tests, new injected-clock app tests, final doc-test target):
+  ```text
+  Running unittests src/main.rs (target/debug/deps/multi_link-7cedda362c6e1306)
+
+  running 24 tests
+  test tests::child_exit_never_passes_the_child_code_through ... ok
+  test tests::labels_use_serde_names_for_multiword_variants ... ok
+  test tests::open_commands_run_without_a_shell_in_cwd ... ok
+  test tests::graph_text_cuts_non_ascii_session_ids_by_chars ... ok
+  test tui::tests::core_snapshots_map_to_tui_phases_and_exact_counts ... ok
+  test tui::tests::control_c_uses_the_same_quit_effect_as_q ... ok
+  test tui::tests::partial_setup_and_restore_failure_still_leave_normal_terminal ... ok
+  test tui::tests::cli_loading_draw_preserves_no_color_and_control_c_quits ... ok
+  test tui::tests::disconnected_worker_draws_error_before_quitting ... ok
+  test tui::tests::drawn_finished_but_fresh_running_never_resumes_and_errors_never_execute ... ok
+  test tui::tests::loading_quit_does_not_wait_for_blocked_worker ... ok
+  test tui::tests::terminal_restores_after_success_spawn_failure_and_unwind ... ok
+  test tui::tests::graph_steps_are_tagged_plan_steps_then_unplanned_by_first_handoff ... ok
+  test tui::tests::started_steps_include_children_outside_the_tui_window ... ok
+  test tui::tests::graph_refresh_on_phase8_fixture ... ok
+  test tui::tests::phase9_codex_lane_untagged_has_no_step ... ok
+  test tui::tests::phase9_codex_lane_same_repo_beats_newer_cross_repo ... ok
+  test tui::live_tests::live_flag_and_worker_report_follow_screen_request ... ok
+  test tui::tests::phase9_codex_lane_parent_outside_window ... ok
+  test tui::tests::stale_threshold_changes_status_without_file_change ... ok
+  test tui::tests::coordinator_s_end_to_end ... ok
+  test tui::tests::live_indices_follow_worker_step_and_freshness ... ok
+  test tui::tests::app_open_running_fixture_uses_fresh_pass_and_never_resumes ... ok
+  test tui::tests::worker_sends_progress_before_report_and_finishes_shared_handle ... ok
+
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+  Running tests/loading_app.rs (target/debug/deps/loading_app-5bd2efe9d42b5517)
+
+  running 4 tests
+  test injected_counts_are_rendered_and_no_color_never_fades_or_adds_bold ... ok
+  test report_deadlines_drive_both_fade_stages_without_extra_frames ... ok
+  test errors_and_quit_end_loading_immediately ... ok
+  test skip_is_consumed_before_and_after_report_and_during_fade ... ok
+
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_tui
+
+  running 0 tests
+
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual output:
+  ```text
+      Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.55s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output. `git diff --check` → exit 0, no output.
+  Focused new app tests initially failed to compile on the missing loading API; after implementation all four
+  passed. The CLI quit test initially failed on the missing extracted loop; after wiring the CLI tests passed.
+- Review: Claude, 2026-11-11, mode Codex loop (`codex-quota.py` → `primary: 27%`, `secondary: 55%`, `CODEX: OK`).
+  Diff read against Step 15.3 and F4/F5/F8: no findings, no fix round. Files as named (plus PROGRESS.md); the tui
+  crate still has no core dependency; no new timer or thread (the 50 ms loop sets the instant each frame); skip
+  consumed once, `q`/Ctrl-C quit, error and disconnect end loading with the error footer, NO_COLOR never fades and the
+  home NO_COLOR postpass is skipped on the loading screen; `finish()` runs after the first report is sent. Behaviour
+  change noted: a disconnected worker now shows `refresh failed: refresh worker stopped` instead of exiting at once
+  (F5). Re-ran Verify: `cargo test --workspace` → 686 passed, 0 failed, 1 ignored (same totals); clippy `-D warnings`
+  and `fmt --check` clean. PTY smoke on real `~` (release, 76×22, scratch harness with a tiny screen model, not in
+  the repo): `listing transcripts…` at 0.004 s, `reading transcripts` rising 33 → 1029 / 1049 by 0.87 s,
+  `linking sessions…` 0.93 s, `ready ✓  opening home` 1.46 s (first report), home drawn 1.75 s (fade + next frame),
+  `q` exited in 0.011 s, status 0. Space at 0.32 s → `loading sessions… · q quit` at once. Ctrl-C at 0.41 s during
+  reading → the process exited and closed the PTY. Not checked here (left for 15.4): resize, `--live` start, terminal
+  state after Ctrl-C/fade quit.
+- Gotchas: No manifest changes, core dependency, fixture updates, stages or commits. Real-data timing / PTY smoke
+  remains Step 15.4. An unrelated untracked `.claude/` directory appeared during verification and was left untouched.
 
 ### 2026-11-11 — Step 15.2: TUI loading screen render — Codex
 - Did: Implemented the pure loading renderer with TUI-owned `LoadPhase` / `LoadingOptions`, the pinned fish

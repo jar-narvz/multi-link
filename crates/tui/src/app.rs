@@ -1,5 +1,9 @@
 //! Pure interaction state. Effects request work; they never contain a cached open decision.
-use std::{cell::Cell, collections::HashSet};
+use std::{
+    cell::Cell,
+    collections::HashSet,
+    time::{Duration, Instant},
+};
 
 use crossterm::event::KeyCode;
 use multi_link_model::{
@@ -9,7 +13,8 @@ use multi_link_model::{
 use ratatui::{buffer::Buffer, layout::Rect};
 
 use crate::{
-    GraphOptions, RepoOptions, Target, TimeWindow, graph_first_slot, render_graph,
+    Fade, GraphOptions, LoadPhase, LoadingOptions, RepoOptions, Target, TimeWindow,
+    graph_first_slot, render_graph,
     timeline::{lanes, render_repo},
 };
 
@@ -96,6 +101,17 @@ pub struct App {
     picker: Option<(Vec<(String, String)>, usize)>,
     /// Width of the last render; 0 means never drawn and counts as wide.
     drawn_width: Cell<u16>,
+    loading: Option<Loading>,
+}
+
+/// Startup state is enabled explicitly by the runtime; ordinary App users keep immediate home.
+struct Loading {
+    start: Instant,
+    now: Instant,
+    first_report: Option<Instant>,
+    phase: LoadPhase,
+    files_done: usize,
+    files_total: usize,
 }
 
 /// Stable identity shared by refresh and returning from the timeline.
@@ -158,6 +174,74 @@ impl SelectionIdentity {
 }
 
 impl App {
+    /// Begin the one startup animation using the caller's monotonic clock.
+    pub fn begin_loading(&mut self, now: Instant) {
+        self.loading = Some(Loading {
+            start: now,
+            now,
+            first_report: None,
+            phase: LoadPhase::Listing,
+            files_done: 0,
+            files_total: 0,
+        });
+    }
+
+    /// The CLI supplies an instant each loop; tests advance it without sleeping.
+    pub fn set_instant(&mut self, now: Instant) {
+        if let Some(loading) = &mut self.loading {
+            loading.now = now;
+        }
+    }
+
+    /// Presentation-only values: the CLI translates its core progress snapshot.
+    pub fn set_load_progress(&mut self, phase: LoadPhase, files_done: usize, files_total: usize) {
+        if let Some(loading) = &mut self.loading {
+            loading.phase = phase;
+            loading.files_done = files_done;
+            loading.files_total = files_total;
+        }
+    }
+
+    pub fn loading_options(&self) -> Option<LoadingOptions> {
+        let loading = self.loading.as_ref()?;
+        let theme = self.home_options().theme;
+        let fade = if let Some(received) = loading.first_report {
+            let deadline = received.max(loading.start + Duration::from_secs(1));
+            if loading.now < deadline {
+                Fade::None
+            } else {
+                let elapsed = loading.now.duration_since(deadline);
+                if theme.mode == crate::theme::ColorMode::NoColor
+                    || elapsed >= Duration::from_millis(250)
+                {
+                    return None;
+                }
+                if elapsed < Duration::from_millis(125) {
+                    Fade::School
+                } else {
+                    Fade::Text
+                }
+            }
+        } else {
+            Fade::None
+        };
+        Some(LoadingOptions {
+            time: loading
+                .now
+                .saturating_duration_since(loading.start)
+                .as_secs_f64(),
+            phase: if loading.first_report.is_some() {
+                LoadPhase::Done
+            } else {
+                loading.phase
+            },
+            files_done: loading.files_done,
+            files_total: loading.files_total,
+            fade,
+            theme,
+        })
+    }
+
     fn report_window(
         report: &OverviewReport,
         length: Option<std::time::Duration>,
@@ -247,15 +331,30 @@ impl App {
     }
 
     pub fn update(&mut self, event: Event) -> Vec<Effect> {
+        if let Event::Key(key) = &event
+            && self.loading_options().is_some()
+        {
+            if *key == KeyCode::Char('q') {
+                return vec![Effect::Quit];
+            }
+            self.loading = None;
+            return Vec::new();
+        }
         if matches!(&event, Event::Key(_)) && !self.opening {
             self.footer.clear();
         }
         match event {
             Event::Refresh(Err(error)) => {
+                self.loading = None;
                 self.healthy = false;
                 self.refresh_error = Some(format!("refresh failed: {error}; keeping last report"));
             }
             Event::Refresh(Ok(mut report)) => {
+                if let Some(loading) = &mut self.loading
+                    && loading.first_report.is_none()
+                {
+                    loading.first_report = Some(loading.now);
+                }
                 let live_id = self.live_card().map(|c| c.id.clone());
                 if self.live.is_some() && report.live.is_none() {
                     report.live = self.report.as_ref().and_then(|r| r.live.clone());
@@ -786,6 +885,10 @@ impl App {
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         let area = area.intersection(buf.area);
         if area.is_empty() {
+            return;
+        }
+        if let Some(options) = self.loading_options() {
+            crate::render_loading(&options, area, buf);
             return;
         }
         self.drawn_width.set(area.width);
