@@ -36,10 +36,30 @@ start before the mod's `session.start` runs and opens the pane, so the honest fi
 launching `claude`, 1.87 s from the pane opening. The 140 ms is CPU time per 3 s tick (a 30 s window after the first
 line), not wall time per refresh.
 
+## Desktop app (owner, 2026-11-11)
+
+The owner installed the 1.13 binary (`cargo install --path crates/cli --locked`), set `CLAUDE_CODE_PLUGIN_DIRS` to the
+mod folder in `~/.claude/settings.json`, restarted the Claude desktop app and opened this repo's coordinator session.
+Their screenshot (3:44 PM) shows the pane docked to the right of the chat titled `multi-link`, drawing:
+
+```text
+multi-link · multi-link
+working ─
+waiting ─
+recent (2h) ─
+▌● this session  16.3
+▌ └ codex 01a1cc93 ✓
+ ✓ "Reply with just the word ok."
+updated 12s ago
+```
+
+So G5 (a) and (b) hold in the desktop app too: the desktop session's id matched its transcript (this session is
+found and marked), the app draws a mod pane, and the app's `PATH` reaches `~/.cargo/bin/multi-link` (no
+`isn't on PATH`). The `"Reply with just the word ok."` row is one of this check's own PTY test sessions. The
+coordinator shows under `recent` because it was idle, waiting for the owner, when the screenshot was taken.
+
 ## Not checked
 
-- **The Claude desktop app** (G5 (a) and (b), desktop half). It needs the owner's one paste (below) and a restart of
-  the app, and the app's `PATH` must include `multi-link`.
 - Narrow panes on a real surface: overflow is covered by `claude plugin test` (20×6, 30×12, working-only), not seen
   live.
 - A Codex link matched by time (`likely`) and an ambiguous hand-off live: covered by the answer keys and mod tests;

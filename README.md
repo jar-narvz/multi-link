@@ -224,11 +224,14 @@ updated 18s ago
   exits on its own if Claude Code goes away.
 - **States:** `reading sessions…` before the first line; `multi-link isn't on PATH` and `This multi-link is too old
   for the pane` say what to fix; errors keep the last data and show in the footer; a stopped watcher retries.
-- **Load it** in a terminal session (needs `multi-link` 1.13 on `PATH`):
+- **Load it** in one terminal session (needs `multi-link` 1.13 on `PATH`):
 
   ```bash
   claude --plugin-dir /path/to/multi-link/mod/multi-link-pane
   ```
+
+  or in every session, the desktop app included: set `CLAUDE_CODE_PLUGIN_DIRS` to that folder in the `env` block of
+  `~/.claude/settings.json` and restart Claude Code.
 
   `/multi-link` reopens the pane if you close it. The pane is read-only.
 
@@ -361,8 +364,7 @@ state rules.
 ## Limitations and validation
 
 - The Claude Code pane (Release 1.13) relies on Claude Code's mod API (checked on 2.1.322). It was checked for real
-  in the terminal only; the Claude desktop app has not been checked yet. It needs `multi-link` on the `PATH` that
-  Claude Code sees.
+  in the terminal and in the Claude desktop app on macOS. It needs `multi-link` on the `PATH` that Claude Code sees.
 
 - Claude Code and Codex transcript formats are undocumented and may change. Unknown records
   are skipped and counted; missing evidence can leave states or links unknown.
