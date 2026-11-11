@@ -1,12 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 16.4 is committed (Claude step, 2026-11-11): real check in the terminal, README "Claude Code pane",
-`docs/phase16-check.md`. Desktop app checked by the owner (screenshot, pane drawn, this session found); waiting on the owner's confirm.**
-Real terminal session (Claude Code 2.1.322, 3 runs): pane data 1.87 s median after the pane opens (2.81 s from
-launching `claude`), 140 ms CPU per warm tick, one watcher per session, none left 5 s after `/exit`, the old 1.12
-binary shows `too old`. **Next:** record the owner's answer in `docs/phase16-check.md` → "Owner check" and the 16.4 entry's Review line; then
-Phase 16 is closed.
+**Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
+[--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
+(`docs/phase16-check.md`). The owner's `~/.claude/settings.json` sets `CLAUDE_CODE_PLUGIN_DIRS` to the mod folder, so
+every Claude Code session on this machine loads the pane. **Next:** the backlog (PLAN.md): tmux / Herdr jump
+(optional), desktop app with notifications, pane step strip and actions (board 16 B). Owner's polish notes, not
+asked for yet: empty section rules stay drawn; `updated Ns ago` counts from the last printed line.
 
 **Step 16.2 is committed (Codex loop, 2026-11-11): `multi-link pane --watch --json`.** One long-lived `Scanner`;
 compact, flushed NDJSON on a data change (ignoring `now` and every `phrase`) or a 30 s heartbeat, 3 s ticks;
@@ -837,7 +837,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 - Review: Claude's own step (docs only; no code), as 15.4. Numbers in README and the check doc are from the scratch
   `events.txt` of runs 1–4 and `old`, and the CPU script output. Board check: the captured pane has board 16 C's
   header, rules, `▌` row and `└` children. Desktop half: done by the owner 2026-11-11 (screenshot; recorded in
-  `docs/phase16-check.md` → "Desktop app"). Owner's answer: pending.
+  `docs/phase16-check.md` → "Desktop app"). Owner's answer (2026-11-11): "Looks good". Phase 16 closed.
 - Gotchas: a `claude` started from a Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION` and saves no
   transcript, so the pane cannot find it; clear `CLAUDE_CODE_*` for real checks. In zsh, `bash dir/$s` with
   `s="check.sh 6"` is one word.

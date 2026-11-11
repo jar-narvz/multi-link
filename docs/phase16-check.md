@@ -74,4 +74,4 @@ coordinator shows under `recent` because it was idle, waiting for the owner, whe
 
 ## Owner check (stop and ask)
 
-Pending.
+2026-11-11: the owner tried the pane in the Claude desktop app and answered "Looks good". Phase 16 is closed.
