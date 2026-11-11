@@ -1,0 +1,7 @@
+{
+  "name": "multi-link-pane",
+  "version": "0.1.0",
+  "author": { "name": "Jared Narvaez" },
+  "description": "Sessions in this repo, beside Claude Code",
+  "types": "./types/index.d.ts"
+}

@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 16.3 is committed (Codex loop, 2026-11-11): the mod in `mod/multi-link-pane/`.** `/multi-link` opens the pane,
+the 16.2 watcher streams into an atom, board 16 C layout, every G4 state; `claude plugin validate` passes and
+`claude plugin test` is 46 / 46 on terminal and desktop. **For 16.4:** load it with
+`claude --plugin-dir /Users/jarednarvaez/multi-link/mod/multi-link-pane` in this repo (a PTY, as 16.0's harness);
+`multi-link` on PATH must be the 16.2 build (`cargo install --path crates/cli --locked`, an owner command since it
+replaces the installed binary); check unload kills the watcher (`ps`), no orphan 5 s after `/exit`; desktop app via
+`CLAUDE_CODE_PLUGIN_DIRS` is the owner's one paste.
+
 **Step 16.2 is committed (Codex loop, 2026-11-11): `multi-link pane --watch --json`.** One long-lived `Scanner`;
 compact, flushed NDJSON on a data change (ignoring `now` and every `phrase`) or a 30 s heartbeat, 3 s ticks;
 `{ "v": 1, "error": "…" }` lines keep going; exits when its parent pid changes (or is 1 at start) and on a broken
@@ -803,6 +811,75 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 16.3: The mod — Codex
+- Did: Added the `multi-link-pane` mod (0.1.0), `/multi-link`, pane `multi-link` on session start, and the exact
+  `multi-link pane --json --watch --cwd <cwd> --session <id>` argument vector. Buffered stdout until newlines;
+  malformed/unknown-version lines are ignored, error lines keep the report, valid lines refresh the receipt clock.
+  Spawn rejection and a quick unrecognized-subcommand exit show G4's actionable messages. Other exits restart
+  after 2/4/8/16/32/60/60… seconds; valid data resets the delay. Session end cancels the child, retry and age timers.
+  Unload relies on the host's stream/timer ownership, without a plugin unload hook (see Gotchas).
+  Draws surface-resolved Box/Text only, using viewport rows/columns: sections, harness colours, this-session marker,
+  nested children, likely links, hand-off outcomes, updated-age/error footer. Overflow removes whole other-session
+  rows from recent, waiting, working (counting rows in `+N more`); pins this session, caps its children at three and
+  counts the remainder in `+N runs`. At 20×6 the section heading yields and one child fits; four are summarized.
+- Changed: `mod/multi-link-pane/.claude-plugin/plugin.json`, `mod/multi-link-pane/hooks/hooks.json`,
+  `mod/multi-link-pane/hooks/register.tsx`, `mod/multi-link-pane/types/index.d.ts`,
+  `mod/multi-link-pane/hooks/register.test.tsx`, `PROGRESS.md`.
+- Verify: Both requested commands ran inside the sandbox; neither needed an install. Test-first run against the
+  empty register: `0 pass`, `34 fail` (missing drawings, as expected). Final requested runs:
+  `claude plugin validate mod/multi-link-pane` → exit 0; actual decisive output (directory notices also pasted):
+  ```text
+  ❯ ./register.tsx hooks: session.start, session.end, command.run{command=multi-link}, ui.render{component=Pane, requestId=multi-link}
+  ❯ ./register.tsx gating hook without .catch: command.run{command=multi-link}
+  ❯ ./register.tsx calls: $.clock.after, $.clock.every, $.clock.now, $.command.register, $.process.spawn, $.session.id, $.state.get, $.state.set, $.ui.open, $.ui.resolve
+  ❯ ./register.tsx state writes: multi-link-pane.pane
+  ❯ ./register.tsx state reads: multi-link-pane.pane
+  ✘ Found 1 problem the plugin directory refuses a submission for:
+  ❯ LICENSE: License missing (LICENSE_MISSING). This plugin has no LICENSE file and plugin.json has no `license`. The directory requires one of them.
+  ⚠ Found 1 plugin directory warning:
+  ❯ .claude-plugin/plugin.json icon: No icon (ICON_MISSING). No icon found in the plugin. The validator looked for `icon` in plugin.json and for a file at .claude-plugin/icon.png or .svg, assets/icon.png or .svg, or a similar path.
+  These plugin directory checks do not change the result below. To fail on problems the directory refuses a submission for, run this command with --profile directory.
+  Digest: sha256-GGW56/gZb5unli2mEWe31AaFQQlKxmwDMOPj6fIafag=
+  ✔ Validation passed
+  ```
+  `claude plugin test mod/multi-link-pane` → exit 0; actual summary:
+  ```text
+   46 pass
+   0 fail
+  Ran 46 tests across 1 file. [2.39s]
+  ```
+  Tests run on terminal and desktop: all ten 16.0 keys fed as watcher lines, a literal board C drawing and harness
+  colours, all G4 states, split lines, malformed/unknown versions, error preservation, heartbeat/age, retry cap and
+  reset, 20×6/30×12 working-only overflow, recent/waiting/working removal order, command reopening without another
+  watcher, and session-end cleanup while streaming and during backoff (no further child starts or clock updates).
+  An independent Python comparison of the embedded test keys against the read-only JSON files printed:
+  ```text
+  10 embedded watcher keys equal fixtures/expected/pane/*.json exactly.
+  ```
+  `git diff --check` → no output, exit 0 (tracked changes); nothing staged, committed or pushed.
+- Review: Claude, 2026-11-11, mode Codex loop (`codex-quota.py` → `CODEX: OK`). Diff read: all of
+  `mod/multi-link-pane/` (manifest, hooks list, `register.tsx`, `types/index.d.ts`, tests); no file outside the step.
+  No findings. Checked by reading: a stdout chunk is buffered to newlines; an `error` line sets the footer notice and
+  keeps the last report; spawn rejecting before any chunk → `missing`; a fast exit with `unrecognized subcommand` →
+  `too old`; else backoff 2→60 s, reset by data; `session.start` stops a previous lifecycle (hot reload) and
+  `session.end` cancels the stream, the retry timer and the 1 s footer tick; overflow keeps header, this session and
+  footer, drops `recent` → `waiting` → `working`, `+N more` counts sessions. Colours follow board 16 C (glyph and
+  row in the harness colour); G3's green/amber are not used because the approved board does not use them.
+  Unload: the kit cannot raise one (Codex's note is right); the engine's contract kills a spawn on unload and 16.0's
+  spike proved it with `ps` (G5 (d)); 16.4 checks it again on the real mod. Re-ran Verify: `claude plugin validate
+  mod/multi-link-pane` → `✔ Validation passed` (directory-only notices: no icon, no licence file); `claude plugin test
+  mod/multi-link-pane` → 46 pass, 0 fail (23 cases × terminal and desktop). Matches Codex's paste.
+- Gotchas: The mod/test environment has no Node and cannot import JSON files, so the test embeds the ten read-only
+  answer-key objects, checked for exact equality above; it does not edit the keys. A process.spawn mock must return
+  `{ value: { code, signal } }`, and a session.end mock must return `{ sessionId }`. Earlier test iterations exposed
+  and corrected those mock shapes. The kit exposes no unload call. An attempted `$.ui.close` from its Engine was
+  undefined; the API types further say `PaneCloseOrigin`'s `unload` does **not** run the opener's hooks, so a ui.close
+  cleanup hook would not provide unload teardown and was removed. The host explicitly owns cancellation of each
+  spawned stream and each clock timer on module unload (types: process.spawn and clock docs); the 16.0 spike also
+  observed child death on hot reload. Claude still needs a real unload check with this mod, including backoff.
+  Validation's optional directory license/icon notices were left visible: no license chosen for the unlicensed
+  repo, no submission assets added. Existing untracked `.claude/` was left alone. No npm, tsc or new installs.
 
 ### 2026-11-11 — Step 16.2: `pane --watch` — Codex
 - Did: Added `--watch` around the existing pane projection and exact `tui::refresh_with_live` pass, with one
