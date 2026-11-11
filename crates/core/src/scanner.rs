@@ -5,6 +5,10 @@ use std::{
     fs, io,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::SystemTime,
 };
 
@@ -13,6 +17,49 @@ use multi_link_codex::{Discovery, ReadFailure, Rollout};
 use multi_link_model::{HookSummary, OverviewReport, RepoSteps, Skipped, Timestamp};
 
 use crate::{LinksOutput, Liveness, Options, ProcessProbe, RepoMode, SessionsOutput};
+
+/// First-load progress shared with the UI. A handle represents one generation;
+/// attach a fresh handle for another load. The worker calls `finish` only after
+/// sending its first complete report (including the all-time pass).
+#[derive(Clone, Default)]
+pub struct LoadProgress(Arc<ProgressState>);
+
+#[derive(Default)]
+struct ProgressState {
+    phase: AtomicUsize,
+    total: AtomicUsize,
+    done: AtomicUsize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoadSnapshot {
+    pub phase: &'static str,
+    pub files_total: usize,
+    pub files_done: usize,
+}
+
+impl LoadProgress {
+    pub fn snapshot(&self) -> LoadSnapshot {
+        // Publishing the phase releases the final total; it never changes again.
+        let phase = self.0.phase.load(Ordering::Acquire);
+        if phase == 0 {
+            return LoadSnapshot {
+                phase: "listing",
+                files_total: 0,
+                files_done: 0,
+            };
+        }
+        LoadSnapshot {
+            phase: ["listing", "reading", "linking", "done"][phase],
+            files_total: self.0.total.load(Ordering::Acquire),
+            files_done: self.0.done.load(Ordering::Acquire),
+        }
+    }
+
+    pub fn finish(&self) {
+        self.0.phase.store(3, Ordering::Release);
+    }
+}
 
 /// Reuse this refresh's batch results during session assembly.
 struct BatchProcessProbe {
@@ -36,7 +83,7 @@ pub struct ParseStats {
 
 /// Assumes fine-grained mtime (APFS: nanoseconds). On a 1 s mtime filesystem a
 /// same-length, same-inode rewrite within one second would be missed.
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Stamp {
     len: u64,
     modified: SystemTime,
@@ -48,6 +95,17 @@ struct Cache<T>(HashMap<PathBuf, (Stamp, T)>);
 impl<T> Default for Cache<T> {
     fn default() -> Self {
         Self(HashMap::new())
+    }
+}
+
+impl Stamp {
+    fn read(path: &Path) -> io::Result<Self> {
+        let meta = fs::metadata(path)?;
+        Ok(Self {
+            len: meta.len(),
+            modified: meta.modified()?,
+            inode: meta.ino(),
+        })
     }
 }
 
@@ -104,6 +162,14 @@ pub struct OverviewOutput {
 #[derive(Default)]
 pub struct Scanner {
     root: Option<PathBuf>,
+    parse_threads: Option<usize>,
+    progress: Option<LoadProgress>,
+    #[cfg(test)]
+    after_prefill: Option<fn(&Path)>,
+    #[cfg(test)]
+    reverse_parses: bool,
+    #[cfg(test)]
+    completed_parses: Vec<PathBuf>,
     pub(crate) live_cache: crate::live::CallCache,
     #[cfg(test)]
     pub(crate) live_reads: Vec<String>,
@@ -138,11 +204,213 @@ struct Inputs {
     invocations: Vec<multi_link_claude::Invocation>,
 }
 
+enum ParseJob {
+    AppRecord(PathBuf, Stamp),
+    Claude(PathBuf, Stamp, bool),
+    Codex(PathBuf, Stamp),
+}
+
+impl ParseJob {
+    fn parse(&self, root: &Path) -> io::Result<ParsedJob> {
+        match self {
+            Self::AppRecord(path, stamp) => multi_link_claude::read_app_record(path)
+                .map(|read| ParsedJob::AppRecord(path.clone(), stamp.clone(), read)),
+            Self::Claude(path, stamp, subagent) => {
+                multi_link_claude::parse_file(root, path, *subagent)
+                    .map(|parsed| ParsedJob::Claude(path.clone(), stamp.clone(), parsed))
+            }
+            Self::Codex(path, stamp) => {
+                let mut skipped = Vec::new();
+                multi_link_codex::parse_file(root, path, &mut skipped).map(|rollout| {
+                    ParsedJob::Codex(path.clone(), stamp.clone(), (rollout, skipped))
+                })
+            }
+        }
+    }
+}
+
+enum ParsedJob {
+    AppRecord(PathBuf, Stamp, AppRecordRead),
+    Claude(PathBuf, Stamp, ParsedFile),
+    Codex(PathBuf, Stamp, (Option<Rollout>, Vec<Skipped>)),
+}
+
 impl Scanner {
+    /// Override the worker count for deterministic equivalence tests.
+    #[doc(hidden)]
+    pub fn with_parse_threads(n: usize) -> Self {
+        Self {
+            parse_threads: Some(n.max(1)),
+            ..Self::default()
+        }
+    }
+
+    pub fn set_progress(&mut self, progress: LoadProgress) {
+        self.progress = Some(progress);
+    }
+
+    fn parse_jobs(&mut self, root: &Path) -> Vec<ParseJob> {
+        let mut jobs = Vec::new();
+        for project in children(&root.join(".claude/projects")).unwrap_or_default() {
+            if !project.is_dir() {
+                continue;
+            }
+            for path in children(&project).unwrap_or_default() {
+                if !path.is_file() || !extension(&path, "jsonl") {
+                    continue;
+                }
+                let Some(id) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                let subs = children(&project.join(id).join("subagents")).unwrap_or_default();
+                for (path, subagent) in std::iter::once((path, false)).chain(
+                    subs.into_iter()
+                        .filter(|p| {
+                            p.is_file()
+                                && extension(p, "jsonl")
+                                && p.file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .and_then(|s| s.strip_prefix("agent-"))
+                                    .is_some_and(|s| !s.is_empty())
+                        })
+                        .map(|p| (p, true)),
+                ) {
+                    if let Ok(stamp) = Stamp::read(&path) {
+                        if self
+                            .claude
+                            .0
+                            .get(&path)
+                            .is_some_and(|(old, _)| old == &stamp)
+                        {
+                            continue;
+                        }
+                        self.claude.0.remove(&path);
+                        jobs.push(ParseJob::Claude(path, stamp, subagent));
+                    }
+                }
+            }
+        }
+        for path in
+            multi_link_codex::rollout_paths(&root.join(".codex/sessions")).unwrap_or_default()
+        {
+            if let Ok(stamp) = Stamp::read(&path) {
+                if self
+                    .codex
+                    .0
+                    .get(&path)
+                    .is_some_and(|(old, _)| old == &stamp)
+                {
+                    continue;
+                }
+                self.codex.0.remove(&path);
+                jobs.push(ParseJob::Codex(path, stamp));
+            }
+        }
+        // Listing failures are deliberately left to the existing serial reader.
+        let (app_paths, _) = multi_link_claude::app_record_paths(root);
+        for path in app_paths {
+            if let Ok(stamp) = Stamp::read(&path) {
+                if self
+                    .app_records
+                    .0
+                    .get(&path)
+                    .is_some_and(|(old, _)| old == &stamp)
+                {
+                    continue;
+                }
+                self.app_records.0.remove(&path);
+                jobs.push(ParseJob::AppRecord(path, stamp));
+            }
+        }
+        jobs
+    }
+
+    // Discovery here is speculative: serial discovery below remains the only
+    // authority for errors, ordering, and files that change during a parse.
+    fn prefill(&mut self, root: &Path) {
+        let jobs = self.parse_jobs(root);
+        let progress = self
+            .progress
+            .as_ref()
+            .filter(|p| p.0.phase.load(Ordering::Acquire) == 0);
+        if let Some(p) = progress {
+            p.0.total.store(jobs.len(), Ordering::Release);
+            p.0.phase
+                .store(if jobs.is_empty() { 2 } else { 1 }, Ordering::Release);
+        }
+        #[cfg(test)]
+        let jobs = {
+            let mut jobs = jobs;
+            if self.reverse_parses {
+                jobs.reverse();
+            }
+            jobs
+        };
+        let next = AtomicUsize::new(0);
+        let results = Mutex::new(Vec::new());
+        let threads = self
+            .parse_threads
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from));
+        std::thread::scope(|scope| {
+            for _ in 0..threads.min(jobs.len()) {
+                scope.spawn(|| {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(job) = jobs.get(index) else {
+                            break;
+                        };
+                        let result = job.parse(root);
+                        // Failed speculative reads discard partial diagnostics and are
+                        // retried by the serial loop, with its existing error policy.
+                        if let Ok(result) = result {
+                            results.lock().unwrap().push(result);
+                        }
+                        if let Some(p) = progress {
+                            p.0.done.fetch_add(1, Ordering::Release);
+                        }
+                    }
+                });
+            }
+        });
+        for result in results.into_inner().unwrap() {
+            let (path, bytes) = match result {
+                ParsedJob::AppRecord(path, stamp, value) => {
+                    let bytes = stamp.len;
+                    self.app_records.0.insert(path.clone(), (stamp, value));
+                    (path, bytes)
+                }
+                ParsedJob::Claude(path, stamp, value) => {
+                    let bytes = stamp.len;
+                    self.claude.0.insert(path.clone(), (stamp, value));
+                    (path, bytes)
+                }
+                ParsedJob::Codex(path, stamp, value) => {
+                    let bytes = stamp.len;
+                    self.codex.0.insert(path.clone(), (stamp, value));
+                    (path, bytes)
+                }
+            };
+            #[cfg(test)]
+            self.completed_parses.push(path.clone());
+            let _ = path;
+            self.stats.files += 1;
+            self.stats.bytes += bytes;
+        }
+        if let Some(p) = progress {
+            p.0.phase.store(2, Ordering::Release);
+        }
+    }
+
     fn read(&mut self, root: &Path, options: &Options<'_>) -> io::Result<Inputs> {
         if self.root.as_deref() != Some(root) {
             *self = Self {
                 root: Some(root.to_owned()),
+                parse_threads: self.parse_threads,
+                progress: self.progress.clone(),
+                #[cfg(test)]
+                after_prefill: self.after_prefill,
+                #[cfg(test)]
+                reverse_parses: self.reverse_parses,
                 ..Default::default()
             };
         }
@@ -154,6 +422,11 @@ impl Scanner {
         self.codex.prune();
         self.hooks.prune();
         self.outputs.prune();
+        self.prefill(root);
+        #[cfg(test)]
+        if let Some(hook) = self.after_prefill {
+            hook(root);
+        }
         let (claude, invocations, latest, app_unreadable) = self.read_claude(root)?;
         let mut codex = self.read_codex(root)?;
         codex.unreadable.extend(app_unreadable);
@@ -546,6 +819,241 @@ mod tests {
                 fs::copy(entry.path(), target).unwrap();
             }
         }
+    }
+
+    fn synthetic(root: &Path) -> PathBuf {
+        let project = root.join(".claude/projects/test");
+        fs::create_dir_all(&project).unwrap();
+        for id in ["a", "b", "c"] {
+            fs::write(project.join(format!("{id}.jsonl")),
+                "{\"type\":\"user\",\"cwd\":\"/synthetic\",\"timestamp\":\"2026-10-29T23:15:00Z\"}\n").unwrap();
+        }
+        project
+    }
+
+    #[test]
+    fn app_record_prefill_caches_all_read_kinds_and_counts_each_miss_once() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root
+            .path()
+            .join("Library/Application Support/Claude/claude-code-sessions/a/b");
+        fs::create_dir_all(&directory).unwrap();
+        let records = [
+            ("local_good.json", r#"{"cliSessionId":"synthetic-session"}"#),
+            ("local_ignored.json", r#"{"cliSessionId":null}"#),
+            ("local_bad.json", "not JSON"),
+        ];
+        for (name, text) in records {
+            fs::write(directory.join(name), text).unwrap();
+        }
+        let progress = LoadProgress::default();
+        let mut scanner = Scanner::with_parse_threads(4);
+        scanner.set_progress(progress.clone());
+        scanner.prefill(root.path());
+        assert_eq!(
+            scanner.stats,
+            ParseStats {
+                files: 3,
+                bytes: 65,
+            }
+        );
+        assert_eq!(scanner.app_records.0.len(), 3);
+        assert!(matches!(
+            scanner.app_records.0[&directory.join("local_good.json")].1,
+            AppRecordRead::Record(_)
+        ));
+        assert_eq!(
+            scanner.app_records.0[&directory.join("local_ignored.json")].1,
+            AppRecordRead::Ignored
+        );
+        assert_eq!(
+            scanner.app_records.0[&directory.join("local_bad.json")].1,
+            AppRecordRead::Bad
+        );
+        assert_eq!(
+            progress.snapshot(),
+            LoadSnapshot {
+                phase: "linking",
+                files_total: 3,
+                files_done: 3
+            }
+        );
+        let (claude, _, _, failures) = scanner.read_claude(root.path()).unwrap();
+        assert!(failures.is_empty());
+        assert_eq!(claude.app_records.len(), 1);
+        assert_eq!(claude.app_records[0].cli_session_id, "synthetic-session");
+        assert_eq!(
+            claude.bad_records,
+            ["Library/Application Support/Claude/claude-code-sessions/a/b/local_bad.json"]
+        );
+        assert_eq!(
+            scanner.stats.files, 3,
+            "serial assembly must use the prefetched cache"
+        );
+        scanner.stats = ParseStats::default();
+        scanner.prefill(root.path());
+        scanner.read_claude(root.path()).unwrap();
+        assert_eq!(scanner.stats, ParseStats::default());
+        assert_eq!(
+            progress.snapshot(),
+            LoadSnapshot {
+                phase: "linking",
+                files_total: 3,
+                files_done: 3
+            }
+        );
+    }
+
+    #[test]
+    fn listing_snapshot_hides_counts_until_publication() {
+        let progress = LoadProgress::default();
+        // A snapshot can load the old listing phase just before the publisher
+        // stores its total. It must not expose a half-published generation.
+        progress.0.total.store(3, Ordering::Release);
+        assert_eq!(
+            progress.snapshot(),
+            LoadSnapshot {
+                phase: "listing",
+                files_total: 0,
+                files_done: 0
+            }
+        );
+        progress.0.phase.store(1, Ordering::Release);
+        assert_eq!(
+            progress.snapshot(),
+            LoadSnapshot {
+                phase: "reading",
+                files_total: 3,
+                files_done: 0
+            }
+        );
+    }
+
+    #[test]
+    fn reverse_completion_keeps_serial_assembly_order() {
+        let root = tempfile::tempdir().unwrap();
+        let project = synthetic(root.path());
+        let mut forward = Scanner::with_parse_threads(1);
+        let mut reverse = Scanner::with_parse_threads(1);
+        reverse.reverse_parses = true;
+        let opts = options(&FixtureProcessProbe);
+        let (a, al) = forward.refresh(root.path(), &opts).unwrap();
+        let (b, bl) = reverse.refresh(root.path(), &opts).unwrap();
+        assert_eq!(
+            reverse.completed_parses,
+            ["c", "b", "a"].map(|id| project.join(format!("{id}.jsonl")))
+        );
+        assert_eq!(
+            serde_json::to_vec(&a.report).unwrap(),
+            serde_json::to_vec(&b.report).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&al.report).unwrap(),
+            serde_json::to_vec(&bl.report).unwrap()
+        );
+        assert_eq!(forward.stats, reverse.stats);
+    }
+
+    #[test]
+    fn changes_between_prefill_and_serial_are_revalidated() {
+        fn change(root: &Path) {
+            let project = root.join(".claude/projects/test");
+            fs::OpenOptions::new()
+                .append(true)
+                .open(project.join("a.jsonl"))
+                .unwrap()
+                .write_all(b"{\"type\":\"future\"}\n")
+                .unwrap();
+            // Equal length and mtime, new inode: the old cache must not win.
+            let old = project.join("b.jsonl");
+            let replacement = project.join("new");
+            let bytes = fs::read(&old).unwrap();
+            fs::write(
+                &replacement,
+                String::from_utf8(bytes)
+                    .unwrap()
+                    .replace("/synthetic", "/different"),
+            )
+            .unwrap();
+            fs::File::options()
+                .write(true)
+                .open(&replacement)
+                .unwrap()
+                .set_modified(fs::metadata(&old).unwrap().modified().unwrap())
+                .unwrap();
+            fs::rename(replacement, old).unwrap();
+            fs::remove_file(project.join("c.jsonl")).unwrap();
+        }
+        let root = tempfile::tempdir().unwrap();
+        synthetic(root.path());
+        let mut scanner = Scanner::with_parse_threads(4);
+        scanner.after_prefill = Some(change);
+        let opts = options(&FixtureProcessProbe);
+        let (actual, links) = scanner.refresh(root.path(), &opts).unwrap();
+        assert_eq!(actual.report.sessions.len(), 2);
+        assert_eq!(actual.report.skipped.len(), 1);
+        assert!(actual.report.sessions.iter().any(|s| s.cwd == "/different"));
+        let mut serial = Scanner::default();
+        // Exercise the original serial readers directly against the new bytes.
+        let (claude, invocations, _, _) = serial.read_claude(root.path()).unwrap();
+        let codex = serial.read_codex(root.path()).unwrap();
+        let expected = serial
+            .assemble(
+                &opts,
+                Inputs {
+                    claude,
+                    codex,
+                    hooks: Default::default(),
+                    waiting: Default::default(),
+                    invocations,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::to_vec(&actual.report).unwrap(),
+            serde_json::to_vec(&expected.report).unwrap()
+        );
+        assert!(links.report.links.is_empty());
+        scanner.after_prefill = None;
+        scanner.refresh(root.path(), &opts).unwrap();
+        assert_eq!(scanner.stats.files, 0);
+    }
+
+    #[test]
+    fn failed_parallel_read_drops_stale_cache_and_reports_once() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join(".codex/sessions");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rollout-test.jsonl");
+        fs::write(&path, "not json\n").unwrap();
+        let opts = options(&FixtureProcessProbe);
+        let mut scanner = Scanner::default();
+        let (first, _) = scanner.refresh(root.path(), &opts).unwrap();
+        assert_eq!(first.report.skipped.len(), 1);
+        assert!(!scanner.codex.0.is_empty());
+        fs::write(&path, "not json again\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o0)).unwrap();
+        let (actual, links) = scanner.refresh(root.path(), &opts).unwrap();
+        let mut serial = Scanner::default();
+        let expected = serial.read_codex(root.path()).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            expected.unreadable.len(),
+            1,
+            "test requires permission-denied reads"
+        );
+        assert_eq!(actual.unreadable.len(), 1);
+        assert_eq!(links.unreadable.len(), 1);
+        assert_eq!(actual.unreadable[0].file, expected.unreadable[0].file);
+        assert_eq!(
+            actual.unreadable[0].error.to_string(),
+            expected.unreadable[0].error.to_string()
+        );
+        assert!(actual.report.skipped.is_empty());
+        assert!(scanner.codex.0.is_empty());
+        scanner.refresh(root.path(), &opts).unwrap();
+        assert_eq!(scanner.stats.files, 1);
     }
 
     #[test]

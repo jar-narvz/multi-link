@@ -2473,7 +2473,8 @@ the backlog as an optional feature that never asks a user to install anything.
 
 Decisions:
 - **F1 Parse in parallel, same results.** At the start of `Scanner::read` (both harnesses at once), list every
-  Claude transcript and subagent file and every Codex rollout with its stamp, take the cache misses, and parse them on
+  Claude transcript and subagent file, every Claude desktop-app record (15.1 amendment) and every Codex rollout with
+  its stamp, take the cache misses, and parse them on
   `std::thread::available_parallelism()` scoped threads (`std::thread::scope`, no new crate). Each result is stored
   with the stamp taken **before** its parse. The existing serial loops then run as today through `Cache::read`, which
   already re-parses when the stamp no longer matches (a file appended or replaced in between) — so ordering, sorting,
@@ -2600,6 +2601,16 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · tmux / Herdr jump (optional, never a required install) · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-11 — Step 15.1 F1 amendment (Claude, during review, Codex loop)
+- **F1 now also prefetches Claude desktop-app records** (`multi_link_claude::app_record_paths` /
+  `read_app_record`, the `app_records` cache). Measured on real `~` after the first 15.1 implementation: 166 records,
+  87 MB, read serially in 544–554 ms per cold pass (scratch harness, 3 runs), outside F1's list and about a quarter of
+  the 2.0 s budget; F3 (b) was 1842 / 1881 ms medians, a 6 % margin. Same rules as transcripts: stamp before the read,
+  failures uncached, the serial loop the only reporter (a `Bad` read stays a bad record there); they count in
+  `files_total`. Why: same per-file hot spot, same file, no new risk. Not taken here: the all-time pass's serial
+  `git rev-parse` per new cwd (~390 ms cold, `RepoMode::map`), which is repo lookup, not parsing; a lever for 15.1a if
+  F3 ever misses.
 
 ### 2026-11-11 — Step 15.0 amendments (Claude, while writing the goldens)
 - **F5 centre.** "Centre (W/2, art height/2)" puts the 76×22 centre at row 7.5, but the board's `drawC` uses

@@ -1,14 +1,23 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 15.0 is committed (2026-11-11, Claude step): Phase 15 rules, loading goldens, timing baseline. Step 15.1
-(Codex: parallel cold parse, F2 measurement, progress handle) is next.** Rules: `docs/design.md` → "Phase 15
-decisions" (F1–F8 plus "Pinned while writing the goldens"); PLAN.md F5 centre y is now 0.48 × art rows and F6 to-do
-bar cells `border` (Review log, Step 15.0 amendments).
+**Step 15.1 is committed (2026-11-11, Codex loop): parallel cold parse, F2 measurement (no `Arc`), progress
+handle. Step 15.2 (Codex: TUI loading screen render) is next.** F3 passed after review round 2 (Claude, release, real
+`~`, 3 fresh processes): (a) cold `overview --json` median **0.97 s** (was 7.99 s); (b) worker first report median
+**1397 ms** without `--live`, **1408 ms** with (was 8624 / 8514 ms); (d) warm median 110 / 169 ms. PLAN.md F1 was
+amended in review to prefetch Claude desktop-app records too (Review log). No disk cache (15.1a) is needed.
+- **Progress handle for 15.2/15.3:** `multi_link_core::{LoadProgress, LoadSnapshot}`. The worker creates a
+  `LoadProgress`, calls `scanner.set_progress(p.clone())` before its first pass (survives the root reset), sends a
+  clone to the UI thread, and calls `p.finish()` after sending its first report (after the all-time pass). The UI reads
+  `p.snapshot()` → `LoadSnapshot { phase: &'static str ("listing" | "reading" | "linking" | "done"), files_total,
+  files_done }`; totals are hidden (0 / 0) while phase is listing; zero misses go straight to linking; later passes
+  never touch it. 15.2's pure render can take a `LoadSnapshot` directly.
+- **Where the cold time still goes (if it ever matters again):** overview ≈ 0.93–1.04 s; the all-time pass ≈ 390 ms
+  cold, mostly serial `git rev-parse` per new cwd (`RepoMode::map`), not parsing — the next lever, not a disk cache.
 - **Baseline to beat (release `c29c516`, real `~`, 3 fresh processes):** F3 (a) cold `overview --json` wall 9.02 /
   7.99 / 7.95 s (median 7.99 s; user ≈ 7.25 s, sys 0.67–0.80 s); F3 (b) first report without `--live` 9344 / 8624 /
   8446 ms (median 8624; overview ≈ 8.0–8.8 s, all-time pass 435–524 ms), with `--live` 8510 / 8514 / 8550 ms (median
-  8514; live part 63–65 ms). Budget: (a) and (b) ≤ 2.0 s each. 15.1 re-times both the same way next to these.
+  8514; live part 63–65 ms). Budget: (a) and (b) ≤ 2.0 s each. 15.1 measurements are in the newest log entry below.
 - **Timing harness for (b)** (scratch only, never in the repo): a crate with path deps on `crates/{core,plan,model}`
   whose `main` repeats `refresh_with_live` from `crates/cli/src/tui.rs` without the graph — `Scanner::overview` with
   `since` 2 h and `RealProcessProbe`, then `Scanner::refresh` with `since: None`, `live::started_steps` /
@@ -760,6 +769,88 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 15.1: Parallel cold parse, F2 measurement, progress handle — Codex
+- Did: Parallel speculative prefill with pre-read stamps, original serial assembly/revalidation/diagnostics,
+  one-generation atomic progress and root-reset survival. Round 1 re-exported `LoadSnapshot` and added complete
+  out-of-report diagnostic comparisons plus malformed-Claude coverage. Round 2 implements Claude's F1 amendment:
+  app-record jobs come from `app_record_paths`; cache every successful `read_app_record` result (Record/Ignored/Bad)
+  with its listing stamp; discard speculative errors, including NotFound. Existing serial app-record loop unchanged.
+  App-record misses count in progress and parse stats exactly like other jobs.
+- Changed: `crates/core/src/scanner.rs`, `crates/core/src/lib.rs`, `crates/core/tests/parallel_scan.rs`, `PROGRESS.md`.
+  This round changed scanner, parallel_scan tests and this log only; Claude's PLAN.md amendment was left untouched.
+- Verify: All cargo commands used `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"` first.
+  `cargo test --workspace > /tmp/multi-link-15-r2-tests.log 2>&1` → exit 0; actual summary of result lines:
+  ```text
+  test result lines: 63
+  passed: 672 failed: 0 ignored: 1
+  ```
+  The ignored test is the existing `real_counts`. New round 2 unit regression failed before implementation
+  (0 files/0 bytes vs expected 3 files/65 bytes); after implementation its actual result was:
+  ```text
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  ```
+  `cargo test -p multi-link-core --test parallel_scan` → exit 0; actual result:
+  ```text
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+  ```
+  Coverage includes 1-vs-4 reports/diagnostics/stats on good/ignored/bad app records; direct prefill cache and
+  progress assertions (3 misses, 65 bytes), unchanged serial bad-record reporting, and a full warm refresh with
+  0 files/0 bytes parsed. All earlier race, diagnostic and progress tests remain in the suite.
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual final line:
+  ```text
+  Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.10s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output. Four script results (summarized from actual output):
+  ```text
+  bash fixtures/expected/phase9/check.sh 6 → 47 ok, exit=0
+  bash fixtures/expected/phase12/check.sh → 3 ok, exit=0
+  bash fixtures/expected/phase13/check.sh → 1 ok, exit=0
+  bash fixtures/expected/phase14/check.sh → 1 ok, exit=0
+  ```
+  `git diff --exit-code -- fixtures/expected docs/design.md`, `git diff --check` → exit 0, no output.
+  `git diff --cached --name-only` → no output. Full round 2 logs: `/tmp/multi-link-15-r2-{tests,clippy,checks}.log`.
+- Review: Claude (Codex loop; quota check `CODEX: OK`, 5 h window 2 %, weekly 51 %), 2 rounds. Round 1 (3 findings):
+  re-export `LoadSnapshot` (15.2 must name it); 1-vs-many test must compare out-of-report diagnostics (bad records,
+  incomplete, unreadable, hook conflicts) on a root that has them; a malformed Claude record reported once — fixed.
+  Round 2: Claude measured the serial desktop-app record loop at 544–554 ms of each cold pass (166 files, 87 MB) and
+  amended F1 to prefetch them (PLAN.md Review log) — implemented. Checked in the diff: serial loops remain the only
+  assembler and reporter, stamps are taken before the read, failed reads are not cached, the progress phase is only
+  published on the first generation. Claude re-ran Verify: `cargo test --workspace` 64 result lines, 672 passed,
+  0 failed, 1 ignored; clippy `-D warnings` clean; `fmt --check` clean; phase9 (`6`), 12, 13, 14 `check.sh` exit 0;
+  `git diff --exit-code -- fixtures/expected` clean. F2: no `Arc` branch accepted (warm reader pair 13 ms in total, so
+  clones are well under 50 ms; cold clones 1.3 ms). F3 re-timed by Claude after round 2 (scratch harness as in 15.0,
+  release, real `~`, load average ≈ 3.7 from other sessions):
+  ```
+  (a) overview --json: real 1.22 user 9.48 sys 1.60 | real 0.95 user 8.62 sys 1.02 | real 0.97 user 8.97 sys 1.04 → median 0.97 s
+  (b) no live: 1397 = 997+398 | 1336 = 948+386 | 1433 = 1041+391                       → median 1397 ms
+      --live:  1405 = 929+393+80 | 1457 = 988+388+78 | 1408 = 932+394+80               → median 1408 ms
+  (d) warm median of 10: 110 ms (no live), 169 ms (--live); 14.4 was 191–212 ms
+  ```
+  Before round 2 (same harness, Claude): (a) 1.76 / 1.48 / 1.47 s, (b) 1842 / 1881 ms medians — a 6 % margin, which
+  is why round 2 was taken. All F3 budgets pass; no 15.1a.
+- Gotchas: Corrupt rollouts intentionally remain uncached and retry on warm passes; the zero-parse warm test uses
+  a separate root with cacheable good/ignored/bad app records. No F3 runs in either review round, no new dependency,
+  no writes to agent data, no stage/commit/push. Pre-existing untracked `.claude/` left alone.
+
+**F2 measurements retained (release, real `~`, before the app-record amendment).** Temporary instrumentation timed
+cache-hit clones in the serial reader pair and total overview duration minus speculative prefill. Cold serial
+remainder **683.485 ms** (prefill 918.986 ms), reader pair 586.923 ms, clones **1.312 ms**. Ten warm overview serial
+remainders: median **47.6025 ms**; across both reader calls per warm worker refresh, clone median **1.1255 ms**,
+range 0.976–1.686 ms (reader median 12.916 ms). Earlier probe: cold readers 644.254 ms, clones 1.555 ms.
+**Branch: no Arc cache conversion**, below >300 ms cold / >50 ms warm clone gates. Arc only backs the progress
+handle. Instrumentation was removed before verification; scratch log `/tmp/multi-link-15-f2-full.log`.
+
+**F3 first miss remains visible (before the app-record amendment).** Against 15.0 baseline medians (a) 7.99 s,
+(b) 8624 / 8514 ms without/with live, the first series gave (a) 1.516947 s, (b) **2033.849 / 2059.297 ms** — misses.
+Worker runs without live: 2033.849 / 2035.126 / 1997.225 ms; with live: 2059.297 / 1963.257 / 2077.807 ms.
+That series overlapped other verification/development. A final uninstrumented pre-review series after checks
+finished gave (a) **1.617987 s**, (b) **1944.862 / 1944.432 ms**, (d) **113.848 / 177.7325 ms** warm medians.
+These are historical measurements, not measurements of the amended implementation. F3 stays held for Claude;
+no 15.2 or disk-cache work started. Raw logs: `/tmp/multi-link-15-f3.log`, `/tmp/multi-link-15-f3-final.log`.
+Harness: `/tmp/multi-link-15-timing/`, release, real process probe and root, overview at 2h + all-time refresh +
+started/codex step maps + optional live; 3 fresh processes for (a)/(b), 10 warm refreshes for (d). It omits graph,
+actual TUI/channel/render and the small diagnostic label/Refresh wrapper. Claude re-times after this round.
 
 ### 2026-11-11 — Step 15.0: Rules, loading goldens, timing baseline — Claude
 - Mode: Claude step (no Codex hand-off in 15.0, so no quota check was needed).

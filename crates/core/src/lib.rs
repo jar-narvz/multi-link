@@ -18,4 +18,4 @@ pub use graph::{CodexDetails, GraphInput, build as build_graph, commit_for_step}
 pub use links::{LinksOutput, links_report};
 
 mod scanner;
-pub use scanner::{OverviewOutput, ParseStats, Scanner};
+pub use scanner::{LoadProgress, LoadSnapshot, OverviewOutput, ParseStats, Scanner};
