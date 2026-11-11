@@ -1,0 +1,51 @@
+ multi-link › live  what every agent is doing now                   ◆ 1 waiting · ● 11 working now · ○ 1 stale   2:20pm
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ HAND-OFFS newest first · all repos
+ 2:10pm  repo-m        claude resumed codex for step 2.3                   confirmed link    codex running
+ 2:07pm  repo-m        claude handed step 2.4 to codex                     matched by time   codex running
+ 1:58pm  repo-r        claude handed work to codex                         2 possible runs
+ 1:40pm  repo-m        claude handed step 2.3 to codex                     confirmed link    codex done 1:48pm
+
+ ╭─● claude · repo-p · step 3.2 ────────────────────────╮    ┏━● codex · repo-p · step 3.0 ━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ │ “keep the three runs going and watch the tests”      │    ┃ “Read AGENTS.md, then do Step 3.0 in PLAN.md.”         ┃
+ │ working now · for 22 min                             │    ┃ working now · for over 2h                              ┃
+ │ 2 reads · 1 edit · 2 runs                            │    ┃ 1 read · 2 edits · 2 runs                              ┃
+ │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │──▸ ┃ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┃
+ │ 2:00pm  $ pytest ✗                                   │    ┃ 2:06pm  edit roads.py                                  ┃
+ │ 2:05pm  $ npm test ✓                                 │    ┃ 2:10pm  $ pytest ✓                                     ┃
+ │ 2:10pm  edit test_roads.py                           │    ┃                                                        ┃
+ │ waiting on codex 14270000 · 55 min                   │    ┃ └ from claude 14150000 · confirmed link                ┃
+ ╰─ main · 14150000 ────────────────────────────────────╯    ┗━ main · 14250000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+                                                             ╭─● codex · repo-p · step 3.1 ───────────────────────────╮
+                                                             │ “Read AGENTS.md, then do Step 3.1 in PLAN.md.”         │
+                                                             │ working now · for 59 min                               │
+                                                             │ 2 reads · 1 edit · 2 runs                              │
+                                                         └──▸│ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
+                                                             │ 1:40pm  edit bridges.py                                │
+                                                             │ 2:05pm  $ git diff                                     │
+                                                             │ 2:18pm  $ pytest ✓                                     │
+                                                             │ └ from claude 14150000 · confirmed link                │
+                                                             ╰─ main · 14260000 ──────────────────────────────────────╯
+
+                                                             ╭─● codex · repo-q ──────────────────────────────────────╮
+                                                             │ “Read AGENTS.md, then do Step 3.2 in PLAN.md.”         │
+                                                             │ working now · for 54 min                               │
+                                                             │ 1 read · 1 edit · 2 runs                               │
+                                                         └──▸│ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
+                                                             │ 1:45pm  edit tunnels.py                                │
+                                                             │ 2:00pm  $ npm test ✗                                   │
+                                                             │ 2:19pm  $ git commit                                   │
+                                                             │ └ from claude 14150000 · confirmed link                │
+                                                             ╰─ main · 14270000 ──────────────────────────────────────╯
+ ↓ 4 more
+ 7 idle sessions (repo-m · repo-n · repo-r · repo-s) · home shows them
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  selected  codex · 14250000 · repo-p · started 12:00pm · active about 119 min in 1 stretch
+            asked  “Read AGENTS.md, then do Step 3.0 in PLAN.md.”
+
+ ● working   ◆ waiting on you   ○ stale   │ confirmed link   ╎ matched by time   ✓ exit 0   ✗ exit non-zero
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓←→ move   enter repo view   s step graph   o open   f fork   esc back   q quit                           times UTC-8
+

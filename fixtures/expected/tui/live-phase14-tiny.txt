@@ -1,0 +1,20 @@
+ multi-link › live                         ◆ 1 · ● 11 · ○ 1
+ ──────────────────────────────────────────────────────────
+
+ ┏━◆ claude · repo-n · step 4.1 ━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ ┃ “looks fine, commit step 4.1”                          ┃
+ ┃ waiting on you · since 2:12pm (8 min)                  ┃
+ ┃ 2 reads · 2 runs                                       ┃
+ ┃ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┃
+ ┃ 1:35pm  ▸ codex exec · step 4.1                        ┃
+ ↓ 12 more
+ 7 idle sessions (repo-m · repo-n · …) · home shows them
+ ──────────────────────────────────────────────────────────
+  selected  claude · 14130000 · repo-n · started 1:30pm · …
+            asked  “looks fine, commit step 4.1”
+
+ ● working   ◆ waiting on you   ○ stale   │ confirmed link
+
+ ──────────────────────────────────────────────────────────
+ ↑↓←→ move   enter repo view   s step graph   o open
+

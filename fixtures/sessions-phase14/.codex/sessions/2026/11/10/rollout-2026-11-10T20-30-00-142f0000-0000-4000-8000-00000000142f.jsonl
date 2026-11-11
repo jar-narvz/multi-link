@@ -1,0 +1,6 @@
+{"type": "session_meta", "timestamp": "2026-11-10T20:30:00.000Z", "payload": {"id": "142f0000-0000-4000-8000-00000000142f", "timestamp": "2026-11-10T20:30:00.000Z", "cwd": "/home/dev/repo-m", "originator": "Codex Desktop", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T20:30:00.000Z", "payload": {"type": "task_started", "turn_id": "external-import-turn-1"}}
+{"type": "event_msg", "timestamp": "2026-11-10T20:30:00.000Z", "payload": {"type": "user_message", "message": "<imported prompt>", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T22:17:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T22:18:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T22:19:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}

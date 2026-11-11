@@ -1,0 +1,690 @@
+{
+  "now": "2026-11-10T22:20:00.000Z",
+  "window_from": "2026-11-10T20:20:00.000Z",
+  "counts": {
+    "waiting": 1,
+    "busy": 11,
+    "stale": 1
+  },
+  "groups": [
+    {
+      "head": {
+        "id": "14130000-0000-4000-8000-000000001413",
+        "harness": "claude",
+        "state": "waiting",
+        "repo": "/home/dev/repo-n",
+        "checkout": "/home/dev/repo-n",
+        "started_at": "2026-11-10T21:30:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:30:00.000Z",
+            "to": "2026-11-10T21:35:00.000Z"
+          },
+          {
+            "from": "2026-11-10T21:50:00.000Z",
+            "to": "2026-11-10T21:55:01.000Z"
+          },
+          {
+            "from": "2026-11-10T22:11:30.000Z",
+            "to": "2026-11-10T22:11:31.000Z"
+          }
+        ],
+        "last_asked": "looks fine, commit step 4.1",
+        "step": "4.1",
+        "since": "2026-11-10T22:12:00.000Z",
+        "counts": {
+          "reads": 2,
+          "edits": 0,
+          "runs": 2
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T21:35:00.000Z",
+            "label": "▸ codex exec · step 4.1",
+            "ok": null
+          },
+          {
+            "at": "2026-11-10T21:55:00.000Z",
+            "label": "$ git diff",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T22:11:30.000Z",
+            "label": "$ git commit",
+            "ok": false
+          }
+        ],
+        "link": {
+          "kind": "handoff",
+          "at": "2026-11-10T21:35:00.000Z",
+          "match": "exact",
+          "child": "14230000-0000-4000-8000-000000001423",
+          "candidates": 0,
+          "outcome": "done",
+          "outcome_at": "2026-11-10T21:49:30.000Z"
+        }
+      },
+      "children": []
+    },
+    {
+      "head": {
+        "id": "14110000-0000-4000-8000-000000001411",
+        "harness": "claude",
+        "state": "busy",
+        "repo": "/home/dev/repo-m",
+        "checkout": "/home/dev/repo-m",
+        "started_at": "2026-11-10T21:20:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:20:00.000Z",
+            "to": "2026-11-10T21:23:00.000Z"
+          },
+          {
+            "from": "2026-11-10T21:45:00.000Z",
+            "to": "2026-11-10T22:10:00.000Z"
+          }
+        ],
+        "last_asked": "review codex's step 2.3 work and send a fix round",
+        "step": "2.3",
+        "since": "2026-11-10T21:45:00.000Z",
+        "counts": {
+          "reads": 3,
+          "edits": 1,
+          "runs": 2
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T21:50:00.000Z",
+            "label": "edit PLAN.md",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T21:55:00.000Z",
+            "label": "$ cargo clippy",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T22:10:00.000Z",
+            "label": "▸ codex exec · step 2.3",
+            "ok": null
+          }
+        ],
+        "link": {
+          "kind": "waiting_on",
+          "child": "14210000-0000-4000-8000-000000001421",
+          "at": "2026-11-10T22:10:00.000Z"
+        }
+      },
+      "children": [
+        {
+          "id": "14210000-0000-4000-8000-000000001421",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-m",
+          "checkout": "/home/dev/repo-m",
+          "started_at": "2026-11-10T21:40:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T21:40:04.000Z",
+              "to": "2026-11-10T21:48:00.000Z"
+            },
+            {
+              "from": "2026-11-10T22:10:03.000Z",
+              "to": "2026-11-10T22:19:40.000Z"
+            }
+          ],
+          "last_asked": "Step 2.3 fix round 1: drop the running word for old hand-offs",
+          "step": "2.3",
+          "since": "2026-11-10T22:10:03.000Z",
+          "counts": {
+            "reads": 1,
+            "edits": 2,
+            "runs": 3
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T21:45:00.000Z",
+              "label": "$ cargo build",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:14:00.000Z",
+              "label": "edit live.rs",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:17:00.000Z",
+              "label": "$ cargo test",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14110000-0000-4000-8000-000000001411",
+            "match": "exact",
+            "at": "2026-11-10T22:10:00.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "head": {
+        "id": "14120000-0000-4000-8000-000000001412",
+        "harness": "claude",
+        "state": "busy",
+        "repo": "/home/dev/repo-m",
+        "checkout": "/home/dev/repo-m",
+        "started_at": "2026-11-10T21:52:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:52:00.000Z",
+            "to": "2026-11-10T22:18:00.000Z"
+          }
+        ],
+        "last_asked": "add the feed rows, then hand step 2.4 to codex",
+        "step": "2.4",
+        "since": "2026-11-10T21:52:00.000Z",
+        "counts": {
+          "reads": 3,
+          "edits": 1,
+          "runs": 1
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T22:00:00.000Z",
+            "label": "edit feed.rs",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T22:07:00.000Z",
+            "label": "▸ codex exec · step 2.4",
+            "ok": null
+          },
+          {
+            "at": "2026-11-10T22:15:00.000Z",
+            "label": "$ git diff",
+            "ok": true
+          }
+        ],
+        "link": {
+          "kind": "waiting_on",
+          "child": "14220000-0000-4000-8000-000000001422",
+          "at": "2026-11-10T22:07:00.000Z"
+        }
+      },
+      "children": [
+        {
+          "id": "14220000-0000-4000-8000-000000001422",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-m",
+          "checkout": "/home/dev/repo-m",
+          "started_at": "2026-11-10T22:07:06.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T22:07:06.000Z",
+              "to": "2026-11-10T22:19:30.000Z"
+            }
+          ],
+          "last_asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
+          "step": "2.4",
+          "since": "2026-11-10T22:07:06.000Z",
+          "counts": {
+            "reads": 1,
+            "edits": 1,
+            "runs": 2
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T22:10:00.000Z",
+              "label": "edit feed.rs",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:12:00.000Z",
+              "label": "$ cargo test",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:18:00.000Z",
+              "label": "$ cargo clippy",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14120000-0000-4000-8000-000000001412",
+            "match": "heuristic",
+            "at": "2026-11-10T22:07:00.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "head": {
+        "id": "14150000-0000-4000-8000-000000001415",
+        "harness": "claude",
+        "state": "busy",
+        "repo": "/home/dev/repo-p",
+        "checkout": "/home/dev/repo-p",
+        "started_at": "2026-11-10T19:55:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:18:00.000Z",
+            "to": "2026-11-10T21:25:01.000Z"
+          },
+          {
+            "from": "2026-11-10T21:58:00.000Z",
+            "to": "2026-11-10T22:19:00.000Z"
+          }
+        ],
+        "last_asked": "keep the three runs going and watch the tests",
+        "step": "3.2",
+        "since": "2026-11-10T21:58:00.000Z",
+        "counts": {
+          "reads": 2,
+          "edits": 1,
+          "runs": 2
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T22:00:00.000Z",
+            "label": "$ pytest",
+            "ok": false
+          },
+          {
+            "at": "2026-11-10T22:05:00.000Z",
+            "label": "$ npm test",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T22:10:00.000Z",
+            "label": "edit test_roads.py",
+            "ok": true
+          }
+        ],
+        "link": {
+          "kind": "waiting_on",
+          "child": "14270000-0000-4000-8000-000000001427",
+          "at": "2026-11-10T21:25:00.000Z"
+        }
+      },
+      "children": [
+        {
+          "id": "14250000-0000-4000-8000-000000001425",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-p",
+          "checkout": "/home/dev/repo-p",
+          "started_at": "2026-11-10T20:00:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T20:20:00.000Z",
+              "to": "2026-11-10T22:19:00.000Z"
+            }
+          ],
+          "last_asked": "Read AGENTS.md, then do Step 3.0 in PLAN.md.",
+          "step": "3.0",
+          "since": "2026-11-10T20:20:00.000Z",
+          "counts": {
+            "reads": 1,
+            "edits": 2,
+            "runs": 2
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T22:06:00.000Z",
+              "label": "edit roads.py",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:10:00.000Z",
+              "label": "$ pytest",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14150000-0000-4000-8000-000000001415",
+            "match": "exact",
+            "at": "2026-11-10T20:00:00.000Z"
+          }
+        },
+        {
+          "id": "14260000-0000-4000-8000-000000001426",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-p",
+          "checkout": "/home/dev/repo-p",
+          "started_at": "2026-11-10T21:20:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T21:20:04.000Z",
+              "to": "2026-11-10T22:18:31.000Z"
+            }
+          ],
+          "last_asked": "Read AGENTS.md, then do Step 3.1 in PLAN.md.",
+          "step": "3.1",
+          "since": "2026-11-10T21:20:04.000Z",
+          "counts": {
+            "reads": 2,
+            "edits": 1,
+            "runs": 2
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T21:40:00.000Z",
+              "label": "edit bridges.py",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:05:00.000Z",
+              "label": "$ git diff",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:18:30.000Z",
+              "label": "$ pytest",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14150000-0000-4000-8000-000000001415",
+            "match": "exact",
+            "at": "2026-11-10T21:20:00.000Z"
+          }
+        },
+        {
+          "id": "14270000-0000-4000-8000-000000001427",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-q",
+          "checkout": "/home/dev/repo-q",
+          "started_at": "2026-11-10T21:25:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T21:25:04.000Z",
+              "to": "2026-11-10T22:19:11.000Z"
+            }
+          ],
+          "last_asked": "Read AGENTS.md, then do Step 3.2 in PLAN.md.",
+          "step": null,
+          "since": "2026-11-10T21:25:04.000Z",
+          "counts": {
+            "reads": 1,
+            "edits": 1,
+            "runs": 2
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T21:45:00.000Z",
+              "label": "edit tunnels.py",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:00:00.000Z",
+              "label": "$ npm test",
+              "ok": false
+            },
+            {
+              "at": "2026-11-10T22:19:10.000Z",
+              "label": "$ git commit",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14150000-0000-4000-8000-000000001415",
+            "match": "exact",
+            "at": "2026-11-10T21:25:00.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "head": {
+        "id": "14160000-0000-4000-8000-000000001416",
+        "harness": "claude",
+        "state": "busy",
+        "repo": "/home/dev/repo-m",
+        "checkout": "/home/dev/repo-m",
+        "started_at": "2026-11-10T21:03:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:03:00.000Z",
+            "to": "2026-11-10T21:07:00.000Z"
+          },
+          {
+            "from": "2026-11-10T21:28:00.000Z",
+            "to": "2026-11-10T21:34:00.000Z"
+          },
+          {
+            "from": "2026-11-10T22:00:00.000Z",
+            "to": "2026-11-10T22:18:01.000Z"
+          }
+        ],
+        "last_asked": "check both runs and tidy the docs",
+        "step": "2.5",
+        "since": "2026-11-10T22:00:00.000Z",
+        "counts": {
+          "reads": 2,
+          "edits": 1,
+          "runs": 1
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T21:32:00.000Z",
+            "label": "▸ codex exec · step 2.5",
+            "ok": null
+          },
+          {
+            "at": "2026-11-10T22:01:00.000Z",
+            "label": "edit live.md",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T22:04:00.000Z",
+            "label": "$ cargo build",
+            "ok": true
+          }
+        ],
+        "link": {
+          "kind": "waiting_on",
+          "child": "14290000-0000-4000-8000-000000001429",
+          "at": "2026-11-10T21:32:00.000Z"
+        }
+      },
+      "children": [
+        {
+          "id": "14280000-0000-4000-8000-000000001428",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-m",
+          "checkout": "/home/dev/repo-m",
+          "started_at": "2026-11-10T21:30:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T21:30:04.000Z",
+              "to": "2026-11-10T22:17:00.000Z"
+            }
+          ],
+          "last_asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
+          "step": "2.6",
+          "since": "2026-11-10T21:30:04.000Z",
+          "counts": {
+            "reads": 0,
+            "edits": 1,
+            "runs": 1
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T21:50:00.000Z",
+              "label": "edit width.rs",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:10:00.000Z",
+              "label": "$ cargo test",
+              "ok": true
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14160000-0000-4000-8000-000000001416",
+            "match": "exact",
+            "at": "2026-11-10T21:30:00.000Z"
+          }
+        },
+        {
+          "id": "14290000-0000-4000-8000-000000001429",
+          "harness": "codex",
+          "state": "busy",
+          "repo": "/home/dev/repo-m",
+          "checkout": "/home/dev/repo-m",
+          "started_at": "2026-11-10T21:05:04.000Z",
+          "activity": [
+            {
+              "from": "2026-11-10T21:05:04.000Z",
+              "to": "2026-11-10T21:15:00.000Z"
+            },
+            {
+              "from": "2026-11-10T21:32:03.000Z",
+              "to": "2026-11-10T22:19:00.000Z"
+            }
+          ],
+          "last_asked": "Step 2.5 fix round 1",
+          "step": "2.5",
+          "since": "2026-11-10T21:32:03.000Z",
+          "counts": {
+            "reads": 0,
+            "edits": 1,
+            "runs": 2
+          },
+          "notable": [
+            {
+              "at": "2026-11-10T21:08:00.000Z",
+              "label": "edit order.rs",
+              "ok": true
+            },
+            {
+              "at": "2026-11-10T22:06:00.000Z",
+              "label": "$ cargo test",
+              "ok": false
+            }
+          ],
+          "link": {
+            "kind": "from",
+            "parent": "14160000-0000-4000-8000-000000001416",
+            "match": "exact",
+            "at": "2026-11-10T21:32:00.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "head": {
+        "id": "14240000-0000-4000-8000-000000001424",
+        "harness": "codex",
+        "state": "stale",
+        "repo": "/home/dev/repo-p",
+        "checkout": "/home/dev/repo-p",
+        "started_at": "2026-11-10T21:00:00.000Z",
+        "activity": [
+          {
+            "from": "2026-11-10T21:00:00.000Z",
+            "to": "2026-11-10T21:50:00.000Z"
+          }
+        ],
+        "last_asked": "run the roads checks by hand",
+        "step": null,
+        "since": "2026-11-10T21:50:00.000Z",
+        "counts": {
+          "reads": 1,
+          "edits": 1,
+          "runs": 1
+        },
+        "notable": [
+          {
+            "at": "2026-11-10T21:10:00.000Z",
+            "label": "edit roads.py",
+            "ok": true
+          },
+          {
+            "at": "2026-11-10T21:20:00.000Z",
+            "label": "$ pytest",
+            "ok": false
+          }
+        ],
+        "link": {
+          "kind": "none"
+        }
+      },
+      "children": []
+    }
+  ],
+  "idle": {
+    "count": 7,
+    "repos": [
+      "/home/dev/repo-m",
+      "/home/dev/repo-n",
+      "/home/dev/repo-r",
+      "/home/dev/repo-s"
+    ]
+  },
+  "last_handoff": "2026-11-10T22:10:00.000Z",
+  "feed": [
+    {
+      "at": "2026-11-10T22:10:00.000Z",
+      "repo": "/home/dev/repo-m",
+      "parent": "14110000-0000-4000-8000-000000001411",
+      "invocation": "toolu_p14_1411_18",
+      "form": "resume",
+      "step": "2.3",
+      "match": "exact",
+      "child": "14210000-0000-4000-8000-000000001421",
+      "candidates": 0,
+      "outcome": "running",
+      "outcome_at": null
+    },
+    {
+      "at": "2026-11-10T22:07:00.000Z",
+      "repo": "/home/dev/repo-m",
+      "parent": "14120000-0000-4000-8000-000000001412",
+      "invocation": "toolu_p14_1412_9",
+      "form": "exec",
+      "step": "2.4",
+      "match": "heuristic",
+      "child": "14220000-0000-4000-8000-000000001422",
+      "candidates": 1,
+      "outcome": "running",
+      "outcome_at": null
+    },
+    {
+      "at": "2026-11-10T21:58:00.000Z",
+      "repo": "/home/dev/repo-r",
+      "parent": "141a0000-0000-4000-8000-00000000141a",
+      "invocation": "toolu_p14_141a_5",
+      "form": "exec",
+      "step": null,
+      "match": "ambiguous",
+      "child": null,
+      "candidates": 2,
+      "outcome": null,
+      "outcome_at": null
+    },
+    {
+      "at": "2026-11-10T21:40:00.000Z",
+      "repo": "/home/dev/repo-m",
+      "parent": "14170000-0000-4000-8000-000000001417",
+      "invocation": "toolu_p14_1417_4",
+      "form": "exec",
+      "step": "2.3",
+      "match": "exact",
+      "child": "14210000-0000-4000-8000-000000001421",
+      "candidates": 0,
+      "outcome": "done",
+      "outcome_at": "2026-11-10T21:48:00.000Z"
+    }
+  ]
+}

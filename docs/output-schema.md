@@ -1,4 +1,4 @@
-# Output schema — `multi-link sessions | links | steps | overview | graph --json`, `open`
+# Output schema — `multi-link sessions | links | steps | overview | graph | live --json`, `open`
 
 Binding contract for Phases 1–8. `docs/design.md` → Data model is illustrative only; this file wins.
 Hand-written expected outputs: `fixtures/expected/{sessions,links,steps}.json` and the derived variants
@@ -57,6 +57,11 @@ names a folder other than `checkout`). A `cd` before the launch no longer always
 An explicit resume id after options (`codex exec resume -c k=v <id>`) is recognised (Recognised invocations). Committed
 key change: `fixtures/expected/phase12/links.json` case (h)'s option-first resume → `exact` / `resume_arg`. New
 isolated fixture root `fixtures/sessions-phase13/` with key `fixtures/expected/phase13/links.json`.
+
+**Phase 14 changes (Step 14.0, design L0–L5):** new report `live` and its section below (cards, groups, idle line,
+hand-off feed). No Session, SessionRow, link, overview or graph key changes; every committed key stays equal. New
+isolated fixture root `fixtures/sessions-phase14/` with key `fixtures/expected/phase14/live.json` (`check.sh`; Phase 14
+fixture results, at the end).
 
 **Phase 12 changes (Step 12.0, design K0–K4):** Link `evidence` gains `"nearest_run"` (only on `heuristic`); for launch
 hand-offs `candidates` now lists the runs left after the K1 rule (a contract revision: runs a closer hand-off would choose
@@ -992,6 +997,80 @@ recomputes every part from the fixture lines and `links`. The root is synthetic:
 **Sentinels:** `sentinel-path-81`, `sentinel-token-81` (Claude commands in 1.1) and `sentinel-path-82`, `sentinel-token-82`
 (a Codex command in 1.1) must never appear in a report (Step 8.3 tests this).
 
+## `live`
+
+Phase 14 (design L0–L5, board 14): what every working, waiting or stale session is doing now. Step 14.1 builds it;
+`multi-link live [--root] [--now] [--since] [--json]` takes the flags of `overview` (default window `2h`, the TUI's).
+Text mode (one line per card in flattened order, then one line per feed row) is not compared by any test. **Like
+`sessions`, the JSON exports prompt text** (`last_asked`): real reports stay in scratch (W10, L10).
+
+```json
+{
+  "now": "2026-11-10T22:20:00.000Z",
+  "window_from": "2026-11-10T20:20:00.000Z",
+  "counts": {"waiting": 1, "busy": 11, "stale": 1},
+  "groups": [ {"head": Card, "children": [Card, ...]}, ... ],
+  "idle": {"count": 7, "repos": ["/home/dev/repo-m", "..."]},
+  "last_handoff": "2026-11-10T22:10:00.000Z",
+  "feed": [ FeedRow, ... ]
+}
+```
+**Inputs.** The same refresh as `overview` (listed sessions and listed links with the same flags), plus G5 calls
+(`graph` → Calls and turns) read for card sessions only, plus Codex turns (G4 `codex_turns`) for the children of feed
+rows and card links. No existing report changes.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `now` | timestamp | The report's clock. |
+| `window_from` | timestamp \| null | `now − since`; `null` for `--since all`. The TUI's `<period>` is `now − window_from`. |
+| `counts` | `{"waiting", "busy", "stale"}` ints | Cards by `state` (L5). |
+| `groups` | Group[] | L2 order. Every card appears exactly once, as a `head` or in one `children` list. `[]` when there are no cards. |
+| `idle.count` | int | Listed, non-imported sessions that are not cards and have at least one `activity` burst (L1). |
+| `idle.repos` | string[] | Their distinct Session `repo` strings, ascending (the TUI shows basenames). |
+| `last_handoff` | timestamp \| null | Greatest `at` of the listed links, any `match`; `null` when none. |
+| `feed` | FeedRow[] | At most 4 (L4). |
+
+**Cards (L1).** Every listed session with `imported: false` and `state` ∈ `waiting`, `busy`, `stale`, either harness,
+top-level or child. Imported sessions are never cards and never idle, whatever their state.
+
+**Groups (L2).** A Codex card's *parent link* is its latest incoming link with `match` `exact` or `heuristic`, by
+(`at`, position in the links report); its parent is that link's `parent`. A Codex card whose parent is a Claude card
+is that card's child; every other card is a head. `children` are ordered by their parent link `at`, then full id.
+Groups are ordered by head: `waiting`, then `busy`, then `stale`; within a state by the head's `since` (below; a busy
+head with `since: null` uses `last_activity`), then full id.
+
+### Card
+| Field | Type | Rule |
+| --- | --- | --- |
+| `id`, `harness`, `state`, `repo`, `checkout`, `started_at`, `activity`, `last_asked` | | Copied from the Session. |
+| `step` | string \| null | Claude: the `step` of its latest tagged link as `parent`, by (`at`, report position), any `match`. Codex: the latest tagged link with this `child` whose `parent` is a listed session in the same `repo` (the `codex_steps` rule, moved to core in 14.1); a cross-repo parent gives `null`. |
+| `since` | timestamp \| null | `busy`: the `from` of its last `activity` burst (`null` with none). `waiting` / `stale`: `state_since`, else `last_activity`. |
+| `counts` | `{"reads", "edits", "runs"}` ints | G5 kinds of every owned call of the session (not windowed); hand-offs not counted. |
+| `notable` | `{"at", "label", "ok"}`[] | At most 3, newest last: the shared G6 summary over the session's calls in time order; a label seen again moves to its latest position and takes that call's `at` and `ok`. Every recognised hand-off (a call of kind `handoff`) is `▸ codex exec`, plus ` · step X` when its link has a `step`, with `ok: null`; the same label merges like any other. |
+| `link` | CardLink \| null | Below. |
+
+CardLink is one of:
+- `{"kind": "waiting_on", "child": id, "at": timestamp}` — a Claude card with children: the last child in group
+  order; `at` is that child's parent link `at`.
+- `{"kind": "handoff", "at", "match", "child": id|null, "candidates": int, "outcome": "running"|"done"|null,
+  "outcome_at": timestamp|null}` — a Claude card with no children: its latest link as `parent` with `at` in
+  [`window_from`, `now`] (any `match`), `candidates` its length, outcome as FeedRow. `null` instead when it has none.
+- `{"kind": "from", "parent": id, "match": "exact"|"heuristic", "at": timestamp}` — a Codex card with a parent link
+  (the parent need not be a card).
+- `{"kind": "none"}` — a Codex card with no parent link.
+
+### FeedRow
+Listed links with `at` in [`window_from`, `now`] (all of them with `--since all`), any `match`, newest first by (`at`,
+report position) descending; the first 4.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `at`, `parent`, `invocation`, `form`, `step`, `match`, `child` | | Copied from the Link. |
+| `repo` | string | The parent session's `repo`; the Link `checkout` if the parent is not listed. |
+| `candidates` | int | The Link's `candidates` length. |
+| `outcome` | `"running"` \| `"done"` \| null | `null` for `ambiguous` / `unlinked` and when `child` has no session (no rollout). `running` when the child's `state` is `busy` and this link is the child's parent link (checked first). `done` when a non-imported turn of the child starting at or after `at` has a `task_complete`. Else `null`. |
+| `outcome_at` | timestamp \| null | For `done`: the `task_complete` time of the first such turn; else `null`. |
+
 ## Open
 
 Phase 3, FR18, design T7. `open::action(&Session, fork: bool) -> OpenAction` is a pure function of the
@@ -1164,3 +1243,28 @@ Root `fixtures/sessions-phase13/`, `--now 2026-11-10T08:00:00Z`, `--since all`; 
 | (i) | two sessions in different folders `cd` into one folder at 0 s and 20 s; runs 1 s after each (and with the time order reversed) | the earlier hand-off `heuristic` / `nearest_run` with its own run only (K1 groups by launch folder); the later `heuristic` |
 | (j) | `codex exec resume -c model=x <id> …`, `codex exec -s read-only resume --json <id> …`, `codex resume --oss <id>`; `codex exec resume -c k=v --last <id>`; `--unknown <id>`; `-- <id>` | three `exact` / `resume_arg` (`form: "resume"`); `resume_turn` (R7); last two `exec`, `unlinked` |
 
+## Phase 14 fixture results (`fixtures/sessions-phase14/`, Step 14.0)
+Verify command (`fixtures/expected/phase14/check.sh`): `multi-link live --root fixtures/sessions-phase14 --now
+2026-11-10T22:20:00Z --json` (default window 2h) must equal `fixtures/expected/phase14/live.json` (parsed). The key was
+built by an independent scratch script from the fixture lines and the `sessions` / `links` reports, then checked by
+hand against the case table in design → Phase 14 decisions. Synthetic root: no session records other than
+`.claude/sessions/714xx.json`, no hook folder, no plan folders, task outputs under `task-output/`. `sessions`: 21 listed,
+0 skipped (`142b` is not listed: stale, last active 19:00). `links`: 13, `unparented`: `1424`, `142a`, `142d`, `142e`,
+`142f`.
+
+| Card (flattened order) | What it pins |
+| --- | --- |
+| `1413` claude waiting | Wait start from the record (22:12); latest hand-off `exact` to `1423`, outcome `done` 21:49:30; `$ git commit` `ok: false` |
+| `1411` claude busy → `1421` | `since` 21:45 (second burst); `waiting_on` `1421` since its resume at 22:10. `1421` has two parent candidates: `1417` at 21:40 (`exact` task output) and `1411` at 22:10 (`resume_arg`): the later wins. `1421` labels `$ cargo test` (`false` then `true`) and `edit live.rs` merge |
+| `1412` claude busy → `1422` | `heuristic` (background launch, no output file); `rg` / `git diff` reads while the run goes |
+| `1415` claude busy → `1425`, `1426`, `1427` | Three children ordered by link `at` (20:00, 21:20, 21:25); `1425`'s burst starts before the window, `since` = `window_from`; `1427` runs in repo-q (`-C`), cross-repo, `step: null`; `$ pytest` `false`, `$ npm test` `true`; label-less `./scripts/check-bridges.sh` |
+| `1416` claude busy → `1428`, `1429` | `1429` resumed by `1418` and `1416` at the same `at` (21:32): the later invocation in the report (`1416`'s) wins, so `1418` (idle) has no card; `▸ codex exec · step 2.5` seen twice, merged at 21:32; `1428`'s prompt has wide characters |
+| `1424` codex stale | Manual run, open turn quiet since 21:50: `since` = `last_activity`, `link` `none` |
+
+Feed (4 of 12 hand-offs in the window): 22:10 `resume` `exact` → `running`; 22:07 `heuristic` → `running`; 21:58
+untagged `ambiguous` (2 candidates) → `null`; 21:40 `exact` → `done` 21:48:00 (`1421` was resumed later, so this
+older link is not `running`). Not shown: 21:35 (`1413`), the two 21:32 resumes, 21:30, 21:25, 21:20, 21:10 (`exact`, no
+rollout for `142c`), 21:05. Idle: `1417`, `1418` (repo-m), `1423` (repo-n), `141a`, `142d`, `142e` (repo-r), `142a`
+(repo-s). The busy import `142f` is neither a card nor idle.
+Limits of the key: the no-rollout outcome (21:10), the feed's tie order (21:32) and a `from` link whose parent is not a
+card never reach `live.json`; Step 14.1's unit tests (L2 ties, L4 no rollout) must cover them.

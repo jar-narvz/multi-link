@@ -1,0 +1,30 @@
+ multi-link › live  what every agent is doing now                   ◆ 1 waiting · ● 11 working now · ○ 1 stale   2:20pm
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ┏━◆ claude · repo-n · step 4.1 ━━━━━━━━━━━━━━━━━━━━━━━━┓
+ ┃ “looks fine, commit step 4.1”                        ┃
+ ┃ waiting on you · since 2:12pm (8 min)                ┃
+ ┃ 2 reads · 2 runs                                     ┃
+ ┃ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┃
+ ┃ 1:35pm  ▸ codex exec · step 4.1                      ┃
+ ┃ 1:55pm  $ git diff                                   ┃
+ ┃ 2:11pm  $ git commit ✗                               ┃
+ ┃ codex 14230000 done 1:49pm                           ┃
+ ┗━ main · 14130000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ↓ 12 more
+
+
+
+
+
+
+ 7 idle sessions (repo-m · repo-n · repo-r · repo-s) · home shows them
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  selected  claude · 14130000 · repo-n · started 1:30pm · active about 10 min in 3 stretches
+            asked  “looks fine, commit step 4.1”
+
+ ● working   ◆ waiting on you   ○ stale   │ confirmed link   ╎ matched by time   ✓ exit 0   ✗ exit non-zero
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓←→ move   enter repo view   s step graph   o open   f fork   esc back   q quit                           times UTC-8
+

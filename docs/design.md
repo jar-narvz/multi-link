@@ -94,7 +94,7 @@ Where the flow feels awkward today: I can see *that* Codex is busy, but not *whi
 | FR9 | TUI home screen (`multi-link tui`): every active repo, sorted needs-you first. Per repo: steps in progress with their Verify, one mini lane per session with its step and checkout, Codex lanes nested under their parent. Over 4 sessions, lanes merge into "claude ×N". | 1, 3, 5 |
 | FR10 | Repo view (Phase 6, replaces the repo timeline): one swimlane per session active in the window, Codex rows nested under their Claude parent, bars only where transcripts show activity, an axis fitted to the work with long idle gaps folded, a link line per hand-off (solid confirmed, dashed matched by time), ambiguous links shown as such. | 2, 5 |
 | FR11 | Step graph (Phase 8): for one PLAN.md step, its Claude parts and Codex runs in order, each with what it did, how it ended, its link confidence and where the time went, from tagged hand-offs only; an untagged or missing run is marked, never guessed. Replay is out of scope. | 4, 5, 6 |
-| FR12 | Backlog: live grid, one card per active session under a feed of hand-offs. | 1, 2, 5 |
+| FR12 | Live grid (Phase 14): one card per working, waiting or stale session under a feed of hand-offs. | 1, 2, 5 |
 | FR13 | Optional hook records exact links when the child id is observable, and explicit step tags. | 2, 3, 6 |
 | FR14 | Optional alert, fired only on a supported "waiting on me" signal: terminal bell or macOS notification. | 1, 5 |
 | FR15 | Backlog: desktop / menu-bar app on the same core, with native notifications. | 1, 5 |
@@ -601,7 +601,8 @@ Illustrative only; the binding schema is `docs/output-schema.md` (Step 0.5).
 | FR8 | `cli/` serialises the core's model |
 | FR9, FR10 | `tui/`: home overview and repo timeline |
 | FR11 (need 4) | `core::graph` builds the report from tagged hand-offs, Codex turns and on-demand calls (G0–G6); `multi-link graph` prints it; the TUI draws it (G8–G10) |
-| FR12, FR15, FR16 | Backlog |
+| FR12 | Phase 14: `multi-link live` and the live grid screen (`l`, `tui --live`); Phase 14 decisions |
+| FR15, FR16 | Backlog |
 | FR13 | `multi-link hook install` prints the hook entry for the owner to paste; the hook writes to `~/.multi-link/` (H2, H4, H10); step tags from hand-off commands (H6) |
 | FR17 | Core compares the working folders of busy sessions |
 | FR18 | See "Opening a session" below; Phase 3 |
@@ -662,7 +663,7 @@ The terminal mockup (claude.ai artifact, private: https://claude.ai/artifact/R5B
 | 2 · Repo timeline | 3 (Release 1) | Swimlanes for one repo, Codex rows under their Claude parent; solid = exact link, dashed = heuristic; ambiguous and unlinked runs shown as such. |
 | 4 · CLI (plumbing) | 1 (MVP) | Not a daily view. Prints the core's output as a table or JSON for tests and other front ends. |
 | 3 · Step graph | 8 (Release 1.5) | One step as Claude plan → Codex implement → Claude review. Board 9 is its approved form; the scrubber is dropped (Phase 8 non-goals). |
-| 5 · Live grid | Backlog | One card per session under a feed of hand-offs. |
+| 5 · Live grid | 14 (Release 1.11) | One card per working, waiting or stale session (a Claude card paired with the Codex runs it started) under a feed of hand-offs. Board 14a is its approved form (Phase 14 decisions). |
 | 1 · Mod strip | Backlog | A strip above the Claude Code prompt. |
 
 ### Phase 7 decisions
@@ -1070,3 +1071,107 @@ target all resolve under C1, and each of the 29 `exec` ones has exactly one run 
 resolved folder usually has no run, and the hand-off stays `unlinked`; a wrong link needs an unrelated run starting
 in the target folder within 60 s.
 
+### Phase 14 decisions (live grid: what is each agent doing now?, Step 14.0)
+Planned 2026-11-10 (PLAN.md → Phase 14). Need (owner): see what each agent is doing right now (its last few actions,
+its state, how long it has been at it) without switching terminal tabs; design needs 1, 2 and 5, FR12, screen 5. The
+owner approved **board 14** on the mockup canvas (claude.ai artifact R5Bh9iX6bsn3jSu8F8D58C) on 2026-11-10: 14a is real
+data (described here, never committed as an image, W10), 14b made-up waiting and stale cards. Where the board and these
+rules differ, the rules win (Codex critique, PLAN.md Review log): card line 1 is `last_asked` for both harnesses (14a's
+`fix round 1` needs chain positions the grid does not compute), the feed has no `codex back T` and no chain words, the
+header counts follow L5, `✓` follows G6 (14a's `$ git diff ✓` has no mark), counts keep G6's order `reads · edits ·
+runs` (14a writes `39 runs · 3 edits`), the idle line always names its repos (14b's has none), and 14b's `no parent
+found` first line is `last_asked` like every card. On this screen L3/L4 replace W5's hand-off words: `no run found`
+(W5: `no codex run found`) and `codex running` only for a busy child (W5 also counts stale). Binding JSON rules:
+`docs/output-schema.md` → `live`. Binding key: `fixtures/expected/phase14/live.json` (`check.sh`). Binding pictures:
+`fixtures/expected/tui/live-phase14{,-100,-short,-tiny,-children,-stale}.txt` / `.styles.txt` (Step 14.0, drawn from the rules below and
+checked region by region against 14a; Step 14.2 must match them cell for cell).
+
+| # | Decision | Why |
+| --- | --- | --- |
+| L0 | A report, then a screen. `multi_link_core::live` builds a `LiveReport` (model crate) from the sessions, links and overview pass the TUI already runs, plus G5 calls for card sessions only. `multi-link live [--root] [--now] [--since] [--json]` prints it; plain text is a list (one line per card, then the feed). No existing JSON key changes. The TUI only draws the report (T2) | Answer-keyed like every other view; the desktop app (FR15) can reuse it |
+| L1 | Which cards: every non-imported session, top-level or child, whose `state` is `waiting`, `busy` or `stale`, from the same windowed sessions pass the TUI runs (a stale Codex run last active before the window is not listed, so it is history, not a card). Every other non-imported session with activity in the window is counted on one line: `N idle sessions (repo · repo) · home shows them` (distinct repo names, sorted, cut with `…` to the width). No cards and nothing idle: `nothing working right now` plus, if any, `· last hand-off T` | Cards only where something is happening (owner choice); home already answers the rest |
+| L2 | Groups, rows and moving. A Codex card's parent is the Claude session of its latest incoming non-ambiguous link by `at` (ties: the later one in the links report); no `started_by` fallback; the parent may be in another repo. A group is a Claude card plus the live Codex cards whose parent it is (by link `at`, ties by full id), or a lone card. Groups by head: waiting (oldest wait start), busy (oldest last-burst start), stale (oldest stale start), ties by full id; wait/stale start = `state_since`, else `last_activity`. Flattened order = groups, head then children. Wide: head at x 1 (56 wide), first child at x 61 (58 wide) joined by `──▸` on the card's 5th row; each further child takes the next row, right side, joined by `└──▸` from x 57; a lone Codex card sits on the left. The selection is kept by full id across refreshes, else the same flattened index (clamped). `↑↓` previous / next group head, `←→` along the group; narrow: both along the flattened order | Pairs show who launched what; a stable selection avoids htop's jump on re-sort |
+| L3 | Card (10 rows), border in the harness colour, title in the top border: state glyph (`●` busy, `◆` waiting, `○` stale), harness word bold, `· <repo>`, `· step <id>` (Claude: its latest tagged hand-off; Codex: the `codex_steps` rule, moved to core in 14.1). Rows: (1) `“last_asked”`; (2) W5 phrase `working now · for N min` (last burst's start; `for over <period>` when that burst starts at the window start; `working now` with no burst), `waiting on you · since T (N min)`, `stale · no activity since T (N min)`; (3) G6 counts for the whole session; (4) `┄` rule; (5–7) the last 3 notable calls, newest last, `T  label` with G6 marks, every recognised hand-off as `▸ codex exec` (+ ` · step X`); (8) link line: Claude with a live child → `waiting on codex <id8> · N min`; else its latest hand-off in the window → `codex <id8> done T` / `N possible runs` / `no run found` / `codex <id8>`; else blank. Codex → `└ from claude <id8> · confirmed link\|matched by time` or `not linked to any claude session`. Bottom border `<place> · <id8>`. Text cut at the inner width with `…` | One glance answers the need; fixed labels cannot leak commands (G6) |
+| L4 | Feed: `HAND-OFFS newest first · all repos`, then up to 4 hand-offs whose `at` is in the window, ambiguous and unlinked included. Row: `T  <repo, 14 wide>  claude handed step X to codex` (`work` when untagged; `claude resumed codex for …` for a resume form), W8 words at x 75, outcome at x 93: `codex running` when the child is busy and this is its latest incoming link; `codex done T` when a turn starting at or after `at` completed (the first such turn); else blank. None: `no hand-offs in the last <period>` | agtrace's feed: what was handed off, how sure, and how it ended |
+| L5 | Header: `multi-link › live  what every agent is doing now`, right `◆ N waiting · ● N working now · ○ N stale   T`. Bottom: `selected` line, `asked` line, legend, keys and `times UTC-8`, as board 14a | The counts that matter first; the rest as on every screen |
+| L6 | Keys: `l` opens the grid from home and the repo view (footers gain `l live`, Step 14.3); `multi-link tui --live` starts on it; `esc` returns to the opener (`--live`: home); `enter` repo view, `s` step graph (G9 rules), `o`/`f` FR18, `q` quits. Refresh every pass, in place | k9s: drill in, back out, refresh in place |
+| L7 | Sizes. Width ≥ 120: board 14a. Below 120: one column, a Codex child under its parent indented 4, joined by `└▸`. Narrower still: the same, text cut with `…`. Rows: the feed drops to 2 rows below 40 rows, none below 32; cards that do not fit leave `↓ N more` and the view scrolls to keep the selection visible; when not even one card fits, the selected card is drawn clipped and `↓ N more` takes the last row. All cutting by display width, never bytes | A small terminal still answers the need |
+| L8 | Colour: existing theme roles only (harness colours, `needs_you`, dim harness colours for stale, `busy_card` / `codex_box` / `waiting_card`, heavy border plus `selected` for the selection, `done` / `warning` for `✓` / `✗`). NO_COLOR keeps every glyph and word | No new colour to test |
+| L9 | Speed: the live report is built only while the grid is open (`Refresh::live`); calls are read only for card sessions and cached per session by its dependency set (path, length, mtime, inode of the main transcript and every subagent file); clock-only changes re-read nothing. The refresh stays within the 2 s NFR (measured in 14.4) | The largest transcripts are megabytes; a card needs one session's calls |
+| L10 | Privacy: fixtures synthetic (W10); real renders stay in scratch; README images from fixtures only | The JSON and screen carry prompt text |
+
+**Pinned while writing the keys (Step 14.0).** L0–L10 left these open; the keys and goldens depend on them.
+- **Report fields** (`docs/output-schema.md` → `live`): `window_from` is `now − since` (`null` for `--since all`); a busy
+  card's `since` is its last activity burst's `from` (already clipped to the window), so "clipped" is `since ==
+  window_from`; a busy card with no burst has `since: null` and sorts by `last_activity`. `notable` items carry `at` (the
+  label's latest call). `last_handoff` is the greatest `at` of the listed links. Card `link` is one of `waiting_on`,
+  `handoff`, `from`, `none` (Codex with no parent) or `null` (Claude with nothing to say).
+- **Which live child a Claude card waits on:** the last child in group order (its latest hand-off); `N min` since that
+  child's parent link `at`. **Outcome order:** `running` is checked before `done`, so the child's latest link with a busy
+  child is `running` even when an earlier turn after it completed. A Claude card's `handoff` line never says running
+  (a busy child of its own would be a card and give `waiting_on`); a `running` outcome there prints `codex <id8>`.
+- **Feed:** ties on `at` newest first by reverse links-report order; `repo` is the parent session's repo (the link's
+  `checkout` if the parent is not listed); an `unlinked` hand-off's W8 column says `no run found` (grey). Colours:
+  `confirmed link` text, `matched by time` and `no run found` grey, `N possible runs` `needs_you`, `codex running`
+  codex colour, `codex done T` `done`; times grey; `claude handed` / `to codex` / `resumed codex for` grey, the step
+  (or `work`) text colour; repo text colour cut to 14 with `…`. Time at x 1, repo at x 9, sentence at x 23 (a 7-cell
+  time leaves one space). **Below 120 columns** the two right columns pack: W8 words at 23 + the widest shown sentence
+  + 3, outcome at that + the widest shown W8 word + 3; the row is cut at the right margin.
+- **Header:** left `multi-link` and `live` text BOLD, ` › ` and the subtitle grey; right `◆ N waiting` `needs_you`,
+  `● N working now` claude colour (as home), each grey when 0; `○ N stale` always grey (the stale glyph is grey on cards,
+  as 14b); separators ` · ` grey, three spaces, then the clock in text colour ending at x w−2. When the two sides would
+  come closer than 2 cells, drop in order: the subtitle, the clock, then the count words (`◆ 1 · ● 11 · ○ 1`).
+- **Rows (top to bottom):** header 0, rule 1 (`─` x 1..w−2, border colour); with a feed of k rows (4 at ≥ 40 rows, 2 at
+  32–39): `HAND-OFFS` row 2 (`HAND-OFFS` grey BOLD, ` newest first · all repos` grey), feed rows 3..2+k, one blank, cards from 4+k; with no feed: one blank, cards from 3. The
+  feed always reserves its k rows. Bottom block, fixed: idle line h−10, rule h−9, `selected` h−8, `asked` h−7, blank,
+  legend h−5, blank, rule h−3, keys h−2, blank h−1. Card rows start at the first card row and repeat every 11 rows
+  (10 + one blank); a card row is drawn only if it ends by h−12. `↓ N more` (grey, x 1) goes on the row right under
+  the last drawn card row; N counts the cards after the last one drawn (cards above the view are not counted; there is
+  no `↑` line). Clipped case: the selected card from the first card row through h−12, `↓ N more` on h−11.
+- **Card cells:** border, glyph and title as board 14a/14b: selected `┏━ ┓ ┃ ┗━ ┛ ━` BOLD with the `selected`
+  background, else `╭─ ╮ │ ╰─ ╯ ─` not bold. Border colour: busy the harness colour, waiting `needs_you`, stale the
+  dim harness colour. Background: selected `selected`; else busy Claude `busy_card`, busy Codex `codex_box`, waiting
+  `waiting_card`, stale none (screen). Glyph colour: busy harness, waiting `needs_you`, stale grey; harness word BOLD in
+  the harness colour (dim when stale); ` · repo · step X ` text BOLD. Content at x+2, `w − 4` cells wide; `┄` border
+  colour. Row 1 text colour (`no prompt` grey when null); the `“…”` line is cut as one string, so a cut line ends `…`
+  and loses its closing quote. Row 2: `working now` harness colour, `waiting on you` `needs_you` BOLD, `stale` grey
+  BOLD, the rest grey. Row 3 text colour, `1 read` / `1 edit` / `1 run` singular, empty when all zero. Rows 5–7: time
+  grey, two spaces, label text colour (`▸` in the harness colour), ` ✗` `warning` on `ok: false`, ` ✓` `done` only on
+  `$ cargo …`, `$ pytest`, `$ npm test` with `ok: true`; rows fill from the top. Row 8: `waiting on codex …` codex
+  colour; `codex <id8> done T`, `codex <id8>`, `no run found` grey; `N possible runs` `needs_you`; `└ from claude <id8>
+  · ` grey then the W8 words text colour; `not linked to any claude session` grey. Bottom: ` <place> · <id8> ` grey.
+  `──▸` / `└──▸` / `└▸` codex colour on the screen background.
+- **Narrow layout:** a head or lone card at x 1, `w − 2` wide; a child at x 5, `w − 6` wide, `└▸` at x 2–3 on its 5th
+  row. The view scrolls by whole cards (wide: by whole card rows).
+- **Bottom block:** `selected` grey at x 2; harness word BOLD in its colour at x 12; then ` · <id8> · <repo>[, <place>]
+  · started T · active about N min in K stretch(es)` text colour (the place only for a worktree, as 14b; the active
+  part omitted with no activity; N = W5 minutes of the summed bursts). `asked` grey at x 12, `“last_asked”` at x 19.
+  Both cut with `…` at x w−2. Legend and keys: items separated by three spaces, whole items dropped from the end until
+  they fit (keys: the key text colour, its word grey); `times UTC-8` (grey, ending at x w−2) only when every key fits
+  and at least 3 blank cells stay between the last key and the label's first cell. Legend colours:
+  `●` claude, `◆` `needs_you`, `│` `╎` text, `✓` `done`, `✗` `warning`, words and `○ stale` grey. Idle line grey; when it
+  is too wide, repo names drop from the end behind one `…`. Truecolor palette, offset UTC−8.
+- **`<period>`:** `now − window_from` as whole hours `Nh`, else whole minutes `Nm` (`2h`, `90m`). With `--since all`
+  (`window_from` null) no burst is ever clipped, so `for over` never shows, and an empty feed says `no hand-offs`.
+- **Golden inputs** (`--now 2026-11-10T22:20:00Z`, window 2h): `live-phase14` 120×40, selection 0 (the waiting card),
+  first row 0; `live-phase14-100` 100×40, selection 2 (Codex `1421`), first card 1 (shows the narrow child and a
+  selected Codex card); `live-phase14-short` 120×30 and `live-phase14-tiny` 60×20, selection 0, first 0; `live-phase14-children` 120×51, selection 6 (`1425`), first row 3 (the `1415` row:
+  three children, two `└──▸` rows, `for over 2h`, a cross-repo child with no step); `live-phase14-stale` 120×40,
+  selection 11 (`1429`), first row 7 (a `└──▸` row whose head is above the view, then the unselected stale lone Codex
+  card `1424` with `not linked to any claude session`).
+- **Not in any golden** (14.2 unit tests instead): an unselected waiting card; the Claude card link lines `N possible
+  runs`, `no run found` and `codex <id8>`; an untagged `▸ codex exec`; and the wide-character prompt (Codex `1428`,
+  never in view): ratatui resets the cell after a wide character (symbol, colours and
+  modifiers), an implementation detail a hand-drawn styles file should not freeze.
+
+**Fixture** `fixtures/sessions-phase14/` (synthetic, `--now 2026-11-10T22:20:00Z`, ids `<tag>0000-0000-4000-8000-
+00000000<tag>`, repos `/home/dev/repo-m … repo-s`, no plan folders, no hook folder): 21 listed sessions, 13 cards in
+6 groups (waiting `1413`; busy `1411`+`1421`, `1412`+`1422`, `1415`+`1425`/`1426`/`1427`, `1416`+`1428`/`1429`; stale
+`1424`), 7 idle, 13 links. Cases: confirmed and matched-by-time live pairs; a waiting Claude whose child finished; a stale
+manual run with no parent; two- and three-child Claude cards; a child with two incoming links from different parents
+(`1421`: `1417` at 21:40, `1411` resumes at 22:10, latest wins) and one with two at the same `at` (`1429`, `1418` and
+`1416` at 21:32, the later invocation wins); a cross-repo child (`1427` in repo-q, no step); a burst crossing the window
+start (`1425`, `for over 2h`); a resumed child whose earlier hand-off says `codex done`, not running; an exact hand-off
+with no rollout (`142c`); an ambiguous untagged hand-off (2 runs); labels repeated with a changed `ok` (`1421`, `1425`,
+`1429`), a repeated hand-off label (`1416`), `✗`, label-less runs; a wide-character prompt (`1428`); a busy Codex Desktop
+import (`142f`, hidden); a stale run before the window (`142b`, not listed).

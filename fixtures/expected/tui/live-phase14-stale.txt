@@ -1,0 +1,40 @@
+ multi-link › live  what every agent is doing now                   ◆ 1 waiting · ● 11 working now · ○ 1 stale   2:20pm
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ HAND-OFFS newest first · all repos
+ 2:10pm  repo-m        claude resumed codex for step 2.3                   confirmed link    codex running
+ 2:07pm  repo-m        claude handed step 2.4 to codex                     matched by time   codex running
+ 1:58pm  repo-r        claude handed work to codex                         2 possible runs
+ 1:40pm  repo-m        claude handed step 2.3 to codex                     confirmed link    codex done 1:48pm
+
+                                                             ┏━● codex · repo-m · step 2.5 ━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+                                                             ┃ “Step 2.5 fix round 1”                                 ┃
+                                                             ┃ working now · for 47 min                               ┃
+                                                             ┃ 1 edit · 2 runs                                        ┃
+                                                         └──▸┃ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┃
+                                                             ┃ 1:08pm  edit order.rs                                  ┃
+                                                             ┃ 2:06pm  $ cargo test ✗                                 ┃
+                                                             ┃                                                        ┃
+                                                             ┃ └ from claude 14160000 · confirmed link                ┃
+                                                             ┗━ main · 14290000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+ ╭─○ codex · repo-p ────────────────────────────────────╮
+ │ “run the roads checks by hand”                       │
+ │ stale · no activity since 1:50pm (30 min)            │
+ │ 1 read · 1 edit · 1 run                              │
+ │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
+ │ 1:10pm  edit roads.py                                │
+ │ 1:20pm  $ pytest ✗                                   │
+ │                                                      │
+ │ not linked to any claude session                     │
+ ╰─ main · 14240000 ────────────────────────────────────╯
+
+ 7 idle sessions (repo-m · repo-n · repo-r · repo-s) · home shows them
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  selected  codex · 14290000 · repo-m · started 1:05pm · active about 56 min in 2 stretches
+            asked  “Step 2.5 fix round 1”
+
+ ● working   ◆ waiting on you   ○ stale   │ confirmed link   ╎ matched by time   ✓ exit 0   ✗ exit non-zero
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓←→ move   enter repo view   s step graph   o open   f fork   esc back   q quit                           times UTC-8
+

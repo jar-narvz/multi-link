@@ -1,0 +1,40 @@
+ multi-link › live  what every agent is doing now                   ◆ 1 waiting · ● 11 working now · ○ 1 stale   2:20pm
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ HAND-OFFS newest first · all repos
+ 2:10pm  repo-m        claude resumed codex for step 2.3                   confirmed link    codex running
+ 2:07pm  repo-m        claude handed step 2.4 to codex                     matched by time   codex running
+ 1:58pm  repo-r        claude handed work to codex                         2 possible runs
+ 1:40pm  repo-m        claude handed step 2.3 to codex                     confirmed link    codex done 1:48pm
+
+ ┏━◆ claude · repo-n · step 4.1 ━━━━━━━━━━━━━━━━━━━━━━━━┓
+ ┃ “looks fine, commit step 4.1”                        ┃
+ ┃ waiting on you · since 2:12pm (8 min)                ┃
+ ┃ 2 reads · 2 runs                                     ┃
+ ┃ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ ┃
+ ┃ 1:35pm  ▸ codex exec · step 4.1                      ┃
+ ┃ 1:55pm  $ git diff                                   ┃
+ ┃ 2:11pm  $ git commit ✗                               ┃
+ ┃ codex 14230000 done 1:49pm                           ┃
+ ┗━ main · 14130000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+ ╭─● claude · repo-m · step 2.3 ────────────────────────╮    ╭─● codex · repo-m · step 2.3 ───────────────────────────╮
+ │ “review codex's step 2.3 work and send a fix round”  │    │ “Step 2.3 fix round 1: drop the running word for old … │
+ │ working now · for 35 min                             │    │ working now · for 9 min                                │
+ │ 3 reads · 1 edit · 2 runs                            │    │ 1 read · 2 edits · 3 runs                              │
+ │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │──▸ │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ │
+ │ 1:50pm  edit PLAN.md                                 │    │ 1:45pm  $ cargo build ✓                                │
+ │ 1:55pm  $ cargo clippy ✓                             │    │ 2:14pm  edit live.rs                                   │
+ │ 2:10pm  ▸ codex exec · step 2.3                      │    │ 2:17pm  $ cargo test ✓                                 │
+ │ waiting on codex 14210000 · 10 min                   │    │ └ from claude 14110000 · confirmed link                │
+ ╰─ main · 14110000 ────────────────────────────────────╯    ╰─ main · 14210000 ──────────────────────────────────────╯
+ ↓ 10 more
+ 7 idle sessions (repo-m · repo-n · repo-r · repo-s) · home shows them
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  selected  claude · 14130000 · repo-n · started 1:30pm · active about 10 min in 3 stretches
+            asked  “looks fine, commit step 4.1”
+
+ ● working   ◆ waiting on you   ○ stale   │ confirmed link   ╎ matched by time   ✓ exit 0   ✗ exit non-zero
+
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓←→ move   enter repo view   s step graph   o open   f fork   esc back   q quit                           times UTC-8
+

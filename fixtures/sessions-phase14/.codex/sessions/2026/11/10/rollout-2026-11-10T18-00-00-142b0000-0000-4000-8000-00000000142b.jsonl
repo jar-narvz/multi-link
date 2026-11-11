@@ -1,0 +1,18 @@
+{"type": "session_meta", "timestamp": "2026-11-10T18:00:00.000Z", "payload": {"id": "142b0000-0000-4000-8000-00000000142b", "timestamp": "2026-11-10T18:00:00.000Z", "cwd": "/home/dev/repo-r", "originator": "codex_cli_rs", "source": "exec"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:00:00.000Z", "payload": {"type": "task_started", "turn_id": "142b0001-0000-4000-8000-00000001142b"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:00:00.000Z", "payload": {"type": "user_message", "message": "old manual run", "images": []}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:04:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:08:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:12:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:16:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:20:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:24:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:28:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:32:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:36:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:40:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:44:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:48:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:52:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T18:56:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
+{"type": "event_msg", "timestamp": "2026-11-10T19:00:00.000Z", "payload": {"type": "agent_message", "message": "<said>"}}
