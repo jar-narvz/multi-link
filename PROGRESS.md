@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 14 (live grid: what is each agent doing now, Release 1.11) is planned (2026-11-10); Step 14.0 (Claude:
+rules, fixtures, keys, goldens) is next.** Owner approved board 14 (canvas R5Bh9iX6bsn3jSu8F8D58C, 14a real data at
+8 Nov 2:19pm, 14b made-up waiting/stale cards). Own screen (`l`, `tui --live`), cards only for busy/waiting/stale
+sessions; a row pairs a Claude card with its live Codex card; each card shows `last_asked`, state and time, G6 counts,
+its last 3 notable calls and what it waits on; a 4-row hand-off feed above. L0–L10 in PLAN.md. Codex critique: 10
+points, 9 accepted, 1 in part (PLAN.md Review log). Live data comes from a new `core::live` report built only while
+the grid is open; calls cached per session by its file set (main + subagents).
+
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
 reads keys with crossterm `use-dev-tty`. Real check in `docs/phase13-check.md`: unlinked 49 → 12, ambiguous 1 → 0,

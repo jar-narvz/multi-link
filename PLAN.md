@@ -2291,10 +2291,191 @@ equal except 13.0's list; `python3 -I tools/resize-key-check.py target/release/m
 - Files: `docs/phase13-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts explained; the owner's answer recorded.
 
+### Phase 14 — Live grid: what is each agent doing now? (Release 1.11)
+Need (owner, 2026-11-10): "see what each agent is doing right now (its last few actions, its state, how long it has
+been at it) without switching terminal tabs." Design needs 1, 2 and 5; FR12, screen 5. Home answers "which repo needs
+me"; the repo view and step graph answer "what happened". Neither shows, for every live session at once, what it is
+doing. Board 14 (canvas R5Bh9iX6bsn3jSu8F8D58C, boards 14a–14b) was approved by the owner on 2026-11-10. 14a is real
+data (8 Nov 2:19pm, read by a scratch script, not multi-link's code); 14b is made up, to show waiting and stale cards.
+Owner choices (2026-11-10): its own screen; cards only for working, waiting or stale sessions. How it opens was left
+to Claude: `l` plus `tui --live` (the other options, a size-based default or a remembered screen, hide a rule or need
+saved state). Builds on the 2026-11-08 proposal (`.claude/handoff/proposal-live-grid-and-pane-jump.md`, L0–L9),
+revised by board 14: rows pair a Claude card with its live Codex card, and each card shows its last 3 notable calls.
+Comparables (board 14 notes): agtrace (hand-off feed), c9watch (needs-you first), Herdr's sidebar (one state per agent),
+k9s (enter drills in, esc back, refresh in place); htop's flaw (cursor jumps on re-sort) avoided.
+
+Decisions:
+- **L0 A report, then a screen.** New `multi_link_core::live` builds a `LiveReport` (model crate) from the same
+  sessions, links and overview pass the TUI already runs, plus G5 calls for card sessions only. `multi-link live
+  [--root] [--now] [--since] [--json]` prints it; plain text is a list (one line per card, then the feed). No existing
+  JSON key changes. The TUI only draws the report (as T2 for home). Why: answer-keyed like every other view, and the
+  desktop app (FR15) can reuse it.
+- **L1 Which cards.** Every non-imported session, top-level or child, whose state is `waiting`, `busy` or `stale`
+  (home's `working now` is `busy`, both harnesses), taken from the same sessions pass the TUI runs, so its window rules
+  apply (a stale Codex run last active before the window is history, not a card; stated). All other sessions with
+  activity in the window are counted on one
+  line: `N idle sessions (repo · repo) · home shows them` (distinct repo names, sorted, cut with `…` to the width).
+  No cards and nothing idle: `nothing working right now` plus, if any, `· last hand-off T`.
+- **L2 Groups, rows and moving.** A Codex card's parent is the Claude session of its latest incoming non-ambiguous
+  link by `at` (ties: the later one in the links report); no `started_by` fallback (core sets it for Claude only); the
+  parent may be in another repo. A group is a Claude card plus the live Codex cards whose parent it is (by link `at`,
+  ties by full id), or a lone card (a Codex card whose parent is not a card or is unknown; a Claude card with no live
+  child). Groups are ordered by their head: waiting first (oldest wait start), then busy (oldest last-burst start),
+  then stale (oldest stale start), ties by full id; wait/stale start = `state_since`, else `last_activity` (Codex busy
+  and stale never have `state_since`). The flattened card order is group order, head then children. Wide layout: the
+  head on the left (x 1, 56 wide), its first child on the right (x 61, 58 wide) joined by `──▸` on the card's 5th row;
+  each further child takes the next row, right side, left blank, joined by `└──▸` from x 57; a lone Codex card sits on
+  the left. **The selection is kept by full session id** across refreshes; if that session leaves, it goes to the same
+  flattened index (clamped to the last). `↑↓` move to the previous / next group's head; `←→` move along the flattened
+  order within the group. Narrow layout (L7): `↑↓` and `←→` both move along the flattened order.
+- **L3 Card (10 rows).** Border in the harness colour; title in the top border: state glyph (`●` busy, `◆` waiting,
+  `○` stale), harness word bold, `· <repo>`, `· step <id>` when the session has a latest tagged hand-off step
+  (Claude: its own latest tagged hand-off; Codex: the `codex_steps` rule, moved to core in 14.1). Inner rows:
+  (1) `“last_asked”` (P1/P5), both harnesses (G3 part kinds need chain position the grid does not compute); (2) W5
+  phrase: `working now · for N min` from the last burst's start (`for over <period>` when that burst starts at the
+  window start, i.e. was clipped; `working now` with no burst), `waiting on you · since T (N min)`, `stale · no activity
+  since T (N min)` with L2's wait/stale start; (3) G6 counts for the whole session
+  (`N reads · N edits · N runs`, zeros left out, hand-offs not counted); (4) `┄` rule; (5–7) the last 3 notable calls,
+  from a shared summary extracted from `graph::tally` that keeps each label's latest `at` and `ok` (graph JSON
+  unchanged); every recognised hand-off is notable as `▸ codex exec`, plus ` · step X` when tagged (no chain words);
+  newest last, each `T  label` with G6 marks; empty rows when fewer; (8) the link line: Claude with a live child →
+  `waiting on codex <id8> · N min` (since that link's `at`); else its latest hand-off in the window, with L4's outcome
+  → `codex <id8> done T` / `N possible runs` / `no run found` / `codex <id8>` (outcome unknown); else blank. Codex → `└ from claude <id8> · confirmed link|matched by time`, or `not linked to any claude session`.
+  Bottom border: `<place> · <id8>` (place as the repo view: `main`, `<name> worktree`). Text is cut at the card's inner
+  width with `…`. Why: answers the need in one glance; fixed labels cannot leak commands (G6).
+- **L4 Feed.** `HAND-OFFS newest first · all repos`, then up to 4 rows: hand-offs whose `at` is in the window, newest
+  first, all repos, ambiguous included. Row: `T  <repo, 14 wide>  claude handed step X to codex` (`work` when
+  untagged; `resumed codex for` instead of `handed … to codex` for a resume form), W8 confidence words at x 75
+  (`confirmed link`, `matched by time`, `N possible runs`), outcome at x 93 from the child's turns (G4): `codex running`
+  when the child is busy and this is its latest incoming link; `codex done T` when a turn starting at or after `at`
+  completed (T = that completion; the first such turn); blank otherwise (unlinked, ambiguous, no rollout, or a later
+  link superseded it while no turn completed). No hand-offs:
+  `no hand-offs in the last <period>`.
+- **L5 Header and footer.** Row 0: `multi-link › live  what every agent is doing now`, right: `◆ N waiting · ● N
+  working now · ○ N stale   T` (a zero count drawn grey, glyph kept). Bottom: `selected` line (harness, id8, repo and
+  place, started, `active about N min in K stretches`), `asked` line, legend (`● working ◆ waiting on you ○ stale │
+  confirmed link ╎ matched by time ✓ exit 0 ✗ exit non-zero`), keys row and `times UTC-8`, as board 14a.
+- **L6 Keys.** `l` opens the grid from home and the repo view (their footers gain `l live`); `multi-link tui --live`
+  starts on it. `esc` returns to the screen that opened it (`--live`: home). `enter` opens the selected card's repo
+  view; `s` its step graph (the card's step, G9 rules); `o`/`f` as FR18; `q` quits. Refresh every pass, in place.
+- **L7 Sizes.** Width ≥ 120: board 14a. Width < 120: one column; a Codex card sits under its parent, indented 4,
+  joined by `└▸`; cards take the full width minus the indent. Narrower still: the same one-column form, text cut
+  with `…` (no other screen has a too-small message today, so none is added). Rows: the feed drops to 2 rows below 40
+  rows and to none below 32; cards that do not fit leave one line `↓ N more` and the view scrolls to keep the
+  selection visible; when not even one card fits, the selected card is drawn clipped at the bottom edge and the
+  `↓ N more` line wins the last row. All cutting is by display width (wide and combining characters), never bytes.
+- **L8 Colour.** Existing theme roles only: harness colours for borders and words, `needs_you` for `◆` and the
+  waiting border, the dim harness colour for stale borders, `busy_card` / `codex_box` / `waiting_card` backgrounds,
+  heavy border plus `selected` background for the selection, `done`/`warning` for `✓`/`✗`. NO_COLOR keeps every glyph
+  and word. No new colour.
+- **L9 Speed.** The live report is built only while the grid is open (`Refresh` gains `live: Option<LiveReport>`, as
+  `graph`). Calls are read only for card sessions and cached in the CLI worker per session, keyed by its dependency
+  set: (path, length, mtime, inode) of the main transcript and of every subagent file the scanner lists for it (as
+  T1), so an added, removed, grown or replaced file re-reads that session and nothing else; clock-only state changes
+  re-read nothing. The whole refresh with the grid open stays within the 2 s NFR on real `~` (measured in 14.4).
+- **L10 Privacy.** Fixtures synthetic (W10); real renders stay in scratch; README images from fixtures only.
+
+Non-goals: a terminal preview or sending keys (control is a design non-goal); state-change history in the feed (needs
+saved state); idle sessions as cards; a per-repo grid; the tmux / Herdr pane jump (backlog); changing home, the repo
+view or the step graph beyond the `l` key and its footer word; a new colour.
+
+Whole-phase Verify: `cargo test --workspace` → all `ok`; clippy `-D warnings` and `fmt --check` clean; committed keys
+equal except 14.0's list (home/repo footers); `multi-link live --root fixtures/sessions-phase14 --now <t> --json`
+equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0 goldens cell for cell (120×40, 100×40,
+120×30, 60×20); `fixtures/expected/phase9/check.sh 6`, `phase12/check.sh`, `phase13/check.sh`, `phase14/check.sh` all
+`ok`; W10 scan.
+
+### Step 14.0 — Rules, fixtures, keys and goldens (Claude)
+- Depends on: 13.3. L0–L10 into `docs/design.md` ("Phase 14 decisions", screen 5 row moves from Backlog) and
+  `docs/output-schema.md` (`live` report). Synthetic fixture root `fixtures/sessions-phase14/` with a fixed `--now`,
+  shaped like boards 14a + 14b: two Claude sessions each with a live, linked Codex child (one confirmed, one matched by
+  time), one waiting Claude with a finished child, one stale Codex with no parent, one Claude with two live children,
+  two idle sessions in two repos, one imported Codex (hidden), one ambiguous hand-off in the feed, and calls that
+  exercise G6 merge and marks (a repeat label, `✗`, a label-less run). Keys: `fixtures/expected/phase14/live.json`,
+  `check.sh`, and hand-drawn goldens `fixtures/expected/tui/live-phase14{,-100,-short}.{txt,styles.txt}` checked
+  region by region against board 14a, plus `live-phase14-tiny` (60×20). Extra cases (critique): a Codex child with
+  two incoming links (latest wins) and two at the same `at`; a parent in another repo; a Claude card with three live
+  children; a busy burst that crosses the window start (`for over 2h`); a resumed child whose earlier hand-off must not
+  say `running`; a hand-off with no rollout; a label repeated with a changed `ok`; a wide-character prompt.
+  Home and repo footer goldens are not touched here (14.3 changes them with the code).
+- Files: `docs/design.md`, `docs/output-schema.md`, `fixtures/sessions-phase14/**`, `fixtures/expected/phase14/**`,
+  `fixtures/expected/tui/live-phase14*`, `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` (nothing reads the new files yet); `fixtures/expected/phase14/check.sh`
+  fails only because `multi-link live` does not exist yet; W10 scan of the new files finds nothing.
+
+### Step 14.1 — `core::live` and `multi-link live` (Codex)
+- Depends on: 14.0. L0–L5 data (cards, groups, order, feed, counts, idle line); calls via the existing G5 readers;
+  the G6 summary extracted from `graph::tally` with each label's latest `at` (graph JSON unchanged); the
+  `codex_steps` / `started_steps` rules moved from `crates/cli/src/tui.rs` into core with their tests and tie rules,
+  the CLI calling the core versions.
+- Files: `crates/model/src/lib.rs` (LiveReport), `crates/model/tests/**`, `crates/core/src/live.rs` (new),
+  `crates/core/src/lib.rs`, `crates/core/src/graph.rs` (the shared summary), `crates/core/tests/**`,
+  `crates/cli/src/main.rs`, `crates/cli/src/tui.rs` (use the moved step maps only), `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; `fixtures/expected/phase14/check.sh` → `live.json` equal;
+  `fixtures/expected/phase9/check.sh 6` 47/47, `phase12/check.sh` and `phase13/check.sh` all `ok`; `multi-link graph`
+  output for the phase 8 fixture unchanged; unit tests for L1 (each state, imported hidden, stale outside the window),
+  L2 (parent precedence and ties, cross-repo parent, three children, lone cards, order keys incl. Codex fallbacks),
+  L3 phrases and link lines, L4 outcomes (resumed child, no rollout); `git diff 67cdabd -- fixtures/expected`
+  = 14.0's keys only.
+
+### Step 14.2 — TUI render to board 14 (Codex)
+- Depends on: 14.1. L3–L5, L7, L8 drawing; pure render from `LiveReport` plus a selection and scroll.
+- Files: `crates/tui/src/live.rs` (new), `crates/tui/src/lib.rs`, `crates/tui/src/theme.rs` (only if a role needs a
+  helper; no new colour), `crates/tui/tests/**`, `crates/tui/examples/home_html.rs` (live variant for README images),
+  `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; the fixture render equals `live-phase14.txt`/`.styles.txt` cell for cell at
+  120×40, `-100` at 100×40, `-short` at 120×30, `-tiny` at 60×20; a wide-character prompt is cut by display width;
+  NO_COLOR render keeps every glyph; every existing snapshot unchanged (home/repo footers change only in 14.3).
+
+### Step 14.3 — Wiring: `l`, `--live`, keys, refresh, call cache (Codex)
+- Depends on: 14.2. L6, L9.
+- Files: `crates/tui/src/app.rs`, `crates/cli/src/tui.rs`, `crates/cli/src/main.rs` (`--live`), `crates/tui/src/home.rs`
+  and `crates/tui/src/timeline.rs` (footer word only), the home/repo goldens under `fixtures/expected/tui/` whose footer
+  gains `l live` (each listed in PROGRESS), `crates/tui/tests/**`, `crates/cli/tests/**`, `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; app tests: `l` from home and repo view, `esc` back to each, `--live` start and
+  `esc` → home, `enter`/`s`/`o` on a card, `↑↓←→` across a two-child row; the selection kept by id across a refresh
+  that adds a card above it, and moved to the same flattened index when its session leaves (either column); moving
+  in the narrow layout and after a resize; the call cache re-reads a session when its main file or a subagent file
+  grows, is added, removed or replaced (inode), and nothing on a clock-only refresh (tests); the changed home/repo
+  goldens differ from 67cdabd only in the footer row (diff shown in PROGRESS).
+
+### Step 14.4 — Real check, README, owner confirm (Claude)
+- Depends on: 14.3. On real `~` (release build): refresh time with the grid open, cold (first pass) and warm (median
+  of 10 passes), and one pass after a card's transcript grows; each ≤ 2 s;
+  card counts by state and a PTY smoke run (open with `l`, move, `esc`, `--live`, resize, `q`), scratch only.
+  README: the live grid section, its keys, an image from the fixture render, limits (fixed labels hide plain
+  reads; Codex part kinds only for tagged hand-offs). `docs/phase14-check.md` with counts only.
+- Files: `docs/phase14-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Verify: whole-phase Verify; real counts and timing recorded; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
+`hook check` shipped in Phase 10 · live grid is Phase 14 · tmux / Herdr jump · desktop app with notifications · Claude Code mod.
 
 ## Review log
+
+### 2026-11-10 — Phase 14 plan critique (Codex, read-only, Codex loop)
+Quota check: `CODEX: OK` (31% / 44%). Ten points, each checked against the code; outcome:
+1. Busy/stale Codex never have `state_since`, so stale order and `stale since T` had no data → **accepted**: wait /
+   stale start = `state_since`, else `last_activity`; busy order uses the last burst's start.
+2. Window semantics: cards come from the TUI's windowed pass and bursts are clipped → **accepted**: stated that a
+   stale run older than the window is not a card; a clipped burst prints `for over <period>`.
+3. Parent choice underspecified; `started_by` is Claude-only → **accepted**: latest non-ambiguous incoming link by
+   `at`, ties by report order; no `started_by` fallback; cross-repo parents allowed.
+4. G3 kinds need chain position; `back T` undefined; a resumed child could make an old hand-off say `running` →
+   **accepted**: card line 1 is `last_asked` for both harnesses; `back T` dropped; outcomes defined from the child's
+   turns, `running` only for the child's latest incoming link.
+5. `graph::tally` drops `at` → **accepted**: 14.1 extracts a shared summary that keeps the latest `at`; graph JSON
+   unchanged and checked; hand-offs on cards are `▸ codex exec` (+ step), no chain words.
+6. Continuation rows had no sort key; movement undefined → **accepted**: groups (head + children), flattened order,
+   `↑↓` by group head, `←→` within the group, fallback to the same flattened index.
+7. Cache keyed on the main file misses subagent files → **accepted**: dependency set (main + subagents, with inode),
+   as T1; cold, warm and changed-file timings in 14.4.
+8. 14.0 changed footer goldens before 14.3's code; `phase9/check.sh` needs `6` → **accepted**: footer goldens move to
+   14.3; every check command spelled out.
+9. `codex_steps` is private in the CLI → **accepted**: 14.1 moves `codex_steps` / `started_steps` into core and adds
+   `crates/cli/src/tui.rs` to its Files.
+10. Small sizes untested → **accepted in part**: a 60×20 golden and display-width cutting are added, and a card that
+   cannot fit is clipped with `↓ N more`; arbitrarily small sizes beyond that are not tested (no screen does today).
 
 ### 2026-11-10 — Phase 13 plan critique (Codex, read-only, Codex loop)
 Quota check: `CODEX: OK`. Nine points; outcome:
