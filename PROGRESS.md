@@ -1,6 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Step 17.3 is committed (Codex, reviewed by Claude, 2026-11-11).** The mod draws the S1 strip, expands
+one row at a time (A1), copies ids and opens eligible sessions with `multi-link open --app-only <id>` by argv.
+The default-on `notify` option adds `--notify` only on macOS; completion events invoke the fixed N2 AppleScript
+with title/body as separate arguments. Failed delivery is shown in the footer and is not retried. Empty section
+headings are hidden; data, errors, events and tick lines reset `checked Ns ago`. Tests: **86 pass, 0 fail**
+across terminal and desktop; plugin validation passed (existing directory-only license/icon advisories remain).
+Review round 1: accepted behavior retained; the S1 strip now styles heading/part segments individually,
+including theme success/warning status marks and dim minutes, while clipping each complete line once.
+Next: Step 17.4 (Claude): real PTY check with a sandbox Codex hand-off, timings, README, `docs/phase17-check.md`, owner
+confirm. Known deviations to record there: the open row has no highlight (no theme background key exists; board 17 A1
+shows one), and an event's `said` is cut at 120 characters without the H1 `…`.
+
 **Step 17.2 is committed (Codex, reviewed by Claude, 2026-11-11): the watcher prints a tick line on every unchanged
 tick and, with `--notify`, one `codex_done` event per hand-off (permanent `create_new` tombstones in
 `<state dir>/notified/`). The strip is rebuilt only when sessions' `(id, state)`, links or the step change, or every
@@ -821,6 +833,176 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 17.3: Review round 1 — Codex
+- Did: Addressed the S1 styling finding with optional styled segments on Line, rendered as a row Box
+  of Text elements only for the strip heading and part lines. Heading: dim step/title, bold id.
+  Parts: harness colour only on the harness, default-colour kind, success for done, warning for
+  running/waiting, dim unknown mark and minutes; this session's marker uses the Claude colour and
+  every segment of its part is bold. The complete line is sanitized and cut once to the column
+  budget, then the surviving text retains its segment styles. Other line rendering is unchanged.
+  Tests check heading and done/running/unknown/waiting segment styles on both surfaces, plus
+  shared truncation at 5, 10, 22 (wide title characters) and zero columns. The existing text helper
+  now joins each segmented strip row so all previous row-text assertions remain in force.
+- Changed: `mod/multi-link-pane/hooks/register.tsx`,
+  `mod/multi-link-pane/hooks/register.test.tsx`, `PROGRESS.md`.
+- Verify: New regression tests first produced `76 pass / 10 fail` before implementation.
+  Final `claude plugin test mod/multi-link-pane` → exit 0; actual output excerpt:
+```text
+(pass) S1 heading and part segments use board styles on terminal [42.65ms]
+(pass) strip segments share one column budget 5 on terminal [33.87ms]
+(pass) strip segments share one column budget 10 on terminal [46.81ms]
+(pass) strip segments share one column budget 22 on terminal [32.83ms]
+(pass) strip segments share one column budget 0 on terminal [33.70ms]
+(pass) S1 heading and part segments use board styles on desktop [52.22ms]
+(pass) strip segments share one column budget 5 on desktop [32.52ms]
+(pass) strip segments share one column budget 10 on desktop [49.22ms]
+(pass) strip segments share one column budget 22 on desktop [33.88ms]
+(pass) strip segments share one column budget 0 on desktop [32.70ms]
+ 86 pass
+ 0 fail
+Ran 86 tests across 1 file. [4.57s]
+```
+  `claude plugin validate mod/multi-link-pane` → exit 0; actual result/advisory headings excerpt
+  (absolute local paths omitted):
+```text
+✘ Found 1 problem the plugin directory refuses a submission for:
+⚠ Found 1 plugin directory warning:
+✔ Validation passed
+```
+  `git diff --check` → exit 0, no output.
+- Review: Claude, 1 round. Behaviour matched H2–H5 on first pass (strip fold and `+N earlier`, one open row, `Open
+  in app` only when `openable` via `open --app-only` argv, `Copy id`, `--notify` only when on and macOS, fixed
+  `osascript` argv, failure in the footer without retry, overflow order, no empty-section rule, `checked Ns ago`).
+  Finding vs board 17 S1: strip lines were one colour each → styled segments (dim `step`/title, bold id, harness
+  colour, `success`/`warning` marks, dim minutes). Claude re-ran Verify: `claude plugin validate` ✔ passed;
+  `claude plugin test` 86 pass, 0 fail. Accepted: no highlight on the open row (no theme background key in 2.1.322).
+- Gotchas: Existing directory-only missing license/icon advisories remain. No Rust, PLAN.md,
+  manifest or types changes in this round. Nothing staged, committed or pushed.
+
+
+### 2026-11-11 — Step 17.3: The mod: strip, row actions, notifications, polish — Codex
+- Did: Implemented H2–H5 against board 17's S1 / A1 / N2. The strip keeps at most four parts,
+  preserving this session's newest part when needed and folding older parts. Rows and children are id-keyed
+  Buttons; one row expands with width-cut asked/said and Copy id, plus Open in app only when openable.
+  Open uses the explicit H3 `--app-only` argv (the shorter Verify wording omits that flag).
+  Expansion survives redraws and closes when its id leaves the data. Overflow drops recent, waiting,
+  oldest strip parts, said, asked, working, then an unpinned open row with its buttons; pinned-child
+  overflow keeps the selected child and buttons together while folding siblings.
+  Notifications default on through the manifest's boolean option, gated by local `uname -s` = Darwin;
+  no shell or event text is interpolated into AppleScript. The lifecycle remembers attempted run ids across
+  watcher retries; Rust's permanent tombstones remain the cross-pane delivery authority.
+  Separate action notices keep a notification failure visible when the following data line arrives.
+  Updated the state shape tag for the added open-row/action-notice fields.
+- Changed: `mod/multi-link-pane/.claude-plugin/plugin.json`,
+  `mod/multi-link-pane/hooks/register.tsx`, `mod/multi-link-pane/hooks/register.test.tsx`,
+  `mod/multi-link-pane/types/index.d.ts`, `PROGRESS.md`.
+- Verify: `claude plugin test mod/multi-link-pane` → actual output:
+```text
+hooks/register.test.tsx:
+(pass) reading before the first line on terminal [43.26ms]
+(pass) reading before the first line on desktop [22.15ms]
+(pass) ambiguous watcher line on terminal [39.98ms]
+(pass) busy watcher line on terminal [40.64ms]
+(pass) child-other-repo watcher line on terminal [33.69ms]
+(pass) children-exact-likely watcher line on terminal [45.58ms]
+(pass) done-2h watcher line on terminal [35.83ms]
+(pass) empty watcher line on terminal [32.51ms]
+(pass) idle-recent watcher line on terminal [45.55ms]
+(pass) openable watcher line on terminal [45.61ms]
+(pass) unseen watcher line on terminal [43.24ms]
+(pass) waiting-quiet watcher line on terminal [54.79ms]
+(pass) waiting-stale watcher line on terminal [37.81ms]
+(pass) split lines, errors, heartbeat and footer age on terminal [102.31ms]
+(pass) missing and retry on terminal [80.53ms]
+(pass) old and retry on terminal [88.07ms]
+(pass) exit and retry on terminal [195.55ms]
+(pass) overflow 20x6 on terminal [35.12ms]
+(pass) overflow 30x12 on terminal [34.44ms]
+(pass) ambiguous watcher line on desktop [44.39ms]
+(pass) busy watcher line on desktop [40.36ms]
+(pass) child-other-repo watcher line on desktop [34.17ms]
+(pass) children-exact-likely watcher line on desktop [45.11ms]
+(pass) done-2h watcher line on desktop [37.55ms]
+(pass) empty watcher line on desktop [32.91ms]
+(pass) idle-recent watcher line on desktop [48.20ms]
+(pass) openable watcher line on desktop [48.22ms]
+(pass) unseen watcher line on desktop [46.81ms]
+(pass) waiting-quiet watcher line on desktop [41.99ms]
+(pass) waiting-stale watcher line on desktop [33.28ms]
+(pass) split lines, errors, heartbeat and footer age on desktop [98.71ms]
+(pass) missing and retry on desktop [71.37ms]
+(pass) old and retry on desktop [70.73ms]
+(pass) exit and retry on desktop [158.99ms]
+(pass) overflow 20x6 on desktop [33.84ms]
+(pass) overflow 30x12 on desktop [36.32ms]
+(pass) session.end during streaming cancels child and timers on terminal [35.14ms]
+(pass) session.end during backoff cancels child and timers on terminal [28.62ms]
+(pass) the command reopens the pane without starting a second watcher on terminal [36.13ms]
+(pass) overflow removes recent before waiting before working on terminal [33.31ms]
+(pass) session.end during streaming cancels child and timers on desktop [31.89ms]
+(pass) session.end during backoff cancels child and timers on desktop [33.97ms]
+(pass) the command reopens the pane without starting a second watcher on desktop [22.79ms]
+(pass) overflow removes recent before waiting before working on desktop [31.21ms]
+(pass) board C text and harness colors on terminal [51.19ms]
+(pass) data after a retry resets the backoff on terminal [43.47ms]
+(pass) board C text and harness colors on desktop [56.70ms]
+(pass) data after a retry resets the backoff on desktop [40.49ms]
+(pass) strip matches every key on terminal [140.91ms]
+(pass) row actions survive redraw and close when removed on terminal [109.81ms]
+(pass) ticks reset checked age without replacing data on terminal [57.47ms]
+(pass) notification option true on terminal [44.27ms]
+(pass) notification option false on terminal [50.35ms]
+(pass) open row overflow at 8 on terminal [49.16ms]
+(pass) open row overflow at 7 on terminal [44.17ms]
+(pass) open row overflow at 6 on terminal [41.09ms]
+(pass) strip matches every key on desktop [127.74ms]
+(pass) row actions survive redraw and close when removed on desktop [108.84ms]
+(pass) ticks reset checked age without replacing data on desktop [59.68ms]
+(pass) notification option true on desktop [51.86ms]
+(pass) notification option false on desktop [39.95ms]
+(pass) open row overflow at 8 on desktop [49.73ms]
+(pass) open row overflow at 7 on desktop [44.58ms]
+(pass) open row overflow at 6 on desktop [43.98ms]
+(pass) four part cap keeps this sessions newest part on terminal [42.36ms]
+(pass) short viewport keeps the expanded child and its buttons together on terminal [56.48ms]
+(pass) four part cap keeps this sessions newest part on desktop [35.16ms]
+(pass) short viewport keeps the expanded child and its buttons together on desktop [71.10ms]
+(pass) non macOS host never claims or displays notifications on terminal [28.50ms]
+(pass) notification fallback and spawn failure false on terminal [60.16ms]
+(pass) notification fallback and spawn failure true on terminal [60.48ms]
+(pass) copy refusal is shown in the footer on terminal [46.05ms]
+(pass) non macOS host never claims or displays notifications on desktop [30.63ms]
+(pass) notification fallback and spawn failure false on desktop [61.81ms]
+(pass) notification fallback and spawn failure true on desktop [54.78ms]
+(pass) copy refusal is shown in the footer on desktop [50.73ms]
+
+ 76 pass
+ 0 fail
+Ran 76 tests across 1 file. [4.29s]
+```
+  `claude plugin validate mod/multi-link-pane` → actual result/advisory headings excerpt
+  (absolute local paths omitted from the log):
+```text
+✘ Found 1 problem the plugin directory refuses a submission for:
+⚠ Found 1 plugin directory warning:
+✔ Validation passed
+```
+  Default validation exits successfully; the directory submission profile still reports the pre-existing
+  missing LICENSE and icon. No license was selected or artwork added in this step.
+  `git diff --check` → no output.
+  Test-first checks initially produced `16 pass / 48 fail` for the new behavior. An additional expanded-child
+  overflow regression then produced `66 pass / 2 fail`, fixed by dropping sibling lines while retaining the
+  selected child's row and actions. Final tests include all eleven current pane keys, a synthetic eight-part
+  strip, terminal/desktop presses, action refusal, notification success/failure/null fallbacks, disabled and
+  non-macOS notifications, duplicate events across watcher retries, and the Phase 16 lifecycle/overflow cases.
+- Review: Claude accepted behavior in round 1 and requested S1 segment styling; addressed in the
+  review round 1 entry above, awaiting re-review. No staging, commits or pushes.
+- Gotchas: The approved types file was present and used. Plugin validate/test both run in this sandbox;
+  real terminal/desktop rendering, macOS delivery attribution and timing remain Step 17.4.
+  No Rust or PLAN.md changes. Pre-existing untracked `.claude/` and
+  `mod/multi-link-pane/tsconfig.json` were left untouched.
+
 
 ### 2026-11-11 — Step 17.2: Review round 2 — Codex
 - Did: Removed last_activity from strip_fingerprint per PLAN.md Review log "Step 17.2 tick cost", round 2.

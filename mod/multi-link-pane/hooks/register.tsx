@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
-import type { PaneChild, PaneReport, PaneRow, PaneState } from '../types'
+import type { PaneChild, PaneDetails, PaneReport, PaneRow, PaneState } from '../types'
 
 const PANE = 'multi-link'
-const initial: PaneState = { report: null, receivedAt: null, now: 0, notice: '' }
-const pane = atom({ plugin: 'multi-link-pane', key: 'pane' } as const, initial, { shape: 'pane-1' })
+const initial: PaneState = { openId: null, actionNotice: '', report: null, receivedAt: null, now: 0, notice: '' }
+const pane = atom({ plugin: 'multi-link-pane', key: 'pane' } as const, initial, { shape: 'pane-2' })
 const missing = "multi-link isn't on PATH. See the README."
 const tooOld = 'This multi-link is too old for the pane. Update it.'
 const retrying = 'watcher stopped, retrying'
@@ -14,15 +14,20 @@ function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function details(value: Record<string, unknown>): boolean {
+  return (value.asked === null || typeof value.asked === 'string')
+    && (value.said === null || typeof value.said === 'string') && typeof value.openable === 'boolean'
+}
+
 function child(value: unknown): value is PaneChild {
-  return object(value) && typeof value.id === 'string'
+  return object(value) && details(value) && typeof value.id === 'string'
     && (value.harness === 'claude' || value.harness === 'codex')
     && typeof value.state === 'string' && typeof value.phrase === 'string'
     && (value.match === 'exact' || value.match === 'likely')
 }
 
 function row(value: unknown): value is PaneRow {
-  return object(value) && typeof value.id === 'string' && typeof value.label === 'string'
+  return object(value) && details(value) && typeof value.id === 'string' && typeof value.label === 'string'
     && (value.harness === 'claude' || value.harness === 'codex')
     && (value.step === null || typeof value.step === 'string')
     && typeof value.state === 'string' && typeof value.phrase === 'string'
@@ -36,20 +41,54 @@ function row(value: unknown): value is PaneRow {
 function report(value: unknown): value is PaneReport {
   return object(value) && value.v === 1 && typeof value.repo === 'string'
     && typeof value.now === 'string' && typeof value.this === 'string'
-    && typeof value.seen === 'boolean' && Array.isArray(value.sections)
+    && typeof value.seen === 'boolean'
+    && (value.strip === null || (object(value.strip) && typeof value.strip.step === 'string'
+      && (value.strip.title === null || typeof value.strip.title === 'string') && Array.isArray(value.strip.parts)
+      && value.strip.parts.every(p => object(p) && (p.harness === 'claude' || p.harness === 'codex')
+        && typeof p.kind === 'string' && [null, 'done', 'running', 'waiting', 'stale'].includes(p.status as string)
+        && typeof p.active_min === 'number' && Number.isFinite(p.active_min) && p.active_min >= 1
+        && typeof p.is_this === 'boolean')))
+    && Array.isArray(value.sections)
     && value.sections.length === 3 && value.sections.every((s, i) => object(s)
       && s.name === ['working', 'waiting', 'recent'][i]
       && Array.isArray(s.rows) && s.rows.every(row))
 }
 
-async function line($: EngineInterface, text: string): Promise<boolean> {
+const notificationScript = 'on run argv\n  display notification (item 2 of argv) with title (item 1 of argv)\nend run'
+
+function contains(data: PaneReport, id: string | null): boolean {
+  return id !== null && data.sections.some(s => s.rows.some(r => r.id === id || r.children.some(c => c.id === id)))
+}
+
+async function line($: EngineInterface, text: string, notify: boolean, announced: Set<string>): Promise<boolean> {
   let value: unknown
   try { value = JSON.parse(text) } catch { return false }
-  if (object(value) && value.v === 1 && typeof value.error === 'string') {
-    await update($, pane, s => ({ ...s, notice: value.error as string }))
+  if (!object(value) || value.v !== 1) return false
+  const now = await $.clock.now()
+  if (typeof value.error === 'string') {
+    await update($, pane, s => ({ ...s, receivedAt: now, now, notice: value.error as string }))
+  } else if (typeof value.tick === 'string') {
+    await update($, pane, s => ({ ...s, receivedAt: now, now }))
+  } else if (object(value.event) && value.event.kind === 'codex_done'
+    && typeof value.event.run === 'string' && typeof value.event.id === 'string'
+    && (value.event.step === null || typeof value.event.step === 'string')
+    && (value.event.said === null || typeof value.event.said === 'string')) {
+    await update($, pane, s => ({ ...s, receivedAt: now, now }))
+    const event = value.event
+    if (notify && !announced.has(event.run as string)) {
+      announced.add(event.run as string)
+      try {
+        const result = await $.process.run(['osascript', '-e', notificationScript,
+          event.step ? 'codex finished (' + event.step + ')' : 'codex finished',
+          (event.said as string | null) ?? 'no final message'])
+        if (result.exitCode !== 0) throw new Error('notification failed')
+      } catch {
+        await update($, pane, s => ({ ...s, actionNotice: 'notification failed' }))
+      }
+    }
   } else if (report(value)) {
-    const now = await $.clock.now()
-    await update($, pane, () => ({ report: value, receivedAt: now, now, notice: '' }))
+    await update($, pane, s => ({ ...s, report: value, receivedAt: now, now, notice: '',
+      openId: contains(value, s.openId) ? s.openId : null }))
     return true
   }
   return false
@@ -57,7 +96,7 @@ async function line($: EngineInterface, text: string): Promise<boolean> {
 
 // Each register invocation owns one lifecycle. The host cancels streams and
 // clock timers on unload; session.end explicitly releases the same resources.
-export const register: Register = on => {
+export const register: Register = (on, options) => {
   let stop: (() => Promise<void>) | undefined
 
   on('session.start', async ($, e, next) => {
@@ -68,6 +107,11 @@ export const register: Register = on => {
     await $.command.register({ name: PANE, description: 'Show multi-link sessions in this repo' })
     await $.ui.open({ id: PANE, title: 'multi-link' })
 
+    let notify = false
+    if (options.notify !== false) {
+      try { notify = (await $.process.run(['uname', '-s'])).stdout.trim() === 'Darwin' } catch { /* Unsupported host. */ }
+    }
+    const announced = new Set<string>()
     let active = true
     let retry: Timer | undefined
     let stream: ReturnType<EngineInterface['process']['spawn']> | undefined
@@ -94,7 +138,7 @@ export const register: Register = on => {
       const began = await $.clock.now()
       if (!active) return
       try {
-        stream = $.process.spawn({ argv: ['multi-link', 'pane', '--json', '--watch', '--cwd', e.cwd, '--session', id] })
+        stream = $.process.spawn({ argv: ['multi-link', 'pane', '--json', '--watch', '--cwd', e.cwd, '--session', id, ...(notify ? ['--notify'] : [])] })
         for await (const chunk of stream) {
           if (!active) break
           pulled = true
@@ -108,7 +152,7 @@ export const register: Register = on => {
             const text = stdout.slice(0, newline)
             stdout = stdout.slice(newline + 1)
             if (!active) break
-            if (await line($, text)) { gotData = true; delay = 2000 }
+            if (await line($, text, notify, announced)) { gotData = true; delay = 2000 }
           }
         }
       } catch {
@@ -146,34 +190,81 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const state = await read($, pane)
     const columns = Math.max(0, e.viewport?.columns ?? e.props.bodyColumns)
     const rows = Math.max(0, e.viewport?.rows ?? e.props.scroll.bodyRows)
     const lines = layout(state, rows)
+    const notice = async (text: string) => { await update($, pane, s => ({ ...s, actionNotice: text })) }
+    const toggle = async (id: string) => { await update($, pane, s => ({ ...s, openId: s.openId === id ? null : id })) }
     return <Box flexDirection="column">
-      {lines.map(l => <Text color={l.color} bold={l.bold} dimColor={l.dim} wrap="truncate-end">
+      {lines.map((l, i) => l.actions ? <Box key={'actions:' + l.actions.id} flexDirection="row">
+        {l.actions.openable && <Button key={'open:' + l.actions.id} onPress={async () => {
+          try {
+            const result = await $.process.run(['multi-link', 'open', '--app-only', l.actions!.id])
+            await notice(result.exitCode === 0 ? 'opened in app' : result.stderr.trim() || result.stdout.trim() || 'could not open in app')
+          } catch { await notice('could not open in app') }
+        }}><Text>{cut('Open in app', columns)}</Text></Button>}
+        <Button key={'copy:' + l.actions.id} onPress={async press => {
+          try {
+            const result = await $.ui.copy({ text: l.actions!.id, surface: press.surface })
+            await notice(result.isCopied ? 'copied id' : 'could not copy id')
+          } catch { await notice('could not copy id') }
+        }}><Text>{cut('Copy id', columns)}</Text></Button>
+      </Box> : l.segments ? <Box key={l.key} flexDirection="row">
+        {cutSegments(l.segments, columns).map((segment, j) => <Text key={String(j)}
+          color={segment.color} bold={segment.bold ?? l.bold} dimColor={segment.dim} wrap="truncate-end">
+          {segment.text}
+        </Text>)}
+      </Box> : l.id ? <Button key={l.id} plain onPress={() => toggle(l.id!)}>
+        <Text color={l.color} bold={l.bold} dimColor={l.dim} wrap="truncate-end">{cut(l.text, columns)}</Text>
+      </Button> : <Text key={'line:' + i} color={l.color} bold={l.bold} dimColor={l.dim} wrap="truncate-end">
         {cut(l.text, columns)}
       </Text>)}
     </Box>
   })
 }
 
-type Line = { text: string; color?: string; bold?: boolean; dim?: boolean }
-type Group = { name: string; entries: { own: boolean; lines: Line[] }[]; heading: boolean }
+type Segment = { text: string; color?: string; bold?: boolean; dim?: boolean }
+type Line = { text: string; key?: string; segments?: Segment[]; id?: string; detail?: 'asked' | 'said'; actions?: PaneDetails & { id: string }; color?: string; bold?: boolean; dim?: boolean }
+type Group = { name: string; entries: { own: boolean; open: boolean; lines: Line[] }[]; heading: boolean }
+
+function styledLine(key: string, segments: Segment[], bold = false): Line {
+  return { key, text: segments.map(s => s.text).join(''), segments, bold }
+}
+
+// Clip the complete line once, then give each surviving piece its original style.
+function cutSegments(segments: Segment[], columns: number): Segment[] {
+  const clean = segments.map(s => ({ ...s, text: cut(s.text, Infinity) }))
+  const clipped = cut(clean.map(s => s.text).join(''), columns)
+  let offset = 0
+  return clean.map(s => {
+    const text = clipped.slice(offset, offset + s.text.length)
+    offset += s.text.length
+    return { ...s, text }
+  }).filter(s => s.text.length > 0)
+}
 
 function mark(state: string, phrase: string): string {
   return state === 'finished' || phrase.startsWith('done') ? '✓' : '●'
 }
 
-function rowLines(r: PaneRow, ownId: string): Line[] {
+function rowLines(r: PaneRow, ownId: string, openId: string | null): Line[] {
   const own = r.is_this
   const color = colors[r.harness]
   const label = own ? 'this session' : r.label
   const step = r.step && !label.includes(r.step) ? '  ' + r.step : ''
-  const lines: Line[] = [{ text: `${own ? '▌' : ' '}${mark(r.state, r.phrase)} ${label}${step}`, color, bold: own }]
+  const lines: Line[] = [{ id: r.id, text: `${own ? '▌' : ' '}${mark(r.state, r.phrase)} ${label}${step}`, color, bold: own }]
+  const expand = (r: PaneDetails & { id: string }) => {
+    if (r.id === openId) lines.push(
+      { text: '   asked ' + (r.asked ?? '—'), dim: true, detail: 'asked' },
+      { text: '   said  ' + (r.said ?? '—'), dim: true, detail: 'said' },
+      { text: '', actions: r })
+  }
+  expand(r)
   for (const c of r.children.slice(0, own ? 3 : undefined)) {
-    lines.push({ text: `${own ? '▌' : ' '} └ ${c.harness} ${c.id.slice(0, 8)} ${mark(c.state, c.phrase)}${c.match === 'likely' ? ' likely' : ''}${c.id === ownId ? ' · this session' : ''}`, color: colors[c.harness] })
+    lines.push({ id: c.id, text: `${own ? '▌' : ' '} └ ${c.harness} ${c.id.slice(0, 8)} ${mark(c.state, c.phrase)}${c.match === 'likely' ? ' likely' : ''}${c.id === ownId ? ' · this session' : ''}`, color: colors[c.harness] })
+    expand(c)
   }
   if (own && r.children.length > 3) lines.push({ text: `▌  +${r.children.length - 3} runs`, dim: true })
   for (const h of r.handoffs) lines.push({ text: `${own ? '▌' : ' '} └ ${h.outcome}`, dim: true })
@@ -184,60 +275,82 @@ function layout(s: PaneState, height: number): Line[] {
   if (!height) return []
   const data = s.report
   const header: Line = { text: 'multi-link' + (data ? ' · ' + (data.repo.split('/').filter(Boolean).pop() ?? '/') : ''), bold: true }
-  if (!data) {
-    return [header, { text: s.notice || 'reading sessions…', dim: true }].slice(0, height)
-  }
+  if (!data) return [header, { text: s.notice || 'reading sessions…', dim: true }].slice(0, height)
   const groups: Group[] = data.sections.map(section => ({ name: section.name === 'recent' ? 'recent (2h)' : section.name,
-    heading: true, entries: section.rows.map(r => ({ own: r.is_this || r.children.some(c => c.id === data.this), lines: rowLines(r, data.this) })) }))
-  if (!data.seen) groups[0].entries.unshift({ own: true, lines: [{ text: '▌ this session · not seen yet', color: colors.claude, bold: true }] })
+    heading: true, entries: section.rows.map(r => ({
+      own: r.is_this || r.children.some(c => c.id === data.this),
+      open: r.id === s.openId || r.children.some(c => c.id === s.openId),
+      lines: rowLines(r, data.this, s.openId),
+    })) }))
+  if (!data.seen) groups[0].entries.unshift({ own: true, open: false, lines: [{ text: '▌ this session · not seen yet', color: colors.claude, bold: true }] })
+  const allParts = data.strip?.parts ?? []
+  let parts = allParts.slice(-4)
+  const ownPart = allParts.filter(p => p.is_this).at(-1)
+  if (ownPart && !parts.some(p => p.is_this)) parts = [ownPart, ...parts.slice(1)]
+  const stripHeading: Line[] = data.strip ? [styledLine('strip:heading', [
+    { text: 'step ', dim: true },
+    { text: data.strip.step, bold: true },
+    ...(data.strip.title ? [{ text: ' ' + data.strip.title, dim: true }] : []),
+  ])] : []
   const empty = data.sections.every(section => !section.rows.length)
-  const footer: Line = { text: `updated ${Math.max(0, Math.floor((s.now - (s.receivedAt ?? s.now)) / 1000))}s ago${s.notice ? ' · ' + s.notice : ''}`, dim: true }
+  const notice = [s.notice, s.actionNotice].filter(Boolean).join(' · ')
+  const footer: Line = { text: `checked ${Math.max(0, Math.floor((s.now - (s.receivedAt ?? s.now)) / 1000))}s ago${notice ? ' · ' + notice : ''}`, dim: true }
   let dropped = 0
-  const draw = (): Line[] => [header, ...groups.flatMap(g => [
-    ...(g.heading ? [{ text: g.name + ' ─', dim: true }] : []),
-    ...g.entries.flatMap(entry => entry.lines),
-  ]), ...(empty ? [{ text: 'No sessions in this repo in the last 2 h.', dim: true }] : []),
-  ...(dropped ? [{ text: `+${dropped} more`, dim: true }] : []), footer]
-
-  // Empty section labels yield before sessions. Remove whole sessions, never
-  // orphan a child, and count sessions (rows), rather than their drawn lines.
-  for (const g of [...groups].reverse()) {
-    if (draw().length > height && !g.entries.length) g.heading = false
-  }
-  for (const g of [...groups].reverse()) {
+  const draw = (): Line[] => [header, ...stripHeading,
+    ...(allParts.length > parts.length ? [{ text: '+' + (allParts.length - parts.length) + ' earlier', dim: true }] : []),
+    ...parts.map((p, i) => styledLine('strip:part:' + i, [
+      { text: p.is_this ? '▌' : ' ', color: p.is_this ? colors.claude : undefined },
+      { text: p.harness.padEnd(6) + ' ', color: colors[p.harness] },
+      { text: p.kind.padEnd(10) + ' ' },
+      { text: p.status === 'done' ? '✓' : p.status === 'running' ? '●' : p.status === 'waiting' ? '◆' : '·',
+        color: p.status === 'done' ? 'success' : p.status === 'running' || p.status === 'waiting' ? 'warning' : undefined,
+        dim: p.status !== 'done' && p.status !== 'running' && p.status !== 'waiting' },
+      { text: ' ' + p.active_min + 'm', dim: true },
+    ], p.is_this)),
+    ...groups.flatMap(g => [
+      ...(g.heading && g.entries.length ? [{ text: g.name + ' ─', dim: true }] : []),
+      ...g.entries.flatMap(entry => entry.lines),
+    ]), ...(empty ? [{ text: 'No sessions in this repo in the last 2 h.', dim: true }] : []),
+    ...(dropped ? [{ text: `+${dropped} more`, dim: true }] : []), footer]
+  const dropRows = (g: Group, keepOpen: boolean) => {
     for (let i = g.entries.length - 1; i >= 0 && draw().length > height; i--) {
-      if (g.entries[i].own) continue
+      if (g.entries[i].own || (keepOpen && g.entries[i].open)) continue
       g.entries.splice(i, 1)
       dropped++
     }
-    if (!g.entries.length && draw().length > height) g.heading = false
   }
-  for (const g of [...groups].reverse()) {
-    if (draw().length > height) g.heading = false
-  }
-  // At very short sizes the pinned session's children also need a cut. Replace
-  // every omitted child with +N runs; hand-off annotations yield first.
-  for (const g of groups) {
-    for (const entry of g.entries.filter(e => e.own)) {
-      let extra = 0
-      const summary = entry.lines.find(l => /\+\d+ runs$/.test(l.text))
-      if (summary) { extra = Number(summary.text.match(/\+(\d+)/)![1]); entry.lines.splice(entry.lines.indexOf(summary), 1) }
-      while (draw().length + (extra ? 1 : 0) > height && entry.lines.length > 1) {
-        const removed = entry.lines.pop()!
-        if (/ └ (codex|claude) /.test(removed.text)) extra++
-      }
-      if (extra) entry.lines.push({ text: `▌  +${extra} runs`, dim: true })
+  dropRows(groups[2], true)
+  dropRows(groups[1], true)
+  while (draw().length > height && parts.length) parts.shift()
+  for (const detail of ['said', 'asked']) {
+    for (const g of groups) for (const entry of g.entries) {
+      if (draw().length > height) entry.lines = entry.lines.filter(l => l.detail !== detail)
     }
   }
-  for (const g of [...groups].reverse()) {
-    if (draw().length > height) g.heading = false
+  dropRows(groups[0], true)
+  // An open row and its actions yield only after the working rows.
+  for (const g of [...groups].reverse()) dropRows(g, false)
+  // Section headings yield before the pinned row's children.
+  for (const g of [...groups].reverse()) if (draw().length > height) g.heading = false
+  for (const g of groups) for (const entry of g.entries.filter(e => e.own)) {
+    let extra = 0
+    const summary = entry.lines.find(l => /\+\d+ runs$/.test(l.text))
+    if (summary) { extra = Number(summary.text.match(/\+(\d+)/)![1]); entry.lines.splice(entry.lines.indexOf(summary), 1) }
+    while (draw().length + (extra ? 1 : 0) > height && entry.lines.length > 1) {
+      const removable = entry.lines.findLastIndex((l, i) => i > 0 && !l.actions
+        && !l.detail && l.id !== s.openId && l.id !== data.this)
+      if (removable < 0) break
+      const [removed] = entry.lines.splice(removable, 1)
+      if (removed.id) extra++
+    }
+    if (extra) entry.lines.push({ text: `▌  +${extra} runs`, dim: true })
   }
   const lines = draw()
   if (lines.length <= height) return lines
-  // Degenerate viewports cannot hold all pins. Keep the footer and, if room,
-  // the header and this session before any overflow annotation.
   const own = groups.flatMap(g => g.entries).find(e => e.own)?.lines[0]
-  return height === 1 ? [footer] : [header, ...(own && height > 2 ? [own] : []), ...lines.slice(1).filter(l => l !== own && l !== footer).slice(0, Math.max(0, height - (own && height > 2 ? 3 : 2))), footer]
+  const pins = [header, ...stripHeading, ...(own ? [own] : []), footer]
+  if (pins.length >= height) return height === 1 ? [footer] : [...pins.slice(0, height - 1), footer]
+  return [...pins.slice(0, -1), ...lines.filter(l => !pins.includes(l)).slice(0, height - pins.length), footer]
 }
 
 // Cut in terminal cells, keeping wide characters and combining marks together.

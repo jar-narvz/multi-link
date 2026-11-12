@@ -3,5 +3,13 @@
   "version": "0.1.0",
   "author": { "name": "Jared Narvaez" },
   "description": "Sessions in this repo, beside Claude Code",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "notify": {
+      "type": "boolean",
+      "title": "Codex completion notifications",
+      "description": "Show the first 120 characters of the final message in macOS Notification Center.",
+      "default": true
+    }
+  }
 }

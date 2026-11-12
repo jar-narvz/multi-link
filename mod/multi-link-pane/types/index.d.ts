@@ -1,11 +1,16 @@
-export type PaneChild = {
+export type PaneDetails = {
+  asked: string | null
+  said: string | null
+  openable: boolean
+}
+export type PaneChild = PaneDetails & {
   id: string
   harness: 'claude' | 'codex'
   state: string
   phrase: string
   match: 'exact' | 'likely'
 }
-export type PaneRow = {
+export type PaneRow = PaneDetails & {
   id: string
   harness: 'claude' | 'codex'
   label: string
@@ -22,9 +27,19 @@ export type PaneReport = {
   now: string
   this: string
   seen: boolean
+  strip: { step: string; title: string | null; parts: PanePart[] } | null
   sections: { name: 'working' | 'waiting' | 'recent'; rows: PaneRow[] }[]
 }
+export type PanePart = {
+  harness: 'claude' | 'codex'
+  kind: string
+  status: 'done' | 'running' | 'waiting' | 'stale' | null
+  active_min: number
+  is_this: boolean
+}
 export type PaneState = {
+  openId: string | null
+  actionNotice: string
   report: PaneReport | null
   receivedAt: number | null
   now: number
