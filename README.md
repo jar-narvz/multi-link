@@ -231,8 +231,13 @@ checked 0s ago
   `codex finished (<step>)` with the first 120 characters of its final message. It fires once per hand-off, even with
   several panes open (each run leaves a marker file in `~/.multi-link/notified/`). It is only for runs the pane saw
   finish; a run already finished when the pane started is not announced. The text shows on screen, so turn it off
-  with the mod's `notify` option if others can see your screen. macOS may credit the notification to Script Editor
-  (it is sent by `osascript`).
+  with the mod's `notify` option if others can see your screen. macOS credits it to **Script Editor** (it is sent by
+  `osascript`), and drops it silently until Script Editor has been allowed once. To allow it, run this, press Run ▶
+  in Script Editor, click Allow, and check that System Settings → Notifications → Script Editor uses Banners:
+
+  ```bash
+  osascript -e 'tell application "Script Editor" to activate' -e 'tell application "Script Editor" to make new document with properties {contents:"display notification \"Notifications are on\" with title \"multi-link\""}'
+  ```
 - **How it gets data:** the mod starts one `multi-link pane --json --watch --notify` per session. That process keeps
   its cache warm, prints a line when something changes and a short "checked" line every 3 s, so the footer counts
   from the last check. In the real check each 3 s refresh cost 195–219 ms of CPU, and the pane had data 3.6–4.6 s
@@ -381,8 +386,8 @@ state rules.
 
 - The Claude Code pane (Releases 1.13–1.14) relies on Claude Code's mod API (checked on 2.1.322). It was checked for
   real in the terminal and in the Claude desktop app on macOS. It needs `multi-link` on the `PATH` that Claude Code
-  sees. Notifications are macOS only. Pressing a row is covered by the mod's test kit and the owner's desktop check
-  (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
+  sees. Notifications are macOS only. Pressing a row was checked by the mod's test kit and by the owner in the desktop
+  app (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
   has no theme background colour). Pane data took 3.6–4.6 s from launch in the Phase 17 check, slower than Phase 16,
   because the first refresh also builds the strip and reads linked Codex rollouts.
 

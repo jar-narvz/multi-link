@@ -83,4 +83,19 @@ Claude made both edits; Codex reviewed them read-only ("Clean — no findings").
 
 ## Owner check (stop and ask)
 
-Pending.
+2026-11-11, Claude desktop app, after installing 1.14 (`cargo install --path crates/cli --locked`) and restarting:
+
+- **Strip and row actions:** the owner's screenshot (7:05 PM) shows this repo's pane with `step 17.4 Real check,
+  README, owner confirm (Claude)`, the parts `▌claude plan ✓ 5m`, ` codex implement ✓ 1m`, `▌claude verify + commit
+  · 1m`, this session's row opened (`asked …`, `said —`, `Open in app`, `Copy id`) and the footer `checked 0s ago ·
+  copied id`. The desktop app draws the buttons as native buttons.
+- **Notification:** the first two test hand-offs (one synthetic `codex exec` from the coordinator session each) were
+  claimed by the pane's watcher (a new marker each) but showed nothing. macOS credits `osascript` notifications to
+  Script Editor, which had never asked for permission, so macOS dropped them silently and Script Editor was not in
+  the Notifications list. The owner opened Script Editor, ran a one-line `display notification` script and clicked
+  Allow. The third test still showed nothing; after the owner checked the macOS notification settings, the fourth
+  test showed both a direct `osascript` banner and **`codex finished (17.4)`** from the pane. Owner: "Saw both".
+- Markers: one new file in `~/.multi-link/notified/` per test hand-off (2 → 6 over four tests), one notification per
+  hand-off.
+
+Phase 17 is closed.

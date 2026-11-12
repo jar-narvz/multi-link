@@ -1,11 +1,9 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 17: Step 17.4 is waiting for the owner's desktop check (stop and ask).** Real PTY check done
-(`docs/phase17-check.md`): two panes, one Codex hand-off → exactly one notification, one marker; strip as board 17
-S1; tick CPU 195 ms; two mod fixes (pane size from the pane body, old binary says "too old"). README updated. Next:
-the owner installs 1.14, restarts the desktop app and checks the strip, a row press and the notification; then record
-the answer in `docs/phase17-check.md`, the README limitation line and here, and close Phase 17.
+**Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
+opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
+Script Editor allowed once for `osascript` notifications (README). Nothing is planned next; backlog in PLAN.md.
 
 **Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
 [--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
@@ -835,6 +833,9 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and the first pass now also builds the strip and reads linked rollouts), recorded as a limitation. Owner check:
   pending.
 - Review: Claude's edit reviewed by Codex (read-only): "Clean—no findings in the `mod/` diff."
+- Owner check (2026-11-11): screenshot of the desktop pane showing the strip, an open row and `copied id`; the
+  notification needed Script Editor allowed once in macOS (first three test hand-offs claimed but not shown, macOS
+  dropped them); the fourth showed `codex finished (17.4)`. Owner: "Saw both". Phase 17 closed.
 - Gotchas: Claude Code's trust prompt defaults to "No, exit"; an arrow key sent as one escape sequence right after
   launch can read as Esc. Trust the sandbox folder once. `e.viewport` in `ui.render` is the screen, not the pane.
 
