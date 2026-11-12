@@ -1350,3 +1350,41 @@ Real facts (18.0, 2026-11-12, this Mac, sandbox `repo-p17`): `claude` started in
 `not found`. No Automation prompt appeared (the caller was already allowed); the -1743 text is from Apple's
 `errAEEventNotPermitted` and is still to be seen live (18.4).
 
+
+## Phase 19 decisions
+
+Step 19.0, 2026-11-12. PLAN.md Phase 19 M1–M5, pinned. Keys: `fixtures/expected/menubar/` (`multi-repo.json`,
+`waiting-quiet.json`, `open-actions.json`, `watch-codex-done.jsonl`, `check.sh`). Fixture roots are the existing
+`sessions-phase14`, `sessions-phase9` and `sessions-phase18`; no new fixtures were needed.
+
+| Id | Pin |
+| --- | --- |
+| M1 report | One JSON object per line: `{"v":1,"now","waiting","running","repos":[…]}`. `now` as the pane prints it. Flags as `pane`: `--root`, `--now`, `--json`, `--watch`, `--notify`; no `--cwd` or `--session` (no "this session"). |
+| M1 repos | Every Session `repo` (from `sessions --since all`) whose pane, run for that repo with a session id that matches nothing, has at least one row. So the pane's visibility rule decides (activity in 2 h, or `waiting` / `stale` at any age, never imported). Each: `repo`, `name` (last path part), `tier`, `last_activity`, `step`, `rows`. |
+| M1 order | Overview's RepoGroup order applied to the shown sessions (rows and children): `tier` `waiting` if any is `waiting`, else `busy` if any is `busy`, else `other` (`stale` is `other`); then `last_activity` (greatest of the shown sessions) descending; then `repo` ascending. |
+| M1 rows | The pane's rows for that repo, flattened in section order (`working`, `waiting`, `recent`), each with `section` first and `is_this` removed; everything else (children, `openable`, `opens`, `match`, `handoffs`) byte-for-byte the pane's. |
+| M1 step | From the repo's rows in order: the distinct non-null `step` of top-level rows whose `state` is `busy`, `waiting` or `stale`. None → `null`; else `{"id": first, "title": <its PLAN.md title at repo/PLAN.md, or null>, "more": count − 1}`. (Revised from "overview `active_steps`": that field is empty for a quiet waiting repo outside the window, and has no order.) Fixtures have no PLAN.md, so every key's `title` is null; 19.1 tests a title with a temp repo. |
+| M1 counts | `waiting` = Claude rows and children (any repo) with `state` `waiting` or `stale`. `running` = any row or child `busy`. |
+| M2 events | The pane's event line, unchanged: `{"v":1,"event":{"kind":"codex_done","run","id","step","said"}}` (`run` = invocation, the marker key; `id` = Codex session; `said` cut to 120 characters). One contract for both watchers; the app builds the title `codex finished (<step>)` (or `codex finished` when `step` is null) and the body from `said`, as the mod does. Two hand-offs to one Codex session give two events (`watch-codex-done.jsonl`, runs `toolu_watch_a` / `toolu_watch_b`). |
+| M2 lock | `~/.multi-link/menubar.lock` (in the home the watcher reads; `<root>/.multi-link/…` in fixture mode). The pane watcher with `--notify` tests it with a non-blocking `flock(LOCK_EX)` right before `claim`: if another process holds it, skip the claim and the event for that run (the run stays unclaimed); else unlock at once and claim as today. The menubar watcher never checks the lock (it is the app's own watcher). |
+| M3 signing | `codesign --force --sign - -r='designated => identifier "dev.multi-link.menubar"'`. With a plain ad-hoc signature the designated requirement is the code hash, and macOS ties the notification permission to it, so every rebuild loses the permission. Pinning the requirement to the bundle id keeps it (fact below). |
+| M3 permission | Don't trust `requestAuthorization`'s first callback: on this Mac it returned `false` ("Notifications are not allowed") the moment the owner clicked Allow, and the banner still showed. The app treats `getNotificationSettings().alertSetting == .enabled` as "can deliver", re-read at launch, when the popover opens and every 60 s. That value drives the M2 lock. |
+| M3 sandbox | Codex builds Swift with `--add-dir "$HOME/.cache/clang" --add-dir "$HOME/Library/Caches/org.swift.swiftpm" --add-dir "$HOME/Library/org.swift.swiftpm"` and `swift build --disable-sandbox` / `swift test --disable-sandbox` (SwiftPM's own `sandbox-exec` can't nest in Codex's sandbox). |
+| M4 first jump | The app's first terminal jump shows macOS's "allow multi-link to control Terminal" prompt while `osascript` waits; the CLI kills `osascript` after 5 s. A slow click then fails with `osascript timed out after 5 s`. The app's footer adds "if macOS asked for permission, try again" to that one message; the CLI is unchanged. |
+
+Real facts (19.0, 2026-11-12, this Mac, macOS 15.7.3, Swift 6.2.4, scratch spikes; owner answers quoted):
+- A SwiftPM executable wrapped as an `.app` (`LSUIElement`, bundle id, `LSMinimumSystemVersion` 15.0,
+  `NSAppleEventsUsageDescription`), signed ad hoc, passed `codesign --verify --strict` and showed its `MenuBarExtra`.
+- Launched from `/private/tmp/…`, notifications were refused with no prompt (`UNErrorDomain` 1). Copied to
+  `~/multi-link-sandbox/` and launched with `open`, macOS asked; owner: "Allowed, saw banner" (title, body, sound
+  with the `[.banner, .sound]` foreground delegate). So `build.sh` must not run the app from a temp folder.
+- Plain ad-hoc rebuild (new code hash): `authorizationStatus` denied, `add` returned no error, owner: "No banners".
+  `com.apple.ncprefs` showed one requirement entry per code hash.
+- With `-r='designated => identifier "…"'`: first launch prompt, owner "Allowed, saw B1"; after a rebuild with a new
+  code hash, `authorizationStatus` 2 (authorized), `requestAuthorization` true, owner "Yes, B2 showed".
+- From inside the app: `multi-link open --no-resume <id>` (binary path containing a space) printed `jumped to
+  Terminal · window 2 · tab 1 (ttys006)`, exit 0, after macOS asked to let the app control Terminal (owner: "Prompt,
+  I allowed"). `osascript -e 'on run argv' -e 'tell application "Terminal" to do script (item 1 of argv)' …` with the
+  single-quoted path plus ` tui` opened Terminal running the TUI.
+- `flock(LOCK_EX|LOCK_NB)` on a file opened `O_CREAT|O_RDWR|O_CLOEXEC`: held while the app ran (a second process got
+  `EWOULDBLOCK`), not visible in its child's open files (`lsof`), free right after `pkill`.

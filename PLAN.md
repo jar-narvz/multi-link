@@ -3020,15 +3020,15 @@ Decisions (revised after the Codex critique, Review log 2026-11-12):
   `tier` waiting, busy, other; then `last_activity` descending; then `repo`), and within a repo the pane's row order.
   Each repo has `repo` (path), `name` (last path part), `step` and `rows[]` (the pane's row shape: label, state
   words, `openable`, `opens`, children for hand-offs; no `▌`, since the app has no "this session"). **Step header:**
-  from the overview's `active_steps`: none → `null`; one → `{id, title}` (title from PLAN.md, null if not found);
-  several → the newest by its latest hand-off `at`, plus `more: N`. Top-level `waiting` (waiting + stale Claude
+  from the repo's active rows (pinned in 19.0, design "Phase 19 decisions" M1 step): none → `null`; else the first
+  row's step `{id, title, more}` (title from PLAN.md, null if not found). Top-level `waiting` (waiting + stale Claude
   sessions shown, I1) and `running` (any `busy` session shown). Labels, states and order come from Rust so the app
   holds no state rules (Phase 16's reason: one place for the rules, checked by Rust tests and answer keys).
   `--watch` keeps one warm `Scanner`, prints a report when it changes and `{"v":1,"tick":…}` every 3 s, like
   `pane --watch`; errors as `{"v":1,"error":…}`.
 - **M2 Notifications move to the app, with a lock that only means "the app is delivering".**
-  `menubar --watch --notify` prints `{"v":1,"notify":{"run","session","step","title","body"}}` (`run` = the hand-off
-  invocation, the marker's key; Phase 17's text) after claiming the marker in `~/.multi-link/notified/` (existing
+  `menubar --watch --notify` prints the pane's own event line `{"v":1,"event":{"kind":"codex_done","run","id","step",
+  "said"}}` (`run` = the hand-off invocation, the marker's key; the app builds Phase 17's text; pinned in 19.0) after claiming the marker in `~/.multi-link/notified/` (existing
   `MarkerStore`: first claimer owns the hand-off, so each fires once, even for two hand-offs to one Codex session).
   The app holds an advisory `flock` on `~/.multi-link/menubar.lock` **only while** notification permission is granted
   **and** its watcher is healthy (a line within the last 10 s); it releases the lock when either stops, so a denied

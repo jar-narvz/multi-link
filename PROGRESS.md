@@ -1,6 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.0 is committed (Claude, 2026-11-12).
+Next: Step 19.1 (`multi-link menubar`, Codex).**
+- Keys: `fixtures/expected/menubar/` (`check.sh` exits 2 "menubar subcommand missing" until 19.1). Pins: design
+  "Phase 19 decisions". The watch key reuses the pane's event line, unchanged.
+- For 19.2/19.3: Codex builds Swift with the extra `--add-dir`s and `--disable-sandbox` (design M3 sandbox); sign
+  with a bundle-id designated requirement or every rebuild loses notification permission; don't trust the first
+  `requestAuthorization` callback; never launch the app from a temp folder.
+- Bundle id `dev.multi-link.menubar`. macOS already has notification entries for the spike ids
+  `dev.multi-link.spike19` / `spike19b` (harmless; the owner can remove them in System Settings → Notifications).
+
 **Phase 18: Step 18.4 is done; the owner check is pending (Claude, 2026-11-12).** `multi-link open`, the TUI's `o`
 and the pane's `Jump to terminal` bring a running Claude session's Terminal.app / iTerm2 tab to the front (board 18 J1).
 - Checked live with Terminal.app: the CLI and the TUI `o` jumped to the right tab from another front window; the real
@@ -826,6 +836,23 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 19.0: Facts on this Mac, design pins, answer keys — Claude
+- Did: Scratch spikes (never committed) of an ad-hoc signed SwiftPM `MenuBarExtra` app: notifications, rebuild
+  behaviour, signing requirement, terminal jump and Open TUI from inside the app, `flock`, and Swift in the Codex
+  sandbox. Owner answers: "Allowed, saw banner", "No banners" (plain ad-hoc rebuild), "Allowed, saw B1", "Yes, B2
+  showed" (bundle-id requirement), "Prompt, I allowed" (Automation). Pinned M1–M4 in design "Phase 19 decisions";
+  aligned PLAN M1 (step rule) and M2 (reuse the pane's event line). Keys generated from today's `pane` and `sessions`
+  output by a scratch generator (`p190/gen19.py`), so the menubar rows match the pane's byte for byte.
+- Changed: `docs/design.md`, `PLAN.md`, `fixtures/expected/menubar/{multi-repo,waiting-quiet,open-actions}.json`,
+  `fixtures/expected/menubar/watch-codex-done.jsonl`, `fixtures/expected/menubar/check.sh`, `PROGRESS.md`.
+- Verify: `fixtures/expected/menubar/check.sh` → `menubar subcommand missing`, exit 2 (expected: keys ahead of code).
+  No Rust code changed since the Step 18.4 run (730 passed / 0 failed / 1 ignored). Spike commands and outputs are in
+  design "Phase 19 decisions" → Real facts.
+- Review: Claude's own step; the Codex plan critique (10 findings, all accepted) is in the PLAN Review log.
+- Gotchas: Codex's `swift build` fails without `--disable-sandbox` (`sandbox-exec: sandbox_apply`) and the three
+  cache `--add-dir`s; `codex exec -C <scratch>` needs `--skip-git-repo-check`. Notifications from an app in
+  `/private/tmp` are refused with no prompt.
 
 ### 2026-11-12 — Step 18.4: Real check, README (owner confirm pending) — Claude
 - Did: Real checks on Terminal.app in `~/multi-link-sandbox/repo-p17`: the CLI jump and the TUI `o` (PTY harness,

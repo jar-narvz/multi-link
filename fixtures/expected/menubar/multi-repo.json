@@ -1,0 +1,364 @@
+{
+  "v": 1,
+  "now": "2026-11-10T22:20:00.000Z",
+  "waiting": 1,
+  "running": true,
+  "repos": [
+    {
+      "repo": "/home/dev/repo-n",
+      "name": "repo-n",
+      "tier": "waiting",
+      "last_activity": "2026-11-10T22:11:31.000Z",
+      "step": {
+        "id": "4.1",
+        "title": null,
+        "more": 0
+      },
+      "rows": [
+        {
+          "section": "waiting",
+          "id": "14130000-0000-4000-8000-000000001413",
+          "harness": "claude",
+          "label": "step 4.1",
+          "step": "4.1",
+          "state": "waiting",
+          "phrase": "waiting on you · since 10:12pm",
+          "asked": "Finish step 4.1 and hand the tests to codex",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "14230000-0000-4000-8000-000000001423",
+              "harness": "codex",
+              "state": "unknown",
+              "phrase": "done 9:49pm",
+              "asked": "Read AGENTS.md, then do Step 4.1 in PLAN.md. Write the parser tests.",
+              "said": "<said>",
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-m",
+      "name": "repo-m",
+      "tier": "busy",
+      "last_activity": "2026-11-10T22:19:40.000Z",
+      "step": {
+        "id": "2.4",
+        "title": null,
+        "more": 2
+      },
+      "rows": [
+        {
+          "section": "working",
+          "id": "14120000-0000-4000-8000-000000001412",
+          "harness": "claude",
+          "label": "step 2.4",
+          "step": "2.4",
+          "state": "busy",
+          "phrase": "working now · for 28 min",
+          "asked": "add the feed rows, then hand step 2.4 to codex",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "14220000-0000-4000-8000-000000001422",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 12 min",
+              "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
+              "said": null,
+              "openable": false,
+              "opens": null,
+              "match": "likely"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "section": "working",
+          "id": "14110000-0000-4000-8000-000000001411",
+          "harness": "claude",
+          "label": "step 2.3",
+          "step": "2.3",
+          "state": "busy",
+          "phrase": "working now · for 35 min",
+          "asked": "pick up step 2.3 where the last session stopped",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "14210000-0000-4000-8000-000000001421",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 9 min",
+              "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
+              "said": "<said>",
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "section": "working",
+          "id": "14160000-0000-4000-8000-000000001416",
+          "harness": "claude",
+          "label": "step 2.5",
+          "step": "2.5",
+          "state": "busy",
+          "phrase": "working now · for 20 min",
+          "asked": "split step 2.5 and 2.6 between two codex runs",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "14280000-0000-4000-8000-000000001428",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 49 min",
+              "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
+              "said": null,
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            },
+            {
+              "id": "14290000-0000-4000-8000-000000001429",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 47 min",
+              "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
+              "said": "<said>",
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "14170000-0000-4000-8000-000000001417",
+          "harness": "claude",
+          "label": "step 2.3",
+          "step": "2.3",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "start step 2.3 with codex",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "14180000-0000-4000-8000-000000001418",
+          "harness": "claude",
+          "label": "step 2.5",
+          "step": "2.5",
+          "state": "idle",
+          "phrase": "idle · last active 47 min ago",
+          "asked": "nudge the step 2.5 run",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-q",
+      "name": "repo-q",
+      "tier": "busy",
+      "last_activity": "2026-11-10T22:19:11.000Z",
+      "step": {
+        "id": "3.2",
+        "title": null,
+        "more": 0
+      },
+      "rows": [
+        {
+          "section": "working",
+          "id": "14270000-0000-4000-8000-000000001427",
+          "harness": "codex",
+          "label": "step 3.2",
+          "step": "3.2",
+          "state": "busy",
+          "phrase": "working now · for 54 min",
+          "asked": "Read AGENTS.md, then do Step 3.2 in PLAN.md.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p",
+      "name": "repo-p",
+      "tier": "busy",
+      "last_activity": "2026-11-10T22:19:00.000Z",
+      "step": {
+        "id": "3.2",
+        "title": null,
+        "more": 0
+      },
+      "rows": [
+        {
+          "section": "working",
+          "id": "14150000-0000-4000-8000-000000001415",
+          "harness": "claude",
+          "label": "step 3.2",
+          "step": "3.2",
+          "state": "busy",
+          "phrase": "working now · for 22 min",
+          "asked": "run the three road checks in parallel with codex",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "14260000-0000-4000-8000-000000001426",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 59 min",
+              "asked": "Read AGENTS.md, then do Step 3.1 in PLAN.md.",
+              "said": null,
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            },
+            {
+              "id": "14250000-0000-4000-8000-000000001425",
+              "harness": "codex",
+              "state": "busy",
+              "phrase": "working now · for 120 min",
+              "asked": "Read AGENTS.md, then do Step 3.0 in PLAN.md.",
+              "said": null,
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        },
+        {
+          "section": "waiting",
+          "id": "14240000-0000-4000-8000-000000001424",
+          "harness": "codex",
+          "label": "“run the roads checks by hand”",
+          "step": null,
+          "state": "stale",
+          "phrase": "stale since 9:50pm",
+          "asked": "run the roads checks by hand",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r",
+      "name": "repo-r",
+      "tier": "other",
+      "last_activity": "2026-11-10T22:02:00.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "142e0000-0000-4000-8000-00000000142e",
+          "harness": "codex",
+          "label": "“check the bridge script”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "done 10:02pm",
+          "asked": "check the bridge script",
+          "said": "<said>",
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "142d0000-0000-4000-8000-00000000142d",
+          "harness": "codex",
+          "label": "“try the bridge check again”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "done 10:01pm",
+          "asked": "try the bridge check again",
+          "said": "<said>",
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "141a0000-0000-4000-8000-00000000141a",
+          "harness": "claude",
+          "label": "step 5.1",
+          "step": "5.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "try step 5.1 on codex",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": [
+            {
+              "step": null,
+              "outcome": "2 possible runs",
+              "candidates": [
+                "142d0000-0000-4000-8000-00000000142d",
+                "142e0000-0000-4000-8000-00000000142e"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-s",
+      "name": "repo-s",
+      "tier": "other",
+      "last_activity": "2026-11-10T21:10:00.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "142a0000-0000-4000-8000-00000000142a",
+          "harness": "codex",
+          "label": "“summarise the survey notes”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "done 9:10pm",
+          "asked": "summarise the survey notes",
+          "said": "<said>",
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}
