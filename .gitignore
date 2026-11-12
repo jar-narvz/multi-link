@@ -12,3 +12,7 @@ target/
 
 # Logs
 *.log
+
+# Swift menu-bar app
+apps/menubar/.build/
+apps/menubar/build/

@@ -2,13 +2,18 @@
 
 ## Current state
 **Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.1 is committed (Codex, reviewed by
-Claude, 2026-11-12). Next: Step 19.2 (the Swift package, Codex).**
+Claude, 2026-11-12). Step 19.2 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 19.3 (popover,
+icon, actions, notifications, app bundle; Codex).**
+- Swift core: typed reports/events, byte-buffered NDJSON, binary lookup, process supervision and delivery lock;
+  release build passes and all 10 Swift tests pass after Review round 1. No UI yet; 19.3 follows review.
 - `multi-link menubar --json [--watch] [--notify]` prints the M1 report (rows are the pane's, flattened) and the
   pane's `codex_done` event lines; the pane watcher skips its claim while `~/.multi-link/menubar.lock` is held.
 - Warm watch tick on real `~`: 208 / 211 ms CPU per 3 s tick (two 30 s samples; first report 2.87 s).
 - Known limit: completions are scanned only for repos with a session active in the last 2 h, so a Codex run that
   finishes after both it and its Claude parent were quiet for 2 h is not announced.
-- The app should retry taking the lock for a few seconds: a pane watcher probes it briefly before each claim.
+- The Swift app retries the delivery lock every 2 s while permission and watcher health permit ownership;
+  a pane watcher probes it briefly before each claim. Permission uses notification settings alertSetting, never
+  the requestAuthorization callback; tests inject permission without touching UNUserNotificationCenter.
 - Keys: `fixtures/expected/menubar/` (`check.sh` exits 0 after 19.1). Pins: design
   "Phase 19 decisions". The watch key reuses the pane's event line, unchanged.
 - For 19.2/19.3: Codex builds Swift with the extra `--add-dir`s and `--disable-sandbox` (design M3 sandbox); sign
@@ -842,6 +847,113 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 19.2: Review round 1 — Codex
+- Did: Fixed Claude's health finding: decodable lines, including scan errors, refresh watcher health;
+  malformed lines neither refresh nor clear it. Too-old output, child exit and 10 s of silence still lose
+  health. Errors still reach the model. Added a parameterized regression using a live fake child, checking
+  error/malformed dispatch, uninterrupted delivery ownership, a competing lock probe, and unchanged child-start
+  records after each transient line (only the initial startup rotation is allowed).
+- Changed: `apps/menubar/Sources/MenubarCore/Watcher.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift`, `PROGRESS.md`.
+- Verify: Before the fix, `swift test --disable-sandbox --package-path apps/menubar
+  --filter transientScanOutputKeepsDeliveryAndChild` → exit 1, actual decisive output:
+  ```text
+  ✘ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases failed after 0.813 seconds with 4 issues.
+  ✘ Test run with 1 test in 0 suites failed after 0.813 seconds with 4 issues.
+  ```
+  Both error and malformed cases failed delivery-history and child-start assertions.
+  After the fix, the same command → exit 0, actual decisive output:
+  ```text
+  ✔ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases passed after 0.636 seconds.
+  ✔ Test run with 1 test in 0 suites passed after 0.637 seconds.
+  ```
+  In `apps/menubar`, `swift build -c release --disable-sandbox` → exit 0, actual output:
+  ```text
+  [0/1] Planning build
+  Building for production...
+  [0/3] Write sources
+  [1/3] Write swift-version--58304C5D6DBC2206.txt
+  [3/4] Compiling MenubarCore BinaryLookup.swift
+  [4/5] Compiling MenubarApp App.swift
+  [4/6] Write Objects.LinkFileList
+  [5/6] Linking multi-link-menubar
+  Build complete! (2.41s)
+  ```
+  `swift test --disable-sandbox` → exit 0, actual final output:
+  ```text
+  ✔ Test modelKeepsLastReportOnErrors() passed after 0.001 seconds.
+  ✔ Test deliveryLockRequiresPermissionAndHealthAndRetries() passed after 0.003 seconds.
+  ✔ Test lookupOrderAndNotFound() passed after 0.431 seconds.
+  ✔ Test fixtureContractAndByteFraming() passed after 0.431 seconds.
+  ✔ Test injectedPermissionControlsDeliveryAndQuitReleasesLock() passed after 0.772 seconds.
+  ✔ Test unexpectedExitReleasesDeliveryDuringBackoff() passed after 0.978 seconds.
+  ✔ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases passed after 1.111 seconds.
+  ✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 1.179 seconds.
+  ✔ Test watcherDrainsStderrRestartsWithBackoffAndQuits() passed after 1.409 seconds.
+  ✔ Test secondInstanceCannotClaimAndTakesOverAfterQuit() passed after 3.021 seconds.
+  ✔ Test run with 10 tests in 0 suites passed after 3.021 seconds.
+  ```
+- Review (Claude, 2026-11-12): re-review clean. Re-ran `swift build -c release` and `swift test` in `apps/menubar`
+  (outside the sandbox): build complete, 10 tests passed.
+- Gotchas: Accepted gap: after the lock is taken, the --notify child's first pass is a baseline, so a completion
+  in those few seconds at startup or after a permission change is not announced.
+
+### 2026-11-12 — Step 19.2: The Swift package: model, watcher, binary lookup, lock — Codex
+- Did: Added a dependency-free Swift 6.2 package targeting macOS 15, a minimal executable, and a core library.
+  Decodes the shared report/row/child/handoff/event contract; buffers raw bytes to newlines and dispatches reports,
+  ticks, errors and completion events; unknown versions show too old, malformed lines fail soft. Observable UI
+  state is main-actor isolated and retains the last report on errors. Lookup tries the saved path, cargo, Homebrew
+  and local bin in order and returns the complete attempted list on failure. Actor-owned Process supervision runs
+  off the main actor, continuously drains both pipes, bounds retained stderr, retries exits with exponential
+  1–30 s backoff, recognizes old-subcommand diagnostics and never restarts after Quit.
+  Permission is injectable; the real adapter reads alertSetting == .enabled at launch, explicit refresh (for the
+  future popover), and every 60 s. Delivery requires permission plus a line within 10 s. The lock uses
+  O_CREAT|O_RDWR|O_CLOEXEC and LOCK_EX|LOCK_NB, retries contention every 2 s, and releases on permission/health
+  loss, unexpected exit/backoff, incompatible output or Quit. Only the owning instance runs with --notify, so
+  denied/second instances do not consume permanent notification markers. Delivery changes rotate the watcher.
+- Changed: `.gitignore`, `apps/menubar/Package.swift`, `apps/menubar/Sources/MenubarApp/App.swift`,
+  `apps/menubar/Sources/MenubarCore/{Model,BinaryLookup,DeliveryLock,Watcher}.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift`, `PROGRESS.md`.
+- Verify: In `apps/menubar`, `swift build -c release --disable-sandbox` → exit 0, actual output:
+  ```text
+  Building for production...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  [4/6] Compiling MenubarCore BinaryLookup.swift
+  [5/7] Compiling MenubarApp App.swift
+  [5/7] Write Objects.LinkFileList
+  [6/7] Linking multi-link-menubar
+  Build complete! (4.28s)
+  ```
+  `swift test --disable-sandbox` → exit 0, actual final output (Swift Testing cases, after the empty XCTest wrapper):
+  ```text
+  ✔ Test modelKeepsLastReportOnErrors() passed after 0.001 seconds.
+  ✔ Test deliveryLockRequiresPermissionAndHealthAndRetries() passed after 0.003 seconds.
+  ✔ Test lookupOrderAndNotFound() passed after 0.321 seconds.
+  ✔ Test fixtureContractAndByteFraming() passed after 0.321 seconds.
+  ✔ Test injectedPermissionControlsDeliveryAndQuitReleasesLock() passed after 0.352 seconds.
+  ✔ Test unexpectedExitReleasesDeliveryDuringBackoff() passed after 0.433 seconds.
+  ✔ Test watcherDrainsStderrRestartsWithBackoffAndQuits() passed after 1.143 seconds.
+  ✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 1.875 seconds.
+  ✔ Test secondInstanceCannotClaimAndTakesOverAfterQuit() passed after 2.834 seconds.
+  ✔ Test run with 9 tests in 0 suites passed after 2.835 seconds.
+  ```
+  `git diff --check` → no output, exit 0. `git check-ignore apps/menubar/.build/x apps/menubar/build/x` →
+  ```text
+  apps/menubar/.build/x
+  apps/menubar/build/x
+  ```
+- Review (Claude, 2026-11-12): one finding, an `error` line cleared health, so one transient scan error dropped the
+  lock and cold-restarted the child twice; fixed in Review round 1. Accepted: the `--notify` child's first pass after
+  the lock is taken is a baseline (a few seconds without announcements). PLAN.md and unrelated files untouched.
+- Gotchas: Initial test compilation failed on the absent implementation; subsequent runs exposed a fixture-path
+  error, Swift Testing's mutating-call macro limitation, and Foundation read(upToCount:) waiting to fill pipe
+  reads (4 test issues). Corrected the path/assertions and used POSIX reads; final suite is green. Tests use temp
+  scripts/files and fake permission only, with no live agent data or real notification center. Deliberate watcher
+  rotations when delivery changes establish a new notification baseline, so the existing restart loss limitation
+  applies to those transitions too. No views, notification posting, app bundle, signing or real app launch in this
+  step; the minimal executable exits immediately. Those remain for 19.3.
 
 ### 2026-11-12 — Step 19.1: Review round 1 — Codex
 - Did: Addressed Claude's blocking performance finding by filtering the all-time sessions before expensive
