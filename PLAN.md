@@ -2880,10 +2880,144 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 - Files: `docs/phase17-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
 
+### Phase 18 — Jump to a running terminal session's own tab (Release 1.15)
+Need (owner, 2026-11-12, backlog "tmux / Herdr jump"): "when a Claude session I started in a terminal is still
+running, take me to it instead of telling me it's unavailable." Today `open` on a running Claude session without an
+app link answers `unavailable` (`running_without_app_link`) with `claude --resume <id>`, which would start a second
+copy. Owner's choices (2026-11-12): targets **Terminal.app and iTerm2 tabs** (no install); offered in the **CLI, TUI
+and pane**; **Codex left out**. Board 18 (claude.ai artifact Eu2BQxCGZQAue5s7623CCw, source
+`docs/boards/board18-terminal-jump.html`): the owner picked **J1 · Jump straight**. Comparables: claudectl (jumps by
+tty with AppleScript; silent, raw AppleScript errors when the tab is gone), Herdr's sidebar (always works, but only for
+agents started inside it), tmux `choose-tree` (shows the target first; tmux only). Facts checked 2026-11-12: a
+running Claude session's record `~/.claude/sessions/<pid>.json` has `pid` and `procStart` (the liveness probe
+already uses them); Terminal.app tabs and iTerm2 sessions expose a `tty` property to AppleScript (iTerm2's scripting
+docs; claudectl's Terminal.app script; 18.0 confirms Terminal on this Mac); neither tmux nor Herdr is installed here and iTerm2 is not installed either. Why now with
+no daily user (Phase 15 dropped it for that reason): the owner chose to try it; Terminal.app needs no install, so
+18.0 and 18.4 can check it on real processes.
+
+Decisions:
+- **I1 A new open answer, `Jump`.** For a Claude session that is running (`busy`, `idle`, `waiting`, `stale`) and has
+  no app link, the resolver takes **one identity-bearing process snapshot** (`ps -axo pid,ppid,lstart,tty,comm`,
+  injectable like `ProcessProbe`, fixture mode reads a table), at most once per resolver build and only when such a
+  session exists. The target is the record the existing rule already picks (output-schema "newest record not
+  confirmed gone"); two records for one session that are both live in the snapshot → unavailable
+  `ambiguous_process`. The record's pid must be in the snapshot **with its `lstart` equal to the record's
+  `procStart`** (same snapshot as the tty and ancestors, so a reused pid cannot borrow another terminal); otherwise
+  unavailable `process_changed`. A failed, denied, truncated or malformed snapshot, or a duplicate pid row, gives
+  unavailable `process_unknown`: it is never exit evidence and never turns into `Resume`. ttys are compared in one
+  form, `/dev/ttysNNN` (`ps` prints `ttys004`; `??` or `-` means no tty). Walking up from the session's pid:
+  the first ancestor that is Terminal.app's or iTerm2's main binary → `Jump { app, tty, pid }`; a `tmux`, `screen` or
+  `zellij` before it → unavailable `inside_multiplexer`; another app bundle (VS Code, Ghostty, WezTerm, Warp…) →
+  unavailable `terminal_not_supported` with the app's name; no tty → unavailable `no_tty`. Every unavailable answer
+  keeps today's `claude --resume <id>` text, with "(after it ends)". Finished and unknown sessions are unchanged.
+  Why: the tty is the one id both the process table and the terminal's AppleScript share; the ancestor walk is what
+  tells a Terminal tab from a tmux pane that also has a tty.
+- **I2 Running the jump.** `osascript` by argv (`on run argv`, the tty as `item 1 of argv`, no text spliced into the
+  script, no shell), one fixed script per app: Terminal.app selects the tab whose `tty` matches and brings its window
+  forward; iTerm2 selects the session, its tab and its window. The script returns `window W tab T` or `not found`.
+  `osascript` gets a 5 s deadline, then is killed. Every other outcome (missing `osascript`, another AppleScript
+  error, malformed output, the deadline) is unavailable, exit 3, with its reason. Outcomes: jumped (exit 0, "jumped to Terminal · window 2 · tab 3 (ttys004)"); tab gone (unavailable, exit 3,
+  "its tab is gone"); macOS refused (AppleScript error -1743, exit 3, "blocked by macOS: allow it in System Settings →
+  Privacy & Security → Automation"). Never falls back to resume. The answer is re-resolved from a fresh pass right
+  before it runs (FR18's fresh-decision rule).
+- **I3 Where it shows (J1).** `multi-link open <id>` jumps and prints the line above; `--dry-run` prints the action
+  JSON with `"action": "jump"`, `app`, `tty` (no window lookup: cheap); `--fork` on a running session stays
+  unavailable as today. The TUI's existing open key `o` (Enter stays navigation, `app.rs` `FreshOpen`) jumps on such
+  a row and says the same line in its status message; the TUI is not suspended for a jump (nothing interactive runs). The pane:
+  rows and children gain `opens`: `"app"` | `"terminal"` | null (additive, `v` stays 1); `openable` becomes true for
+  `AppLink` or `Jump`; the row button reads `Open in app` or `Jump to terminal`, and its press runs
+  `multi-link open --no-resume <id>` (new flag: refuses `Resume`, accepts `AppLink` and `Jump`; `--app-only` stays
+  and keeps refusing `Jump`).
+- **I4 Answer keys first.** 18.0 writes the keys: `open --dry-run` JSON for a fixture set covering every I1 branch
+  (Terminal, iTerm2, tmux, VS Code, no tty, `??` tty, pid reused (`lstart` differs), snapshot failed / malformed /
+  duplicate pid, two live records, newer record dead with an older live one, app link wins, finished unchanged) and
+  the AppleScript texts. The pane keys are **not** changed in 18.0 (so 18.1–18.2 stay green); 18.3 adds `opens`
+  and Verify proves the change additive. A fake `osascript` in tests asserts the exact argv.
+- **I5 macOS permission.** The first jump makes macOS ask whether the caller (Terminal, the Claude app…) may control
+  Terminal or iTerm2. The README says so, with the Settings path, and -1743 gets its own message (Phase 17 lesson:
+  a silent macOS permission cost the owner three tries).
+
+Non-goals: Codex sessions; tmux, screen, zellij and Herdr panes; Ghostty, WezTerm, Warp, kitty, Alacritty and the VS
+Code terminal (named in the message, not driven); Linux; starting a new terminal for a running session; choosing a
+split inside an iTerm2 tab beyond selecting its session.
+
+### Step 18.0 — Facts on real processes, design pins, answer keys (Claude)
+- Depends on: Phase 17. I1–I5.
+- Real-process facts in `~/multi-link-sandbox/` (scratch, never in the repo): start `claude` in a new Terminal.app
+  window by `osascript … do script`; read its record's pid, `ps` tty and ancestor chain; run the I2 Terminal script
+  by argv from another process and record its return and which tab is selected after; record the -1743 text if macOS
+  refuses. iTerm2: not installed, so its script is written from its scripting docs and marked untested.
+- Pins in `docs/design.md` → "Phase 18 decisions" (I1–I5: binary paths matched, reason names, message texts, JSON
+  field order). Keys: `fixtures/expected/open-jump/*.json` with a fixture process table, the pane keys gaining
+  `opens`, `fixtures/expected/open-jump/scripts/{terminal,iterm2}.applescript`.
+- Files: `docs/design.md`, `fixtures/**` (new process table and keys), `PLAN.md`, `PROGRESS.md`
+- Verify: `cargo test --workspace` → all `ok` (no existing key changes); the raw `ps` tty and the AppleScript tty
+  recorded side by side; the Terminal facts recorded with their commands; W10 scan clean.
+
+### Step 18.1 — Resolver: `Jump` and the process snapshot (Codex)
+- Depends on: 18.0. I1, I4.
+- Files: `crates/core/src/open.rs`, `crates/core/src/probe.rs` (the snapshot trait and its `ps` and fixture
+  implementations), `crates/core/src/scanner.rs` (wiring the snapshot into `open_resolver`), `crates/core/src/lib.rs`
+  (exports only), `crates/cli/src/main.rs` (`open --dry-run` JSON, and a temporary `Jump` arm that refuses with exit 3
+  until 18.2),
+  `crates/*/tests/**`, `docs/output-schema.md` (Open), `PROGRESS.md`
+- Verify: tests, clippy `-D warnings`, fmt clean; every `open-jump` key byte for byte; process queries counted
+  through the seams: the existing liveness batch plus at most one snapshot per resolver build, none when no session
+  needs it; no failure branch yields `Resume` (a test per branch); every old `open` key and `check.sh` unchanged.
+
+### Step 18.2 — Running the jump in the CLI and TUI (Codex)
+- Depends on: 18.1. I2, I3, I5.
+- Files: `crates/cli/src/main.rs`, `crates/cli/src/tui.rs` (the `o` path and its message), `crates/cli/tests/**`,
+  `crates/tui/**` (the `FreshOpen` result message only), `PROGRESS.md`
+- Verify: tests, clippy, fmt clean; with a fake `osascript` on `PATH`: exact argv per app, no shell, "jumped …" on a
+  `window W tab T` answer, exit 3 and "its tab is gone" on `not found`, exit 3 and the Automation message on -1743,
+  exit 3 with a reason for missing `osascript`, another AppleScript error, malformed output and a hung child (killed
+  at 5 s), no resume ever spawned on any failure, `--no-resume` refuses `Resume` and accepts `AppLink` and `Jump`,
+  `--app-only` refuses `Jump`; the TUI's `o` on a jump row runs the same path without suspending the terminal, shows
+  the line, and Enter still navigates.
+
+### Step 18.3 — Pane: `opens` and `Jump to terminal` (Codex)
+- Depends on: 18.2. I3.
+- Files: `crates/cli/src/pane.rs`, `crates/cli/tests/**`, `mod/multi-link-pane/**`, `PROGRESS.md`
+- Verify: Rust tests, clippy, fmt clean; the pane keys regenerated with `opens` and proven additive (removing
+  `opens` gives the old keys byte for byte, `openable` changes only where `opens` is `terminal`); `claude plugin validate` clean and
+  `claude plugin test` all pass: the button label follows `opens`, its press runs `multi-link open --no-resume <id>`
+  by argv, the footer shows the CLI's line or error; every Phase 16–17 test still passes.
+
+### Step 18.4 — Real check, README, owner confirm (Claude)
+- Depends on: 18.3. A Claude session started in Terminal.app in the sandbox: `multi-link open` brings its tab to the
+  front from another window (selected tab's tty checked by AppleScript), the TUI's Enter does the same (PTY), the
+  pane's button is checked by its tests and the owner; tab-gone and inside-tmux (if tmux is ever installed; otherwise
+  fixtures only) messages recorded; the Automation prompt seen once. README: the open table and the pane section;
+  iTerm2 stated untested unless it was installed. `docs/phase18-check.md`. Owner: one jump from the desktop pane to a
+  terminal session (stop and ask).
+- Files: `docs/phase18-check.md`, `README.md`, `PROGRESS.md`
+- Verify (whole phase): `TZ=UTC cargo test --workspace`, clippy `-D warnings`, fmt clean; every `fixtures/expected/*/
+  check.sh` exit 0; `claude plugin validate` and `claude plugin test` pass; the real-check items above recorded with
+  their commands; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · tmux / Herdr jump (optional, never a required install) · desktop menu-bar app.
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app.
 
 ## Review log
+
+### 2026-11-12 — Phase 18 plan critique (Codex, read-only, Codex loop)
+`codex-quota.py` → `CODEX: OK`. Nine findings; all accepted.
+1. **Snapshot failures had no "never resume" rule.** **Accepted**: any failed, denied, truncated, malformed or
+   duplicate-pid snapshot → unavailable `process_unknown`, never exit evidence, never `Resume`; a test per branch.
+2. **Liveness and tty came from different `ps` calls (pid reuse).** **Accepted**: one snapshot with `lstart`; the pid
+   must match the record's `procStart` in that same snapshot, else `process_changed`.
+3. **Which record when a session has several.** **Accepted**: the existing output-schema pick; two live → `ambiguous_
+   process`; fixtures for newer-dead/older-live and two live.
+4. **TUI Enter is navigation.** **Accepted**: the jump uses the existing open key `o` (`FreshOpen`); Enter unchanged.
+5. **18.1 cannot compile without a `Jump` arm in `main.rs`.** **Accepted**: a temporary refusing arm (exit 3) in 18.1.
+6. **`scanner.rs` builds the resolver.** **Accepted**: added to 18.1's files; one snapshot per resolver build.
+7. **tty forms differ (`ttys004` vs `/dev/ttys004`, `??`).** **Accepted**: one canonical `/dev/ttysNNN`; 18.0 records
+   both raw values; fixtures for `??`.
+8. **No deadline; the TUI waits on its child.** **Accepted**: 5 s deadline then kill; every other failure is a reason;
+   the TUI is not suspended for a jump.
+9. **Pane keys changed in 18.0 would fail 18.1–18.2; no whole-phase Verify.** **Accepted**: pane keys change in 18.3
+   only, proven additive; Step 18.4 spells out the whole-phase Verify.
 
 ### 2026-11-11 — Step 17.4 scope (Claude, real check)
 - The real PTY check found two mod bugs: the pane sized itself from `e.viewport` (the whole screen) instead of its

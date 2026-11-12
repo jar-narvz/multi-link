@@ -1,0 +1,97 @@
+<title>Board 18 · Terminal Jump</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: header, then option cards in a wrapping grid; each card shows the pane as it would draw (dark mono column). */
+:root{
+  --bg:#f3f2f0; --card:#ffffff; --fg:#1d1c1a; --muted:#6b6863; --line:#dedbd6;
+  --pane:#171614; --pane-fg:#e8e4dc; --pane-dim:#8c867c; --pane-sel:#2a2723;
+  --claude:#df9b79; --codex:#8cb9f1; --ok:#7fbf8e; --warn:#d6a243;
+  --note:#2b2a28; --note-fg:#f1eee8;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:Inter,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121110;--card:#1b1a18;--fg:#ece8e1;--muted:#9a948a;--line:#2e2c28;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121110;--card:#1b1a18;--fg:#ece8e1;--muted:#9a948a;--line:#2e2c28;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-size:1.9rem;margin:0 0 6px;text-wrap:balance}
+h2.sec{font-family:var(--display);font-size:1.3rem;margin:36px 0 4px}
+.lede,.sub{color:var(--muted);max-width:70ch;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.opt h3{font-family:var(--display);font-size:1.08rem;margin:0;display:flex;gap:10px;align-items:baseline}
+.tag{font:600 .7rem var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opt p{margin:0;color:var(--muted);font-size:.9rem}
+.pane{background:var(--pane);color:var(--pane-fg);font:12.5px/1.65 var(--mono);padding:10px 12px;border-radius:8px;white-space:pre;overflow-x:auto}
+.d{color:var(--pane-dim)} .c{color:var(--claude)} .x{color:var(--codex)} .ok{color:var(--ok)} .w{color:var(--warn)} .b{font-weight:600}
+.sel{background:var(--pane-sel);display:inline-block;min-width:100%}
+.btn{border:1px solid var(--pane-dim);border-radius:3px;padding:0 4px;color:var(--pane-fg)}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:.84rem}
+.notes div{min-width:0}.notes b{display:block;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.toast{background:var(--note);color:var(--note-fg);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:start;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:380px}
+.toast .ic{width:34px;height:34px;border-radius:8px;background:#3a3835;display:grid;place-items:center;font:600 13px var(--mono);color:var(--codex)}
+.toast .t{font-weight:600;font-size:.88rem}.toast .m{font-size:.84rem;opacity:.85}.toast .when{font-size:.75rem;opacity:.6}
+.fix{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.foot{margin-top:28px;font-size:.82rem;color:var(--muted)}
+@media (max-width:620px){.notes{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+<h1>Board 18 · jump to a terminal session</h1>
+<p class="lede">Today, opening a running Claude session that was started in a terminal says <code>unavailable</code> and prints <code>claude --resume</code>, which would start a second copy. Phase 18 brings that session's own Terminal or iTerm2 tab to the front instead. Its session record gives the process, the process gives its tty, and AppleScript selects the tab with that tty. Nothing has to be installed. Codex, tmux and Herdr stay out (owner, 2026-11-12). Pick one option in part 1. Rows are example data in the shape of real output.</p>
+
+<h2 class="sec">Comparables</h2>
+<div class="grid">
+<section class="opt"><h3><span class="tag">C1</span>claudectl</h3><p>Lists Claude sessions and jumps to their tab by tty with AppleScript, for Terminal.app and iTerm2. <b>Works:</b> no setup. <b>Awkward:</b> it jumps silently, and when the tab is gone you get an AppleScript error, not a reason.</p></section>
+<section class="opt"><h3><span class="tag">C2</span>Herdr sidebar</h3><p>A multiplexer that owns every agent's terminal, so focusing a pane always works. <b>Works:</b> one keypress. <b>Awkward:</b> only for agents started inside it; it's a tool you have to adopt first.</p></section>
+<section class="opt"><h3><span class="tag">C3</span>tmux choose-tree</h3><p>Shows every pane with a live preview, then switches to it. <b>Works:</b> you see where you're going before you go. <b>Awkward:</b> only inside tmux, and the preview costs screen space.</p></section>
+</div>
+
+<h2 class="sec">1 · How the jump shows</h2>
+<p class="sub">The same rule in all three places: the CLI (<code>multi-link open</code>), the TUI (Enter) and the Claude Code pane (row button). Each re-checks the tab right before it acts and never falls back to starting a second copy.</p>
+<div class="grid">
+<section class="opt"><h3><span class="tag">J1</span>Jump straight</h3>
+<p>The action just goes. Afterwards the footer or CLI says where it went.</p>
+<div class="pane"><span class="d">$</span> multi-link open 8f3e
+<span class="ok">✓</span> jumped to Terminal · window 2 · tab 3 <span class="d">(ttys004)</span>
+
+<span class="d">pane, open row</span>
+ <span class="c">● step-18-1</span>  <span class="d">18.1</span>
+<span class="sel">   <span class="d">asked</span> Do Step 18.1 in PLAN.md…   </span>
+<span class="sel">   <span class="btn">Jump to terminal</span> <span class="btn">Copy id</span>         </span>
+<span class="d">checked 1s ago · jumped to Terminal</span></div>
+<div class="notes"><div><b>Good</b>One press, like Open in app. The same label everywhere.</div><div><b>Weak</b>You only learn which tab after the window has moved.</div></div></section>
+
+<section class="opt"><h3><span class="tag">J2</span>Say where first</h3>
+<p>Where the session runs is shown before you press: in the TUI's detail line, the pane's open row and <code>open --dry-run</code>.</p>
+<div class="pane"><span class="d">$</span> multi-link open 8f3e --dry-run
+<span class="d">jump</span>  Terminal · window 2 · tab 3 <span class="d">(ttys004)</span>
+
+<span class="d">pane, open row</span>
+ <span class="c">● step-18-1</span>  <span class="d">18.1</span>
+<span class="sel">   <span class="d">runs </span> Terminal · ttys004           </span>
+<span class="sel">   <span class="d">asked</span> Do Step 18.1 in PLAN.md…   </span>
+<span class="sel">   <span class="btn">Jump to terminal</span> <span class="btn">Copy id</span>         </span></div>
+<div class="notes"><div><b>Good</b>No surprise jumps; like tmux's preview, in one line.</div><div><b>Weak</b>One more line in an open row; finding the window and tab costs a scan on every draw unless only the tty is shown.</div></div></section>
+</div>
+
+<h2 class="sec">States every option needs</h2>
+<div class="fix">
+<div class="pane"><span class="w">unavailable</span> · its tab is gone
+<span class="d">The process is still running, but no Terminal
+or iTerm2 tab has its tty (e.g. a closed window
+with a detached process).</span>
+run: claude --resume 8f3e…  <span class="d">(after it ends)</span></div>
+<div class="pane"><span class="w">unavailable</span> · runs in Ghostty
+<span class="d">Only Terminal and iTerm2 can be driven.
+Other terminals and tmux panes keep today's
+message.</span></div>
+<div class="pane"><span class="w">blocked by macOS</span>
+<span class="d">The first jump asks "allow … to control
+Terminal". If it was denied: System Settings →
+Privacy & Security → Automation.</span></div>
+</div>
+
+<p class="foot">Colours follow boards 16–17. iTerm2 is not installed on this Mac, so its path is covered by tests and stated as untested in the README unless it gets installed for the check. Lesson from Phase 17: macOS permission prompts (Automation, here) get their own README line and a state of their own.</p>
+</div>
