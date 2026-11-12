@@ -1,9 +1,13 @@
 use std::{path::Path, process::Command};
 
 #[test]
-fn pane_matches_all_eleven_pretty_json_keys_byte_for_byte() {
+fn pane_matches_all_twelve_pretty_json_keys_byte_for_byte() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let cases = [
+        (
+            "terminal",
+            "--root fixtures/sessions-phase18 --now 2026-11-12T09:00:00Z --cwd /home/dev/repo-p18 --session 18000001-0000-4000-8000-000018000001",
+        ),
         (
             "openable",
             "--root fixtures/sessions-phase9 --now 2026-11-09T06:00:00Z --cwd /home/dev/repo-p9c --session 92000002-0000-4000-8000-000092000002",
@@ -49,7 +53,7 @@ fn pane_matches_all_eleven_pretty_json_keys_byte_for_byte() {
             "--root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z --cwd /home/dev/repo-p9c --session 92000012-0000-4000-8000-00009200000c",
         ),
     ];
-    assert_eq!(cases.len(), 11);
+    assert_eq!(cases.len(), 12);
     for (name, args) in cases {
         let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
             .current_dir(&root)
@@ -410,4 +414,87 @@ fn notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker() {
         std::fs::read_dir(markers.join("notified")).unwrap().count(),
         1
     );
+}
+
+#[test]
+fn pane_opens_distinguishes_terminal_app_and_unavailable() {
+    use serde_json::{Value, json};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for (fixture, now, cwd, session, expected) in [
+        (
+            "sessions-phase18",
+            "2026-11-12T09:00:00Z",
+            "/home/dev/repo-p18",
+            "18000001-0000-4000-8000-000018000001",
+            vec![
+                ("18000001", json!("terminal")),
+                ("18000002", json!("terminal")),
+                ("18000003", Value::Null),
+                ("18000004", Value::Null),
+                ("18000005", Value::Null),
+                ("18000006", Value::Null),
+                ("18000007", Value::Null),
+                ("18000008", Value::Null),
+                ("18000009", json!("terminal")),
+                ("18000010", Value::Null),
+                ("18000011", Value::Null),
+            ],
+        ),
+        (
+            "sessions-phase14",
+            "2026-11-10T22:20:00Z",
+            "/home/dev/repo-m",
+            "14120000-0000-4000-8000-000000001412",
+            vec![("14120000", Value::Null)],
+        ),
+        (
+            "sessions-phase9",
+            "2026-11-09T06:00:00Z",
+            "/home/dev/repo-p9c",
+            "92000002-0000-4000-8000-000092000002",
+            vec![("92000002", json!("app")), ("92000001", Value::Null)],
+        ),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+            .current_dir(&root)
+            .env("TZ", "UTC")
+            .args([
+                "pane",
+                "--json",
+                "--root",
+                &format!("fixtures/{fixture}"),
+                "--now",
+                now,
+                "--cwd",
+                cwd,
+                "--session",
+                session,
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let pane: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let rows: Vec<_> = pane["sections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|s| s["rows"].as_array().unwrap())
+            .collect();
+        for (prefix, opens) in expected {
+            let row = rows
+                .iter()
+                .find(|r| r["id"].as_str().unwrap().starts_with(prefix))
+                .unwrap();
+            assert!(row.get("opens").is_some(), "missing opens: {prefix}");
+            assert_eq!(row["opens"], opens, "{prefix}");
+            assert_eq!(row["openable"], opens != Value::Null, "{prefix}");
+        }
+        for row in rows {
+            for child in row["children"].as_array().unwrap() {
+                assert!(child.get("opens").is_some());
+                assert_eq!(child["opens"], Value::Null);
+                assert_eq!(child["openable"], false);
+            }
+        }
+    }
 }

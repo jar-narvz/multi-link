@@ -23,6 +23,7 @@
           "asked": "Synthetic exit case 12.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -37,6 +38,7 @@
           "asked": "Synthetic exit case 9.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -56,6 +58,7 @@
           "asked": "Synthetic exit case 2.",
           "said": null,
           "openable": true,
+          "opens": "app",
           "is_this": true,
           "children": [],
           "handoffs": []
@@ -70,6 +73,7 @@
           "asked": "Synthetic exit case 11.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -84,6 +88,7 @@
           "asked": "Synthetic exit case 10.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -98,6 +103,7 @@
           "asked": "Synthetic exit case 8.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -112,6 +118,7 @@
           "asked": "Synthetic exit case 7.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -126,6 +133,7 @@
           "asked": "Synthetic exit case 6.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -140,6 +148,7 @@
           "asked": "Synthetic exit case 5.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -154,6 +163,7 @@
           "asked": "Synthetic exit case 4.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -168,6 +178,7 @@
           "asked": "Synthetic exit case 3.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -182,6 +193,7 @@
           "asked": "Synthetic exit case 1.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

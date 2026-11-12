@@ -15,8 +15,10 @@ function object(value: unknown): value is Record<string, unknown> {
 }
 
 function details(value: Record<string, unknown>): boolean {
+  if (value.opens === undefined) value.opens = null
   return (value.asked === null || typeof value.asked === 'string')
     && (value.said === null || typeof value.said === 'string') && typeof value.openable === 'boolean'
+    && (value.opens === null || value.opens === 'app' || value.opens === 'terminal')
 }
 
 function child(value: unknown): value is PaneChild {
@@ -202,10 +204,12 @@ export const register: Register = (on, options) => {
       {lines.map((l, i) => l.actions ? <Box key={'actions:' + l.actions.id} flexDirection="row">
         {l.actions.openable && <Button key={'open:' + l.actions.id} onPress={async () => {
           try {
-            const result = await $.process.run(['multi-link', 'open', '--app-only', l.actions!.id])
-            await notice(result.exitCode === 0 ? 'opened in app' : result.stderr.trim() || result.stdout.trim() || 'could not open in app')
-          } catch { await notice('could not open in app') }
-        }}><Text>{cut('Open in app', columns)}</Text></Button>}
+            const result = await $.process.run(['multi-link', 'open', '--no-resume', l.actions!.id])
+            await notice(result.exitCode === 0
+              ? result.stdout.trim() || (l.actions!.opens === 'terminal' ? 'jumped to terminal' : 'opened in app')
+              : result.stderr.trim() || 'could not open session')
+          } catch { await notice('could not open session') }
+        }}><Text>{cut(l.actions.opens === 'terminal' ? 'Jump to terminal' : 'Open in app', columns)}</Text></Button>}
         <Button key={'copy:' + l.actions.id} onPress={async press => {
           try {
             const result = await $.ui.copy({ text: l.actions!.id, surface: press.surface })

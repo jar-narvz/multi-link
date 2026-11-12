@@ -1,15 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 18 is in progress. Step 18.2 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 18.3 (pane).**
-- CLI and TUI execute Jump through the same runner: embedded pinned scripts, argv only, five-second deadline,
-  kill and reap on timeout, exact success / tab-gone / Automation messages, exit 3 on CLI jump failures.
-  No jump failure resumes. `--no-resume` accepts AppLink / Jump and refuses Resume; `--app-only` still refuses Jump.
-- The TUI's `FreshOpen` (`o`) runs jumps without suspending terminal modes and displays the runner's line;
-  Enter remains navigation. All jump execution tests use fake osascript executables, never the real binary.
-- Unavailable messages include optional terminal / multiplexer detail in parentheses on CLI and TUI.
-- Verify: workspace 729 passed / 0 failed / 1 existing ignored; clippy and fmt clean. Real terminal / permission
-  confirmation remains Step 18.4 (iTerm2 is still untested live). Claude decides when this step is done.
+**Phase 18 is in progress. Step 18.3 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 18.4 (real check,
+README, owner confirm).**
+- Pane rows and children now serialize `opens` immediately after `openable`: `app`, `terminal`, or null.
+  AppLink and Jump enable the button; its label follows `opens`, and presses use `open --no-resume` by argv.
+  Phase 17 lines without `opens` normalize it to null. The footer displays CLI stdout on success and stderr
+  on failure, with destination-specific success text or `could not open session` when output is empty.
+- Regenerated pane keys are additive: stripping 59 `opens` fields reproduces all 14 previously tracked pane
+  files byte for byte. A new `terminal.json` covers Terminal, iTerm2, and unavailable outcomes.
+- Verify: workspace 730 passed / 0 failed / 1 existing ignored; mod 134 passed / 0 failed; plugin validation,
+  clippy and fmt pass. Validation also prints existing catalog-only license/icon notices (non-fatal).
+- Performance follow-up for Claude: one warm **release** real-home pass was **256.990 ms**, slightly above the
+  250 ms target; this is one sample, not the ten-tick median gate. No timing instrumentation remains.
+- Step 18.2 is committed. Real terminal/permission confirmation remains Step 18.4; iTerm2 is untested live.
+  Claude decides when this step is done.
 
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
@@ -824,6 +829,143 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 18.3: Review round 1 — Codex
+- Did: Fixed both Claude findings. Missing `opens` normalizes to null for rows and children before validation;
+  false, numbers, objects, arrays and unknown destination strings remain invalid. Successful presses keep
+  non-empty stdout, else say `opened in app` (app/legacy) or `jumped to terminal` (terminal). Failed presses
+  keep non-empty stderr, else say `could not open session`.
+- Changed: `mod/multi-link-pane/hooks/register.tsx`, `mod/multi-link-pane/hooks/register.test.tsx`, `PROGRESS.md`.
+  Accepted pane keys and Rust code were not changed in this round.
+- Verify: Added 20 regression cases across terminal, desktop, vscode and mobile: a Phase 17 line with
+  `opens` omitted from every row and child renders and expands; invalid values on either row type preserve
+  the last good report; whitespace-only stdout/stderr gets the correct app/terminal success or failure text.
+  Before implementation, `claude plugin test mod/multi-link-pane` → actual output:
+  ```text
+   114 pass
+   20 fail
+  Ran 134 tests across 1 file. [7.06s]
+  ```
+  Failures included the legacy line staying on `reading sessions…` and the empty-output footer staying
+  `checked 0s ago`. After implementation, same command → exit 0, actual output:
+  ```text
+   134 pass
+   0 fail
+  Ran 134 tests across 1 file. [7.58s]
+  ```
+  `claude plugin validate mod/multi-link-pane` → exit 0, `✔ Validation passed`; existing non-fatal catalog
+  notices `LICENSE_MISSING` / `ICON_MISSING` remain.
+- Verify: `TZ=UTC cargo test --workspace` → exit 0. Actual summary printed by Python summing the captured
+  `test result:` lines:
+  ```text
+  Workspace: 68 targets; 730 passed; 0 failed; 1 ignored
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0. Rust PATH set per AGENTS.md.
+  Re-ran the byte-comparison script below against `1728932` → actual output:
+  ```text
+  PASS: all 14 original pane files remain byte-identical after removing 59 opens fields.
+  ```
+- Review: Claude, 1 round. Keys checked additive by Claude (removing `opens` from all ten changed keys gives HEAD's
+  bytes; `terminal.json` is new). Findings: (1) the mod required `opens`, so a 1.14 binary's lines would all be
+  rejected and the pane would sit on `reading sessions…` → a missing `opens` is null; (2) an app-link open prints
+  nothing, so the footer went blank → fallbacks `opened in app` / `jumped to terminal` / `could not open session`.
+  Claude re-ran Verify: 730 passed, 0 failed, 1 ignored; clippy, fmt clean; `claude plugin validate` ✔, `claude
+  plugin test` 134 pass, 0 fail. Real data: with a `claude` running in a Terminal.app tab (sandbox), `open
+  --dry-run` answered `jump` / `terminal` / `/dev/ttys006`; the watcher's warm tick with that session present
+  (snapshot every pass) was **226 ms CPU** over 60 s with `--notify` (budget ≤ 250 ms; Phase 17: 219 ms). Codex's
+  256 ms was one whole pass, not a watcher tick.
+- Gotchas: No new timing run: this round only changes mod parsing and footer text, not the Rust pass.
+  The previous single warm release sample and its budget limitation still apply. Nothing staged or committed;
+  existing untracked files untouched.
+
+### 2026-11-12 — Step 18.3: Pane opens and Jump to terminal — Codex
+- Did: Added `opens` immediately after `openable` in both row types (`v` remains 1), using the existing
+  once-per-pass resolver: AppLink → `app`, Jump → `terminal`, everything else → null. The resolver action is
+  evaluated once per visible session; no extra resolver build or process snapshot was added. `openable` is
+  true exactly when `opens` is non-null. Updated mod types, input validation, embedded keys, labels and argv.
+  The footer uses trimmed CLI stdout on success and trimmed stderr on failure, even if both streams contain
+  text. Review round 1 adds explicit empty-output fallbacks and accepts Phase 17 input without `opens`.
+  Spawn exceptions show `could not open session`.
+- Changed: `crates/cli/src/pane.rs`, `crates/cli/tests/pane.rs`,
+  `mod/multi-link-pane/{hooks/register.tsx,hooks/register.test.tsx,types/index.d.ts}`,
+  `fixtures/expected/pane/{ambiguous,busy,child-other-repo,children-exact-likely,done-2h,idle-recent,openable,unseen,waiting-quiet,waiting-stale,terminal}.json`,
+  `PROGRESS.md`. Fixture edits are explicitly authorized by the owner's Step 18.3 request.
+- Verify: Test-first: the new Rust integration test failed with `missing opens: 18000001`; the mod tests
+  failed on the old argv/terminal label. Final `cargo test -p multi-link --test pane` → actual output:
+  ```text
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.36s
+  ```
+  After extending the Rust case table to exercise nested children, final `TZ=UTC cargo test --workspace`
+  exited 0. Summary printed by Python summing its captured `test result:` lines:
+  ```text
+  Workspace: 68 targets; 730 passed; 0 failed; 1 ignored
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+      Checking multi-link v0.1.0 (repo/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.53s
+  ```
+  (Compiler's checkout prefix replaced with `repo` above to avoid committing a personal path.)
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0. Rust PATH set per AGENTS.md.
+- Verify: `claude plugin validate mod/multi-link-pane` → exit 0, `✔ Validation passed`.
+  Its additional catalog checks report existing `LICENSE_MISSING` and `ICON_MISSING`; those checks explicitly
+  do not affect normal validation (no directory profile requested). `claude plugin test mod/multi-link-pane`
+  → exit 0, actual output:
+  ```text
+   114 pass
+   0 fail
+  Ran 114 tests across 1 file. [6.07s]
+  ```
+  The 24 new mod cases cover app/terminal/null × CLI success/failure on terminal, desktop, vscode and mobile;
+  each exercises top-level and child actions, exact argv (including shell-looking id data), both-stream
+  stdout/stderr precedence, footer text, and absence of an open button for null. Existing Phase 16–17 cases
+  still pass, including redraw, overflow, copy, strip, watch lifecycle, ticks and notifications.
+- Verify (additivity): Regenerated all 11 old pretty JSON pane keys using the command table in
+  `crates/cli/tests/pane.rs`; empty and watcher files need no edits. New `terminal.json` uses the new table
+  entry with `sessions-phase18`. The following byte check ran against base `1728932` (HEAD at implementation):
+  ```python
+  import pathlib, re, subprocess
+  paths = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', '1728932',
+                                   'fixtures/expected/pane'], text=True).splitlines()
+  for path in paths:
+      before = subprocess.check_output(['git', 'show', f'1728932:{path}'])
+      after = pathlib.Path(path).read_bytes()
+      assert re.sub(rb'^\s*"opens": (?:"app"|"terminal"|null),\n', b'',
+                    after, flags=re.M) == before, path
+  ```
+  Actual comparison output (including a separate parsed comparison of embedded mod keys):
+  ```text
+  PASS: all 14 tracked pane files reproduce HEAD byte for byte after removing 59 opens fields; old openable values unchanged.
+  PASS: 11 embedded mod keys equal the regenerated fixture JSON.
+  PASS: Phase 18 key equals pre-change bytes after removing opens and reverting openable only for terminal rows ['18000001', '18000002', '18000009'].
+  ```
+  The last comparison used the same Phase 18 pane command captured before implementation. Terminal/iTerm2
+  and newer-dead/older-live rows gain `openable`; all other bytes match after removing `opens` and reverting
+  those three bools. No other expected directory changed.
+- Verify (timing): Temporarily timed the complete `run` pass closure with `Instant::now()` before refresh
+  and elapsed milliseconds after strip resolution; used one watcher process per case, measuring its first
+  and second passes. Removed instrumentation in a `finally` block and rebuilt clean binaries afterwards.
+  No `--notify`; stdout discarded, timing-only stderr saved outside the repo. Commands: `cargo build -p multi-link`
+  (debug cases), then `cargo build --release -p multi-link` (release case); `multi-link pane --json --watch`
+  with the corresponding pane test arguments (phase14 session `14110000-0000-4000-8000-000000001411`),
+  or real home with `--cwd <checkout> --session timing-unseen`. Actual measured output:
+  ```text
+  phase18 fixture (snapshot, no strip): cold pane_pass_ms=9.027; one warm pane_pass_ms=5.572
+  phase14 fixture (cached strip): cold pane_pass_ms=16.735; one warm pane_pass_ms=6.067
+  real home (unseen session, no strip): cold pane_pass_ms=6986.920; one warm pane_pass_ms=1213.812
+  release real home (unseen session, no strip): cold pane_pass_ms=1831.120; one warm pane_pass_ms=256.990
+  ```
+- Review: Claude accepted the additive keys. Both round 1 mod findings are fixed in the entry above;
+  pending Claude re-review. No staging, commit or push; PLAN.md untouched.
+- Gotchas: The release warm real-home sample is 6.990 ms above the 250 ms target; this is not a ten-tick
+  median or a real current-session strip benchmark. Performance follow-up belongs with Claude before
+  declaring the budget met; no out-of-scope optimization attempted. The fixture snapshot uses fixture-ps,
+  not real `ps`; existing resolver snapshot-count tests remain green. Real terminal jumps and Automation
+  prompts were not invoked. Existing untracked `.claude/` and mod `tsconfig.json` were left untouched.
 
 ### 2026-11-12 — Step 18.2: Running the jump in the CLI and TUI — Codex
 - Did: Replaced both temporary Jump arms with one runner. Embedded the answer-key scripts using `include_str!`,

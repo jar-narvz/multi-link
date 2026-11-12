@@ -27,7 +27,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
   })
 }
 
-// Verbatim Phase 17 answer keys; the mod sandbox cannot import JSON files.
+// Verbatim pane answer keys (Phase 18 additive opens); the mod sandbox cannot import JSON files.
 const keys: Record<string, PaneReport> = {
   "ambiguous": {
     "v": 1,
@@ -84,6 +84,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "try step 5.1 on codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [],
             "handoffs": [
@@ -107,6 +108,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "check the bridge script",
             "said": "<said>",
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -121,6 +123,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "try the bridge check again",
             "said": "<said>",
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -162,6 +165,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "run the three road checks in parallel with codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [
               {
@@ -172,6 +176,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 3.1 in PLAN.md.",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               },
               {
@@ -182,6 +187,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 3.0 in PLAN.md.",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -202,6 +208,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "run the roads checks by hand",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -235,6 +242,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Read AGENTS.md, then do Step 3.2 in PLAN.md.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -291,6 +299,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "add the feed rows, then hand step 2.4 to codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [
               {
@@ -301,6 +310,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "likely"
               }
             ],
@@ -316,6 +326,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "pick up step 2.3 where the last session stopped",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -326,6 +337,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -341,6 +353,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "split step 2.5 and 2.6 between two codex runs",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -351,6 +364,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               },
               {
@@ -361,6 +375,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -385,6 +400,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "start step 2.3 with codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -399,6 +415,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "nudge the step 2.5 run",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -436,6 +453,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic lane parent 4.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [
               {
@@ -446,6 +464,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Tidy the synthetic README wording.",
                 "said": "<text>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -461,6 +480,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic import.",
             "said": "<text>",
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -475,6 +495,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Read AGENTS.md, then do Step 2.2 in PLAN.md. Synthetic export.",
             "said": "<text>",
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -580,6 +601,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "add the feed rows, then hand step 2.4 to codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -590,6 +612,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "likely"
               }
             ],
@@ -605,6 +628,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "pick up step 2.3 where the last session stopped",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -615,6 +639,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -630,6 +655,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "split step 2.5 and 2.6 between two codex runs",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -640,6 +666,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               },
               {
@@ -650,6 +677,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -674,6 +702,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "nudge the step 2.5 run",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [],
             "handoffs": []
@@ -688,6 +717,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "start step 2.3 with codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -721,6 +751,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 12.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -735,6 +766,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 9.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -754,6 +786,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 2.",
             "said": null,
             "openable": true,
+            "opens": "app",
             "is_this": true,
             "children": [],
             "handoffs": []
@@ -768,6 +801,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 11.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -782,6 +816,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 10.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -796,6 +831,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 8.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -810,6 +846,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 7.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -824,6 +861,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 6.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -838,6 +876,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 5.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -852,6 +891,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 4.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -866,6 +906,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 3.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -880,6 +921,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 1.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -909,6 +951,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "add the feed rows, then hand step 2.4 to codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -919,6 +962,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "likely"
               }
             ],
@@ -934,6 +978,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "pick up step 2.3 where the last session stopped",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -944,6 +989,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -959,6 +1005,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "split step 2.5 and 2.6 between two codex runs",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [
               {
@@ -969,6 +1016,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
                 "said": null,
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               },
               {
@@ -979,6 +1027,7 @@ const keys: Record<string, PaneReport> = {
                 "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
                 "said": "<said>",
                 "openable": false,
+                "opens": null,
                 "match": "exact"
               }
             ],
@@ -1003,6 +1052,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "start step 2.3 with codex",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1017,6 +1067,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "nudge the step 2.5 run",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1050,6 +1101,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 12.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [],
             "handoffs": []
@@ -1064,6 +1116,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 9.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1101,6 +1154,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 12.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": true,
             "children": [],
             "handoffs": []
@@ -1115,6 +1169,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 9.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1134,6 +1189,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 14.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1148,6 +1204,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 13.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1162,6 +1219,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 11.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1176,6 +1234,7 @@ const keys: Record<string, PaneReport> = {
             "asked": "Synthetic exit case 10.",
             "said": null,
             "openable": false,
+            "opens": null,
             "is_this": false,
             "children": [],
             "handoffs": []
@@ -1537,7 +1596,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await ui.press({ key: 'copy:' + id })
     expect(copies).toEqual([{ text: id, surface }])
     await ui.press({ key: 'open:' + id })
-    expect(commands).toEqual([['multi-link', 'open', '--app-only', id]])
+    expect(commands).toEqual([['multi-link', 'open', '--no-resume', id]])
     expect((await texts(ui)).at(-1)).toContain('Session is no longer openable.')
     pipe.chunk(JSON.stringify(keys.openable) + '\n')
     await clock.settle()
@@ -1799,5 +1858,100 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await end($)
       await ui.unmount()
     })
+  }
+}
+
+for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+  for (const opens of ['app', 'terminal', null] as const) {
+    for (const exitCode of [0, 3]) {
+      test('open destination ' + opens + ' exit ' + exitCode + ' on ' + surface, async ($, on) => {
+        const commands: (readonly string[])[] = []
+        const stdout = opens === 'terminal' ? 'jumped to Terminal · window 2 · tab 3 (ttys004)' : 'opened in app'
+        const stderr = 'cannot jump: its tab is gone'
+        const clock = setup(on, argv => {
+          commands.push(argv)
+          return { exitCode, stdout: stdout + '\n', stderr: stderr + '\n', isStdoutTruncated: false, isStderrTruncated: false }
+        })
+        const pipe = watcher(on)
+        const data = JSON.parse(JSON.stringify(keys.openable)) as PaneReport
+        const own = data.sections.flatMap(s => s.rows).find(r => r.is_this)!
+        // Exercise the same action for a top-level row and an expanded child.
+        Object.assign(own, { opens, openable: opens !== null })
+        own.children = [{ id: 'child; $(echo data)', harness: 'codex', state: 'busy', phrase: 'working',
+          asked: null, said: null, openable: opens !== null, opens, match: 'exact' }]
+        await $.session.start({ cwd: '/repo', surface, isInteractive: true })
+        pipe.chunk(JSON.stringify(data) + '\n')
+        await clock.settle()
+        const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 160, rows: 100 }, props: { ...PANE.props, bodyColumns: 160, scroll: { offset: 0, bodyRows: 100 } } })
+        for (const id of [own.id, own.children[0].id]) {
+          await ui.press({ key: id })
+          const button = await ui.find({ key: 'open:' + id })
+          if (opens === null) {
+            expect(button).toBeUndefined()
+          } else {
+            expect(button?.text).toBe(opens === 'terminal' ? 'Jump to terminal' : 'Open in app')
+            await ui.press({ key: 'open:' + id })
+            expect(commands.at(-1)).toEqual(['multi-link', 'open', '--no-resume', id])
+            expect((await texts(ui)).at(-1)).toBe('checked 0s ago · ' + (exitCode === 0 ? stdout : stderr))
+          }
+        }
+        expect(commands.length).toBe(opens === null ? 0 : 2)
+        await end($)
+        await ui.unmount()
+      })
+    }
+  }
+}
+
+for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
+  test('Phase 17 rows and children without opens still render on ' + surface, async ($, on) => {
+    const clock = setup(on)
+    const pipe = watcher(on)
+    await $.session.start({ cwd: '/repo', surface, isInteractive: true })
+    pipe.chunk(JSON.stringify(keys.busy, (key, value) => key === 'opens' ? undefined : value) + '\n')
+    await clock.settle()
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 160, rows: 100 }, props: { ...PANE.props, bodyColumns: 160, scroll: { offset: 0, bodyRows: 100 } } })
+    expect((await texts(ui))[0]).toBe('multi-link · repo-p')
+    const own = keys.busy.sections.flatMap(s => s.rows).find(r => r.is_this)!
+    await ui.press({ key: own.id })
+    expect(await ui.find({ key: 'copy:' + own.id })).toBeDefined()
+    await ui.press({ key: own.children[0].id })
+    expect(await ui.find({ key: 'copy:' + own.children[0].id })).toBeDefined()
+    // A missing field is compatible; an invalid destination must still be rejected.
+    for (const invalid of [false, 1, {}, [], 'other']) {
+      for (const child of [false, true]) {
+        const data = JSON.parse(JSON.stringify(keys.busy)) as PaneReport
+        data.repo = '/repo/rejected'
+        const row = data.sections.flatMap(s => s.rows).find(r => r.is_this)!
+        Object.assign(child ? row.children[0] : row, { opens: invalid })
+        pipe.chunk(JSON.stringify(data) + '\n')
+        await clock.settle()
+        expect((await texts(ui))[0]).toBe('multi-link · repo-p')
+      }
+    }
+    await end($)
+    await ui.unmount()
+  })
+
+  for (const opens of ['app', 'terminal'] as const) {
+    for (const exitCode of [0, 3]) {
+      test('empty CLI output for ' + opens + ' exit ' + exitCode + ' on ' + surface, async ($, on) => {
+        const clock = setup(on, () => ({ exitCode, stdout: ' \n', stderr: ' \n', isStdoutTruncated: false, isStderrTruncated: false }))
+        const pipe = watcher(on)
+        const data = JSON.parse(JSON.stringify(keys.openable)) as PaneReport
+        const own = data.sections.flatMap(s => s.rows).find(r => r.is_this)!
+        own.opens = opens
+        await $.session.start({ cwd: '/repo', surface, isInteractive: true })
+        pipe.chunk(JSON.stringify(data) + '\n')
+        await clock.settle()
+        const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 160, rows: 100 }, props: { ...PANE.props, bodyColumns: 160, scroll: { offset: 0, bodyRows: 100 } } })
+        await ui.press({ key: own.id })
+        await ui.press({ key: 'open:' + own.id })
+        const expected = exitCode !== 0 ? 'could not open session' : opens === 'app' ? 'opened in app' : 'jumped to terminal'
+        expect((await texts(ui)).at(-1)).toBe('checked 0s ago · ' + expected)
+        await end($)
+        await ui.unmount()
+      })
+    }
   }
 }

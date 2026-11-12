@@ -19,6 +19,7 @@
           "asked": "Read AGENTS.md, then do Step 3.2 in PLAN.md.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

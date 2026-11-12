@@ -69,6 +69,7 @@ struct PaneRow {
     asked: Option<String>,
     said: Option<String>,
     openable: bool,
+    opens: Option<&'static str>,
     is_this: bool,
     children: Vec<Child>,
     handoffs: Vec<Handoff>,
@@ -82,6 +83,7 @@ struct Child {
     asked: Option<String>,
     said: Option<String>,
     openable: bool,
+    opens: Option<&'static str>,
     r#match: &'static str,
 }
 #[derive(Debug, Serialize)]
@@ -256,7 +258,7 @@ fn strip(report: &GraphReport, sessions: &[Session], this: &str) -> Strip {
 #[derive(Default)]
 struct Details {
     said: Option<String>,
-    openable: bool,
+    opens: Option<&'static str>,
 }
 
 /// Read graph-style turn windows with original completion text. The graph's
@@ -342,7 +344,11 @@ fn details(
                 session.id.clone(),
                 Details {
                     said,
-                    openable: matches!(resolver.action(session, false), OpenAction::AppLink { .. }),
+                    opens: match resolver.action(session, false) {
+                        OpenAction::AppLink { .. } => Some("app"),
+                        OpenAction::Jump { .. } => Some("terminal"),
+                        _ => None,
+                    },
                 },
             )
         })
@@ -421,6 +427,7 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
                 asked: child.asked.clone(),
                 said: None,
                 openable: false,
+                opens: None,
                 r#match: match view::placing(child, Some(&row.id)).map(|l| l.r#match) {
                     Some(Match::Exact) => "exact",
                     _ => "likely",
@@ -466,6 +473,7 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
             asked: row.asked.clone(),
             said: None,
             openable: false,
+            opens: None,
             is_this: row.id == this,
             children,
             handoffs,
@@ -824,12 +832,14 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
         for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
             if let Some(detail) = details.get(&row.id) {
                 row.said = detail.said.clone();
-                row.openable = detail.openable;
+                row.openable = detail.opens.is_some();
+                row.opens = detail.opens;
             }
             for child in &mut row.children {
                 if let Some(detail) = details.get(&child.id) {
                     child.said = detail.said.clone();
-                    child.openable = detail.openable;
+                    child.openable = detail.opens.is_some();
+                    child.opens = detail.opens;
                 }
             }
         }

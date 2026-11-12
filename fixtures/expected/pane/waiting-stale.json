@@ -23,6 +23,7 @@
           "asked": "Synthetic exit case 12.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": true,
           "children": [],
           "handoffs": []
@@ -37,6 +38,7 @@
           "asked": "Synthetic exit case 9.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -56,6 +58,7 @@
           "asked": "Synthetic exit case 14.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -70,6 +73,7 @@
           "asked": "Synthetic exit case 13.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -84,6 +88,7 @@
           "asked": "Synthetic exit case 11.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -98,6 +103,7 @@
           "asked": "Synthetic exit case 10.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

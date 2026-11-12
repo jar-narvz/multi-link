@@ -27,6 +27,7 @@
           "asked": "Synthetic lane parent 4.",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": true,
           "children": [
             {
@@ -37,6 +38,7 @@
               "asked": "Tidy the synthetic README wording.",
               "said": "<text>",
               "openable": false,
+              "opens": null,
               "match": "exact"
             }
           ],
@@ -52,6 +54,7 @@
           "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic import.",
           "said": "<text>",
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -66,6 +69,7 @@
           "asked": "Read AGENTS.md, then do Step 2.2 in PLAN.md. Synthetic export.",
           "said": "<text>",
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

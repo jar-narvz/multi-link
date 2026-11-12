@@ -31,6 +31,7 @@
           "asked": "run the three road checks in parallel with codex",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": true,
           "children": [
             {
@@ -41,6 +42,7 @@
               "asked": "Read AGENTS.md, then do Step 3.1 in PLAN.md.",
               "said": null,
               "openable": false,
+              "opens": null,
               "match": "exact"
             },
             {
@@ -51,6 +53,7 @@
               "asked": "Read AGENTS.md, then do Step 3.0 in PLAN.md.",
               "said": null,
               "openable": false,
+              "opens": null,
               "match": "exact"
             }
           ],
@@ -71,6 +74,7 @@
           "asked": "run the roads checks by hand",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

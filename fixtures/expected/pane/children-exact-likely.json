@@ -38,6 +38,7 @@
           "asked": "add the feed rows, then hand step 2.4 to codex",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": true,
           "children": [
             {
@@ -48,6 +49,7 @@
               "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
               "said": null,
               "openable": false,
+              "opens": null,
               "match": "likely"
             }
           ],
@@ -63,6 +65,7 @@
           "asked": "pick up step 2.3 where the last session stopped",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [
             {
@@ -73,6 +76,7 @@
               "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
               "said": "<said>",
               "openable": false,
+              "opens": null,
               "match": "exact"
             }
           ],
@@ -88,6 +92,7 @@
           "asked": "split step 2.5 and 2.6 between two codex runs",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [
             {
@@ -98,6 +103,7 @@
               "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
               "said": null,
               "openable": false,
+              "opens": null,
               "match": "exact"
             },
             {
@@ -108,6 +114,7 @@
               "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
               "said": "<said>",
               "openable": false,
+              "opens": null,
               "match": "exact"
             }
           ],
@@ -132,6 +139,7 @@
           "asked": "start step 2.3 with codex",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -146,6 +154,7 @@
           "asked": "nudge the step 2.5 run",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []

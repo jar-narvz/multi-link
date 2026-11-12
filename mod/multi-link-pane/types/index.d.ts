@@ -2,6 +2,7 @@ export type PaneDetails = {
   asked: string | null
   said: string | null
   openable: boolean
+  opens: 'app' | 'terminal' | null
 }
 export type PaneChild = PaneDetails & {
   id: string

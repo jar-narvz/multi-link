@@ -53,6 +53,7 @@
           "asked": "try step 5.1 on codex",
           "said": null,
           "openable": false,
+          "opens": null,
           "is_this": true,
           "children": [],
           "handoffs": [
@@ -76,6 +77,7 @@
           "asked": "check the bridge script",
           "said": "<said>",
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -90,6 +92,7 @@
           "asked": "try the bridge check again",
           "said": "<said>",
           "openable": false,
+          "opens": null,
           "is_this": false,
           "children": [],
           "handoffs": []
