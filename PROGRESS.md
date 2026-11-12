@@ -2,10 +2,12 @@
 
 ## Current state
 **Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.1 is committed (Codex, reviewed by
-Claude, 2026-11-12). Step 19.2 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 19.3 (popover,
-icon, actions, notifications, app bundle; Codex).**
-- Swift core: typed reports/events, byte-buffered NDJSON, binary lookup, process supervision and delivery lock;
-  release build passes and all 10 Swift tests pass after Review round 1. No UI yet; 19.3 follows review.
+Claude, 2026-11-12). Step 19.2 is committed (Codex, reviewed by Claude, 2026-11-12). Step 19.3 is committed
+(Codex, reviewed by Claude, 2026-11-12). Next: Step 19.4 (real check, README, owner confirm; Claude).
+After review: Step 19.4 (real check and owner confirmation).**
+- Swift app: board 19 P2 / I1 popover, core presentation/actions, retained notification delegate, permission banner,
+  and signed app bundle. All 18 Swift tests pass after Review round 1; release bundle verifies with the pinned designated requirement.
+  App not launched; actual appearance, Automation prompts and banners remain for Step 19.4.
 - `multi-link menubar --json [--watch] [--notify]` prints the M1 report (rows are the pane's, flattened) and the
   pane's `codex_done` event lines; the pane watcher skips its claim while `~/.multi-link/menubar.lock` is held.
 - Warm watch tick on real `~`: 208 / 211 ms CPU per 3 s tick (two 30 s samples; first report 2.87 s).
@@ -847,6 +849,147 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 19.3: Review round 1 — Codex
+- Did: Fixed all three Claude findings. Startup resolves the binary and starts the watcher before awaiting
+  notification authorization, so reports arrive while the prompt remains open; it then calls
+  `watcher.refreshPermission()` after the request returns, retaining the once-per-launch guard and using
+  settings rather than the authorization result. Injected startup effects let tests suspend authorization
+  without contacting the real notification center or using the real delivery lock. Headers now include the
+  optional step title before `+N`; absent titles keep the prior form. Open TUI activates Terminal inside the
+  AppleScript run handler after opening the window, preserving shell quoting.
+- Changed: `apps/menubar/Sources/MenubarCore/{AppController,Presentation,Actions}.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/PresentationTests.swift`, `PROGRESS.md`.
+- Verify: Regression tests for both title forms (with/without `+N`) and the exact AppleScript argv failed before
+  the fixes (4 assertion issues across 3 tests). Temporarily restoring authorization-before-watcher ordering
+  made the startup regression fail with `reportBeforeAnswer?.repos.isEmpty → nil`; restored the fixed ordering.
+  Final `swift test --disable-sandbox --package-path apps/menubar` → exit 0, actual final test output:
+  ```text
+✔ Test symbolsActionsAndColors() passed after 0.001 seconds.
+✔ Test completionRequestAndForegroundDelegate() passed after 0.001 seconds.
+✔ Test commandsAndResults() passed after 0.001 seconds.
+✔ Test headersWithAndWithoutStepTitle() passed after 0.001 seconds.
+✔ Test deliveryLockRequiresPermissionAndHealthAndRetries() passed after 0.201 seconds.
+✔ Test lookupOrderAndNotFound() passed after 0.463 seconds.
+✔ Test fixtureContractAndByteFraming() passed after 0.463 seconds.
+✔ Test presentationContract() passed after 0.567 seconds.
+✔ Test modelKeepsLastReportOnErrors() passed after 0.567 seconds.
+✔ Test fixtureBlocksAndChildLines() passed after 0.567 seconds.
+✔ Test actionProcessUsesExactArgvAndDrainsBothPipes() passed after 1.127 seconds.
+✔ Test injectedPermissionControlsDeliveryAndQuitReleasesLock() passed after 1.386 seconds.
+✔ Test unexpectedExitReleasesDeliveryDuringBackoff() passed after 1.387 seconds.
+✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 31.263 seconds.
+✔ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases passed after 31.309 seconds.
+✔ Test startupWatchesWhileAuthorizationPendingAndRefreshesAfterward() passed after 31.310 seconds.
+✔ Test watcherDrainsStderrRestartsWithBackoffAndQuits() passed after 31.738 seconds.
+✔ Test secondInstanceCannotClaimAndTakesOverAfterQuit() passed after 31.914 seconds.
+✔ Test run with 18 tests in 0 suites passed after 31.914 seconds.
+  ```
+  In `apps/menubar`, `swift build -c release --disable-sandbox` → exit 0:
+  ```text
+[0/1] Planning build
+Building for production...
+[0/3] Write sources
+[1/3] Write swift-version--58304C5D6DBC2206.txt
+[3/4] Compiling MenubarCore Actions.swift
+[4/6] Compiling MenubarApp App.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking multi-link-menubar
+Build complete! (4.02s)
+  ```
+  `git diff --check` → exit 0, no output.
+- Review (Claude, 2026-11-12): re-review clean. Re-ran `swift test` (18 passed) and `./build.sh` (built and
+  verified; `Signature=adhoc`, designated requirement `identifier "dev.multi-link.menubar"`).
+- Gotchas: No app launch or live macOS prompt/banner/Terminal activation check; those remain Step 19.4.
+  Startup regression checks report arrival before answering, one authorization request across two starts,
+  disabled delivery before approval, and the permission banner clearing immediately after the settings refresh.
+
+### 2026-11-12 — Step 19.3: Popover, icon, actions, notifications, app bundle — Codex
+- Did: Implemented board 19 P2 / I1 with thin SwiftUI views. MenubarCore preserves report block/row order, builds
+  step headers with `+N`, harness labels and `└` child lines, state symbols and light/dark board palettes, icon
+  text, actions from `opens`, exact open argv, checked age and error footer text (including M4's retry hint),
+  quoted Open TUI commands, and notification requests. AppController handles startup, permission reporting,
+  clipboard/session/TUI actions and shutdown; permission is requested once at launch and settings checks drive
+  delivery through the existing watcher. The retained notification delegate returns banner + sound; requests
+  use `run`, pane title/body text and default sound. Notifications-off banner dismisses once per launch and
+  opens Notifications settings. Build script creates the release bundle in the repo, copies Info.plist and
+  executable, signs with the bundle-id designated requirement, verifies, and never launches.
+- Changed: `apps/menubar/Sources/MenubarApp/App.swift`, `apps/menubar/Sources/MenubarCore/{Model,Presentation,
+  Actions,Notifications,AppController}.swift`, `apps/menubar/Tests/MenubarCoreTests/PresentationTests.swift`,
+  `apps/menubar/build.sh`, `apps/menubar/Info.plist`, `PROGRESS.md`.
+- Verify: New presentation tests first failed because the presentation/action/notification APIs were absent;
+  the fixture-label test then failed on the missing harness prefix before adding it. Final commands and actual
+  output below (Swift commands use `--disable-sandbox` per M3 and the handoff). From `apps/menubar`,
+  `swift test --disable-sandbox` (invoked from root with `--package-path apps/menubar`) → exit 0, final test output:
+  ```text
+✔ Test symbolsActionsAndColors() passed after 0.001 seconds.
+✔ Test commandsAndResults() passed after 0.001 seconds.
+✔ Test completionRequestAndForegroundDelegate() passed after 0.001 seconds.
+✔ Test modelKeepsLastReportOnErrors() passed after 0.001 seconds.
+✔ Test deliveryLockRequiresPermissionAndHealthAndRetries() passed after 0.006 seconds.
+✔ Test fixtureContractAndByteFraming() passed after 0.716 seconds.
+✔ Test lookupOrderAndNotFound() passed after 0.716 seconds.
+✔ Test fixtureBlocksAndChildLines() passed after 0.717 seconds.
+✔ Test presentationContract() passed after 0.717 seconds.
+✔ Test injectedPermissionControlsDeliveryAndQuitReleasesLock() passed after 0.841 seconds.
+✔ Test actionProcessUsesExactArgvAndDrainsBothPipes() passed after 0.842 seconds.
+✔ Test unexpectedExitReleasesDeliveryDuringBackoff() passed after 0.842 seconds.
+✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 1.285 seconds.
+✔ Test watcherDrainsStderrRestartsWithBackoffAndQuits() passed after 1.406 seconds.
+✔ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases passed after 1.481 seconds.
+✔ Test secondInstanceCannotClaimAndTakesOverAfterQuit() passed after 2.957 seconds.
+✔ Test run with 16 tests in 0 suites passed after 2.958 seconds.
+  ```
+  `./build.sh` → exit 0:
+  ```text
+[0/1] Planning build
+Building for production...
+[0/4] Write sources
+[2/4] Write swift-version--58304C5D6DBC2206.txt
+[4/5] Compiling MenubarCore Actions.swift
+[5/7] Compiling MenubarApp App.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking multi-link-menubar
+Build complete! (3.97s)
+build/multi-link.app: replacing existing signature
+Built and verified build/multi-link.app
+  ```
+  `codesign --verify --strict build/multi-link.app` → exit 0, no output (also enforced by `build.sh` with `set -e`).
+  `codesign -dv build/multi-link.app 2>&1 | rg 'Identifier=|Format=|Signature=|Info.plist'` → exit 0:
+  ```text
+Identifier=dev.multi-link.menubar
+Format=app bundle with Mach-O thin (arm64)
+Signature=adhoc
+Info.plist entries=10
+TeamIdentifier=not set
+  ```
+  `codesign -d -r- build/multi-link.app 2>&1 | rg '^designated'` → exit 0:
+  ```text
+designated => identifier "dev.multi-link.menubar"
+  ```
+  `plutil -p build/multi-link.app/Contents/Info.plist` → exit 0:
+  ```text
+{
+  "CFBundleDisplayName" => "multi-link"
+  "CFBundleExecutable" => "multi-link-menubar"
+  "CFBundleIdentifier" => "dev.multi-link.menubar"
+  "CFBundleName" => "multi-link"
+  "CFBundlePackageType" => "APPL"
+  "CFBundleShortVersionString" => "1.0"
+  "CFBundleVersion" => "1"
+  "LSMinimumSystemVersion" => "15.0"
+  "LSUIElement" => 1
+  "NSAppleEventsUsageDescription" => "multi-link opens the TUI and focuses your agent's terminal tab."
+}
+  ```
+  `git diff --check` → exit 0, no output.
+- Review (Claude, 2026-11-12): three findings, fixed in Review round 1: the watcher waited for the first-launch
+  notification prompt; the repo header dropped the step title; Open TUI didn't bring Terminal forward.
+- Gotchas: No app launch, notification permission prompt, actual banner or screenshot verification in this step;
+  those are Step 19.4. Block ordering deliberately follows the CLI report rather than re-sorting in Swift.
+  The notification test decodes a wire event and injects a request sink; it never calls the system notification
+  center. The action process test uses a local fake executable and drains 262144 stderr bytes. Existing unrelated
+  `.claude/` and `mod/multi-link-pane/tsconfig.json` untracked files were left untouched.
 
 ### 2026-11-12 — Step 19.2: Review round 1 — Codex
 - Did: Fixed Claude's health finding: decodable lines, including scan errors, refresh watcher health;

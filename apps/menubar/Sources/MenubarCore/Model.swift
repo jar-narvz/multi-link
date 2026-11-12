@@ -132,6 +132,19 @@ public final class MenubarModel {
     public private(set) var checkedAt: String?
     public private(set) var status: WatcherStatus = .idle
     public private(set) var ownsDelivery = false
+    public var actionNotice: String?
+    public private(set) var showsNotificationsOff = false
+    private var notificationsOffDismissed = false
+
+    public func updatePermission(_ allowed: Bool) {
+        showsNotificationsOff = !allowed && !notificationsOffDismissed
+    }
+
+    public func dismissNotificationsOff() {
+        notificationsOffDismissed = true
+        showsNotificationsOff = false
+    }
+
     public var onCompletion: ((Completion) -> Void)?
 
     public init() {}
