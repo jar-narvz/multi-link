@@ -2839,8 +2839,9 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 
 ### Step 17.1 — Pane JSON: strip, asked/said, openable (Codex)
 - Depends on: 17.0. H1.
-- Files: `crates/cli/src/pane.rs`, `crates/cli/src/main.rs` (`open --app-only`), `crates/core/src/graph.rs` (a
-  `pub` on the H1 `said` helper only), `crates/cli/tests/**`, `PROGRESS.md`
+- Files: `crates/cli/src/pane.rs`, `crates/cli/src/main.rs` (`open --app-only`), `crates/core/src/graph.rs` (extract the
+  inline Codex `said` expression into one `pub` helper, graph output unchanged; Review log), `crates/cli/Cargo.toml` + `Cargo.lock`
+  (the workspace's own `multi-link-codex` as a CLI dependency, review round 1), `crates/cli/tests/**`, `PROGRESS.md`
 - Verify: tests, clippy, fmt clean; every 17.0 `pane --json` key byte for byte; tests: strip null without a step or
   unseen, parts in graph order, a busy session owning an old and a current part marks only the current one `running`,
   a stale Codex part is `stale`, `status` null when unknown, `said` cut on a char boundary and null for Claude,
@@ -2883,6 +2884,15 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · tmux / Herdr jump (optional, never a required install) · desktop menu-bar app.
 
 ## Review log
+
+### 2026-11-11 — Step 17.1 scope (Claude, Codex stop)
+- Codex stopped: `graph.rs` has no `said` helper to make `pub`; the logic is inline in the Codex part builder
+  (`last.filter(completed).and_then(last_agent_message)`). **Accepted:** 17.1 may extract it into one `pub` helper
+  that both graph and pane call, with `graph --json` output unchanged (its golden tests prove it). Nothing else in
+  `graph.rs` changes.
+- Review round 1 moved the raw-rollout reader into `pane.rs` (graph keeps a one-mode helper), so the CLI needs the
+  workspace's own `multi-link-codex` crate (compressed rollouts). **Accepted:** `crates/cli/Cargo.toml` and
+  `Cargo.lock` join 17.1's files; no outside crate is added.
 
 ### 2026-11-11 — Step 17.0 amendments (Claude, during the step)
 - **No `strip-chain` / `strip-none` keys.** With H1 applied, the existing keys already cover the strip: `idle-recent`

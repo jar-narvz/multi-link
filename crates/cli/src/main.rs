@@ -93,6 +93,9 @@ struct CommonArgs {
 
 #[derive(Args)]
 struct OpenArgs {
+    /// Refuse any action other than opening an existing desktop app session.
+    #[arg(long)]
+    app_only: bool,
     /// Session id or a prefix of it (matched on full ids, history window off).
     id_prefix: String,
     /// Fork instead of resuming in place (`--fork-session`).
@@ -181,6 +184,10 @@ fn open(
             ),
             None => eprintln!("cannot open {:?}: {}", session.id, reason.as_str()),
         }
+        return Ok(EXIT_UNAVAILABLE);
+    }
+    if args.app_only && !matches!(action, OpenAction::AppLink { .. }) {
+        eprintln!("cannot open {:?}: no app link available", session.id);
         return Ok(EXIT_UNAVAILABLE);
     }
     if args.dry_run {

@@ -1,13 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 17 (pane strip, row actions, Codex-done notifications) is in progress. Step 17.0 is committed (Claude step,
-2026-11-11): H1–H6 pins in `docs/design.md` → "Phase 17 decisions"; pane keys carry the H1 fields; new
-`openable.json`, `watch-script.json`, `watch-{codex-done,tick}.jsonl`. Next: Step 17.1 (pane JSON, Codex).**
-- **For 17.1:** every pane key's command is the 16.0 list plus `openable` (Step 17.0 entry); field order and every
-  status rule are pinned in design H1; the two key-reading tests (`pane_matches_all_ten_pretty_json_keys_byte_for_byte`
-  in `crates/cli/tests/pane.rs`, and the watch unit test that counts top-level fields) fail until 17.1 lands. Codex
-  `said` in fixtures is the scrubbed `<text>`; test the 120-character cut with a synthetic rollout.
+**Step 17.1 is committed (Codex, reviewed by Claude, 2026-11-11): pane JSON has `strip`, `asked`/`said`/`openable`
+(all eleven keys byte for byte) and `open --app-only` refuses anything but `AppLink`. Next: Step 17.2 (watcher).**
+- **Pass cost note for 17.2:** each pass now also runs `scanner.sessions` (all-time), `open_resolver`, and
+  `scanner.graph` when this session has a step; Codex `said` is cached per rollout by (length, mtime). The 17.2 tick
+  CPU budget (≤ 250 ms) covers all of that; measure it with the strip on.
 - **For 17.2:** replay `watch-script.json` (per-tick pass results; `error` = failed pass) with the injected runtime and
   a fresh marker dir: with `--notify` the output is `watch-codex-done.jsonl` line for line, without it
   `watch-tick.jsonl`. Event lines come before that tick's data or tick line.
@@ -821,6 +819,127 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 17.1: Pane JSON: strip, asked/said, openable — Codex
+- Did: Implemented H1 in the pinned field order: top-level strip, row/child asked/said/openable.
+  Strip uses graph order and live_parts, latest-part waiting and same-chain done rules,
+  floor/minimum active minutes, and null for an unseen, stepless or nested-only current session.
+  Added fresh `open --app-only` resolution, refusing Resume with exit 3 before spawning.
+  Updated only the watch test's top-level field count; watcher behavior and mod remain unchanged.
+- Changed: `crates/cli/src/{pane.rs,main.rs}`, `crates/core/src/graph.rs`, `crates/cli/tests/pane.rs`,
+  `crates/cli/Cargo.toml`, `Cargo.lock`, `PROGRESS.md`.
+- Review round 1: Addressed both Claude findings. `graph.rs` now contains only the extracted
+  `pub fn said(last: Option<&Turn>) -> Option<String>` and its graph call; no rollout parser or I/O
+  remains in that helper. The private raw_said reader lives in pane.rs, preserving the explanation that
+  normalized text is already cut to 119 characters plus ellipsis. Added the approved workspace-owned
+  multi-link-codex CLI path dependency and let Cargo update the lockfile (one dependency-list line;
+  no outside crates). The private SaidCache lives outside run's pass closure and is borrowed by details
+  on each pass, keyed by transcript path, file length and modification time. Unchanged rollouts reuse
+  raw said, including null; changed files are re-read, and read/metadata errors discard cached values.
+  A read-count seam proves one read across two unchanged calls, a re-read after growth, and another
+  re-read after a same-length rewrite with a new mtime. Added compressed-rollout coverage too.
+- Verify: Rust PATH set per AGENTS.md. Original pane tests were red (2 passed, 3 failed). The new
+  cache test was first red with undeclared SaidCache, then passed after implementation. Fresh round 1
+  `TZ=UTC cargo test --workspace` → exit 0; 66 test targets, 704 passed, 0 failed,
+  1 existing ignored (`real_counts`). Actual relevant output:
+  ```text
+test pane::tests::raw_said_reads_compressed_rollouts ... ok
+test pane::tests::said_cache_reuses_unchanged_rollout_and_reads_growth_and_new_mtime ... ok
+test pane::tests::strip_statuses_use_current_parts_and_preserve_graph_order ... ok
+test pane::watch_tests::watch_first_change_heartbeat_and_all_phrases_are_filtered_and_flushed ... ok
+test nested_current_session_has_no_strip ... ok
+test said_uses_last_completed_real_turn_and_cuts_at_120_unicode_characters ... ok
+test app_only_accepts_app_link_and_refuses_resume_after_app_record_disappears ... ok
+test pane_matches_all_eleven_pretty_json_keys_byte_for_byte ... ok
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.42s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual final output:
+  ```text
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 20.19s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `TZ=UTC bash fixtures/expected/phase9/check.sh 6` → exit 0, actual output:
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+  `TZ=UTC bash fixtures/expected/phase12/check.sh` → exit 0, actual output:
+  ```text
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+  ```
+  `TZ=UTC bash fixtures/expected/phase13/check.sh` → exit 0, actual output:
+  ```text
+ok   links.json
+  ```
+  `TZ=UTC bash fixtures/expected/phase14/check.sh` → exit 0, actual output:
+  ```text
+ok   live.json
+  ```
+- Review: Claude, 2 findings in round 1, both fixed: (1) `graph.rs` got a two-mode `said(last, rollout)` with a
+  rollout parser inside; now graph keeps a one-mode `said(last)` and the raw reader is private in `pane.rs` (needs
+  the workspace `multi-link-codex` crate, approved in the Review log); (2) watch mode re-read every visible rollout
+  each pass; now cached by (length, mtime) with a read-count test. Two scope stops (no helper to make `pub`; the
+  CLI dependency) were approved and logged. Claude re-ran Verify: 704 passed, 0 failed, 1 ignored; clippy, fmt,
+  phase 9/12/13/14 checks exit 0, matching the entry. On real data the strip read plan ✓ → implement ✓ → review ✓
+  → fix round 1 ✓ → review running. Accepted as is: the cache never evicts (bounded by sessions seen in one
+  watcher's life).
+- Gotchas: Raw said stays in pane.rs because H1 needs 120 characters plus an ellipsis, whereas graph's
+  normalized message was already cut at 119 plus ellipsis. The synthetic temp-rollout test covers lengths
+  0/119/120/121 with multibyte characters, an imported completion and a later open turn. The raw reader
+  uses the existing open_rollout API, retaining compressed JSONL support. App-record removal in the
+  desktop fixture yields Unavailable (app_session); Resume refusal is tested separately with a CLI
+  fixture, including without dry-run. AppLink uses dry-run and existing command-construction coverage.
+  No keys/check scripts or mod changed; no watcher loop changes. Claude's PLAN.md edits and existing
+  untracked files left untouched. Nothing staged or committed.
 
 ### 2026-11-11 — Step 17.0: Rules, pane keys, API check — Claude
 - Did: mode check `codex-quota.py` → `primary: 2%`, `secondary: 61%`, `CODEX: OK` (17.0 is a Claude step). **H6

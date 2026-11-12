@@ -261,6 +261,12 @@ fn stretches(bursts: &[Activity], turns: &[&Turn]) -> (i64, usize) {
     (active_ms, count)
 }
 
+/// Final message from a graph part's last turn, if that turn completed.
+pub fn said(last: Option<&Turn>) -> Option<String> {
+    last.filter(|t| t.completed_at.is_some())
+        .and_then(|t| t.last_agent_message.clone())
+}
+
 /// The Codex part of a hop at `position` among its chain's Codex parts (G3).
 fn codex_part(
     input: &GraphInput<'_>,
@@ -318,9 +324,7 @@ fn codex_part(
         active_ms,
         stretches,
         asked: first.and_then(|t| t.prompt.clone()),
-        said: last
-            .filter(|t| t.completed_at.is_some())
-            .and_then(|t| t.last_agent_message.clone()),
+        said: said(last.copied()),
         counts,
         notable,
         waiting_reads: 0,

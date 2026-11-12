@@ -1,15 +1,19 @@
 //! The pane projects the worker's repo view, using its labels, placement and status words.
 use std::{
+    collections::{HashMap, HashSet},
     io::{self, Write},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use clap::Args;
 use multi_link_core::{
-    FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode, Scanner,
+    FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode, Scanner, graph,
+    open::{OpenAction, Resolver},
 };
-use multi_link_model::{Harness, Match, SessionRow, State, Timestamp};
+use multi_link_model::{
+    GraphReport, Harness, Match, PartStatus, Session, SessionRow, State, Timestamp,
+};
 use multi_link_tui::{Refresh, view};
 use serde::Serialize;
 
@@ -42,6 +46,7 @@ struct Pane {
     #[serde(rename = "this")]
     this_session: String,
     seen: bool,
+    strip: Option<Strip>,
     sections: Vec<Section>,
 }
 #[derive(Debug, Serialize)]
@@ -57,6 +62,9 @@ struct PaneRow {
     step: Option<String>,
     state: State,
     phrase: String,
+    asked: Option<String>,
+    said: Option<String>,
+    openable: bool,
     is_this: bool,
     children: Vec<Child>,
     handoffs: Vec<Handoff>,
@@ -67,6 +75,9 @@ struct Child {
     harness: Harness,
     state: State,
     phrase: String,
+    asked: Option<String>,
+    said: Option<String>,
+    openable: bool,
     r#match: &'static str,
 }
 #[derive(Debug, Serialize)]
@@ -74,6 +85,205 @@ struct Handoff {
     step: Option<String>,
     outcome: String,
     candidates: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct Strip {
+    step: String,
+    title: Option<String>,
+    parts: Vec<StripPart>,
+}
+#[derive(Debug, Serialize)]
+struct StripPart {
+    harness: Harness,
+    kind: String,
+    status: Option<&'static str>,
+    active_min: i64,
+    is_this: bool,
+}
+
+fn strip(report: &GraphReport, sessions: &[Session], this: &str) -> Strip {
+    let live = graph::live_parts(report, sessions);
+    let parts = report
+        .parts
+        .iter()
+        .enumerate()
+        .map(|(i, part)| {
+            let latest = !report.parts.iter().enumerate().any(|(j, p)| {
+                p.harness == part.harness
+                    && p.session == part.session
+                    && (p.from, j) > (part.from, i)
+            });
+            let status = match part.harness {
+                Harness::Codex => match part.status {
+                    Some(PartStatus::Done) => Some("done"),
+                    Some(PartStatus::Stale) => Some("stale"),
+                    Some(PartStatus::Working) if live.contains(&i) => Some("running"),
+                    _ => None,
+                },
+                Harness::Claude if live.contains(&i) => Some("running"),
+                Harness::Claude
+                    if latest
+                        && sessions.iter().any(|s| {
+                            Some(s.id.as_str()) == part.session.as_deref()
+                                && s.harness == Harness::Claude
+                                && s.state == State::Waiting
+                        }) =>
+                {
+                    Some("waiting")
+                }
+                Harness::Claude
+                    if report
+                        .parts
+                        .iter()
+                        .skip(i + 1)
+                        .any(|p| p.chain == part.chain) =>
+                {
+                    Some("done")
+                }
+                Harness::Claude => None,
+            };
+            StripPart {
+                harness: part.harness,
+                kind: part.kind.clone(),
+                status,
+                active_min: (part.active_ms / 60_000).max(1),
+                is_this: part.session.as_deref() == Some(this),
+            }
+        })
+        .collect();
+    Strip {
+        step: report.step.id.clone(),
+        title: report.step.title.clone(),
+        parts,
+    }
+}
+
+#[derive(Default)]
+struct Details {
+    said: Option<String>,
+    openable: bool,
+}
+
+/// Last completed non-imported turn's original message, before the pane's cut.
+fn raw_said(path: &Path) -> io::Result<Option<String>> {
+    // Read original completion text: the graph reader's normalization already
+    // cuts at 119 characters plus an ellipsis, before the pane's H1 cut.
+    let reader = multi_link_codex::open_rollout(path)?;
+    let mut active = None;
+    let mut completed = None;
+    for record in multi_link_model::jsonl::JsonlReader::new(reader, "rollout") {
+        let Ok((_, value)) = record? else { continue };
+        if value["type"] != "event_msg" {
+            continue;
+        }
+        let payload = &value["payload"];
+        let at = value["timestamp"]
+            .as_str()
+            .and_then(|s| Timestamp::parse(s).ok());
+        if payload["type"] == "task_started" {
+            active = payload["turn_id"]
+                .as_str()
+                .filter(|id| !id.starts_with("external-import") && at.is_some())
+                .map(str::to_owned);
+        } else if payload["type"] == "task_complete"
+            && active.as_deref().is_some_and(|id| payload["turn_id"] == id)
+        {
+            if at.is_some() {
+                completed = payload["last_agent_message"].as_str().map(str::to_owned);
+            }
+            active = None;
+        }
+    }
+    Ok(completed)
+}
+
+struct CachedSaid {
+    len: u64,
+    modified: SystemTime,
+    said: Option<String>,
+}
+
+#[derive(Default)]
+struct SaidCache {
+    entries: HashMap<PathBuf, CachedSaid>,
+}
+
+impl SaidCache {
+    fn get(
+        &mut self,
+        path: &Path,
+        read: impl FnOnce(&Path) -> io::Result<Option<String>>,
+    ) -> Option<String> {
+        let stamp =
+            std::fs::metadata(path).and_then(|metadata| Ok((metadata.len(), metadata.modified()?)));
+        let Ok((len, modified)) = stamp else {
+            self.entries.remove(path);
+            return None;
+        };
+        if let Some(entry) = self.entries.get(path)
+            && (entry.len, entry.modified) == (len, modified)
+        {
+            return entry.said.clone();
+        }
+        self.entries.remove(path);
+        let said = read(path).ok()?;
+        self.entries.insert(
+            path.to_path_buf(),
+            CachedSaid {
+                len,
+                modified,
+                said: said.clone(),
+            },
+        );
+        said
+    }
+}
+
+fn details(
+    root: &Path,
+    sessions: &[Session],
+    resolver: &Resolver,
+    pane: &Pane,
+    said_cache: &mut SaidCache,
+) -> HashMap<String, Details> {
+    let visible: HashSet<&str> = pane
+        .sections
+        .iter()
+        .flat_map(|s| &s.rows)
+        .flat_map(|r| {
+            std::iter::once(r.id.as_str()).chain(r.children.iter().map(|c| c.id.as_str()))
+        })
+        .collect();
+    sessions
+        .iter()
+        .filter(|s| visible.contains(s.id.as_str()))
+        .map(|session| {
+            let said = if session.harness == Harness::Codex {
+                session
+                    .transcript
+                    .as_deref()
+                    .and_then(|path| said_cache.get(&root.join(path), raw_said))
+                    .map(|text| {
+                        let mut chars = text.chars();
+                        let mut preview: String = chars.by_ref().take(120).collect();
+                        if chars.next().is_some() {
+                            preview.push('…');
+                        }
+                        preview
+                    })
+            } else {
+                None
+            };
+            (
+                session.id.clone(),
+                Details {
+                    said,
+                    openable: matches!(resolver.action(session, false), OpenAction::AppLink { .. }),
+                },
+            )
+        })
+        .collect()
 }
 
 fn visible(row: &SessionRow) -> bool {
@@ -97,6 +307,7 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
         now,
         this_session: this.into(),
         seen: false,
+        strip: None,
         sections: ["working", "waiting", "recent"]
             .map(|name| Section {
                 name,
@@ -144,6 +355,9 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
                 harness: child.harness,
                 state: child.state,
                 phrase: view::status(child, now, offset),
+                asked: child.asked.clone(),
+                said: None,
+                openable: false,
                 r#match: match view::placing(child, Some(&row.id)).map(|l| l.r#match) {
                     Some(Match::Exact) => "exact",
                     _ => "likely",
@@ -186,6 +400,9 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
             },
             state: row.state,
             phrase: view::status(row, now, offset),
+            asked: row.asked.clone(),
+            said: None,
+            openable: false,
             is_this: row.id == this,
             children,
             handoffs,
@@ -306,6 +523,7 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
         None => (super::home()?, RepoMode::Real, &real_probe),
     };
     let mut scanner = Scanner::default();
+    let mut said_cache = SaidCache::default();
     let mut pass = |now| -> Result<Pane, WatchError> {
         let options = Options {
             state_dir: super::state_dir(&root),
@@ -315,7 +533,46 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
             probe,
         };
         let refresh = super::tui::refresh_with_live(&mut scanner, &root, &options, None, false)?;
-        Ok(project(&refresh, &args.cwd, repo_mode, &args.session))
+        let mut pane = project(&refresh, &args.cwd, repo_mode, &args.session);
+        let all = Options {
+            since: None,
+            state_dir: options.state_dir.clone(),
+            ..options
+        };
+        let sessions = scanner.sessions(&root, &all)?.report.sessions;
+        let resolver = scanner.open_resolver(&root)?;
+        let details = details(&root, &sessions, &resolver, &pane, &mut said_cache);
+        for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
+            if let Some(detail) = details.get(&row.id) {
+                row.said = detail.said.clone();
+                row.openable = detail.openable;
+            }
+            for child in &mut row.children {
+                if let Some(detail) = details.get(&child.id) {
+                    child.said = detail.said.clone();
+                    child.openable = detail.openable;
+                }
+            }
+        }
+        if let Some(step) = pane
+            .sections
+            .iter()
+            .flat_map(|s| &s.rows)
+            .find(|r| r.is_this)
+            .and_then(|r| r.step.as_deref())
+        {
+            let mut plans = |folder: &Path| {
+                multi_link_plan::steps_report(
+                    Path::new(""),
+                    &[folder.to_string_lossy().into_owned()],
+                )
+                .repos
+                .remove(0)
+            };
+            let report = scanner.graph(&root, &options, &pane.repo, step, &mut plans)?;
+            pane.strip = Some(strip(&report, &sessions, &args.session));
+        }
+        Ok(pane)
     };
     let mut out = io::stdout().lock();
     if args.watch {
@@ -519,6 +776,149 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn strip_statuses_use_current_parts_and_preserve_graph_order() {
+        let mut report: GraphReport = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/phase12/graph-1.1.json"
+        ))
+        .unwrap();
+        let mut session: Session = serde_json::from_value(
+            serde_json::from_str::<serde_json::Value>(include_str!(
+                "../../../fixtures/expected/sessions.json"
+            ))
+            .unwrap()["sessions"][0]
+                .clone(),
+        )
+        .unwrap();
+        session.id = OWNER.into();
+        session.harness = Harness::Claude;
+        session.state = State::Busy;
+        let mut old = report.parts[0].clone();
+        old.session = Some(OWNER.into());
+        old.from = Some(Timestamp::from_epoch_ms(report.now.epoch_ms() - 60_000).unwrap());
+        old.to = old.from;
+        old.active_ms = 59_999;
+        let mut done = old.clone();
+        done.harness = Harness::Codex;
+        done.session = Some("done".into());
+        done.kind = "implement".into();
+        done.status = Some(PartStatus::Done);
+        let mut current = old.clone();
+        current.kind = "review".into();
+        current.from = Some(report.now);
+        current.to = Some(report.now);
+        current.active_ms = 120_999;
+        let mut stale = done.clone();
+        stale.chain = 1;
+        stale.status = Some(PartStatus::Stale);
+        let mut unknown = done.clone();
+        unknown.chain = 2;
+        unknown.status = Some(PartStatus::Unavailable);
+        let mut tail = current.clone();
+        tail.chain = 3;
+        tail.session = Some("other".into());
+        report.parts = vec![old, done, current, stale, unknown, tail];
+        let actual = strip(&report, &[session.clone()], OWNER);
+        assert_eq!(
+            actual.parts.iter().map(|p| p.status).collect::<Vec<_>>(),
+            [
+                Some("done"),
+                Some("done"),
+                Some("running"),
+                Some("stale"),
+                None,
+                None
+            ]
+        );
+        assert_eq!(
+            actual
+                .parts
+                .iter()
+                .map(|p| p.kind.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "plan",
+                "implement",
+                "review",
+                "implement",
+                "implement",
+                "review"
+            ]
+        );
+        assert_eq!(
+            actual.parts.iter().map(|p| p.is_this).collect::<Vec<_>>(),
+            [true, false, true, false, false, false]
+        );
+        assert_eq!(actual.parts[0].active_min, 1);
+        assert_eq!(actual.parts[2].active_min, 2);
+        session.state = State::Waiting;
+        let waiting = strip(&report, &[session], OWNER);
+        assert_eq!(waiting.parts[0].status, Some("done"));
+        assert_eq!(waiting.parts[2].status, Some("waiting"));
+        let mut working = report.parts[1].clone();
+        working.session = Some("working".into());
+        working.status = Some(PartStatus::Working);
+        working.run_available = Some(true);
+        working.chain = 4;
+        let mut resumed = working.clone();
+        resumed.from = Some(report.now);
+        resumed.to = Some(report.now);
+        report.parts.extend([working, resumed]);
+        let codex = strip(&report, &[], OWNER);
+        assert_eq!(codex.parts[6].status, None);
+        assert_eq!(codex.parts[7].status, Some("running"));
+    }
+
+    #[test]
+    fn raw_said_reads_compressed_rollouts() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../fixtures/sessions-phase9/.codex/sessions/2026/11/09/rollout-2026-11-09T09-00-45-91c00001-0000-4000-8000-000091c00001.jsonl.zst"
+        );
+        assert_eq!(raw_said(&path).unwrap().as_deref(), Some("<text>"));
+    }
+
+    #[test]
+    fn said_cache_reuses_unchanged_rollout_and_reads_growth_and_new_mtime() {
+        use std::cell::Cell;
+        use std::fs::{File, FileTimes, OpenOptions};
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("rollout-synthetic.jsonl");
+        fs::write(&path, "first").unwrap();
+        let reads = Cell::new(0);
+        let read = |path: &Path| {
+            reads.set(reads.get() + 1);
+            fs::read_to_string(path).map(Some)
+        };
+        let mut cache = SaidCache::default();
+        assert_eq!(cache.get(&path, read).as_deref(), Some("first"));
+        assert_eq!(reads.get(), 1);
+        assert_eq!(cache.get(&path, read).as_deref(), Some("first"));
+        assert_eq!(reads.get(), 1);
+
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b" second")
+            .unwrap();
+        assert_eq!(cache.get(&path, read).as_deref(), Some("first second"));
+        assert_eq!(reads.get(), 2);
+
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        fs::write(&path, "third fourth").unwrap();
+        File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_times(FileTimes::new().set_modified(modified + Duration::from_secs(1)))
+            .unwrap();
+        assert_eq!(cache.get(&path, read).as_deref(), Some("third fourth"));
+        assert_eq!(reads.get(), 3);
+        assert_eq!(cache.get(&path, read).as_deref(), Some("third fourth"));
+        assert_eq!(reads.get(), 3);
     }
 
     fn git(path: &Path, args: &[&str]) {
@@ -735,7 +1135,7 @@ mod watch_tests {
             "waiting"
         );
         for line in &lines {
-            assert_eq!(line.as_object().unwrap().len(), 6);
+            assert_eq!(line.as_object().unwrap().len(), 7);
             assert_eq!(line["v"], 1);
         }
         assert_eq!(output.flushes, 3);

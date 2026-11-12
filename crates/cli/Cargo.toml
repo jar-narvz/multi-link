@@ -11,6 +11,7 @@ path = "src/main.rs"
 multi-link-model.workspace = true
 multi-link-hook = { path = "../hook" }
 multi-link-core = { path = "../core" }
+multi-link-codex = { path = "../codex" }
 multi-link-plan = { path = "../plan" }
 multi-link-tui = { path = "../tui" }
 ratatui.workspace = true

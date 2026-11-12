@@ -1,9 +1,13 @@
 use std::{path::Path, process::Command};
 
 #[test]
-fn pane_matches_all_ten_pretty_json_keys_byte_for_byte() {
+fn pane_matches_all_eleven_pretty_json_keys_byte_for_byte() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let cases = [
+        (
+            "openable",
+            "--root fixtures/sessions-phase9 --now 2026-11-09T06:00:00Z --cwd /home/dev/repo-p9c --session 92000002-0000-4000-8000-000092000002",
+        ),
         (
             "busy",
             "--root fixtures/sessions-phase14 --now 2026-11-10T22:20:00Z --cwd /home/dev/repo-p --session 14150000-0000-4000-8000-000000001415",
@@ -45,7 +49,7 @@ fn pane_matches_all_ten_pretty_json_keys_byte_for_byte() {
             "--root fixtures/sessions-phase9 --now 2026-11-09T12:00:00Z --cwd /home/dev/repo-p9c --session 92000012-0000-4000-8000-00009200000c",
         ),
     ];
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 11);
     for (name, args) in cases {
         let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
             .current_dir(&root)
@@ -197,4 +201,129 @@ fn watcher_exits_within_one_tick_after_parent_exits() {
 #[cfg(unix)]
 fn watcher_started_with_parent_one_exits_immediately() {
     watcher_parent_test(true);
+}
+
+fn copy_tree(source: &Path, target: &Path) {
+    std::fs::create_dir_all(target).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let to = target.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &to);
+        } else {
+            std::fs::copy(entry.path(), to).unwrap();
+        }
+    }
+}
+
+#[test]
+fn app_only_accepts_app_link_and_refuses_resume_after_app_record_disappears() {
+    let temp = tempfile::tempdir().unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase9");
+    copy_tree(&fixtures, temp.path());
+    let open = |id, dry_run| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_multi-link"));
+        cmd.args(["open", "--app-only", "--root"])
+            .arg(temp.path())
+            .args(["--now", "2026-11-09T06:00:00Z", id]);
+        if dry_run {
+            cmd.arg("--dry-run");
+        }
+        cmd.output().unwrap()
+    };
+    let output = open("92000002", true);
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["action"], "app_link");
+    std::fs::remove_file(temp.path().join(
+        "Library/Application Support/Claude/claude-code-sessions/00000000-0000-4000-8000-0000000094a0/00000000-0000-4000-8000-0000000094b0/local_92f00002-0000-4000-8000-000000009202.json"
+    )).unwrap();
+    let output = open("92000002", true);
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["action"], "unavailable");
+    assert_eq!(value["reason"], "app_session");
+    // A CLI session that resolves to Resume must also be refused, including
+    // without dry-run: app-only must never launch a terminal resume command.
+    let output = open("92000001", true);
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["action"], "resume");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no app link available"));
+    let output = open("92000001", false);
+    assert_eq!(output.status.code(), Some(3), "{output:?}");
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no app link available"));
+}
+
+#[test]
+fn nested_current_session_has_no_strip() {
+    let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .args([
+            "pane",
+            "--json",
+            "--root",
+            "fixtures/sessions-phase14",
+            "--now",
+            "2026-11-10T22:20:00Z",
+            "--cwd",
+            "/home/dev/repo-m",
+            "--session",
+            "14210000-0000-4000-8000-000000001421",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["seen"], true);
+    assert_eq!(value["strip"], serde_json::Value::Null);
+}
+
+#[test]
+fn said_uses_last_completed_real_turn_and_cuts_at_120_unicode_characters() {
+    use serde_json::json;
+    let temp = tempfile::tempdir().unwrap();
+    let sessions = temp.path().join(".codex/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    for length in [0, 119, 120, 121] {
+        let message = "é".repeat(length);
+        let records = [
+            json!({"type":"session_meta","timestamp":"2026-11-10T22:00:00Z","payload":{"id":"aaaaaaaa-0000-4000-8000-000000000001","cwd":"/synthetic","timestamp":"2026-11-10T22:00:00Z"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-10T22:01:00Z","payload":{"type":"task_started","turn_id":"real"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-10T22:02:00Z","payload":{"type":"task_complete","turn_id":"real","last_agent_message":message}}),
+            json!({"type":"event_msg","timestamp":"2026-11-10T22:02:10Z","payload":{"type":"task_started","turn_id":"external-import-1"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-10T22:02:20Z","payload":{"type":"task_complete","turn_id":"external-import-1","last_agent_message":"must be ignored"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-10T22:03:00Z","payload":{"type":"task_started","turn_id":"open"}}),
+        ];
+        let path = sessions.join("rollout-synthetic.jsonl");
+        std::fs::write(
+            &path,
+            records.iter().map(|v| format!("{v}\n")).collect::<String>(),
+        )
+        .unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_multi-link"))
+            .args(["pane", "--json", "--root"])
+            .arg(temp.path())
+            .args([
+                "--now",
+                "2026-11-10T22:04:00Z",
+                "--cwd",
+                "/synthetic",
+                "--session",
+                "aaaaaaaa-0000-4000-8000-000000000001",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            value["sections"][0]["rows"][0]["said"],
+            if length > 120 {
+                format!("{}…", "é".repeat(120))
+            } else {
+                message
+            }
+        );
+    }
 }
