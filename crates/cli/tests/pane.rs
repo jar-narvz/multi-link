@@ -327,3 +327,87 @@ fn said_uses_last_completed_real_turn_and_cuts_at_120_unicode_characters() {
         );
     }
 }
+
+#[test]
+fn notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker() {
+    use serde_json::{Value, json};
+    use std::{
+        io::{BufRead, BufReader, Write},
+        process::Stdio,
+        sync::mpsc,
+        time::Duration,
+    };
+    struct Watcher(std::process::Child);
+    impl Drop for Watcher {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14");
+    let temp = tempfile::tempdir().unwrap();
+    copy_tree(&fixture, temp.path());
+    let markers = temp.path().join("watch-state");
+    let mut watcher = Watcher(
+        Command::new(env!("CARGO_BIN_EXE_multi-link"))
+            .args(["pane", "--json", "--watch", "--notify", "--root"])
+            .arg(temp.path())
+            .args([
+                "--now",
+                "2026-11-10T22:20:00Z",
+                "--cwd",
+                "/home/dev/repo-m",
+                "--session",
+                "unseen",
+            ])
+            .env("MULTI_LINK_HOME", &markers)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
+    let (sender, receiver) = mpsc::channel();
+    let stdout = watcher.0.stdout.take().unwrap();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            if sender.send(line.unwrap()).is_err() {
+                break;
+            }
+        }
+    });
+    let receive = || -> Value {
+        serde_json::from_str(&receiver.recv_timeout(Duration::from_secs(5)).unwrap()).unwrap()
+    };
+    assert_eq!(receive()["seen"], false);
+    assert!(
+        !markers.join("notified").exists(),
+        "baseline must not claim"
+    );
+    let rollout = temp.path().join(".codex/sessions/2026/11/10/rollout-2026-11-10T21-40-04-14210000-0000-4000-8000-000000001421.jsonl");
+    writeln!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(rollout)
+            .unwrap(),
+        "{}",
+        json!({"type":"event_msg","timestamp":"2026-11-10T22:19:59Z","payload":{
+            "type":"task_complete","turn_id":"14210002-0000-4000-8000-000000021421",
+            "last_agent_message":"finished synthetic"
+        }})
+    )
+    .unwrap();
+    assert_eq!(
+        receive(),
+        json!({"v":1,"event":{
+            "kind":"codex_done","run":"toolu_p14_1411_18",
+            "id":"14210000-0000-4000-8000-000000001421","step":"2.3","said":"finished synthetic"
+        }})
+    );
+    assert_eq!(receive()["v"], 1); // Changed data follows the event in the same tick.
+    assert_eq!(receive(), json!({"v":1,"tick":"2026-11-10T22:20:00.000Z"}));
+    assert!(markers.join("notified/toolu_p14_1411_18").is_file());
+    assert_eq!(
+        std::fs::read_dir(markers.join("notified")).unwrap().count(),
+        1
+    );
+}

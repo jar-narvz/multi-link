@@ -2885,6 +2885,19 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 
 ## Review log
 
+### 2026-11-11 — Step 17.2 tick cost (Claude, review)
+- Host measurement (release, real `~`, this repo, method of 16.4): warm tick **363 ms CPU** with the strip on,
+  388 ms with `--notify`, **189 ms** with a session that has no step (no strip). The 250 ms budget fails, and the
+  per-pass `scanner.graph` for the strip is about 175 ms of it. **Decision:** keep the strip but rebuild it only
+  when its inputs change: this row's step, or any session's `(id, state, last_activity)` or link set in the
+  all-time refresh; and at least every 30 s regardless, so `live_parts`' 5-minute staleness and active minutes
+  still move. Between rebuilds the pane reuses the last strip. Same file (`pane.rs`), done as 17.2 review round 1;
+  the budget then has to pass with `--notify` on, since 17.3's mod runs with it.
+- Round 1 result: 190 ms/tick (193 with `--notify`) on an idle repo. But a working session's `last_activity`
+  moves on nearly every tick, which would bring back the per-tick rebuild exactly while someone works. **Round 2:**
+  drop `last_activity` from the key; the strip's minutes and live/stale edges move with the 30 s rebuild, which is
+  fine for a display in whole minutes.
+
 ### 2026-11-11 — Step 17.1 scope (Claude, Codex stop)
 - Codex stopped: `graph.rs` has no `said` helper to make `pub`; the logic is inline in the Codex part builder
   (`last.filter(completed).and_then(last_agent_message)`). **Accepted:** 17.1 may extract it into one `pub` helper

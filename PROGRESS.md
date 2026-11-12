@@ -1,14 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 17.1 is committed (Codex, reviewed by Claude, 2026-11-11): pane JSON has `strip`, `asked`/`said`/`openable`
-(all eleven keys byte for byte) and `open --app-only` refuses anything but `AppLink`. Next: Step 17.2 (watcher).**
-- **Pass cost note for 17.2:** each pass now also runs `scanner.sessions` (all-time), `open_resolver`, and
-  `scanner.graph` when this session has a step; Codex `said` is cached per rollout by (length, mtime). The 17.2 tick
-  CPU budget (≤ 250 ms) covers all of that; measure it with the strip on.
-- **For 17.2:** replay `watch-script.json` (per-tick pass results; `error` = failed pass) with the injected runtime and
-  a fresh marker dir: with `--notify` the output is `watch-codex-done.jsonl` line for line, without it
-  `watch-tick.jsonl`. Event lines come before that tick's data or tick line.
+**Step 17.2 is committed (Codex, reviewed by Claude, 2026-11-11): the watcher prints a tick line on every unchanged
+tick and, with `--notify`, one `codex_done` event per hand-off (permanent `create_new` tombstones in
+`<state dir>/notified/`). The strip is rebuilt only when sessions' `(id, state)`, links or the step change, or every
+30 s. Next: Step 17.3 (the mod).**
+- **For 17.3:** spawn the watcher with `--notify`; event lines are `{"v":1,"event":{"kind":"codex_done","run",
+  "id","step","said"}}` and come before that tick's data or tick line; tick lines are `{"v":1,"tick":"<now>"}` and
+  only reset the "checked Ns ago" clock. `said` is at most 120 characters, no ellipsis.
+- **Known cost (for 17.4):** watcher first line is now 2.2–2.7 s on this repo (16.4 had a 1.64 s median), because the
+  first pass also does the all-time refresh, the strip graph and, with `--notify`, reads every linked rollout once.
+  17.4 must time pane data from the pane opening against the 2.5 s NFR and report it honestly.
 
 **Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
 [--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
@@ -819,6 +821,402 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 17.2: Review round 2 — Codex
+- Did: Removed last_activity from strip_fingerprint per PLAN.md Review log "Step 17.2 tick cost", round 2.
+  The session key now hashes only id and state; links, this row's step and the 30 s rebuild cap remain.
+  Updated the seam test so an activity-only change at 35 s keeps the previous strip. Another activity-only
+  change at 66 s (29 s since the last rebuild) also reuses it; at 67 s the 30 s cap rebuilds it anyway.
+  State, new-link, existing-link, id and step invalidation assertions remain in the same test.
+- Changed: `crates/cli/src/pane.rs`, `PROGRESS.md` (this round only).
+- Verify: Rust PATH set per AGENTS.md. Updated seam test was red before the fix, actual output:
+  ```text
+assertion `left == right` failed
+  left: 6
+ right: 5
+test pane::tests::strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds ... FAILED
+  ```
+  After the fix, `TZ=UTC cargo test -p multi-link strip_cache_rebuilds -- --nocapture` → exit 0:
+  ```text
+test pane::tests::strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.01s
+  ```
+  `TZ=UTC cargo test --workspace > /tmp/multi-link-step17.2-round2-test.log 2>&1` → exit 0;
+  66 targets, 711 passed, 0 failed, 1 existing ignored (`real_counts`). Actual relevant output:
+  ```text
+test pane::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify ... ok
+test pane::tests::strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds ... ok
+test pane_matches_all_eleven_pretty_json_keys_byte_for_byte ... ok
+test notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker ... ok
+  ```
+  Actual result lines from the full workspace run:
+  ```text
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.04s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.62s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.64s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output.
+  `git diff --check` → exit 0, no output.
+- Review: Claude, 2 rounds. Round 1: (1) tick CPU failed the NFR on the host: 363 ms/tick with the strip, 388 ms
+  with `--notify`, 189 ms without a strip, so the strip's per-pass graph was the cost → rebuild only on input change
+  or every 30 s (Review log "Step 17.2 tick cost"); (2) two caches parsed the same rollouts → one `TurnCache`. Round
+  2: the change key held `last_activity`, which moves on nearly every tick while a session works → removed. Claude
+  re-ran Verify: 711 passed, 0 failed, 1 ignored; clippy, fmt, phase 9 check exit 0; all keys byte for byte.
+  **Host CPU (release, real `~`, this repo, `--notify`, 60 s window after the first line, 20 ticks, includes two
+  30 s rebuilds): 219 ms/tick (budget ≤ 250 ms: pass)**; round 1 over 30 s: 190 / 193 ms. All lines were `tick`
+  (quiet repo). Accepted: three log entries for one step (initial + two rounds) are left as Codex wrote them.
+- Gotchas: **Host warm CPU with working sessions, strip + --notify: [Claude to fill; budget ≤ 250 ms].**
+  Did not run sandbox-blocked ps. The measurement command remains in the original Step 17.2 entry below;
+  no new CPU result is claimed.
+
+### 2026-11-11 — Step 17.2: Review round 1 — Codex
+- Did: Applied PLAN.md Review log "Step 17.2 tick cost" without changing PLAN.md. The pass closure now caches
+  the strip and calls scanner.graph only on a step change, an all-time session `(id, state, last_activity)`
+  or link change, or after 30 s. The fingerprint hashes those session fields and every link field directly;
+  sorted per-record hashes avoid rebuilds caused only by scanner ordering. Removing the current step clears
+  the strip cache. Failed rebuilds do not refresh its timestamp or fingerprint. The rebuild seam verifies
+  reuse at 29 s, rebuild at exactly 30 s, state/new-link/step changes, last_activity/id/link-field changes,
+  reordered sets and unrelated prompt metadata, timer reset after each rebuild, and step disappearance/return.
+  Removed SaidCache and the separate raw_said path: one TurnCache now supplies both details' row said and
+  done_runs' turn windows. A parser seam checks one read for unchanged input, shared access by both message
+  and completion lookup, and invalidation on growth or same-length rewrite with a new mtime. Original message
+  text, completed-turn selection, compressed rollout support and all accepted watcher delivery logic remain.
+- Changed: `crates/cli/src/pane.rs`, `PROGRESS.md` (this review round only; prior Step 17.2 integration test
+  changes in `crates/cli/tests/pane.rs` are still present).
+- Verify: Rust PATH set per AGENTS.md. Both new seam checks were first red (2 rebuilds/reads vs expected 1),
+  then green. `TZ=UTC cargo test --workspace > /tmp/multi-link-step17.2-round1-test.log 2>&1` → exit 0;
+  66 targets, 711 passed, 0 failed, 1 existing ignored (`real_counts`). Actual relevant output:
+  ```text
+test pane::tests::turn_cache_shares_parses_and_reads_growth_and_new_mtime ... ok
+test pane::tests::turn_cache_reads_original_said_from_compressed_rollouts ... ok
+test pane::watch_tests::watch_errors_continue_and_unchanged_success_restores_data ... ok
+test pane::watch_tests::simultaneous_watchers_only_one_claims ... ok
+test pane::watch_tests::broken_pipe_after_claim_leaves_tombstone ... ok
+test pane::watch_tests::watch_first_change_ticks_and_all_phrases_are_filtered_and_flushed ... ok
+test pane::watch_tests::watch_parent_one_exits_before_clock_or_pass ... ok
+test pane::watch_tests::disappeared_run_and_failed_scan_keep_state_and_body_is_capped ... ok
+test pane::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify ... ok
+test pane::tests::strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds ... ok
+test pane::watch_tests::full_runs_include_hidden_old_imports_and_use_each_handoff_window ... ok
+test pane_matches_all_eleven_pretty_json_keys_byte_for_byte ... ok
+test notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker ... ok
+  ```
+  Actual result lines from the full workspace run:
+  ```text
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.41s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.04s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+    Blocking waiting for file lock on build directory
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.60s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output.
+  `git diff --check` → exit 0, no output.
+- Review: Both round 1 findings implemented; awaiting Claude review. All eleven pane JSON keys and both
+  watch replay keys still match byte for byte. PLAN.md's existing Claude edits are preserved; no mod edits,
+  staging, commits or pushes.
+- Gotchas: **Host warm CPU with strip + --notify: [Claude to fill after remeasurement; budget ≤ 250 ms].**
+  Did not run sandbox-blocked ps. Use the existing release/ps measurement command in the original Step 17.2
+  entry below. Software verification passes; the CPU NFR is not claimed as passing.
+
+### 2026-11-11 — Step 17.2: Watcher ticks and at-most-once Codex-done events — Codex
+- Did: Added watch-only `--notify`. Completion detection uses all-time refresh links/sessions before pane
+  visibility, imports, nesting or the 2 h display window. Each exact/heuristic child run uses the graph's
+  half-open window (next same-child hand-off, any step/parent in the repo) and last turn's task_complete
+  evidence. Missing rollouts remain known as not done. Baselines, later already-done arrivals, failed passes
+  and disappearing runs follow H4. Only notifying watchers attempt a `create_new` claim at
+  `<state dir>/notified/<invocation id>`; tombstones are never removed, even after a broken output pipe.
+  Events precede the data/tick line and cap original final-message text at 120 Unicode characters.
+  Shared the existing raw completion reader with the per-rollout turn cache, preserving whitespace and
+  avoiding the graph reader's earlier normalization/truncation. Both caches use file length + mtime.
+  Replaced the 30 s data heartbeat with H5 tick lines every unchanged successful tick; errors still reset
+  the data change key. Parent teardown and immediate flushing are preserved.
+- Changed: `crates/cli/src/pane.rs`, `crates/cli/tests/pane.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Red/green: the tick/flush test first failed (2 flushes vs 3), then
+  passed; the unavailable-rollout baseline first failed ([] vs two not-done runs), then passed; the original
+  final-message test first failed (`second answer` vs `second\nanswer`), then passed after sharing raw turns.
+  Replay tests consume every tick of `fixtures/expected/pane/watch-script.json`, a fresh marker directory
+  and the injected runtime; both watch keys match byte for byte. Coverage includes two hand-offs sharing
+  a child id, concurrent watchers forced into the same-tick claim with a barrier, a sequential restart,
+  failed scans/disappearance, no claims without notify, Unicode body cap, a broken pipe after claiming,
+  full-refresh old/imported runs, exact/heuristic links, half-open windows and cache invalidation.
+  A CLI integration test appends completion to a copied synthetic rollout and checks event/data ordering,
+  next-tick suppression and the exact permanent marker. All eleven one-shot pane keys still pass.
+
+
+  Final `TZ=UTC cargo test --workspace > /tmp/multi-link-step17.2-test.log 2>&1` → exit 0;
+  66 test targets, 710 passed, 0 failed, 1 existing ignored (`real_counts`). Actual relevant output:
+  ```text
+test pane::watch_tests::watch_parent_one_exits_before_clock_or_pass ... ok
+test pane::watch_tests::watch_errors_continue_and_unchanged_success_restores_data ... ok
+test pane::watch_tests::disappeared_run_and_failed_scan_keep_state_and_body_is_capped ... ok
+test pane::watch_tests::broken_pipe_after_claim_leaves_tombstone ... ok
+test pane::watch_tests::watch_first_change_ticks_and_all_phrases_are_filtered_and_flushed ... ok
+test pane::watch_tests::simultaneous_watchers_only_one_claims ... ok
+test pane::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify ... ok
+test pane::watch_tests::full_runs_include_hidden_old_imports_and_use_each_handoff_window ... ok
+test pane_matches_all_eleven_pretty_json_keys_byte_for_byte ... ok
+test notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker ... ok
+  ```
+  Actual result lines from the complete workspace run:
+  ```text
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.04s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0, actual output:
+  ```text
+    Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.78s
+  ```
+  `cargo fmt --all -- --check` → exit 0, no output.
+  `git diff --check` → exit 0, no output.
+- Review: Pending Claude (implementer did not sign off the step). All Step 17.2 software checks passed;
+  host CPU NFR still pending. No staging, commits, PLAN.md changes or mod changes.
+- Gotchas: Per owner's instruction, did not attempt sandbox-blocked `ps`. **Warm CPU ms/tick:
+  first build 363 ms (failed; see the round 2 entry's Review for the final 219 ms).** Run the following outside
+  the sandbox from the repo root, setting `PANE_SESSION` to a current Claude session with a step.
+  The command checks that the strip is populated, drains stdout, samples CPU after the first data line and
+  30 s later, and divides the difference by ten ticks. It prints only the measured CPU, never message text.
+  `--notify` exercises H4 too and uses the normal permanent marker store (claims count as delivery attempts).
+
+  ```sh
+export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
+cargo build --release -p multi-link
+PANE_SESSION='<current Claude session id with a step>' python3 - <<'MEASURE'
+import json
+import os
+import subprocess
+import threading
+import time
+
+watcher = subprocess.Popen(
+    ["target/release/multi-link", "pane", "--json", "--watch", "--notify",
+     "--cwd", os.getcwd(), "--session", os.environ["PANE_SESSION"]],
+    stdout=subprocess.PIPE, text=True,
+)
+
+def cpu_seconds():
+    raw = subprocess.check_output(
+        ["ps", "-p", str(watcher.pid), "-o", "time="], text=True
+    ).strip()
+    return sum(float(part) * 60 ** index
+               for index, part in enumerate(reversed(raw.split(":"))))
+
+def drain():
+    for _ in watcher.stdout:
+        pass
+
+try:
+    first = json.loads(watcher.stdout.readline())
+    assert first.get("strip") is not None, "Use a seen session with a step/strip"
+    threading.Thread(target=drain, daemon=True).start()
+    before = cpu_seconds()
+    time.sleep(30)
+    after = cpu_seconds()
+    print("warm tick CPU ms =", (after - before) * 1000 / 10)
+finally:
+    watcher.terminate()
+    watcher.wait()
+MEASURE
+  ```
 
 ### 2026-11-11 — Step 17.1: Pane JSON: strip, asked/said, openable — Codex
 - Did: Implemented H1 in the pinned field order: top-level strip, row/child asked/said/openable.

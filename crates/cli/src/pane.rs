@@ -1,6 +1,7 @@
 //! The pane projects the worker's repo view, using its labels, placement and status words.
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
     io::{self, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
@@ -15,16 +16,19 @@ use multi_link_model::{
     GraphReport, Harness, Match, PartStatus, Session, SessionRow, State, Timestamp,
 };
 use multi_link_tui::{Refresh, view};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Args)]
 pub struct PaneArgs {
     /// Print the pane object as pretty JSON.
     #[arg(long, required = true)]
     json: bool,
-    /// Stream compact JSON changes and a heartbeat every 30 seconds.
+    /// Stream compact JSON changes and a checked tick every 3 seconds.
     #[arg(long)]
     watch: bool,
+    /// Emit at-most-once Codex completion events (watch mode only).
+    #[arg(long, requires = "watch")]
+    notify: bool,
     /// Home-shaped root; enables fixture mode.
     #[arg(long)]
     root: Option<PathBuf>,
@@ -87,19 +91,109 @@ struct Handoff {
     candidates: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct Strip {
     step: String,
     title: Option<String>,
     parts: Vec<StripPart>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct StripPart {
     harness: Harness,
     kind: String,
     status: Option<&'static str>,
     active_min: i64,
     is_this: bool,
+}
+
+/// Hash only graph invalidation inputs, without serializing the refresh. Sorting
+/// record hashes makes scanner ordering irrelevant to the session/link sets.
+/// Activity timestamps advance while work continues; the 30 s cap updates ages.
+fn strip_fingerprint(sessions: &[Session], links: &[multi_link_model::Link]) -> u64 {
+    let mut session_keys: Vec<_> = sessions
+        .iter()
+        .map(|session| {
+            let mut hash = DefaultHasher::new();
+            (&session.id, std::mem::discriminant(&session.state)).hash(&mut hash);
+            hash.finish()
+        })
+        .collect();
+    let mut link_keys: Vec<_> = links
+        .iter()
+        .map(|link| {
+            let mut hash = DefaultHasher::new();
+            (
+                &link.step,
+                &link.parent,
+                &link.invocation,
+                &link.subagent,
+                std::mem::discriminant(&link.form),
+                link.background,
+                link.at,
+                &link.checkout,
+                &link.launch_dir,
+            )
+                .hash(&mut hash);
+            (
+                std::mem::discriminant(&link.r#match),
+                &link.child,
+                link.evidence.map(|value| std::mem::discriminant(&value)),
+            )
+                .hash(&mut hash);
+            link.candidates.len().hash(&mut hash);
+            for candidate in &link.candidates {
+                (&candidate.id, candidate.gap_ms).hash(&mut hash);
+            }
+            hash.finish()
+        })
+        .collect();
+    session_keys.sort_unstable();
+    link_keys.sort_unstable();
+    let mut hash = DefaultHasher::new();
+    (session_keys, link_keys).hash(&mut hash);
+    hash.finish()
+}
+
+struct CachedStrip {
+    fingerprint: u64,
+    rebuilt_at: Duration,
+    strip: Strip,
+}
+
+#[derive(Default)]
+struct StripCache {
+    entry: Option<CachedStrip>,
+}
+impl StripCache {
+    fn get(
+        &mut self,
+        step: Option<&str>,
+        sessions: &[Session],
+        links: &[multi_link_model::Link],
+        elapsed: Duration,
+        rebuild: impl FnOnce(&str) -> Result<Strip, WatchError>,
+    ) -> Result<Option<Strip>, WatchError> {
+        let Some(step) = step else {
+            self.entry = None;
+            return Ok(None);
+        };
+        let fingerprint = strip_fingerprint(sessions, links);
+        if let Some(entry) = &self.entry
+            && entry.strip.step == step
+            && entry.fingerprint == fingerprint
+            && elapsed.saturating_sub(entry.rebuilt_at) < Duration::from_secs(30)
+        {
+            return Ok(Some(entry.strip.clone()));
+        }
+        // Refresh even unchanged inputs after 30 s for staleness and active minutes.
+        let strip = rebuild(step)?;
+        self.entry = Some(CachedStrip {
+            fingerprint,
+            rebuilt_at: elapsed,
+            strip: strip.clone(),
+        });
+        Ok(Some(strip))
+    }
 }
 
 fn strip(report: &GraphReport, sessions: &[Session], this: &str) -> Strip {
@@ -165,13 +259,12 @@ struct Details {
     openable: bool,
 }
 
-/// Last completed non-imported turn's original message, before the pane's cut.
-fn raw_said(path: &Path) -> io::Result<Option<String>> {
-    // Read original completion text: the graph reader's normalization already
-    // cuts at 119 characters plus an ellipsis, before the pane's H1 cut.
+/// Read graph-style turn windows with original completion text. The graph's
+/// reader normalizes whitespace and cuts text before the pane's H1/H4 cap.
+fn raw_turns(path: &Path) -> io::Result<Vec<multi_link_model::Turn>> {
     let reader = multi_link_codex::open_rollout(path)?;
-    let mut active = None;
-    let mut completed = None;
+    let mut active: Option<(String, usize)> = None;
+    let mut turns: Vec<multi_link_model::Turn> = Vec::new();
     for record in multi_link_model::jsonl::JsonlReader::new(reader, "rollout") {
         let Ok((_, value)) = record? else { continue };
         if value["type"] != "event_msg" {
@@ -182,62 +275,32 @@ fn raw_said(path: &Path) -> io::Result<Option<String>> {
             .as_str()
             .and_then(|s| Timestamp::parse(s).ok());
         if payload["type"] == "task_started" {
-            active = payload["turn_id"]
-                .as_str()
-                .filter(|id| !id.starts_with("external-import") && at.is_some())
-                .map(str::to_owned);
-        } else if payload["type"] == "task_complete"
-            && active.as_deref().is_some_and(|id| payload["turn_id"] == id)
-        {
-            if at.is_some() {
-                completed = payload["last_agent_message"].as_str().map(str::to_owned);
-            }
             active = None;
+            if let (Some(id), Some(at)) = (payload["turn_id"].as_str(), at)
+                && !id.starts_with("external-import")
+            {
+                active = Some((id.to_owned(), turns.len()));
+                turns.push(multi_link_model::Turn {
+                    start: at,
+                    completed_at: None,
+                    last_record_at: at,
+                    prompt: None,
+                    last_agent_message: None,
+                });
+            }
+        } else if let Some((id, index)) = &active {
+            let turn = &mut turns[*index];
+            if let Some(at) = at {
+                turn.last_record_at = turn.last_record_at.max(at);
+            }
+            if payload["type"] == "task_complete" && payload["turn_id"] == id.as_str() {
+                turn.completed_at = at;
+                turn.last_agent_message = payload["last_agent_message"].as_str().map(str::to_owned);
+                active = None;
+            }
         }
     }
-    Ok(completed)
-}
-
-struct CachedSaid {
-    len: u64,
-    modified: SystemTime,
-    said: Option<String>,
-}
-
-#[derive(Default)]
-struct SaidCache {
-    entries: HashMap<PathBuf, CachedSaid>,
-}
-
-impl SaidCache {
-    fn get(
-        &mut self,
-        path: &Path,
-        read: impl FnOnce(&Path) -> io::Result<Option<String>>,
-    ) -> Option<String> {
-        let stamp =
-            std::fs::metadata(path).and_then(|metadata| Ok((metadata.len(), metadata.modified()?)));
-        let Ok((len, modified)) = stamp else {
-            self.entries.remove(path);
-            return None;
-        };
-        if let Some(entry) = self.entries.get(path)
-            && (entry.len, entry.modified) == (len, modified)
-        {
-            return entry.said.clone();
-        }
-        self.entries.remove(path);
-        let said = read(path).ok()?;
-        self.entries.insert(
-            path.to_path_buf(),
-            CachedSaid {
-                len,
-                modified,
-                said: said.clone(),
-            },
-        );
-        said
-    }
+    Ok(turns)
 }
 
 fn details(
@@ -245,7 +308,7 @@ fn details(
     sessions: &[Session],
     resolver: &Resolver,
     pane: &Pane,
-    said_cache: &mut SaidCache,
+    turn_cache: &mut TurnCache,
 ) -> HashMap<String, Details> {
     let visible: HashSet<&str> = pane
         .sections
@@ -263,7 +326,7 @@ fn details(
                 session
                     .transcript
                     .as_deref()
-                    .and_then(|path| said_cache.get(&root.join(path), raw_said))
+                    .and_then(|path| turn_cache.said(&root.join(path)))
                     .map(|text| {
                         let mut chars = text.chars();
                         let mut preview: String = chars.by_ref().take(120).collect();
@@ -413,7 +476,137 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
 
 type WatchError = Box<dyn std::error::Error>;
 const TICK: Duration = Duration::from_secs(3);
-const HEARTBEAT: Duration = Duration::from_secs(30);
+
+#[derive(Clone, Debug, Deserialize)]
+struct DoneRun {
+    run: String,
+    id: String,
+    step: Option<String>,
+    said: Option<String>,
+    done: bool,
+}
+
+trait MarkerStore {
+    fn claim(&self, run: &str) -> io::Result<bool>;
+}
+
+struct FileMarkers(PathBuf);
+impl MarkerStore for FileMarkers {
+    fn claim(&self, run: &str) -> io::Result<bool> {
+        // Invocation ids are filenames, never paths supplied by a transcript.
+        if run.is_empty() || run == "." || run == ".." || run.contains(['/', '\\']) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid invocation id",
+            ));
+        }
+        let directory = self.0.join("notified");
+        std::fs::create_dir_all(&directory)?;
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.join(run))
+        {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+#[derive(Default)]
+struct TurnCache {
+    entries: HashMap<PathBuf, (u64, SystemTime, Vec<multi_link_model::Turn>)>,
+}
+impl TurnCache {
+    fn said(&mut self, path: &Path) -> Option<String> {
+        graph::said(
+            self.get(path)?
+                .iter()
+                .rev()
+                .find(|turn| turn.completed_at.is_some()),
+        )
+    }
+
+    fn get(&mut self, path: &Path) -> Option<&[multi_link_model::Turn]> {
+        self.get_with(path, raw_turns)
+    }
+
+    fn get_with(
+        &mut self,
+        path: &Path,
+        read: impl FnOnce(&Path) -> io::Result<Vec<multi_link_model::Turn>>,
+    ) -> Option<&[multi_link_model::Turn]> {
+        let stamp = std::fs::metadata(path).and_then(|m| Ok((m.len(), m.modified()?)));
+        let Ok((len, modified)) = stamp else {
+            self.entries.remove(path);
+            return None;
+        };
+        if !self
+            .entries
+            .get(path)
+            .is_some_and(|e| (e.0, e.1) == (len, modified))
+        {
+            self.entries.remove(path);
+            let turns = read(path).ok()?;
+            self.entries.insert(path.to_owned(), (len, modified, turns));
+        }
+        self.entries.get(path).map(|entry| entry.2.as_slice())
+    }
+}
+
+/// Full-refresh links, before the pane's visibility, nesting and time window.
+fn done_runs(
+    root: &Path,
+    repo: &str,
+    sessions: &[Session],
+    links: &[multi_link_model::Link],
+    cache: &mut TurnCache,
+) -> Vec<DoneRun> {
+    let order =
+        |link: &multi_link_model::Link| (link.at, link.invocation.clone(), link.parent.clone());
+    let mut owned: Vec<_> = links
+        .iter()
+        .filter(|link| {
+            matches!(link.r#match, Match::Exact | Match::Heuristic)
+                && link.child.is_some()
+                && sessions
+                    .iter()
+                    .any(|s| s.id == link.parent && s.harness == Harness::Claude && s.repo == repo)
+        })
+        .collect();
+    owned.sort_by_key(|link| order(link));
+    owned
+        .iter()
+        .filter_map(|link| {
+            let child = link.child.as_deref()?;
+            let path = sessions
+                .iter()
+                .find(|s| s.id == child && s.harness == Harness::Codex)
+                .and_then(|s| s.transcript.as_deref());
+            let next = owned
+                .iter()
+                .filter(|other| other.child.as_deref() == Some(child) && order(other) > order(link))
+                .map(|other| other.at)
+                .min();
+            // The graph's G4 window is half-open, selected by turn start, and only
+            // task_complete (not session state or silence) supplies completion.
+            let last = path
+                .and_then(|path| cache.get(&root.join(path)))
+                .into_iter()
+                .flatten()
+                .filter(|turn| turn.start >= link.at && next.is_none_or(|end| turn.start < end))
+                .max_by_key(|turn| turn.start);
+            Some(DoneRun {
+                run: link.invocation.clone(),
+                id: child.into(),
+                step: link.step.clone(),
+                said: graph::said(last),
+                done: last.is_some_and(|turn| turn.completed_at.is_some()),
+            })
+        })
+        .collect()
+}
 
 trait WatchRuntime {
     fn parent(&self) -> u32;
@@ -464,43 +657,114 @@ fn without_times(value: &mut serde_json::Value) {
     }
 }
 
+#[cfg(test)]
 fn watch(
     out: &mut impl Write,
     runtime: &mut impl WatchRuntime,
     parent: u32,
     mut pass: impl FnMut(Timestamp) -> Result<serde_json::Value, WatchError>,
 ) -> Result<(), WatchError> {
+    watch_passes(
+        out,
+        runtime,
+        parent,
+        false,
+        &FileMarkers(PathBuf::new()),
+        |now| Ok((pass(now)?, Vec::new())),
+    )
+}
+
+fn write_line(out: &mut impl Write, value: &impl Serialize) -> Result<(), WatchError> {
+    serde_json::to_writer(&mut *out, value)?;
+    out.write_all(b"\n")?;
+    out.flush()?;
+    Ok(())
+}
+
+fn watch_passes(
+    out: &mut impl Write,
+    runtime: &mut impl WatchRuntime,
+    parent: u32,
+    notify: bool,
+    markers: &impl MarkerStore,
+    mut pass: impl FnMut(Timestamp) -> Result<(serde_json::Value, Vec<DoneRun>), WatchError>,
+) -> Result<(), WatchError> {
     let mut previous = None;
-    let mut printed_at = Duration::ZERO;
+    let mut known = HashMap::new();
     while parent != 1 && runtime.parent() == parent {
         let tick_start = runtime.elapsed();
-        let result = runtime.now().and_then(&mut pass);
-        // A parent lost during the refresh must not leave an orphan printing data.
+        let result = runtime
+            .now()
+            .and_then(|now| pass(now).map(|value| (now, value)));
         if runtime.parent() != parent {
             break;
         }
-        let (value, key) = match result {
-            Ok(value) => {
-                let mut key = value.clone();
-                without_times(&mut key);
-                if previous.as_ref() == Some(&key)
-                    && runtime.elapsed().saturating_sub(printed_at) < HEARTBEAT
-                {
-                    runtime.wait(TICK.saturating_sub(runtime.elapsed() - tick_start));
-                    continue;
+        match result {
+            Ok((now, (value, runs))) => {
+                let mut claim_error = None;
+                if notify {
+                    for run in runs {
+                        let before = known.insert((run.run.clone(), run.id.clone()), run.done);
+                        if before != Some(false) || !run.done {
+                            continue;
+                        }
+                        match markers.claim(&run.run) {
+                            Ok(true) => {
+                                #[derive(Serialize)]
+                                struct Event<'a> {
+                                    kind: &'static str,
+                                    run: &'a str,
+                                    id: &'a str,
+                                    step: &'a Option<String>,
+                                    said: Option<String>,
+                                }
+                                #[derive(Serialize)]
+                                struct Line<'a> {
+                                    v: u8,
+                                    event: Event<'a>,
+                                }
+                                write_line(
+                                    out,
+                                    &Line {
+                                        v: 1,
+                                        event: Event {
+                                            kind: "codex_done",
+                                            run: &run.run,
+                                            id: &run.id,
+                                            step: &run.step,
+                                            said: run
+                                                .said
+                                                .map(|text| text.chars().take(120).collect()),
+                                        },
+                                    },
+                                )?;
+                            }
+                            Ok(false) => {}
+                            Err(error) => {
+                                claim_error = Some(error);
+                            }
+                        }
+                    }
                 }
-                (value, Some(key))
+                if let Some(error) = claim_error {
+                    write_line(out, &serde_json::json!({"v":1,"error":error.to_string()}))?;
+                    previous = None;
+                } else {
+                    let mut key = value.clone();
+                    without_times(&mut key);
+                    if previous.as_ref() == Some(&key) {
+                        write_line(out, &serde_json::json!({"v":1,"tick":now}))?;
+                    } else {
+                        write_line(out, &value)?;
+                    }
+                    previous = Some(key);
+                }
             }
-            Err(error) => (
-                serde_json::json!({"v": 1, "error": error.to_string()}),
-                None,
-            ),
-        };
-        serde_json::to_writer(&mut *out, &value)?;
-        out.write_all(b"\n")?;
-        out.flush()?;
-        previous = key;
-        printed_at = runtime.elapsed();
+            Err(error) => {
+                write_line(out, &serde_json::json!({"v":1,"error":error.to_string()}))?;
+                previous = None;
+            }
+        }
         runtime.wait(TICK.saturating_sub(runtime.elapsed() - tick_start));
     }
     Ok(())
@@ -523,8 +787,11 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
         None => (super::home()?, RepoMode::Real, &real_probe),
     };
     let mut scanner = Scanner::default();
-    let mut said_cache = SaidCache::default();
-    let mut pass = |now| -> Result<Pane, WatchError> {
+    let mut strip_cache = StripCache::default();
+    let strip_clock = Instant::now();
+    let mut turn_cache = TurnCache::default();
+    let markers = FileMarkers(super::state_dir(&root));
+    let mut pass = |now| -> Result<(Pane, Vec<DoneRun>), WatchError> {
         let options = Options {
             state_dir: super::state_dir(&root),
             now,
@@ -539,9 +806,21 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
             state_dir: options.state_dir.clone(),
             ..options
         };
-        let sessions = scanner.sessions(&root, &all)?.report.sessions;
+        let (all_sessions, all_links) = scanner.refresh(&root, &all)?;
+        let sessions = all_sessions.report.sessions;
+        let runs = if args.notify {
+            done_runs(
+                &root,
+                &pane.repo,
+                &sessions,
+                &all_links.report.links,
+                &mut turn_cache,
+            )
+        } else {
+            Vec::new()
+        };
         let resolver = scanner.open_resolver(&root)?;
-        let details = details(&root, &sessions, &resolver, &pane, &mut said_cache);
+        let details = details(&root, &sessions, &resolver, &pane, &mut turn_cache);
         for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
             if let Some(detail) = details.get(&row.id) {
                 row.said = detail.said.clone();
@@ -554,25 +833,31 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
                 }
             }
         }
-        if let Some(step) = pane
+        let step = pane
             .sections
             .iter()
             .flat_map(|s| &s.rows)
             .find(|r| r.is_this)
-            .and_then(|r| r.step.as_deref())
-        {
-            let mut plans = |folder: &Path| {
-                multi_link_plan::steps_report(
-                    Path::new(""),
-                    &[folder.to_string_lossy().into_owned()],
-                )
-                .repos
-                .remove(0)
-            };
-            let report = scanner.graph(&root, &options, &pane.repo, step, &mut plans)?;
-            pane.strip = Some(strip(&report, &sessions, &args.session));
-        }
-        Ok(pane)
+            .and_then(|r| r.step.as_deref());
+        pane.strip = strip_cache.get(
+            step,
+            &sessions,
+            &all_links.report.links,
+            strip_clock.elapsed(),
+            |step| {
+                let mut plans = |folder: &Path| {
+                    multi_link_plan::steps_report(
+                        Path::new(""),
+                        &[folder.to_string_lossy().into_owned()],
+                    )
+                    .repos
+                    .remove(0)
+                };
+                let report = scanner.graph(&root, &options, &pane.repo, step, &mut plans)?;
+                Ok(strip(&report, &sessions, &args.session))
+            },
+        )?;
+        Ok((pane, runs))
     };
     let mut out = io::stdout().lock();
     if args.watch {
@@ -580,11 +865,19 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
         if runtime.parent() != parent {
             return Ok(());
         }
-        watch(&mut out, &mut runtime, parent, |now| {
-            Ok(serde_json::to_value(pass(now)?)?)
-        })
+        watch_passes(
+            &mut out,
+            &mut runtime,
+            parent,
+            args.notify,
+            &markers,
+            |now| {
+                let (pane, runs) = pass(now)?;
+                Ok((serde_json::to_value(pane)?, runs))
+            },
+        )
     } else {
-        super::json(&mut out, &pass(runtime.now()?)?)?;
+        super::json(&mut out, &pass(runtime.now()?)?.0)?;
         Ok(())
     }
 }
@@ -872,15 +1165,81 @@ mod tests {
     }
 
     #[test]
-    fn raw_said_reads_compressed_rollouts() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
-            "../../fixtures/sessions-phase9/.codex/sessions/2026/11/09/rollout-2026-11-09T09-00-45-91c00001-0000-4000-8000-000091c00001.jsonl.zst"
-        );
-        assert_eq!(raw_said(&path).unwrap().as_deref(), Some("<text>"));
+    fn strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds() {
+        use std::cell::Cell;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14");
+        let options = Options {
+            state_dir: root.join(".multi-link"),
+            now: Timestamp::parse("2026-11-10T22:20:00Z").unwrap(),
+            since: None,
+            repo_mode: RepoMode::Fixture,
+            probe: &FixtureProcessProbe,
+        };
+        let (all_sessions, all_links) = Scanner::default().refresh(&root, &options).unwrap();
+        let mut sessions = all_sessions.report.sessions;
+        let mut links = all_links.report.links;
+        let builds = Cell::new(0);
+        let build = |step: &str| -> Result<Strip, WatchError> {
+            builds.set(builds.get() + 1);
+            Ok(Strip {
+                step: step.into(),
+                title: Some(format!("build {}", builds.get())),
+                parts: vec![],
+            })
+        };
+        let mut cache = StripCache::default();
+        let mut check =
+            |step, sessions: &[Session], links: &[multi_link_model::Link], elapsed, expected| {
+                let result = cache
+                    .get(step, sessions, links, Duration::from_secs(elapsed), build)
+                    .unwrap();
+                assert_eq!(builds.get(), expected);
+                assert_eq!(
+                    result.as_ref().map(|s| s.title.as_deref().unwrap()),
+                    step.map(|_| format!("build {expected}")).as_deref()
+                );
+            };
+        check(Some("17.2"), &sessions, &links, 0, 1);
+        check(Some("17.2"), &sessions, &links, 29, 1);
+        check(Some("17.2"), &sessions, &links, 30, 2);
+        check(Some("17.2"), &sessions, &links, 31, 2);
+        sessions.reverse();
+        links.reverse();
+        sessions[0].asked = Some("unrelated prompt metadata".into());
+        check(Some("17.2"), &sessions, &links, 31, 2);
+        sessions[0].state = if sessions[0].state == State::Busy {
+            State::Waiting
+        } else {
+            State::Busy
+        };
+        check(Some("17.2"), &sessions, &links, 32, 3);
+        links.push(links[0].clone());
+        links.last_mut().unwrap().invocation = "new-invocation".into();
+        check(Some("17.2"), &sessions, &links, 33, 4);
+        check(Some("17.3"), &sessions, &links, 34, 5);
+        sessions[0].last_activity = Timestamp::parse("2026-11-10T22:20:01Z").unwrap();
+        check(Some("17.3"), &sessions, &links, 35, 5);
+        sessions[0].id = "new-session".into();
+        check(Some("17.3"), &sessions, &links, 36, 6);
+        links[0].step = Some("other-step".into());
+        check(Some("17.3"), &sessions, &links, 37, 7);
+        sessions[0].last_activity = Timestamp::parse("2026-11-10T22:20:02Z").unwrap();
+        check(Some("17.3"), &sessions, &links, 66, 7);
+        check(Some("17.3"), &sessions, &links, 67, 8);
+        check(None, &sessions, &links, 68, 8);
+        check(Some("17.3"), &sessions, &links, 69, 9);
     }
 
     #[test]
-    fn said_cache_reuses_unchanged_rollout_and_reads_growth_and_new_mtime() {
+    fn turn_cache_reads_original_said_from_compressed_rollouts() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../fixtures/sessions-phase9/.codex/sessions/2026/11/09/rollout-2026-11-09T09-00-45-91c00001-0000-4000-8000-000091c00001.jsonl.zst"
+        );
+        assert_eq!(TurnCache::default().said(&path).as_deref(), Some("<text>"));
+    }
+
+    #[test]
+    fn turn_cache_shares_parses_and_reads_growth_and_new_mtime() {
         use std::cell::Cell;
         use std::fs::{File, FileTimes, OpenOptions};
 
@@ -888,14 +1247,36 @@ mod tests {
         let path = temp.path().join("rollout-synthetic.jsonl");
         fs::write(&path, "first").unwrap();
         let reads = Cell::new(0);
+        let at = Timestamp::parse("2026-11-10T22:20:00Z").unwrap();
         let read = |path: &Path| {
             reads.set(reads.get() + 1);
-            fs::read_to_string(path).map(Some)
+            Ok(vec![multi_link_model::Turn {
+                start: at,
+                completed_at: Some(at),
+                last_record_at: at,
+                prompt: None,
+                last_agent_message: Some(fs::read_to_string(path)?),
+            }])
         };
-        let mut cache = SaidCache::default();
-        assert_eq!(cache.get(&path, read).as_deref(), Some("first"));
+        let mut cache = TurnCache::default();
+        assert_eq!(
+            cache.get_with(&path, read).unwrap()[0]
+                .last_agent_message
+                .as_deref(),
+            Some("first")
+        );
         assert_eq!(reads.get(), 1);
-        assert_eq!(cache.get(&path, read).as_deref(), Some("first"));
+        assert_eq!(cache.said(&path).as_deref(), Some("first"));
+        assert_eq!(
+            graph::said(cache.get(&path).unwrap().last()).as_deref(),
+            Some("first")
+        );
+        assert_eq!(
+            cache.get_with(&path, read).unwrap()[0]
+                .last_agent_message
+                .as_deref(),
+            Some("first")
+        );
         assert_eq!(reads.get(), 1);
 
         OpenOptions::new()
@@ -904,9 +1285,13 @@ mod tests {
             .unwrap()
             .write_all(b" second")
             .unwrap();
-        assert_eq!(cache.get(&path, read).as_deref(), Some("first second"));
+        assert_eq!(
+            cache.get_with(&path, read).unwrap()[0]
+                .last_agent_message
+                .as_deref(),
+            Some("first second")
+        );
         assert_eq!(reads.get(), 2);
-
         let modified = fs::metadata(&path).unwrap().modified().unwrap();
         fs::write(&path, "third fourth").unwrap();
         File::options()
@@ -915,9 +1300,19 @@ mod tests {
             .unwrap()
             .set_times(FileTimes::new().set_modified(modified + Duration::from_secs(1)))
             .unwrap();
-        assert_eq!(cache.get(&path, read).as_deref(), Some("third fourth"));
+        assert_eq!(
+            cache.get_with(&path, read).unwrap()[0]
+                .last_agent_message
+                .as_deref(),
+            Some("third fourth")
+        );
         assert_eq!(reads.get(), 3);
-        assert_eq!(cache.get(&path, read).as_deref(), Some("third fourth"));
+        assert_eq!(
+            cache.get_with(&path, read).unwrap()[0]
+                .last_agent_message
+                .as_deref(),
+            Some("third fourth")
+        );
         assert_eq!(reads.get(), 3);
     }
 
@@ -1073,7 +1468,7 @@ mod watch_tests {
         .unwrap()
     }
     #[test]
-    fn watch_first_change_heartbeat_and_all_phrases_are_filtered_and_flushed() {
+    fn watch_first_change_ticks_and_all_phrases_are_filtered_and_flushed() {
         let mut output = Output::default();
         let mut runtime = FakeRuntime {
             tick: 0,
@@ -1083,15 +1478,7 @@ mod watch_tests {
         let mut passes = 0;
         let flushed = output.flushed.clone();
         watch(&mut output, &mut runtime, 42, |now| {
-            assert_eq!(
-                flushed.get(),
-                match passes {
-                    0 => 0,
-                    1 => 1,
-                    2..=11 => 2,
-                    _ => 3,
-                }
-            );
+            assert_eq!(flushed.get(), passes);
             let mut value = object();
             value["now"] = json!(now);
             for section in value["sections"].as_array_mut().unwrap() {
@@ -1114,17 +1501,13 @@ mod watch_tests {
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
-        // Immediate cold pass, actual change at 3 s, heartbeat at 33 s.
+        // Immediate cold pass and actual change at 3 s; all other ticks carry a tick line.
         assert_eq!(
             lines
                 .iter()
-                .map(|v| v["now"].as_str().unwrap())
+                .filter_map(|v| v["now"].as_str())
                 .collect::<Vec<_>>(),
-            [
-                "2026-11-10T22:20:00.000Z",
-                "2026-11-10T22:20:03.000Z",
-                "2026-11-10T22:20:33.000Z"
-            ]
+            ["2026-11-10T22:20:00.000Z", "2026-11-10T22:20:03.000Z"]
         );
         assert_eq!(
             lines[0]["sections"][0]["rows"][0]["children"][0]["state"],
@@ -1134,11 +1517,13 @@ mod watch_tests {
             lines[1]["sections"][0]["rows"][0]["children"][0]["state"],
             "waiting"
         );
+        assert_eq!(lines.len(), 13);
+        assert_eq!(lines[2], json!({"v":1,"tick":"2026-11-10T22:20:06.000Z"}));
+        assert_eq!(lines[12], json!({"v":1,"tick":"2026-11-10T22:20:36.000Z"}));
         for line in &lines {
-            assert_eq!(line.as_object().unwrap().len(), 7);
             assert_eq!(line["v"], 1);
         }
-        assert_eq!(output.flushes, 3);
+        assert_eq!(output.flushes, 13);
         assert_eq!(passes, 13);
     }
     #[test]
@@ -1185,5 +1570,263 @@ mod watch_tests {
         .unwrap();
         assert!(output.bytes.is_empty());
         assert_eq!(runtime.tick, 0);
+    }
+    fn replay(notify: bool, store: &impl MarkerStore) -> String {
+        let script: Value = serde_json::from_str(include_str!(
+            "../../../fixtures/expected/pane/watch-script.json"
+        ))
+        .unwrap();
+        let ticks = script["ticks"].as_array().unwrap();
+        let mut runtime = FakeRuntime {
+            tick: 0,
+            end: ticks.len() as u64,
+            initial_parent: 42,
+        };
+        let mut output = Output::default();
+        let mut index = 0;
+        watch_passes(&mut output, &mut runtime, 42, notify, store, |now| {
+            let tick = &ticks[index];
+            index += 1;
+            assert_eq!(
+                Timestamp::parse(tick["now"].as_str().unwrap()).unwrap(),
+                now
+            );
+            if let Some(error) = tick["error"].as_str() {
+                return Err(io::Error::other(error).into());
+            }
+            let mut pane = script["pane"].clone();
+            pane["now"] = json!(now);
+            Ok((pane, serde_json::from_value(tick["runs"].clone()).unwrap()))
+        })
+        .unwrap();
+        String::from_utf8(output.bytes).unwrap()
+    }
+
+    #[test]
+    fn watch_scripts_match_byte_for_byte_with_and_without_notify() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = FileMarkers(temp.path().to_owned());
+        assert_eq!(
+            replay(false, &store),
+            include_str!("../../../fixtures/expected/pane/watch-tick.jsonl")
+        );
+        assert!(!temp.path().join("notified").exists());
+        assert_eq!(
+            replay(true, &store),
+            include_str!("../../../fixtures/expected/pane/watch-codex-done.jsonl")
+        );
+        assert_eq!(
+            std::fs::read_dir(temp.path().join("notified"))
+                .unwrap()
+                .count(),
+            2
+        );
+        // Permanent markers suppress a second watcher even after its own baseline.
+        assert_eq!(
+            replay(true, &store),
+            include_str!("../../../fixtures/expected/pane/watch-tick.jsonl")
+        );
+    }
+
+    fn transition(store: &impl MarkerStore, out: &mut impl Write) -> Result<(), WatchError> {
+        let mut runtime = FakeRuntime {
+            tick: 0,
+            end: 7,
+            initial_parent: 42,
+        };
+        let mut tick = 0;
+        watch_passes(out, &mut runtime, 42, true, store, |_| {
+            let current = tick;
+            tick += 1;
+            if current == 2 {
+                return Err(io::Error::other("failed scan").into());
+            }
+            let runs = if current == 1 || current == 3 {
+                vec![]
+            } else {
+                vec![DoneRun {
+                    run: "invocation".into(),
+                    id: "child".into(),
+                    step: None,
+                    said: Some("é".repeat(121)),
+                    done: current >= 4,
+                }]
+            };
+            Ok((object(), runs))
+        })
+    }
+
+    #[test]
+    fn disappeared_run_and_failed_scan_keep_state_and_body_is_capped() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut output = Output::default();
+        transition(&FileMarkers(temp.path().into()), &mut output).unwrap();
+        let lines: Vec<Value> = std::str::from_utf8(&output.bytes)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        let events: Vec<_> = lines.iter().filter(|v| v.get("event").is_some()).collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0]["event"],
+            json!({"kind":"codex_done","run":"invocation","id":"child","step":null,"said":"é".repeat(120)})
+        );
+    }
+
+    #[test]
+    fn simultaneous_watchers_only_one_claims() {
+        struct RacingStore {
+            files: FileMarkers,
+            barrier: std::sync::Arc<std::sync::Barrier>,
+        }
+        impl MarkerStore for RacingStore {
+            fn claim(&self, run: &str) -> io::Result<bool> {
+                self.barrier.wait();
+                self.files.claim(run)
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let store = RacingStore {
+                    files: FileMarkers(temp.path().into()),
+                    barrier: barrier.clone(),
+                };
+                std::thread::spawn(move || {
+                    let mut output = Output::default();
+                    transition(&store, &mut output).unwrap();
+                    String::from_utf8(output.bytes)
+                        .unwrap()
+                        .lines()
+                        .filter(|line| line.contains("codex_done"))
+                        .count()
+                })
+            })
+            .collect();
+        assert_eq!(
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .sum::<usize>(),
+            1
+        );
+    }
+
+    #[test]
+    fn broken_pipe_after_claim_leaves_tombstone() {
+        struct BrokenEvent;
+        impl Write for BrokenEvent {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                // serde writes the field name separately; fail inside the event.
+                if bytes == b"codex_done" {
+                    return Err(io::ErrorKind::BrokenPipe.into());
+                }
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let store = FileMarkers(temp.path().into());
+        assert!(transition(&store, &mut BrokenEvent).is_err());
+        assert!(temp.path().join("notified/invocation").is_file());
+        let mut retry = Output::default();
+        transition(&store, &mut retry).unwrap();
+        assert!(
+            !String::from_utf8(retry.bytes)
+                .unwrap()
+                .contains("codex_done")
+        );
+    }
+
+    #[test]
+    fn full_runs_include_hidden_old_imports_and_use_each_handoff_window() {
+        let temp = tempfile::tempdir().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14");
+        let now = Timestamp::parse("2026-11-10T22:20:00Z").unwrap();
+        let options = Options {
+            state_dir: temp.path().into(),
+            now,
+            since: None,
+            repo_mode: RepoMode::Fixture,
+            probe: &FixtureProcessProbe,
+        };
+        let source = Scanner::default()
+            .sessions(&fixture, &options)
+            .unwrap()
+            .report
+            .sessions;
+        let mut parent = source
+            .iter()
+            .find(|s| s.harness == Harness::Claude)
+            .unwrap()
+            .clone();
+        parent.id = "parent".into();
+        parent.repo = "/repo".into();
+        parent.imported = true;
+        let mut child = source
+            .iter()
+            .find(|s| s.harness == Harness::Codex)
+            .unwrap()
+            .clone();
+        child.id = "child".into();
+        child.imported = true;
+        child.transcript = Some("missing.jsonl".into());
+        let sessions = vec![parent, child];
+        let make_link = |run, at, matching| {
+            serde_json::from_value::<multi_link_model::Link>(json!({
+                "step":null,"parent":"parent","invocation":run,"subagent":null,"form":"exec",
+                "background":false,"at":at,"checkout":"/repo","match":matching,
+                "child":"child","evidence":null,"candidates":[]
+            }))
+            .unwrap()
+        };
+        let links = vec![
+            make_link("first", "2026-11-09T10:00:00Z", "exact"),
+            make_link("second", "2026-11-09T11:00:00Z", "heuristic"),
+            make_link("unowned", "2026-11-09T10:30:00Z", "ambiguous"),
+        ];
+        let mut cache = TurnCache::default();
+        let runs = done_runs(temp.path(), "/repo", &sessions, &links, &mut cache);
+        assert_eq!(
+            runs.iter()
+                .map(|r| (r.run.as_str(), r.done))
+                .collect::<Vec<_>>(),
+            [("first", false), ("second", false)]
+        );
+        let records = [
+            json!({"type":"event_msg","timestamp":"2026-11-09T10:00:00Z","payload":{"type":"task_started","turn_id":"a"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-09T10:01:00Z","payload":{"type":"task_complete","turn_id":"a","last_agent_message":"first answer"}}),
+            // This later open turn belongs to the first handoff, so it is not done.
+            json!({"type":"event_msg","timestamp":"2026-11-09T10:40:00Z","payload":{"type":"task_started","turn_id":"b"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-09T11:00:00Z","payload":{"type":"task_started","turn_id":"c"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-09T11:01:00Z","payload":{"type":"task_complete","turn_id":"c","last_agent_message":"second\nanswer"}}),
+            json!({"type":"event_msg","timestamp":"2026-11-09T11:02:00Z","payload":{"type":"task_started","turn_id":"external-import-x"}}),
+        ];
+        std::fs::write(
+            temp.path().join("missing.jsonl"),
+            records.iter().map(|r| format!("{r}\n")).collect::<String>(),
+        )
+        .unwrap();
+        let runs = done_runs(temp.path(), "/repo", &sessions, &links, &mut cache);
+        assert_eq!(
+            runs.iter()
+                .map(|r| (r.run.as_str(), r.done, r.said.as_deref()))
+                .collect::<Vec<_>>(),
+            [
+                ("first", false, None),
+                ("second", true, Some("second\nanswer"))
+            ]
+        );
+        assert!(done_runs(temp.path(), "/other", &sessions, &links, &mut cache).is_empty());
+        // Changed rollout invalidates the turn cache, including when the child resumes.
+        use std::io::Write;
+        writeln!(std::fs::OpenOptions::new().append(true).open(temp.path().join("missing.jsonl")).unwrap(), "{}", json!({"type":"event_msg","timestamp":"2026-11-09T11:03:00Z","payload":{"type":"task_started","turn_id":"d"}})).unwrap();
+        let runs = done_runs(temp.path(), "/repo", &sessions, &links, &mut cache);
+        assert!(!runs[1].done);
+        assert_eq!(runs[1].said, None);
     }
 }
