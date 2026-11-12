@@ -7,8 +7,11 @@ and the pane's `Jump to terminal` bring a running Claude session's Terminal.app 
   script answers `not found` for a missing tab. iTerm2, tmux, other terminals, a denied Automation prompt (-1743) and a
   real tab-gone process are covered by fixtures and tests only (`docs/phase18-check.md`, README Limitations).
 - A Claude session never sent a prompt has no transcript, so no list (TUI, pane) shows it, though `open <id>` resolves it.
-- Owner check pending: reinstall the binary, restart the app, press `Jump to terminal` on the repo-p17 Terminal row.
-  Phase 18 closes when the owner's answer is recorded.
+- **Pinned (owner, 2026-11-12): the owner check is deferred; the owner tests it later.** Steps: run `cargo install
+  --path /Users/jarednarvaez/multi-link/crates/cli --locked`, restart the app, open a session in
+  `~/multi-link-sandbox/repo-p17`, bring another window to the front, then press `Jump to terminal` on the Terminal
+  session's row. If that sandbox session has ended, start one with a prompt first (`claude "Reply with just the word
+  ok."` in that folder, in Terminal). Phase 18 closes when the answer is recorded; later phases do not wait for it.
 
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs

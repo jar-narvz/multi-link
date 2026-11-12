@@ -2996,6 +2996,8 @@ split inside an iTerm2 tab beyond selecting its session.
 - Verify (whole phase): `TZ=UTC cargo test --workspace`, clippy `-D warnings`, fmt clean; every `fixtures/expected/*/
   check.sh` exit 0; `claude plugin validate` and `claude plugin test` pass; the real-check items above recorded with
   their commands; the owner's answer recorded.
+- Status (2026-11-12): real check, README and docs committed (d492bee). **Owner check pinned for later at the owner's
+  request**; the next phase may start before it. Steps are in PROGRESS.md "Current state".
 
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app.
