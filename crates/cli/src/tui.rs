@@ -315,13 +315,16 @@ fn open_result(result: Result<Option<OpenAction>, String>) -> Result<OpenAction,
             reason,
             command,
             cwd,
-            ..
-        })) => Err(match command {
-            Some(command) => format!("{}; in {cwd}: {command}", reason.as_str()),
-            None => reason.as_str().into(),
-        }),
-        Ok(Some(OpenAction::Jump { .. })) => {
-            Err("cannot jump: terminal jump execution is not implemented yet".into())
+            detail,
+        })) => {
+            let reason = detail.as_ref().map_or_else(
+                || reason.as_str().to_owned(),
+                |detail| format!("{} ({detail})", reason.as_str()),
+            );
+            Err(match command {
+                Some(command) => format!("{reason}; in {cwd}: {command}"),
+                None => reason,
+            })
         }
         Ok(Some(action)) => Ok(action),
     }
@@ -395,7 +398,27 @@ fn dashboard<M: Modes, B: ratatui::backend::Backend>(
     screen: &Screen<M>,
     requests: Sender<Request>,
     messages: Receiver<Message>,
+    input: impl FnMut() -> io::Result<Option<KeyCode>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    dashboard_with_jump(
+        app,
+        terminal,
+        screen,
+        requests,
+        messages,
+        input,
+        super::jump,
+    )
+}
+
+fn dashboard_with_jump<M: Modes, B: ratatui::backend::Backend>(
+    app: &mut App,
+    terminal: &mut Terminal<B>,
+    screen: &Screen<M>,
+    requests: Sender<Request>,
+    messages: Receiver<Message>,
     mut input: impl FnMut() -> io::Result<Option<KeyCode>>,
+    mut jump: impl FnMut(open::TerminalApp, &str) -> Result<String, String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = None;
     let mut disconnected = false;
@@ -414,6 +437,9 @@ fn dashboard<M: Modes, B: ratatui::backend::Backend>(
             Ok(Message::Open(result)) => {
                 let message = match open_result(result) {
                     Err(message) => message,
+                    Ok(OpenAction::Jump { app, tty, .. }) => {
+                        jump(app, &tty).unwrap_or_else(|message| message)
+                    }
                     Ok(action) => {
                         // No event reader runs while status() owns inherited terminal input.
                         let suspended = Suspended::new(screen)?;
@@ -487,6 +513,128 @@ mod tests {
         assert!(app.update(Event::Key(app_key(plain))).is_empty());
         let down = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         assert_eq!(app_key(down), KeyCode::Down);
+    }
+
+    #[test]
+    fn unavailable_message_includes_detail_and_preserves_absent_detail() {
+        for (reason, detail, expected) in [
+            (
+                open::Reason::TerminalNotSupported,
+                Some("Ghostty"),
+                "terminal_not_supported (Ghostty)",
+            ),
+            (
+                open::Reason::InsideMultiplexer,
+                Some("tmux"),
+                "inside_multiplexer (tmux)",
+            ),
+            (
+                open::Reason::RunningWithoutAppLink,
+                None,
+                "running_without_app_link",
+            ),
+        ] {
+            for command in [Some("claude --resume session-id".to_owned()), None] {
+                let action = OpenAction::Unavailable {
+                    reason,
+                    detail: detail.map(str::to_owned),
+                    command: command.clone(),
+                    cwd: "/repo".into(),
+                };
+                let expected = match command {
+                    Some(command) => format!("{expected}; in /repo: {command}"),
+                    None => expected.to_owned(),
+                };
+                assert_eq!(open_result(Ok(Some(action))).unwrap_err(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn fresh_jump_shows_runner_message_without_suspending_and_enter_navigates() {
+        for (body, expected) in [
+            (
+                "printf 'window 2 tab 3\\n'",
+                "jumped to Terminal · window 2 · tab 3 (ttys004)",
+            ),
+            ("printf 'not found\\n'", "cannot jump: its tab is gone"),
+        ] {
+            let (_dir, program) = super::super::jump_tests::fake_program(body);
+            let root = fixtures().join("sessions-phase18");
+            let mut scanner = Scanner::default();
+            let probe = multi_link_core::FixtureProcessProbe;
+            let options = fixture_options(&probe, "2026-11-12T09:00:00Z");
+            let mut app = App::default();
+            app.update(Event::Refresh(Ok(refresh(
+                &mut scanner,
+                &root,
+                &options,
+                None,
+            )
+            .unwrap())));
+            app.update(Event::Key(KeyCode::Enter));
+            let mut selected = None;
+            for _ in 0..40 {
+                let (id, fork) = request(&mut app);
+                if id.starts_with("18000001") {
+                    selected = Some((id, fork));
+                    break;
+                }
+                app.update(Event::Opened(String::new()));
+                app.update(Event::Key(KeyCode::Down));
+            }
+            let (id, fork) = selected.expect("Terminal lane");
+            let action = open::fresh_action(&mut scanner, &root, &options, &id, fork).unwrap();
+            assert!(matches!(action, Some(OpenAction::Jump { .. })));
+            let (requests, _receiver) = mpsc::channel();
+            let (sender, messages) = mpsc::channel();
+            sender.send(Message::Open(Ok(action))).unwrap();
+            let calls = Rc::new(RefCell::new(Vec::new()));
+            let screen = Screen::enter(FakeModes {
+                calls: calls.clone(),
+                fail_enter: false,
+            })
+            .unwrap();
+            let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(160, 40)).unwrap();
+            dashboard_with_jump(
+                &mut app,
+                &mut terminal,
+                &screen,
+                requests,
+                messages,
+                || Ok(Some(KeyCode::Char('q'))),
+                |app, tty| {
+                    super::super::run_jump(app, tty, program.as_os_str(), Duration::from_secs(1))
+                },
+            )
+            .unwrap();
+            let text: String = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect();
+            assert!(text.contains(expected), "{text}");
+            assert_eq!(*calls.borrow(), ["enter"]);
+            let effects = app.update(Event::Key(KeyCode::Enter));
+            assert!(
+                !effects
+                    .iter()
+                    .any(|effect| matches!(effect, Effect::FreshOpen { .. }))
+            );
+            terminal
+                .draw(|frame| app.render(frame.area(), frame.buffer_mut()))
+                .unwrap();
+            let text: String = terminal
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|cell| cell.symbol())
+                .collect();
+            assert!(text.contains("esc home"), "{text}");
+        }
     }
 
     #[test]

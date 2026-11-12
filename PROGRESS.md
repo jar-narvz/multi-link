@@ -1,11 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 18 is in progress. Step 18.1 is committed (Codex, reviewed by Claude, 2026-11-12): `open --dry-run` answers
-`jump` (app, tty, pid) or the new unavailable reasons from one identity-bearing `ps` snapshot. Next: Step 18.2.**
-- **For 18.2:** `main.rs` and `tui.rs` each have a temporary `Jump` arm that prints "terminal jump execution is not
-  implemented yet" and exits 3; replace both with the I2 runner (scripts in `fixtures/expected/open-jump/scripts/`,
-  texts in design I2). The TUI's open path is `FreshOpen` (`o`).
+**Phase 18 is in progress. Step 18.2 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 18.3 (pane).**
+- CLI and TUI execute Jump through the same runner: embedded pinned scripts, argv only, five-second deadline,
+  kill and reap on timeout, exact success / tab-gone / Automation messages, exit 3 on CLI jump failures.
+  No jump failure resumes. `--no-resume` accepts AppLink / Jump and refuses Resume; `--app-only` still refuses Jump.
+- The TUI's `FreshOpen` (`o`) runs jumps without suspending terminal modes and displays the runner's line;
+  Enter remains navigation. All jump execution tests use fake osascript executables, never the real binary.
+- Unavailable messages include optional terminal / multiplexer detail in parentheses on CLI and TUI.
+- Verify: workspace 729 passed / 0 failed / 1 existing ignored; clippy and fmt clean. Real terminal / permission
+  confirmation remains Step 18.4 (iTerm2 is still untested live). Claude decides when this step is done.
 
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
@@ -820,6 +824,90 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 18.2: Running the jump in the CLI and TUI — Codex
+- Did: Replaced both temporary Jump arms with one runner. Embedded the answer-key scripts using `include_str!`,
+  one `-e` per line and tty last; no shell or text interpolation. Drained stdout/stderr concurrently, polled the
+  child against the five-second production deadline, killed and reaped on timeout, and returned failure without
+  falling back to Resume. Added `--no-resume` and kept `--app-only` restrictive. TUI shows the same result without
+  suspending terminal modes; Enter still navigates.
+  Review round 1: included optional unavailable detail after the reason in parentheses on CLI and TUI;
+  absent-detail messages remain byte-identical. Added exact-message regression tests on both surfaces.
+- Changed: `crates/cli/src/main.rs`, `crates/cli/src/tui.rs`, `crates/cli/tests/open_jump.rs`,
+  `crates/cli/tests/support/jump_runner.rs`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Test-first CLI run exited 101 with the expected missing behavior:
+  ```text
+  failures:
+      jump_exact_argv_and_success_for_both_apps
+      jump_failures_never_resume
+      no_resume_accepts_app_link_and_refuses_resume
+
+  test result: FAILED. 3 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+  ```
+  `cargo test -p multi-link --test open_jump` exited 0 after implementation (actual output):
+  ```text
+  running 6 tests
+  test app_only_refuses_jump_without_running_script ... ok
+  test no_resume_accepts_app_link_and_refuses_resume ... ok
+  test open_jump_keys_match_bytes_and_exit_codes ... ok
+  test jump_exact_argv_and_success_for_both_apps ... ok
+  test old_open_keys_match_bytes_and_exit_codes ... ok
+  test jump_failures_never_resume ... ok
+
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+  ```
+  `cargo test --workspace --no-fail-fast` exited 0: 727 passed, 0 failed, 1 ignored across 68 actual result
+  lines; the ignored case is existing `real_counts`. Decisive actual output excerpts:
+  ```text
+  test jump_tests::hung_child_is_killed_and_reaped_at_injected_deadline ... ok
+  test tui::tests::fresh_jump_shows_runner_message_without_suspending_and_enter_navigates ... ok
+  test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+  test real_counts ... ignored
+  ```
+  Strengthened the timeout test after that run to check the production five-second default and that the
+  injected 500 ms deadline actually elapses. `cargo test -p multi-link --bin multi-link hung_child` exited 0:
+  ```text
+  running 1 test
+  test jump_tests::hung_child_is_killed_and_reaped_at_injected_deadline ... ok
+
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.55s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` exited 0 (final actual output):
+  ```text
+  Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.02s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` exited 0 with no output.
+  Review round 1 verification (2026-11-12): both new tests failed before the fix, each exit 101; CLI lacked
+  `(tmux)` and TUI lacked `(Ghostty)`. After the fix, `cargo test -p multi-link unavailable_message_includes_detail`
+  exited 0 for both regression tests. `cargo test --workspace --no-fail-fast` exited 0: 729 passed, 0 failed,
+  1 existing ignored across 68 result lines. Actual output excerpts:
+  ```text
+  test tui::tests::unavailable_message_includes_detail_and_preserves_absent_detail ... ok
+  test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+  test unavailable_message_includes_detail_and_preserves_absent_detail ... ok
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` exited 0 (actual output):
+  ```text
+      Checking multi-link v0.1.0 (/Users/jarednarvaez/multi-link/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.04s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` exited 0 with no output.
+- Review: Claude, 1 round. The runner matched design I2 (scripts embedded, one `-e` per line, tty last, no shell;
+  pipes drained on threads; 5 s deadline then kill and reap; -1743 → the Automation text; `not found` → "its tab
+  is gone"; only `window N tab N` counts as success; no resume on any failure; `--no-resume` and `--app-only` as
+  I3; the TUI's `o` runs the same runner without suspending; Enter still navigates). Finding: unavailable messages
+  dropped the new `detail` → now `reason (detail)` in the CLI and TUI, other messages byte-identical. Accepted: the
+  TUI waits up to 5 s for `osascript` on its own thread of control. Claude re-ran Verify: 729 passed, 0 failed, 1
+  ignored; clippy and fmt clean; every `check.sh` exit 0; sample: `terminal_not_supported (Ghostty)`.
+- Gotchas: Every new execution test uses a fake osascript (both apps' exact argv and success, not found, -1743,
+  other error, malformed output, missing executable, timeout). The injected timeout is 500 ms to allow shell
+  startup under load; production is fixed at 5 s. The timeout test verifies kill/reap with waitpid/ECHILD because
+  this sandbox denies ps; the initial ps-based assertion failed with Operation not permitted. The TUI test drives
+  `o` through the fresh resolver and checks rendered messages, mode calls and Enter navigation. AppLink acceptance
+  uses dry-run so tests never open a real application. No live terminal/Automation checks were attempted.
 
 ### 2026-11-12 — Step 18.1: Resolver: Jump and the process snapshot — Codex
 - Did: Implemented `Jump`, terminal app names, the six pinned unavailable reasons and optional `detail` in JSON

@@ -96,6 +96,9 @@ struct OpenArgs {
     /// Refuse any action other than opening an existing desktop app session.
     #[arg(long)]
     app_only: bool,
+    /// Refuse resuming; accept existing app sessions and terminal tabs.
+    #[arg(long)]
+    no_resume: bool,
     /// Session id or a prefix of it (matched on full ids, history window off).
     id_prefix: String,
     /// Fork instead of resuming in place (`--fork-session`).
@@ -174,16 +177,19 @@ fn open(
         reason,
         command,
         cwd,
-        ..
+        detail,
     } = &action
     {
+        let reason = detail.as_ref().map_or_else(
+            || reason.as_str().to_owned(),
+            |detail| format!("{} ({detail})", reason.as_str()),
+        );
         match command {
             Some(command) => eprintln!(
                 "cannot open {:?}: {}; run it yourself in {cwd:?}: {command}",
-                session.id,
-                reason.as_str()
+                session.id, reason
             ),
-            None => eprintln!("cannot open {:?}: {}", session.id, reason.as_str()),
+            None => eprintln!("cannot open {:?}: {}", session.id, reason),
         }
         return Ok(EXIT_UNAVAILABLE);
     }
@@ -191,12 +197,24 @@ fn open(
         eprintln!("cannot open {:?}: no app link available", session.id);
         return Ok(EXIT_UNAVAILABLE);
     }
+    if args.no_resume && matches!(action, OpenAction::Resume { .. }) {
+        eprintln!("cannot open {:?}: resume disabled", session.id);
+        return Ok(EXIT_UNAVAILABLE);
+    }
     if args.dry_run {
         return Ok(0);
     }
-    if matches!(action, OpenAction::Jump { .. }) {
-        eprintln!("cannot jump: terminal jump execution is not implemented yet");
-        return Ok(EXIT_UNAVAILABLE);
+    if let OpenAction::Jump { app, tty, .. } = &action {
+        return Ok(match jump(*app, tty) {
+            Ok(message) => {
+                println!("{message}");
+                0
+            }
+            Err(message) => {
+                eprintln!("{message}");
+                EXIT_UNAVAILABLE
+            }
+        });
     }
     let mut command = open_command(&action).expect("executable action has a command");
     let status = command
@@ -207,6 +225,117 @@ fn open(
         eprintln!("{message}");
     }
     Ok(code)
+}
+
+const JUMP_DEADLINE: Duration = Duration::from_secs(5);
+const TERMINAL_SCRIPT: &str =
+    include_str!("../../../fixtures/expected/open-jump/scripts/terminal.applescript");
+const ITERM2_SCRIPT: &str =
+    include_str!("../../../fixtures/expected/open-jump/scripts/iterm2.applescript");
+
+fn jump(app: open::TerminalApp, tty: &str) -> Result<String, String> {
+    run_jump(app, tty, std::ffi::OsStr::new("osascript"), JUMP_DEADLINE)
+}
+
+/// Fixed script lines are separate argv items; only the final argument carries the tty.
+/// Drain both pipes concurrently so a verbose error cannot prevent the deadline check.
+fn run_jump(
+    app: open::TerminalApp,
+    tty: &str,
+    program: &std::ffi::OsStr,
+    deadline: Duration,
+) -> Result<String, String> {
+    use std::{
+        io::Read,
+        process::{Command, Stdio},
+        thread,
+        time::Instant,
+    };
+    let (name, script) = match app {
+        open::TerminalApp::Terminal => ("Terminal", TERMINAL_SCRIPT),
+        open::TerminalApp::Iterm2 => ("iTerm2", ITERM2_SCRIPT),
+    };
+    let mut command = Command::new(program);
+    for line in script.lines() {
+        command.args(["-e", line]);
+    }
+    command
+        .arg(tty)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null());
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("cannot jump: cannot run osascript: {e}"))?;
+    let drain = |mut pipe: Box<dyn Read + Send>| {
+        thread::spawn(move || {
+            let mut bytes = Vec::new();
+            pipe.read_to_end(&mut bytes).map(|_| bytes)
+        })
+    };
+    let stdout = drain(Box::new(child.stdout.take().expect("piped stdout")));
+    let stderr = drain(Box::new(child.stderr.take().expect("piped stderr")));
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) if started.elapsed() < deadline => {
+                thread::sleep(
+                    Duration::from_millis(10).min(deadline.saturating_sub(started.elapsed())),
+                );
+            }
+            result => {
+                // Always kill and reap before returning, including a wait error.
+                let _ = child.kill();
+                let _ = child.wait();
+                break Err(match result {
+                    Err(error) => format!("cannot jump: cannot wait for osascript: {error}"),
+                    _ => "cannot jump: osascript timed out after 5 s".into(),
+                });
+            }
+        }
+    };
+    // On a timeout the child may have descendants holding its pipes. Do not let
+    // those inherited descriptors extend our deadline by joining their readers.
+    let status = status?;
+    let read = |reader: thread::JoinHandle<io::Result<Vec<u8>>>| {
+        reader
+            .join()
+            .map_err(|_| "cannot jump: cannot read osascript output".to_owned())?
+            .map_err(|e| format!("cannot jump: cannot read osascript output: {e}"))
+    };
+    let stdout = read(stdout)?;
+    let stderr = read(stderr)?;
+    let error = String::from_utf8_lossy(&stderr);
+    if error.contains("-1743") {
+        return Err("cannot jump: blocked by macOS. Allow it in System Settings → Privacy & Security → Automation".into());
+    }
+    if !error.trim().is_empty() {
+        return Err(format!("cannot jump: osascript: {}", error.trim()));
+    }
+    if !status.success() {
+        return Err("cannot jump: osascript exited unsuccessfully".into());
+    }
+    let output = String::from_utf8(stdout)
+        .map_err(|_| "cannot jump: unexpected osascript output".to_owned())?;
+    let answer = output.trim_end_matches(['\r', '\n']);
+    if answer == "not found" {
+        return Err("cannot jump: its tab is gone".into());
+    }
+    let parts: Vec<_> = answer.split(' ').collect();
+    match parts.as_slice() {
+        ["window", window, "tab", tab]
+            if [window, tab]
+                .iter()
+                .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())) =>
+        {
+            Ok(format!(
+                "jumped to {name} · window {window} · tab {tab} ({})",
+                tty.strip_prefix("/dev/").unwrap_or(tty)
+            ))
+        }
+        _ => Err("cannot jump: unexpected osascript output".into()),
+    }
 }
 
 /// The child's own code is not passed through: it would collide with 2/3/4.
@@ -847,3 +976,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/support/jump_runner.rs"]
+mod jump_tests;
