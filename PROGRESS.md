@@ -933,7 +933,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   **Host CPU (release, real `~`, this repo, `--notify`, 60 s window after the first line, 20 ticks, includes two
   30 s rebuilds): 219 ms/tick (budget ≤ 250 ms: pass)**; round 1 over 30 s: 190 / 193 ms. All lines were `tick`
   (quiet repo). Accepted: three log entries for one step (initial + two rounds) are left as Codex wrote them.
-- Gotchas: **Host warm CPU with working sessions, strip + --notify: [Claude to fill; budget ≤ 250 ms].**
+- Gotchas: **Host warm CPU, strip + --notify: 219 ms/tick (Claude, 60 s window on a quiet repo; a working session no longer
+  forces a rebuild per tick).**
   Did not run sandbox-blocked ps. The measurement command remains in the original Step 17.2 entry below;
   no new CPU result is claimed.
 
@@ -1049,7 +1050,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - Review: Both round 1 findings implemented; awaiting Claude review. All eleven pane JSON keys and both
   watch replay keys still match byte for byte. PLAN.md's existing Claude edits are preserved; no mod edits,
   staging, commits or pushes.
-- Gotchas: **Host warm CPU with strip + --notify: [Claude to fill after remeasurement; budget ≤ 250 ms].**
+- Gotchas: **Host warm CPU, strip + --notify: 193 ms/tick over 30 s (Claude); superseded by round 2's 219 ms over 60 s.**
   Did not run sandbox-blocked ps. Use the existing release/ps measurement command in the original Step 17.2
   entry below. Software verification passes; the CPU NFR is not claimed as passing.
 
