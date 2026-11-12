@@ -4,6 +4,7 @@
   "now": "2026-11-09T12:00:00.000Z",
   "this": "92000012-0000-4000-8000-00009200000c",
   "seen": true,
+  "strip": null,
   "sections": [
     {
       "name": "working",
@@ -19,6 +20,9 @@
           "step": null,
           "state": "waiting",
           "phrase": "waiting on you · since 6:02am",
+          "asked": "Synthetic exit case 12.",
+          "said": null,
+          "openable": false,
           "is_this": true,
           "children": [],
           "handoffs": []
@@ -30,6 +34,9 @@
           "step": null,
           "state": "stale",
           "phrase": "stale since 5:30am",
+          "asked": "Synthetic exit case 9.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

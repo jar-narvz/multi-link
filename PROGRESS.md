@@ -1,6 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 17 (pane strip, row actions, Codex-done notifications) is in progress. Step 17.0 is committed (Claude step,
+2026-11-12): H1–H6 pins in `docs/design.md` → "Phase 17 decisions"; pane keys carry the H1 fields; new
+`openable.json`, `watch-script.json`, `watch-{codex-done,tick}.jsonl`. Next: Step 17.1 (pane JSON, Codex).**
+- **For 17.1:** every pane key's command is the 16.0 list plus `openable` (Step 17.0 entry); field order and every
+  status rule are pinned in design H1; the two key-reading tests (`pane_matches_all_ten_pretty_json_keys_byte_for_byte`
+  in `crates/cli/tests/pane.rs`, and the watch unit test that counts top-level fields) fail until 17.1 lands. Codex
+  `said` in fixtures is the scrubbed `<text>`; test the 120-character cut with a synthetic rollout.
+- **For 17.2:** replay `watch-script.json` (per-tick pass results; `error` = failed pass) with the injected runtime and
+  a fresh marker dir: with `--notify` the output is `watch-codex-done.jsonl` line for line, without it
+  `watch-tick.jsonl`. Event lines come before that tick's data or tick line.
+
 **Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
 [--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
 (`docs/phase16-check.md`). The owner's `~/.claude/settings.json` sets `CLAUDE_CODE_PLUGIN_DIRS` to the mod folder, so
@@ -810,6 +821,41 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 17.0: Rules, pane keys, API check — Claude
+- Did: mode check `codex-quota.py` → `primary: 2%`, `secondary: 61%`, `CODEX: OK` (17.0 is a Claude step). **H6
+  spike** (scratch mod `mlspike17`, never in the repo): in an interactive Claude Code 2.1.322 PTY session in
+  `~/multi-link-sandbox/repo-a` (`CLAUDE_CODE_*` cleared), `session.start` ran `osascript -e 'on run argv' -e 'display
+  notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' <synthetic title> <synthetic body>` by
+  `$.process.run` → `exit=0 stderr=""`; `$.ui.notify` → `{"isSent":false,"reason":"no-channel"}`; `ui.open` →
+  `{"isPlaced":true} surface=terminal`. Scripted ctrl+x tab / hotkey presses did not reach the pane. `claude plugin
+  test` on the spike: a `Button` press runs `onPress`, which calls `$.ui.copy` → received `synthetic-id-123@terminal`
+  and `@desktop` (1 pass); a `ui.press` hook without `{ element }` is skipped by the engine. Codex `said` on real
+  data: 16.4's `graph` output had it for `01a1cc93` (length only noted, text not copied here).
+  **Keys** by a scratch writer (`k17/gen.py`): base = HEAD's `pane --json`; `asked` from `sessions --json --since all`;
+  Codex `said` read straight from each rollout's last non-imported `task_complete` (`last_agent_message`, 120-char cut);
+  `openable` from `open --dry-run` (`action == app_link`); `strip` from `graph --json` plus a Python mirror of
+  `graph::live_parts` and the H1 status pins. Checked: removing the new fields from each new key gives the old key
+  exactly (10/10). Strips: `busy` 3.2 [codex implement running 54m]; `children-exact-likely` 2.4 [claude plan done
+  15m ▌, codex implement running 12m]; `ambiguous` 5.1 [claude plan done ▌, codex implement null, claude review null
+  ▌]; `idle-recent` 2.5 (7 parts, ▌ on two); null for `waiting-stale`, `done-2h`, `unseen`, `child-other-repo`,
+  `empty`, `waiting-quiet`, `openable`. `openable: true` only for `92000002` in `openable.json`. Watcher keys from the
+  synthetic `watch-script.json` (7 ticks: run a done at tick 1 → event; an already-done run at start and one first
+  seen done at tick 4 → no event; a failed pass at tick 3 → error line, then data; a second hand-off on the same Codex
+  id done at tick 6 → event).
+- Changed: `docs/design.md`, `fixtures/expected/pane/{busy,waiting-stale,done-2h,children-exact-likely,unseen,ambiguous,child-other-repo,idle-recent,empty,waiting-quiet}.json`
+  (H1 fields only), `fixtures/expected/pane/{openable.json,watch-script.json,watch-codex-done.jsonl,watch-tick.jsonl}`,
+  `PLAN.md` (17.0 text and Review log "Step 17.0 amendments"), `PROGRESS.md`. Board 17 was committed with the plan.
+- Key commands (`TZ=UTC`, `multi-link pane …`): the ten 16.0 commands unchanged (Step 16.0 entry), plus
+  `openable`: `pane --json --root fixtures/sessions-phase9 --now 2026-11-09T06:00:00Z --cwd /home/dev/repo-p9c --session 92000002-0000-4000-8000-000092000002`.
+- Verify: `TZ=UTC cargo test --workspace --no-fail-fast` → 696 passed, 2 failed, 1 ignored; the two failures are the
+  key readers (`pane_matches_all_ten_pretty_json_keys_byte_for_byte`, and
+  `pane::watch_tests::watch_first_change_heartbeat_and_all_phrases_are_filtered_and_flushed`, which counts the key's
+  top-level fields), as expected after the additive key change. H6 recorded above. W10 scan
+  `rg -l "/Users/|\bsk-|api_key" fixtures --glob '!raw/**' --glob '!README.md'` → nothing.
+- Review: Claude's own step (rules, keys, scratch spike); no code. Keys checked against independent sources as above.
+- Gotchas: zsh does not split `$var` into words (`set -- $spec` and `bash dir/$s` both break); use Python or `${=var}`.
+  `open --dry-run` prints JSON then a message line and exits non-zero for unavailable; parse up to the last `}`.
 
 ### 2026-11-11 — Step 16.4: Real check, README, owner confirm — Claude
 - Did: Release build of `93194cc`. Scratch PTY harness (session scratchpad, not in the repo): `claude --plugin-dir

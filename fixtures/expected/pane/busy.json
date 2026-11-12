@@ -4,6 +4,19 @@
   "now": "2026-11-10T22:20:00.000Z",
   "this": "14150000-0000-4000-8000-000000001415",
   "seen": true,
+  "strip": {
+    "step": "3.2",
+    "title": null,
+    "parts": [
+      {
+        "harness": "codex",
+        "kind": "implement",
+        "status": "running",
+        "active_min": 54,
+        "is_this": false
+      }
+    ]
+  },
   "sections": [
     {
       "name": "working",
@@ -15,6 +28,9 @@
           "step": "3.2",
           "state": "busy",
           "phrase": "working now · for 22 min",
+          "asked": "run the three road checks in parallel with codex",
+          "said": null,
+          "openable": false,
           "is_this": true,
           "children": [
             {
@@ -22,6 +38,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 59 min",
+              "asked": "Read AGENTS.md, then do Step 3.1 in PLAN.md.",
+              "said": null,
+              "openable": false,
               "match": "exact"
             },
             {
@@ -29,6 +48,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 120 min",
+              "asked": "Read AGENTS.md, then do Step 3.0 in PLAN.md.",
+              "said": null,
+              "openable": false,
               "match": "exact"
             }
           ],
@@ -46,6 +68,9 @@
           "step": null,
           "state": "stale",
           "phrase": "stale since 9:50pm",
+          "asked": "run the roads checks by hand",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

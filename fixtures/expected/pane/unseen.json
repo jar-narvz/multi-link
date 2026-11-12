@@ -4,6 +4,7 @@
   "now": "2026-11-10T22:20:00.000Z",
   "this": "aaaaaaaa-0000-4000-8000-000000000000",
   "seen": false,
+  "strip": null,
   "sections": [
     {
       "name": "working",
@@ -15,6 +16,9 @@
           "step": "2.4",
           "state": "busy",
           "phrase": "working now · for 28 min",
+          "asked": "add the feed rows, then hand step 2.4 to codex",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [
             {
@@ -22,6 +26,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 12 min",
+              "asked": "Read AGENTS.md, then do Step 2.4 in PLAN.md.",
+              "said": null,
+              "openable": false,
               "match": "likely"
             }
           ],
@@ -34,6 +41,9 @@
           "step": "2.3",
           "state": "busy",
           "phrase": "working now · for 35 min",
+          "asked": "pick up step 2.3 where the last session stopped",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [
             {
@@ -41,6 +51,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 9 min",
+              "asked": "Read AGENTS.md, then do Step 2.3 in PLAN.md.",
+              "said": "<said>",
+              "openable": false,
               "match": "exact"
             }
           ],
@@ -53,6 +66,9 @@
           "step": "2.5",
           "state": "busy",
           "phrase": "working now · for 20 min",
+          "asked": "split step 2.5 and 2.6 between two codex runs",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [
             {
@@ -60,6 +76,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 49 min",
+              "asked": "Step 2.6: 表示幅で切る — cut every card line by display width, never by bytes",
+              "said": null,
+              "openable": false,
               "match": "exact"
             },
             {
@@ -67,6 +86,9 @@
               "harness": "codex",
               "state": "busy",
               "phrase": "working now · for 47 min",
+              "asked": "Read AGENTS.md, then do Step 2.5 in PLAN.md.",
+              "said": "<said>",
+              "openable": false,
               "match": "exact"
             }
           ],
@@ -88,6 +110,9 @@
           "step": "2.3",
           "state": "unknown",
           "phrase": "state unknown",
+          "asked": "start step 2.3 with codex",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -99,6 +124,9 @@
           "step": "2.5",
           "state": "idle",
           "phrase": "idle · last active 47 min ago",
+          "asked": "nudge the step 2.5 run",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

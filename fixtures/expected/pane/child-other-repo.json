@@ -4,6 +4,7 @@
   "now": "2026-11-10T22:20:00.000Z",
   "this": "14150000-0000-4000-8000-000000001415",
   "seen": false,
+  "strip": null,
   "sections": [
     {
       "name": "working",
@@ -15,6 +16,9 @@
           "step": "3.2",
           "state": "busy",
           "phrase": "working now · for 54 min",
+          "asked": "Read AGENTS.md, then do Step 3.2 in PLAN.md.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

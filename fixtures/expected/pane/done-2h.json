@@ -4,6 +4,7 @@
   "now": "2026-11-09T12:00:00.000Z",
   "this": "95000004-0000-4000-8000-000095000004",
   "seen": true,
+  "strip": null,
   "sections": [
     {
       "name": "working",
@@ -23,6 +24,9 @@
           "step": null,
           "state": "unknown",
           "phrase": "state unknown",
+          "asked": "Synthetic lane parent 4.",
+          "said": null,
+          "openable": false,
           "is_this": true,
           "children": [
             {
@@ -30,6 +34,9 @@
               "harness": "codex",
               "state": "unknown",
               "phrase": "done 11:01am",
+              "asked": "Tidy the synthetic README wording.",
+              "said": "<text>",
+              "openable": false,
               "match": "exact"
             }
           ],
@@ -42,6 +49,9 @@
           "step": "2.1",
           "state": "unknown",
           "phrase": "done 11:30am",
+          "asked": "Read AGENTS.md, then do Step 2.1 in PLAN.md. Synthetic import.",
+          "said": "<text>",
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -53,6 +63,9 @@
           "step": "7.1",
           "state": "unknown",
           "phrase": "done 10:31am",
+          "asked": "Read AGENTS.md, then do Step 2.2 in PLAN.md. Synthetic export.",
+          "said": "<text>",
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

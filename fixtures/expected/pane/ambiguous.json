@@ -4,6 +4,33 @@
   "now": "2026-11-10T22:20:00.000Z",
   "this": "141a0000-0000-4000-8000-00000000141a",
   "seen": true,
+  "strip": {
+    "step": "5.1",
+    "title": null,
+    "parts": [
+      {
+        "harness": "claude",
+        "kind": "plan",
+        "status": "done",
+        "active_min": 2,
+        "is_this": true
+      },
+      {
+        "harness": "codex",
+        "kind": "implement",
+        "status": null,
+        "active_min": 1,
+        "is_this": false
+      },
+      {
+        "harness": "claude",
+        "kind": "review",
+        "status": null,
+        "active_min": 4,
+        "is_this": true
+      }
+    ]
+  },
   "sections": [
     {
       "name": "working",
@@ -23,6 +50,9 @@
           "step": "5.1",
           "state": "unknown",
           "phrase": "state unknown",
+          "asked": "try step 5.1 on codex",
+          "said": null,
+          "openable": false,
           "is_this": true,
           "children": [],
           "handoffs": [
@@ -43,6 +73,9 @@
           "step": null,
           "state": "unknown",
           "phrase": "done 10:02pm",
+          "asked": "check the bridge script",
+          "said": "<said>",
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -54,6 +87,9 @@
           "step": null,
           "state": "unknown",
           "phrase": "done 10:01pm",
+          "asked": "try the bridge check again",
+          "said": "<said>",
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []

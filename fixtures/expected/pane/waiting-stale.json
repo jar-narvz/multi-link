@@ -4,6 +4,7 @@
   "now": "2026-11-09T07:30:00.000Z",
   "this": "92000012-0000-4000-8000-00009200000c",
   "seen": true,
+  "strip": null,
   "sections": [
     {
       "name": "working",
@@ -19,6 +20,9 @@
           "step": null,
           "state": "waiting",
           "phrase": "waiting on you · since 6:02am",
+          "asked": "Synthetic exit case 12.",
+          "said": null,
+          "openable": false,
           "is_this": true,
           "children": [],
           "handoffs": []
@@ -30,6 +34,9 @@
           "step": null,
           "state": "stale",
           "phrase": "stale since 5:30am",
+          "asked": "Synthetic exit case 9.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -46,6 +53,9 @@
           "step": null,
           "state": "unknown",
           "phrase": "state unknown",
+          "asked": "Synthetic exit case 14.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -57,6 +67,9 @@
           "step": null,
           "state": "unknown",
           "phrase": "state unknown",
+          "asked": "Synthetic exit case 13.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -68,6 +81,9 @@
           "step": null,
           "state": "finished",
           "phrase": "finished",
+          "asked": "Synthetic exit case 11.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
@@ -79,6 +95,9 @@
           "step": null,
           "state": "idle",
           "phrase": "idle · last active 5:40am",
+          "asked": "Synthetic exit case 10.",
+          "said": null,
+          "openable": false,
           "is_this": false,
           "children": [],
           "handoffs": []
