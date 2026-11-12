@@ -1,20 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 18 is in progress. Step 18.3 is committed (Codex, reviewed by Claude, 2026-11-12). Next: Step 18.4 (real check,
-README, owner confirm).**
-- Pane rows and children now serialize `opens` immediately after `openable`: `app`, `terminal`, or null.
-  AppLink and Jump enable the button; its label follows `opens`, and presses use `open --no-resume` by argv.
-  Phase 17 lines without `opens` normalize it to null. The footer displays CLI stdout on success and stderr
-  on failure, with destination-specific success text or `could not open session` when output is empty.
-- Regenerated pane keys are additive: stripping 59 `opens` fields reproduces all 14 previously tracked pane
-  files byte for byte. A new `terminal.json` covers Terminal, iTerm2, and unavailable outcomes.
-- Verify: workspace 730 passed / 0 failed / 1 existing ignored; mod 134 passed / 0 failed; plugin validation,
-  clippy and fmt pass. Validation also prints existing catalog-only license/icon notices (non-fatal).
-- Performance follow-up for Claude: one warm **release** real-home pass was **256.990 ms**, slightly above the
-  250 ms target; this is one sample, not the ten-tick median gate. No timing instrumentation remains.
-- Step 18.2 is committed. Real terminal/permission confirmation remains Step 18.4; iTerm2 is untested live.
-  Claude decides when this step is done.
+**Phase 18: Step 18.4 is done; the owner check is pending (Claude, 2026-11-12).** `multi-link open`, the TUI's `o`
+and the pane's `Jump to terminal` bring a running Claude session's Terminal.app / iTerm2 tab to the front (board 18 J1).
+- Checked live with Terminal.app: the CLI and the TUI `o` jumped to the right tab from another front window; the real
+  script answers `not found` for a missing tab. iTerm2, tmux, other terminals, a denied Automation prompt (-1743) and a
+  real tab-gone process are covered by fixtures and tests only (`docs/phase18-check.md`, README Limitations).
+- A Claude session never sent a prompt has no transcript, so no list (TUI, pane) shows it, though `open <id>` resolves it.
+- Owner check pending: reinstall the binary, restart the app, press `Jump to terminal` on the repo-p17 Terminal row.
+  Phase 18 closes when the owner's answer is recorded.
 
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
@@ -829,6 +823,22 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 18.4: Real check, README (owner confirm pending) — Claude
+- Did: Real checks on Terminal.app in `~/multi-link-sandbox/repo-p17`: the CLI jump and the TUI `o` (PTY harness,
+  home → repo-p17 → Enter → `o`) each brought the session's tab to the front from another front window, checked with
+  AppleScript (`/dev/ttys006, true`). The committed Terminal script prints `not found` for a tty with no tab. Wrote
+  `docs/phase18-check.md`; README: the jump answers table, the Automation note, the pane button, the TUI key, and
+  the limitations (iTerm2 untested).
+- Changed: `docs/phase18-check.md`, `README.md`, `PROGRESS.md`.
+- Verify (whole phase, Claude): `TZ=UTC cargo test --workspace` → 730 passed / 0 failed / 1 ignored; clippy
+  `-D warnings` and `cargo fmt --check` clean; `open-jump`, `phase12`, `phase13`, `phase14` and `phase9 6` check.sh
+  all exit 0; `claude plugin validate` → `✔ Validation passed` (existing catalog notice); `claude plugin test` →
+  134 pass / 0 fail. Real-check commands and outputs are in `docs/phase18-check.md`. Owner's answer: pending.
+- Review: Claude's own step (docs only); no code changed.
+- Gotchas: the first sandbox session exited before the TUI check, and a session with no prompt has no transcript, so
+  lists skip it; a new one was started with a prompt. On home, `o` on a repo card asks for the repo view first
+  (existing behaviour). The Automation prompt did not appear because the caller was already allowed.
 
 ### 2026-11-12 — Step 18.3: Review round 1 — Codex
 - Did: Fixed both Claude findings. Missing `opens` normalizes to null for rows and children before validation;

@@ -224,9 +224,11 @@ checked 0s ago
   waiting / `·` not known, and active minutes. This session's parts are marked `▌`. At most four show; older parts
   fold into `+N earlier`.
 - **Row actions:** press a row (click, or Enter when the pane has focus) to open it. An open row shows what it was
-  asked and, for a Codex run, the start of its final message, with buttons: `Copy id` always, and `Open in app` only
-  for a session the Claude desktop app can open. `Open in app` re-checks at the press and never falls back to a
-  terminal resume. One row is open at a time. The footer says what happened.
+  asked and, for a Codex run, the start of its final message, with buttons: `Copy id` always; `Open in app` for a
+  session the Claude desktop app can open; `Jump to terminal` (Release 1.15) for a running Claude session in a
+  Terminal.app or iTerm2 tab, which brings that tab to the front. Both re-check at the press and never fall back to a
+  terminal resume. One row is open at a time. The footer says what happened, e.g. `jumped to Terminal · window 2 ·
+  tab 1 (ttys006)`. A 1.14 binary still works; it just never offers the jump.
 - **Notifications (macOS):** when a Codex run that a Claude session in this repo handed off finishes, macOS shows
   `codex finished (<step>)` with the first 120 characters of its final message. It fires once per hand-off, even with
   several panes open (each run leaves a marker file in `~/.multi-link/notified/`). It is only for runs the pane saw
@@ -274,6 +276,25 @@ in [docs/phase9-check.md](docs/phase9-check.md).
   when exactly one desktop app record maps the session; anything else → Unavailable with the command shown, so a
   cleanly exited desktop session is not resumed in a terminal while the app may reopen it. A `process_exit` session
   still resumes in a terminal whatever its entrypoint (0 real cases on 2026-11-08).
+- **Jumping to a running terminal session (Release 1.15).** `multi-link open` on a Claude session that is still
+  running in a terminal brings its own tab to the front, instead of printing a `claude --resume` that would start a
+  second copy. Its session record gives the process; one `ps` snapshot checks that the process is the same one (start
+  time) and walks its parents to the terminal app; AppleScript selects the Terminal.app or iTerm2 tab whose tty
+  matches. Nothing extra is installed. When it cannot jump it says why and exits 3, never resuming:
+
+  | Answer | When |
+  |---|---|
+  | `jumped to Terminal · window W · tab T (ttysNNN)` | the tab was found and selected |
+  | `inside_multiplexer (tmux)` | the session runs in tmux, screen or zellij |
+  | `terminal_not_supported (Ghostty)` | another terminal app (named when known) |
+  | `no_tty` | the process has no terminal |
+  | `process_changed` / `ambiguous_process` | the record's process is gone or replaced, or several records match |
+  | `cannot jump: its tab is gone` | the process runs but no tab has its tty |
+  | `cannot jump: blocked by macOS…` | macOS Automation permission was denied |
+
+  The first jump makes macOS ask to let the caller (your terminal, or Claude Code for the pane) control Terminal. If
+  it was denied, allow it in System Settings → Privacy & Security → Automation. `--app-only` refuses a jump;
+  `--no-resume` (what the pane uses) allows it. Codex sessions and tmux / Herdr panes are not jumped to.
 - **Compressed rollouts.** Older Codex rollouts are on disk as `rollout-*.jsonl.zst` (a standard zstd frame holding
   the same JSONL). multi-link decompresses them in pure Rust (`ruzstd`), up to 64 MiB each; a file over the cap or
   that fails to decode is counted as unreadable, never an error. When the same run exists in both forms, the plain
@@ -359,7 +380,8 @@ that binary's path. `hook install` still prints the bare snippet, and `hook unin
 
 ## Run
 
-Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open, `f` to fork, Esc to return, and
+Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open (or jump to a running session's terminal tab,
+without leaving the TUI), `f` to fork, Esc to return, and
 `q` to quit. In the repo view, `+`/`-` zoom, ←/→ pan, `0` resets the range, `z` unfolds idle stretches
 and `i` shows imports; `s` opens the step graph for the selected lane. `l` opens the live grid from home or a repo
 view (`multi-link tui --live` starts on it); `esc` returns. The default history window is `2h`; use
@@ -390,6 +412,12 @@ state rules.
   app (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
   has no theme background colour). Pane data took 3.6–4.6 s from launch in the Phase 17 check, slower than Phase 16,
   because the first refresh also builds the strip and reads linked Codex rollouts.
+
+- The terminal jump (Release 1.15) is macOS only and was checked live with Terminal.app from the CLI and the TUI
+  (`docs/phase18-check.md`). **iTerm2 is untested** (not installed; covered by tests only), and so are tmux, other
+  terminals, a real tab-gone process and a denied Automation prompt (fixtures and fake-runner tests). A session never
+  sent a prompt has no transcript yet, so no list shows it. It relies on the session record's `pid`/`procStart`
+  (undocumented). A running terminal session adds one `ps` per refresh (226 ms per pane tick in the check).
 
 - Claude Code and Codex transcript formats are undocumented and may change. Unknown records
   are skipped and counted; missing evidence can leave states or links unknown.
