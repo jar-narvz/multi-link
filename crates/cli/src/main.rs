@@ -134,7 +134,7 @@ fn open_command(action: &OpenAction) -> Option<std::process::Command> {
             command.arg(url);
             Some(command)
         }
-        OpenAction::Unavailable { .. } => None,
+        OpenAction::Unavailable { .. } | OpenAction::Jump { .. } => None,
     }
 }
 
@@ -174,6 +174,7 @@ fn open(
         reason,
         command,
         cwd,
+        ..
     } = &action
     {
         match command {
@@ -192,6 +193,10 @@ fn open(
     }
     if args.dry_run {
         return Ok(0);
+    }
+    if matches!(action, OpenAction::Jump { .. }) {
+        eprintln!("cannot jump: terminal jump execution is not implemented yet");
+        return Ok(EXIT_UNAVAILABLE);
     }
     let mut command = open_command(&action).expect("executable action has a command");
     let status = command
@@ -771,6 +776,7 @@ mod tests {
         assert_eq!(command.get_current_dir(), None);
         assert!(
             open_command(&OpenAction::Unavailable {
+                detail: None,
                 reason: open::Reason::NotKnownFinished,
                 command: Some(format!("claude --resume {id}")),
                 cwd: "/some/repo".into(),

@@ -218,6 +218,131 @@ impl ProcessProbe for FakeProcessProbe {
     }
 }
 
+/// Identity, terminal and ancestry from one process-table read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessRow {
+    pub pid: u32,
+    pub ppid: u32,
+    pub started_at: time::PrimitiveDateTime,
+    pub tty: String,
+    pub comm: String,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub enum ProcessSnapshot {
+    /// Older fixture roots intentionally have no process table.
+    #[default]
+    Absent,
+    Unknown,
+    Known(HashMap<u32, ProcessRow>),
+}
+
+pub trait SnapshotProbe {
+    fn snapshot(&self) -> ProcessSnapshot;
+}
+
+impl SnapshotProbe for RealProcessProbe {
+    fn snapshot(&self) -> ProcessSnapshot {
+        match self
+            .ps_command(&["-axo", "pid,ppid,lstart,tty,comm"])
+            .output()
+        {
+            Ok(output) => ProcessSnapshot::from_output(
+                output.status.success(),
+                &output.stdout,
+                &output.stderr,
+            ),
+            Err(_) => ProcessSnapshot::Unknown,
+        }
+    }
+}
+
+pub struct FixtureSnapshotProbe {
+    pub root: PathBuf,
+}
+
+impl SnapshotProbe for FixtureSnapshotProbe {
+    fn snapshot(&self) -> ProcessSnapshot {
+        match std::fs::read(self.root.join("fixture-ps.txt")) {
+            Ok(text) => ProcessSnapshot::from_output(true, &text, b""),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => ProcessSnapshot::Absent,
+            Err(_) => ProcessSnapshot::Unknown,
+        }
+    }
+}
+
+/// Compare times, including zero-padded record days and space-padded ps days.
+pub(crate) fn process_start(text: &str) -> Option<time::PrimitiveDateTime> {
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    time::PrimitiveDateTime::parse(
+        &normalized,
+        time::macros::format_description!(
+            "[weekday repr:short] [month repr:short] [day padding:none] [hour]:[minute]:[second] [year]"
+        ),
+    ).ok()
+}
+
+impl ProcessSnapshot {
+    /// A bad row invalidates the entire snapshot; it never proves process exit.
+    pub fn from_output(success: bool, stdout: &[u8], stderr: &[u8]) -> Self {
+        if !success || !stderr.iter().all(u8::is_ascii_whitespace) {
+            return Self::Unknown;
+        }
+        let Ok(text) = std::str::from_utf8(stdout) else {
+            return Self::Unknown;
+        };
+        let mut lines = text.lines();
+        if lines.next().is_none_or(|header| header.trim().is_empty()) {
+            return Self::Unknown;
+        }
+        let mut rows = HashMap::new();
+        for line in lines {
+            let Some(row) = parse_process_row(line) else {
+                return Self::Unknown;
+            };
+            if rows.insert(row.pid, row).is_some() {
+                return Self::Unknown;
+            }
+        }
+        if rows.is_empty() {
+            Self::Unknown
+        } else {
+            Self::Known(rows)
+        }
+    }
+}
+
+fn parse_process_row(line: &str) -> Option<ProcessRow> {
+    let mut remaining = line;
+    let mut token = || {
+        remaining = remaining.trim_start();
+        let end = remaining
+            .find(char::is_whitespace)
+            .unwrap_or(remaining.len());
+        let value = &remaining[..end];
+        remaining = &remaining[end..];
+        (!value.is_empty()).then_some(value)
+    };
+    let pid = token()?.parse().ok()?;
+    let ppid = token()?.parse().ok()?;
+    let start = (0..5)
+        .map(|_| token())
+        .collect::<Option<Vec<_>>>()?
+        .join(" ");
+    let tty = token()?.to_owned();
+    let comm = remaining.trim().to_owned();
+    if comm.is_empty() {
+        return None;
+    }
+    Some(ProcessRow {
+        pid,
+        ppid,
+        started_at: process_start(&start)?,
+        tty,
+        comm,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Liveness, classify_output};

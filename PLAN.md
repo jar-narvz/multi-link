@@ -2959,7 +2959,8 @@ split inside an iTerm2 tab beyond selecting its session.
 - Files: `crates/core/src/open.rs`, `crates/core/src/probe.rs` (the snapshot trait and its `ps` and fixture
   implementations), `crates/core/src/scanner.rs` (wiring the snapshot into `open_resolver`), `crates/core/src/lib.rs`
   (exports only), `crates/cli/src/main.rs` (`open --dry-run` JSON, and a temporary `Jump` arm that refuses with exit 3
-  until 18.2),
+  until 18.2), `crates/cli/src/tui.rs` (compile compatibility only: `..` in `Unavailable` patterns and a
+  temporary refusing `Jump` arm, Review log),
   `crates/*/tests/**`, `docs/output-schema.md` (Open), `PROGRESS.md`
 - Verify: tests, clippy `-D warnings`, fmt clean; every `open-jump` key byte for byte; process queries counted
   through the seams: the existing liveness batch plus at most one snapshot per resolver build, none when no session
@@ -3000,6 +3001,12 @@ split inside an iTerm2 tab beyond selecting its session.
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app.
 
 ## Review log
+
+### 2026-11-12 — Step 18.1 scope (Claude, Codex stop)
+- Codex stopped: the new `detail` field breaks the exhaustive `OpenAction::Unavailable { reason, command, cwd }`
+  pattern in `crates/cli/src/tui.rs` (`open_result`). **Accepted:** 18.1 may touch `tui.rs` for compile compatibility
+  only (`..` in such patterns, and a temporary `Jump` arm that refuses like `main.rs`'s); the TUI's real jump stays
+  18.2.
 
 ### 2026-11-12 — Step 18.0 amendments (Claude, during the step)
 - **Which record is the target.** "The existing output-schema pick" was replaced by a rule on the snapshot itself:

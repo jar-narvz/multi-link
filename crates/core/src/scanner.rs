@@ -162,6 +162,8 @@ pub struct OverviewOutput {
 #[derive(Default)]
 pub struct Scanner {
     root: Option<PathBuf>,
+    // Last assembled states decide whether opening needs a process snapshot.
+    open_context: Option<(RepoMode, bool)>,
     parse_threads: Option<usize>,
     progress: Option<LoadProgress>,
     #[cfg(test)]
@@ -701,13 +703,46 @@ impl Scanner {
                 session.checkout = paths.checkout.to_string_lossy().into_owned();
             }
         }
+        self.open_context = Some((
+            options.repo_mode,
+            output
+                .report
+                .sessions
+                .iter()
+                .any(crate::open::Resolver::needs_snapshot),
+        ));
         Ok(output)
     }
 
     /// Resolve reopening metadata through the same file-key cache as sessions.
     pub fn open_resolver(&mut self, root: &Path) -> io::Result<crate::open::Resolver> {
-        self.read_claude(root)
-            .map(|(claude, ..)| crate::open::Resolver::new(claude))
+        match self.open_context.as_ref().map(|(mode, _)| *mode) {
+            Some(RepoMode::Real) => {
+                self.open_resolver_with_snapshot(root, &crate::RealProcessProbe::default())
+            }
+            _ => self.open_resolver_with_snapshot(
+                root,
+                &crate::probe::FixtureSnapshotProbe {
+                    root: root.to_owned(),
+                },
+            ),
+        }
+    }
+
+    /// Injectable snapshot seam. Call after a sessions/refresh pass on the same root;
+    /// constructing a resolver alone still supports the legacy metadata decisions.
+    pub fn open_resolver_with_snapshot(
+        &mut self,
+        root: &Path,
+        probe: &dyn crate::probe::SnapshotProbe,
+    ) -> io::Result<crate::open::Resolver> {
+        let (claude, ..) = self.read_claude(root)?;
+        let mut resolver = crate::open::Resolver::new(claude);
+        if self.root.as_deref() == Some(root) && self.open_context.is_some_and(|(_, needed)| needed)
+        {
+            resolver.set_snapshot(probe.snapshot());
+        }
+        Ok(resolver)
     }
 
     pub fn sessions(&mut self, root: &Path, options: &Options<'_>) -> io::Result<SessionsOutput> {

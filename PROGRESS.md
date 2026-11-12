@@ -1,13 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 18 (jump to a running terminal session's tab) is in progress. Step 18.0 is committed (Claude, 2026-11-12):
-pins in `docs/design.md` → "Phase 18 decisions"; keys in `fixtures/expected/open-jump/` (`open.json`, `check.sh`,
-the two AppleScript texts); fixture root `fixtures/sessions-phase18` with `fixture-ps.txt`. Next: Step 18.1 (resolver,
-Codex).**
-- **For 18.1:** `fixtures/expected/open-jump/check.sh` → 11 `open` lines FAIL (expected until 18.1), 11 `fork` ok.
-  Every rule (parse, identity, walk, JSON order, reasons) is pinned in design I1; whole-snapshot failures are unit
-  tests. Existing keys must not change: a root without `fixture-ps.txt` keeps today's answer.
+**Phase 18 is in progress. Step 18.1 is committed (Codex, reviewed by Claude, 2026-11-12): `open --dry-run` answers
+`jump` (app, tty, pid) or the new unavailable reasons from one identity-bearing `ps` snapshot. Next: Step 18.2.**
+- **For 18.2:** `main.rs` and `tui.rs` each have a temporary `Jump` arm that prints "terminal jump execution is not
+  implemented yet" and exits 3; replace both with the I2 runner (scripts in `fixtures/expected/open-jump/scripts/`,
+  texts in design I2). The TUI's open path is `FreshOpen` (`o`).
 
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
@@ -822,6 +820,145 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 18.1: Resolver: Jump and the process snapshot — Codex
+- Did: Implemented `Jump`, terminal app names, the six pinned unavailable reasons and optional `detail` in JSON
+  order. Added an injectable snapshot seam, real ps through `RealProcessProbe::ps_command` (C locale, UTC),
+  fixture table reads, whole-snapshot rejection, time-based record identity selection and the bounded ancestor
+  walk. Scanner remembers whether its last assembled report needs a snapshot, then takes at most one per
+  resolver build; opening performs no extra liveness probes. CLI dry runs serialize Jump; CLI/TUI execution
+  temporarily refuse. Updated only the Open schema. The owner approved the TUI compatibility edit, and Claude
+  added it to PLAN.md; the previous blocker is resolved.
+- Changed: `crates/core/src/{open.rs,probe.rs,scanner.rs,lib.rs}`, `crates/core/tests/open_jump.rs`,
+  `crates/cli/src/{main.rs,tui.rs}`, `crates/cli/tests/open_jump.rs`, `docs/output-schema.md`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Before implementation, `fixtures/expected/open-jump/check.sh` exited 1
+  (11 open FAIL, 11 fork ok); the new CLI key test failed as expected (`left: Some(3)`, `right: Some(0)`).
+  After implementation, `cargo test --workspace` exited 0; all 68 result lines were ok (721 passed, 0 failed,
+  1 ignored, from the actual log). Decisive actual output excerpts:
+  ```text
+  test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+  test real_counts ... ignored
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  The existing `real_counts` test is ignored. Added an old-key byte comparison and strengthened query-count
+  assertions after the workspace run; targeted reruns exited 0:
+  `cargo test -p multi-link --test open_jump`:
+  ```text
+  running 3 tests
+  test jump_execution_is_temporarily_refused ... ok
+  test open_jump_keys_match_bytes_and_exit_codes ... ok
+  test old_open_keys_match_bytes_and_exit_codes ... ok
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.93s
+  ```
+  `cargo test -p multi-link-core --test open_jump`:
+  ```text
+  running 4 tests
+  test no_snapshot_for_finished_unknown_app_link_or_empty_reports ... ok
+  test one_batch_and_one_snapshot_per_resolver_build_not_per_action ... ok
+  test missing_fixture_table_preserves_old_answer_and_read_errors_are_unknown ... ok
+  test real_snapshot_uses_exact_argv_c_locale_utc_and_one_process ... ok
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+  ```
+  `cargo test -p multi-link-core --lib jump_tests` exited 0: whole-snapshot failures never resume,
+  no tty/multiplexer/unsupported/missing/cyclic ancestors, the 64-row limit, padded days and canonical tty:
+  ```text
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.03s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` exited 0:
+  ```text
+  Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.39s
+  ```
+  `cargo fmt --all -- --check` and `git diff --check` → no output, exit 0.
+  `git diff --name-only -- fixtures` → no output, exit 0 (keys/checkers unchanged).
+  `fixtures/expected/open-jump/check.sh` → exit 0, actual output:
+  ```text
+ok   open open 18000001
+ok   open open 18000002
+ok   open open 18000003
+ok   open open 18000004
+ok   open open 18000005
+ok   open open 18000006
+ok   open open 18000007
+ok   open open 18000008
+ok   open open 18000009
+ok   open open 18000010
+ok   open open 18000011
+ok   open fork 18000001
+ok   open fork 18000002
+ok   open fork 18000003
+ok   open fork 18000004
+ok   open fork 18000005
+ok   open fork 18000006
+ok   open fork 18000007
+ok   open fork 18000008
+ok   open fork 18000009
+ok   open fork 18000010
+ok   open fork 18000011
+  ```
+  `fixtures/expected/phase9/check.sh 6` → exit 0, actual output:
+  ```text
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+  ```
+- Review: Claude, no findings. Checked against design I1: one `ps -axo pid,ppid,lstart,tty,comm` through the probe's
+  `ps_command` only when a running non-app Claude session exists; whole-snapshot failures → `process_unknown` (10
+  cases tested); live = pid present with equal start time (zero- vs space-padded day tested); one/none/two live →
+  jump/`process_changed`/`ambiguous_process`; the walk (64 steps, cycle stop, multiplexer before app, `.app` name)
+  and `/dev/` tty; `Absent` (no fixture table) keeps `running_without_app_link`; `--fork` unchanged. The one scope
+  stop (`tui.rs` compile compatibility) was approved by Claude and logged. Claude re-ran Verify: 722 passed, 0
+  failed, 1 ignored; clippy and fmt clean; `open-jump`, phase 9/12/13/14 `check.sh` all exit 0. The 18.0 Terminal
+  session had exited, so a real `--dry-run` waits for 18.4.
+- Gotchas: No jump execution or osascript command was run. Resolver construction uses the states/mode from
+  the preceding sessions/refresh pass on the same root; standalone metadata-only construction keeps the legacy
+  behavior. Missing fixture tables preserve older answers; unreadable/malformed tables return process_unknown.
+  No dependencies, answer keys or scripts changed; nothing staged, committed or pushed. PLAN.md's scope
+  amendment and pre-existing untracked files belong to the owner/Claude and were left untouched.
 
 ### 2026-11-12 — Step 18.0: Facts on real processes, design pins, answer keys — Claude
 - Did: `codex-quota.py` → `CODEX: OK` (18.0 is a Claude step). Real facts in `~/multi-link-sandbox/repo-p17`: started

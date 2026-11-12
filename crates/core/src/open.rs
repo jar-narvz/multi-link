@@ -24,12 +24,28 @@ pub enum OpenAction {
     },
     /// `open <url>` (macOS); undocumented desktop-app behaviour.
     AppLink { url: String },
+    /// Identify the existing terminal tab; execution is added in Step 18.2.
+    Jump {
+        app: TerminalApp,
+        tty: String,
+        pid: u32,
+        cwd: String,
+    },
     /// Nothing runs; `command` is offered for the user to run themselves.
     Unavailable {
         reason: Reason,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
         command: Option<String>,
         cwd: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalApp {
+    Terminal,
+    Iterm2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -40,6 +56,12 @@ pub enum Reason {
     NoTranscript,
     ForkNeedsFinished,
     RunningWithoutAppLink,
+    InsideMultiplexer,
+    TerminalNotSupported,
+    NoTty,
+    ProcessChanged,
+    AmbiguousProcess,
+    ProcessUnknown,
     NotKnownFinished,
     AppSession,
     UnknownEntrypoint,
@@ -53,6 +75,12 @@ impl Reason {
             Reason::NoTranscript => "no_transcript",
             Reason::ForkNeedsFinished => "fork_needs_finished",
             Reason::RunningWithoutAppLink => "running_without_app_link",
+            Reason::InsideMultiplexer => "inside_multiplexer",
+            Reason::TerminalNotSupported => "terminal_not_supported",
+            Reason::NoTty => "no_tty",
+            Reason::ProcessChanged => "process_changed",
+            Reason::AmbiguousProcess => "ambiguous_process",
+            Reason::ProcessUnknown => "process_unknown",
             Reason::NotKnownFinished => "not_known_finished",
             Reason::AppSession => "app_session",
             Reason::UnknownEntrypoint => "unknown_entrypoint",
@@ -84,6 +112,8 @@ pub fn is_app_host_id(host: &str) -> bool {
 /// Internal reopening metadata; deliberately kept out of the Session JSON schema.
 #[derive(Debug, Default)]
 pub struct Resolver {
+    records: Vec<multi_link_claude::SessionRecord>,
+    snapshot: crate::probe::ProcessSnapshot,
     entrypoints: std::collections::HashMap<String, String>,
     app_ids: std::collections::HashMap<String, Vec<String>>,
 }
@@ -91,6 +121,8 @@ pub struct Resolver {
 impl Resolver {
     pub(crate) fn new(scan: multi_link_claude::ClaudeScan) -> Self {
         Self {
+            records: scan.records,
+            snapshot: Default::default(),
             entrypoints: scan
                 .transcripts
                 .into_iter()
@@ -108,6 +140,94 @@ impl Resolver {
         }
     }
 
+    pub(crate) fn set_snapshot(&mut self, snapshot: crate::probe::ProcessSnapshot) {
+        self.snapshot = snapshot;
+    }
+
+    pub(crate) fn needs_snapshot(session: &Session) -> bool {
+        session.harness == Harness::Claude
+            && matches!(
+                session.state,
+                State::Busy | State::Idle | State::Waiting | State::Stale
+            )
+            && !session
+                .host_session_id
+                .as_deref()
+                .is_some_and(is_app_host_id)
+    }
+
+    fn jump(&self, session: &Session) -> OpenAction {
+        use crate::probe::{ProcessSnapshot, process_start};
+        let unavailable = |reason, detail| OpenAction::Unavailable {
+            reason,
+            detail,
+            command: Some(format!("claude --resume {}", session.id)),
+            cwd: session.cwd.clone(),
+        };
+        let rows = match &self.snapshot {
+            ProcessSnapshot::Absent => return unavailable(Reason::RunningWithoutAppLink, None),
+            ProcessSnapshot::Unknown => return unavailable(Reason::ProcessUnknown, None),
+            ProcessSnapshot::Known(rows) => rows,
+        };
+        let live: Vec<_> = self
+            .records
+            .iter()
+            .filter(|record| record.session_id == session.id)
+            .filter_map(|record| {
+                rows.get(&record.pid)
+                    .filter(|row| process_start(&record.proc_start) == Some(row.started_at))
+            })
+            .collect();
+        let own = match live.as_slice() {
+            [] => return unavailable(Reason::ProcessChanged, None),
+            [row] => *row,
+            _ => return unavailable(Reason::AmbiguousProcess, None),
+        };
+        if matches!(own.tty.as_str(), "??" | "-") {
+            return unavailable(Reason::NoTty, None);
+        }
+        let mut pid = own.pid;
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..64 {
+            if pid <= 1 || !seen.insert(pid) {
+                break;
+            }
+            let Some(row) = rows.get(&pid) else {
+                break;
+            };
+            let basename = Path::new(&row.comm).file_name().and_then(|s| s.to_str());
+            if let Some(name @ ("tmux" | "screen" | "zellij")) = basename {
+                return unavailable(Reason::InsideMultiplexer, Some(name.to_owned()));
+            }
+            let app = if row.comm.contains("/Terminal.app/Contents/MacOS/Terminal") {
+                Some(TerminalApp::Terminal)
+            } else if row.comm.contains("/iTerm.app/Contents/MacOS/iTerm2") {
+                Some(TerminalApp::Iterm2)
+            } else {
+                None
+            };
+            if let Some(app) = app {
+                let tty = if own.tty.starts_with("/dev/") {
+                    own.tty.clone()
+                } else {
+                    format!("/dev/{}", own.tty)
+                };
+                return OpenAction::Jump {
+                    app,
+                    tty,
+                    pid: own.pid,
+                    cwd: session.cwd.clone(),
+                };
+            }
+            if let Some((prefix, _)) = row.comm.split_once(".app/") {
+                let name = prefix.rsplit('/').next().unwrap_or(prefix);
+                return unavailable(Reason::TerminalNotSupported, Some(name.to_owned()));
+            }
+            pid = row.ppid;
+        }
+        unavailable(Reason::TerminalNotSupported, None)
+    }
+
     pub fn action(&self, session: &Session, fork: bool) -> OpenAction {
         resolved_action(session, fork, self)
     }
@@ -122,6 +242,7 @@ fn resolved_action(session: &Session, fork: bool, resolver: &Resolver) -> OpenAc
     let id = &session.id;
     let unavailable = |reason, command: Option<String>| OpenAction::Unavailable {
         reason,
+        detail: None,
         command,
         cwd: session.cwd.clone(),
     };
@@ -184,6 +305,7 @@ fn resolved_action(session: &Session, fork: bool, resolver: &Resolver) -> OpenAc
                 Some(host) if is_app_host_id(host) => {
                     unavailable(Reason::ForkNeedsFinished, claude_command())
                 }
+                _ if !fork => resolver.jump(session),
                 _ => unavailable(Reason::RunningWithoutAppLink, claude_command()),
             }
         }
@@ -408,6 +530,7 @@ mod tests {
                 action,
                 OpenAction::Unavailable {
                     reason: Reason::NoTranscript,
+                    detail: None,
                     command: Some(format!("claude --resume {ID}{suffix}")),
                     cwd: "/record-cwd".into(),
                 }
@@ -462,6 +585,7 @@ mod tests {
                     action,
                     OpenAction::Unavailable {
                         reason: Reason::RunningWithoutAppLink,
+                        detail: None,
                         command: Some(format!("claude --resume {ID}")),
                         cwd: "/transcript-cwd".into(),
                     }
@@ -500,6 +624,7 @@ mod tests {
                 action,
                 OpenAction::Unavailable {
                     reason: Reason::NotKnownFinished,
+                    detail: None,
                     command: Some(format!("claude --resume {ID}{suffix}")),
                     cwd: "/transcript-cwd".into(),
                 }
@@ -528,6 +653,7 @@ mod tests {
                 action(&session, fork),
                 OpenAction::Unavailable {
                     reason: Reason::CodexNotSupported,
+                    detail: None,
                     command: Some(format!("codex {verb} {codex}")),
                     cwd: session.cwd.clone(),
                 }
@@ -554,6 +680,7 @@ mod tests {
                 action(&finished, false),
                 OpenAction::Unavailable {
                     reason: Reason::UnsafeId,
+                    detail: None,
                     command: None,
                     cwd: "/repo".into()
                 },
@@ -768,5 +895,153 @@ mod tests {
             Lookup::Ambiguous(sessions) => assert_eq!(sessions.len(), 4),
             other => panic!("{other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod jump_tests {
+    use super::*;
+    use crate::probe::ProcessSnapshot;
+
+    const START: &str = "Mon Nov 09 05:30:00 2026";
+    const ID: &str = "18000001-0000-4000-8000-000018000001";
+    const HEADER: &str = "PID PPID STARTED TTY COMM\n";
+    const OWN: &str = "18001 500 Mon Nov  9 05:30:00 2026 ttys004 claude\n";
+    const TERMINAL: &str = "500 1 Mon Nov  9 05:30:00 2026 ?? /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\n";
+
+    fn setup() -> (Resolver, Session) {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase18");
+        let mut scan = multi_link_claude::scan(&root).unwrap();
+        scan.records.retain(|r| r.session_id == ID);
+        scan.records[0].proc_start = START.into();
+        let resolver = Resolver::new(scan);
+        let session: Session = serde_json::from_value(serde_json::json!({
+            "id":ID,"harness":"claude","repo":"/repo","checkout":"/repo","cwd":"/repo",
+            "branch":null,"started_at":"2026-11-09T05:30:00.000Z",
+            "last_activity":"2026-11-12T09:00:00.000Z","state":"idle",
+            "state_evidence":"session_record","transcript":null,"pid":18001,"host_session_id":null,
+            "segments":[],"imported":false,
+            "subagents":[],"activity":[],"state_since":null,"title":null
+        }))
+        .unwrap();
+        (resolver, session)
+    }
+
+    #[test]
+    fn every_whole_snapshot_failure_is_process_unknown_never_resume() {
+        let valid = format!("{HEADER}{OWN}{TERMINAL}");
+        let duplicate = format!("{valid}{OWN}");
+        let malformed = format!("{valid}malformed\n");
+        let truncated = format!("{valid}17 1 Mon Nov 9\n");
+        for (success, stdout, stderr) in [
+            (false, valid.as_bytes(), &b""[..]),
+            (false, &b""[..], &b""[..]),
+            (true, valid.as_bytes(), &b"ps: denied"[..]),
+            (true, malformed.as_bytes(), &b""[..]),
+            (true, truncated.as_bytes(), &b""[..]),
+            (true, duplicate.as_bytes(), &b""[..]),
+            (true, &b""[..], &b""[..]),
+            (true, HEADER.as_bytes(), &b""[..]),
+            (true, &b"\xff"[..], &b""[..]),
+            (
+                true,
+                &b"PID PPID STARTED TTY COMM\n1 0 invalid date here now xx ?? comm\n"[..],
+                &b""[..],
+            ),
+        ] {
+            let (mut resolver, session) = setup();
+            resolver.set_snapshot(ProcessSnapshot::from_output(success, stdout, stderr));
+            assert_eq!(
+                resolver.action(&session, false),
+                OpenAction::Unavailable {
+                    reason: Reason::ProcessUnknown,
+                    detail: None,
+                    command: Some(format!("claude --resume {ID}")),
+                    cwd: "/repo".into(),
+                },
+                "{success} {stdout:?} {stderr:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ancestor_failures_no_tty_and_multiplexers_never_resume() {
+        for (own, ancestors, reason, detail) in [
+            (OWN.to_owned(), "".to_owned(), Reason::TerminalNotSupported, None),
+            (OWN.to_owned(), "500 18001 Mon Nov 9 05:30:00 2026 ?? shell\n".into(), Reason::TerminalNotSupported, None),
+            (OWN.replace("18001 500", "18001 0"), "".into(), Reason::TerminalNotSupported, None),
+            (OWN.replace("18001 500", "18001 1"), TERMINAL.into(), Reason::TerminalNotSupported, None),
+            (OWN.replace("ttys004", "-"), TERMINAL.into(), Reason::NoTty, None),
+            (OWN.replace("ttys004", "??"), TERMINAL.into(), Reason::NoTty, None),
+            (OWN.into(), "500 1 Mon Nov 9 05:30:00 2026 ?? /usr/bin/screen\n".into(), Reason::InsideMultiplexer, Some("screen")),
+            (OWN.into(), "500 1 Mon Nov 9 05:30:00 2026 ?? /usr/bin/zellij\n".into(), Reason::InsideMultiplexer, Some("zellij")),
+            (OWN.into(), "500 1 Mon Nov 9 05:30:00 2026 ?? /Applications/Other.app/Contents/Helper.app/Contents/MacOS/x\n".into(), Reason::TerminalNotSupported, Some("Other")),
+        ] {
+            let (mut resolver, session) = setup();
+            resolver.set_snapshot(ProcessSnapshot::from_output(true, format!("{HEADER}{own}{ancestors}").as_bytes(), b""));
+            assert_eq!(resolver.action(&session, false), OpenAction::Unavailable {
+                reason, detail: detail.map(str::to_owned),
+                command: Some(format!("claude --resume {ID}")), cwd: "/repo".into(),
+            });
+        }
+    }
+
+    #[test]
+    fn walk_stops_at_64_rows_and_uses_only_own_tty() {
+        let (mut resolver, session) = setup();
+        for (links, jump) in [(62, true), (63, false)] {
+            let mut text = format!("{HEADER}{OWN}");
+            for index in 0..links {
+                text.push_str(&format!(
+                    "{} {} Mon Nov 9 05:30:00 2026 ?? shell\n",
+                    500 + index,
+                    501 + index
+                ));
+            }
+            text.push_str(&TERMINAL.replace("500 1", &format!("{} 1", 500 + links)));
+            resolver.set_snapshot(ProcessSnapshot::from_output(true, text.as_bytes(), b""));
+            if jump {
+                assert_eq!(
+                    resolver.action(&session, false),
+                    OpenAction::Jump {
+                        app: TerminalApp::Terminal,
+                        tty: "/dev/ttys004".into(),
+                        pid: 18001,
+                        cwd: "/repo".into(),
+                    }
+                );
+            } else {
+                assert!(matches!(
+                    resolver.action(&session, false),
+                    OpenAction::Unavailable {
+                        reason: Reason::TerminalNotSupported,
+                        ..
+                    }
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn zero_padded_record_day_matches_and_prefixed_tty_is_canonical() {
+        let (mut resolver, session) = setup();
+        resolver.set_snapshot(ProcessSnapshot::from_output(
+            true,
+            format!(
+                "{HEADER}{}{TERMINAL}",
+                OWN.replace("ttys004", "/dev/ttys004")
+            )
+            .as_bytes(),
+            b"",
+        ));
+        assert_eq!(
+            resolver.action(&session, false),
+            OpenAction::Jump {
+                app: TerminalApp::Terminal,
+                tty: "/dev/ttys004".into(),
+                pid: 18001,
+                cwd: "/repo".into(),
+            }
+        );
     }
 }

@@ -1074,7 +1074,7 @@ report position) descending; the first 4.
 ## Open
 
 Phase 3, FR18, design T7. `open::action(&Session, fork: bool) -> OpenAction` is a pure function of the
-Session (no I/O); the CLI (`multi-link open <id-prefix> [--fork] [--dry-run]`, Step 3.4) and the TUI only
+Session (no I/O); `Resolver::action` also uses reopening metadata and an optional process snapshot; the CLI (`multi-link open <id-prefix> [--fork] [--dry-run]`, Step 3.4) and the TUI only
 execute what it returns. Before executing, the caller recomputes the Session from a fresh pass for that
 one full id, never from the last drawn report (Codex P1 #2).
 
@@ -1083,7 +1083,8 @@ one full id, never from the last drawn report (Codex P1 #2).
 | --- | --- | --- |
 | `"resume"` | `program`: `"claude"`; `args`: `["--resume", id]`, plus `"--fork-session"` when `fork`; `cwd`: Session `cwd` | Spawn `program args…` in `cwd` with inherited stdio (no shell), wait for it. |
 | `"app_link"` | `url`: `"claude://code/continue?session=" + host_session_id` | `open <url>` (macOS). Undocumented app behaviour, tested once (2026-10-29). |
-| `"unavailable"` | `reason` (below); `command`: string \| null, the command for me to run myself; `cwd`: Session `cwd` | Nothing runs. CLI: reason on stderr, exit 3; TUI: footer message with `command`. |
+| `"jump"` | `app`: `"terminal"` or `"iterm2"`; `tty`: canonical `/dev/ttysNNN`; `pid`: number; `cwd`: Session `cwd` | Dry run exits 0. Execution is temporarily refused (exit 3) until Step 18.2. |
+| `"unavailable"` | `reason` (below); optional `detail`: string, only when present, immediately after `reason`; `command`: string \| null, the command for me to run myself; `cwd`: Session `cwd` | Nothing runs. CLI: reason on stderr, exit 3; TUI: footer message with `command`. |
 
 **Phase 9 (R3) inputs.** *Entrypoint* = the `entrypoint` string of the last main-transcript record that has one
 (own `sessionId` or none); observed values `cli`, `sdk-cli`, `claude-desktop`. *App mapping* = app records (Step 8.4c
@@ -1105,8 +1106,36 @@ session in a terminal makes two writers if the app reopens it, and the app link 
 | Claude `finished`, `transcript` null (record-only) | any | `unavailable` | `no_transcript`, `claude --resume <id>` (+ ` --fork-session`) |
 | Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches `^local_[A-Za-z0-9-]+$` | false | `app_link` | |
 | Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` matches | true | `unavailable` | `fork_needs_finished`, `claude --resume <id> --fork-session` (the app link cannot fork, and multi-link resumes nothing that may be running) |
-| Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` null or not matching | any | `unavailable` | `running_without_app_link`, `claude --resume <id>` (+ ` --fork-session`) |
+| Claude `busy` / `idle` / `waiting` / `stale`, `host_session_id` null or not matching | false | `jump` or `unavailable` | Phase 18 snapshot rules below; unavailable `command` stays `claude --resume <id>`. |
+| Same | true | `unavailable` | `running_without_app_link`, `claude --resume <id> --fork-session` |
 | Claude `unknown` | any | `unavailable` | `not_known_finished`, `claude --resume <id>` (+ ` --fork-session`) |
+
+**Phase 18 (I1) snapshot.** After a sessions/refresh pass on the same scanner and root, each resolver
+build takes at most one snapshot, only if the assembled report contains a running Claude session with no
+valid app link. The existing liveness batch is unchanged; snapshot failures never become exit evidence.
+Real mode uses the probe's C-locale, UTC `ps -axo pid,ppid,lstart,tty,comm` command. Fixture mode reads
+`<root>/fixture-ps.txt`; no file preserves `running_without_app_link`. An unreadable file, non-zero exit,
+stderr text, empty output, invalid UTF-8, malformed row or duplicate pid makes the entire snapshot unknown
+→ `process_unknown`. Skip the header; parse `pid`, `ppid`, five `lstart` tokens, `tty`, then the rest as
+`comm` (paths may contain spaces).
+
+A session record is live only if its pid is present and its `procStart` equals that row's `lstart` as a
+time (zero- and space-padded days compare equally). Exactly one live record selects its pid; none →
+`process_changed`; multiple → `ambiguous_process`. The selected row supplies the tty: `??` or `-` →
+`no_tty`; otherwise canonicalize to `/dev/<tty>`.
+
+Walk from that pid by `ppid`, examining at most 64 rows; cycles and missing parents stop the walk.
+First matching rule: basename `tmux`, `screen` or `zellij` → `inside_multiplexer`, with that name as
+`detail`; path containing `/Terminal.app/Contents/MacOS/Terminal` → `jump`, app `terminal`; path containing
+`/iTerm.app/Contents/MacOS/iTerm2` → `jump`, app `iterm2`; another path with `.app/` →
+`terminal_not_supported`, with the first app component's name as `detail`. Reaching pid 0 or 1, the walk
+limit, a cycle or a missing parent → `terminal_not_supported` without detail. All these unavailable
+answers keep `claude --resume <id>` and exit 3; none becomes `resume`. App links, finished and unknown
+sessions keep their existing rules. `--fork` on a running session never uses the jump decision.
+
+Jump JSON key order is `action`, `app`, `tty`, `pid`, `cwd`. Unavailable keeps `action`, `reason`,
+`command`, `cwd`, inserting `detail` immediately after `reason` only when present. `--app-only` refuses
+Jump. Step 18.1 executes no terminal automation in the CLI or TUI.
 
 **Lookup.** `open <id-prefix>` and the fresh pass before executing search every parsed session with the
 `--since` window off (an old finished session is exactly the one to resume). Prefix matching is on full
@@ -1126,7 +1155,8 @@ transcript `cost-state` or a `SessionEnd` record also gives `finished`, in fixtu
 terminal sessions resume (`open.json`); the rest of this paragraph describes the probe-only rows. When the probe cannot run
 (fixture mode, `ps` denied) no session is `finished` (State), so nothing resumes; record sessions then
 follow their record status (`app_link` or `unavailable`), and opening the app view resumes nothing in this
-terminal. A `waiting` / `hook` session has no record, so it is `running_without_app_link`.
+terminal. A `waiting` / `hook` session without a record keeps `running_without_app_link` when no fixture
+snapshot exists; a known Phase 18 snapshot instead yields `process_changed` (no live record).
 
 Fixture coverage (`--root fixtures/sessions`, probe off, so no `resume`): the five desktop records (busy
 6358ec7e, idle 1f47e9b3, f8017fcd, 9d02a552, bed52539) → `app_link`; the synthetic busy `70001` record (no

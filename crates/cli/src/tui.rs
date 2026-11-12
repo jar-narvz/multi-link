@@ -315,10 +315,14 @@ fn open_result(result: Result<Option<OpenAction>, String>) -> Result<OpenAction,
             reason,
             command,
             cwd,
+            ..
         })) => Err(match command {
             Some(command) => format!("{}; in {cwd}: {command}", reason.as_str()),
             None => reason.as_str().into(),
         }),
+        Ok(Some(OpenAction::Jump { .. })) => {
+            Err("cannot jump: terminal jump execution is not implemented yet".into())
+        }
         Ok(Some(action)) => Ok(action),
     }
 }
