@@ -2,7 +2,7 @@
 
 ## Current state
 **Phase 17 (pane strip, row actions, Codex-done notifications) is in progress. Step 17.0 is committed (Claude step,
-2026-11-12): H1–H6 pins in `docs/design.md` → "Phase 17 decisions"; pane keys carry the H1 fields; new
+2026-11-11): H1–H6 pins in `docs/design.md` → "Phase 17 decisions"; pane keys carry the H1 fields; new
 `openable.json`, `watch-script.json`, `watch-{codex-done,tick}.jsonl`. Next: Step 17.1 (pane JSON, Codex).**
 - **For 17.1:** every pane key's command is the 16.0 list plus `openable` (Step 17.0 entry); field order and every
   status rule are pinned in design H1; the two key-reading tests (`pane_matches_all_ten_pretty_json_keys_byte_for_byte`
@@ -822,7 +822,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 ## Log (newest first)
 
-### 2026-11-12 — Step 17.0: Rules, pane keys, API check — Claude
+### 2026-11-11 — Step 17.0: Rules, pane keys, API check — Claude
 - Did: mode check `codex-quota.py` → `primary: 2%`, `secondary: 61%`, `CODEX: OK` (17.0 is a Claude step). **H6
   spike** (scratch mod `mlspike17`, never in the repo): in an interactive Claude Code 2.1.322 PTY session in
   `~/multi-link-sandbox/repo-a` (`CLAUDE_CODE_*` cleared), `session.start` ran `osascript -e 'on run argv' -e 'display

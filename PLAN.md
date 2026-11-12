@@ -2884,7 +2884,7 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 
 ## Review log
 
-### 2026-11-12 — Step 17.0 amendments (Claude, during the step)
+### 2026-11-11 — Step 17.0 amendments (Claude, during the step)
 - **No `strip-chain` / `strip-none` keys.** With H1 applied, the existing keys already cover the strip: `idle-recent`
   (7 parts, this session on two, so the 4-part fold), `children-exact-likely` (a running Codex part and a done Claude
   part), `ambiguous` (null statuses), `busy` (one part, not this session's), and `waiting-stale` / `unseen` (null).
