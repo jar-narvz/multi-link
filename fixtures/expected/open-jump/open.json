@@ -1,0 +1,213 @@
+{
+  "root": "fixtures/sessions-phase18",
+  "now": "2026-11-12T09:00:00.000Z",
+  "command": "open <id> --dry-run [--fork] --root fixtures/sessions-phase18 --now 2026-11-12T09:00:00Z",
+  "open": {
+    "18000001-0000-4000-8000-000018000001": {
+      "exit": 0,
+      "action": {
+        "action": "jump",
+        "app": "terminal",
+        "tty": "/dev/ttys004",
+        "pid": 18001,
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000002-0000-4000-8000-000018000002": {
+      "exit": 0,
+      "action": {
+        "action": "jump",
+        "app": "iterm2",
+        "tty": "/dev/ttys005",
+        "pid": 18002,
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000003-0000-4000-8000-000018000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "inside_multiplexer",
+        "detail": "tmux",
+        "command": "claude --resume 18000003-0000-4000-8000-000018000003",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000004-0000-4000-8000-000018000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "terminal_not_supported",
+        "detail": "Visual Studio Code",
+        "command": "claude --resume 18000004-0000-4000-8000-000018000004",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000005-0000-4000-8000-000018000005": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "no_tty",
+        "command": "claude --resume 18000005-0000-4000-8000-000018000005",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000006-0000-4000-8000-000018000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "process_changed",
+        "command": "claude --resume 18000006-0000-4000-8000-000018000006",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000007-0000-4000-8000-000018000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "process_changed",
+        "command": "claude --resume 18000007-0000-4000-8000-000018000007",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000008-0000-4000-8000-000018000008": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "ambiguous_process",
+        "command": "claude --resume 18000008-0000-4000-8000-000018000008",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000009-0000-4000-8000-000018000009": {
+      "exit": 0,
+      "action": {
+        "action": "jump",
+        "app": "terminal",
+        "tty": "/dev/ttys014",
+        "pid": 18091,
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000010-0000-4000-8000-000018000010": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "terminal_not_supported",
+        "detail": "Ghostty",
+        "command": "claude --resume 18000010-0000-4000-8000-000018000010",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000011-0000-4000-8000-000018000011": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "terminal_not_supported",
+        "command": "claude --resume 18000011-0000-4000-8000-000018000011",
+        "cwd": "/home/dev/repo-p18"
+      }
+    }
+  },
+  "fork": {
+    "18000001-0000-4000-8000-000018000001": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000001-0000-4000-8000-000018000001 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000002-0000-4000-8000-000018000002": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000002-0000-4000-8000-000018000002 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000003-0000-4000-8000-000018000003": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000003-0000-4000-8000-000018000003 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000004-0000-4000-8000-000018000004": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000004-0000-4000-8000-000018000004 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000005-0000-4000-8000-000018000005": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000005-0000-4000-8000-000018000005 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000006-0000-4000-8000-000018000006": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000006-0000-4000-8000-000018000006 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000007-0000-4000-8000-000018000007": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000007-0000-4000-8000-000018000007 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000008-0000-4000-8000-000018000008": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000008-0000-4000-8000-000018000008 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000009-0000-4000-8000-000018000009": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000009-0000-4000-8000-000018000009 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000010-0000-4000-8000-000018000010": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000010-0000-4000-8000-000018000010 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    },
+    "18000011-0000-4000-8000-000018000011": {
+      "exit": 3,
+      "action": {
+        "action": "unavailable",
+        "reason": "running_without_app_link",
+        "command": "claude --resume 18000011-0000-4000-8000-000018000011 --fork-session",
+        "cwd": "/home/dev/repo-p18"
+      }
+    }
+  }
+}

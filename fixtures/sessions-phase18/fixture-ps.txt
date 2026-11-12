@@ -1,0 +1,31 @@
+  PID  PPID STARTED                      TTY      COMM
+    1     0 Mon Nov  9 09:00:00 2026     ??       /sbin/launchd
+  500     1 Mon Nov  9 09:00:00 2026     ??       /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
+  501     1 Mon Nov  9 09:00:00 2026     ??       /Applications/iTerm.app/Contents/MacOS/iTerm2
+  502     1 Mon Nov  9 09:00:00 2026     ??       /Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)
+  503     1 Mon Nov  9 09:00:00 2026     ??       /Applications/Ghostty.app/Contents/MacOS/ghostty
+17000   500 Thu Nov 12 08:40:00 2026     ttys004  login
+17001 17000 Thu Nov 12 08:40:00 2026     ttys004  -zsh
+17010   501 Thu Nov 12 08:39:00 2026     ttys005  login
+17011 17010 Thu Nov 12 08:39:00 2026     ttys005  -zsh
+17020     1 Thu Nov 12 08:00:00 2026     ??       tmux
+17021 17020 Thu Nov 12 08:38:00 2026     ttys010  -zsh
+17031   502 Thu Nov 12 08:37:00 2026     ttys011  -zsh
+17061   500 Thu Nov 12 08:58:00 2026     ttys015  -zsh
+17081   500 Thu Nov 12 08:33:00 2026     ttys012  -zsh
+17082   500 Thu Nov 12 08:50:00 2026     ttys013  -zsh
+17091   500 Thu Nov 12 08:32:00 2026     ttys014  -zsh
+17101   503 Thu Nov 12 08:31:00 2026     ttys016  -zsh
+17110     1 Thu Nov 12 08:20:00 2026     ??       /usr/libexec/sshd-session
+17111 17110 Thu Nov 12 08:30:00 2026     ttys017  -zsh
+18001 17001 Thu Nov 12 08:40:00 2026     ttys004  claude
+18002 17011 Thu Nov 12 08:39:00 2026     ttys005  claude
+18003 17021 Thu Nov 12 08:38:00 2026     ttys010  claude
+18004 17031 Thu Nov 12 08:37:00 2026     ttys011  claude
+18005   500 Thu Nov 12 08:36:00 2026     ??       claude
+18006 17061 Thu Nov 12 08:58:00 2026     ttys015  claude
+18010 17101 Thu Nov 12 08:31:00 2026     ttys016  claude
+18011 17111 Thu Nov 12 08:30:00 2026     ttys017  claude
+18081 17081 Thu Nov 12 08:33:00 2026     ttys012  claude
+18082 17082 Thu Nov 12 08:50:00 2026     ttys013  claude
+18091 17091 Thu Nov 12 08:32:00 2026     ttys014  claude

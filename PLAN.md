@@ -3001,6 +3001,17 @@ split inside an iTerm2 tab beyond selecting its session.
 
 ## Review log
 
+### 2026-11-12 — Step 18.0 amendments (Claude, during the step)
+- **Which record is the target.** "The existing output-schema pick" was replaced by a rule on the snapshot itself:
+  of a session's records, exactly one live (pid present with matching `lstart`) → it; none → `process_changed`; two
+  → `ambiguous_process`. It needs no other probe and handles newer-dead/older-live (fixture 18000009) directly.
+- **Fixture snapshot.** Fixture mode reads `<root>/fixture-ps.txt` (raw `ps` text, so the real parser is tested); a
+  root without it keeps today's answer, so the phase 9 open keys stay unchanged. Snapshot failure, malformed text and
+  duplicate pids are whole-snapshot cases and go to 18.1 unit tests, not keys.
+- **Unavailable `command` unchanged.** "(after it ends)" was dropped: the `command` text stays today's so existing
+  consumers and keys do not change; a new `detail` field (only when present) names the multiplexer or app.
+- **iTerm2 by bundle id**, so a Mac without iTerm2 never shows a "Where is iTerm2?" dialog; it stays untested.
+
 ### 2026-11-12 — Phase 18 plan critique (Codex, read-only, Codex loop)
 `codex-quota.py` → `CODEX: OK`. Nine findings; all accepted.
 1. **Snapshot failures had no "never resume" rule.** **Accepted**: any failed, denied, truncated, malformed or

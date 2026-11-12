@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 18 (jump to a running terminal session's tab) is in progress. Step 18.0 is committed (Claude, 2026-11-12):
+pins in `docs/design.md` → "Phase 18 decisions"; keys in `fixtures/expected/open-jump/` (`open.json`, `check.sh`,
+the two AppleScript texts); fixture root `fixtures/sessions-phase18` with `fixture-ps.txt`. Next: Step 18.1 (resolver,
+Codex).**
+- **For 18.1:** `fixtures/expected/open-jump/check.sh` → 11 `open` lines FAIL (expected until 18.1), 11 `fork` ok.
+  Every rule (parse, identity, walk, JSON order, reasons) is pinned in design I1; whole-snapshot failures are unit
+  tests. Existing keys must not change: a root without `fixture-ps.txt` keeps today's answer.
+
 **Phase 17 is closed (2026-11-11): owner confirmed in the desktop app ("Saw both").** The pane shows the step strip,
 opens rows with `Open in app` / `Copy id`, and macOS shows `codex finished (<step>)` once per hand-off. macOS needs
 Script Editor allowed once for `osascript` notifications (README). Nothing is planned next; backlog in PLAN.md.
@@ -814,6 +822,23 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 18.0: Facts on real processes, design pins, answer keys — Claude
+- Did: `codex-quota.py` → `CODEX: OK` (18.0 is a Claude step). Real facts in `~/multi-link-sandbox/repo-p17`: started
+  `claude` in a new Terminal.app window (`osascript … do script`, cwd by argv); its record had `pid` and `procStart`
+  `Thu Nov 12 08:37:52 2026`; `ps` (`TZ=UTC`) gave the same `lstart`, tty `ttys006`, chain `claude` → `-zsh` →
+  `login` → `/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal` (`??`, ppid 1). The Terminal
+  script by argv returned `window 1 tab 1` and the front selected tab's tty was then `/dev/ttys006`; `/dev/ttys999`
+  and bare `ttys006` returned `not found`. No Automation prompt (already allowed); -1743 not seen yet. Wrote design
+  pins, the fixture root (11 Claude sessions, 13 records, a raw `ps` table) by a scratch generator, `open.json`,
+  `check.sh` and the two scripts (Terminal compiled with `osacompile`; iTerm2 cannot compile here, not installed).
+- Changed: `docs/design.md`, `fixtures/sessions-phase18/**`, `fixtures/expected/open-jump/**`, `PLAN.md`,
+  `PROGRESS.md`.
+- Verify: `TZ=UTC cargo test --workspace --no-fail-fast` → 711 passed, 0 failed, 1 ignored; `fixtures/expected/open-jump/check.sh` → 11
+  FAIL (`open`, expected before 18.1), 11 ok (`fork`); W10 scan clean.
+- Review: Claude's own step (facts, pins, keys); no code.
+- Gotchas: records zero-pad the day (`Nov 09`), `ps` space-pads it (`Nov  9`): compare as times, not strings. The
+  Terminal `tty` needs the `/dev/` form.
 
 ### 2026-11-11 — Step 17.4: Real check, README (owner confirm pending) — Claude
 - Did: mode check `codex-quota.py` → `CODEX: OK` (17.4 is a Claude step; Codex used once to review Claude's edit).
