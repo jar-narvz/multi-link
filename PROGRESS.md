@@ -1,9 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.0 is committed (Claude, 2026-11-12).
-Next: Step 19.1 (`multi-link menubar`, Codex).**
-- Keys: `fixtures/expected/menubar/` (`check.sh` exits 2 "menubar subcommand missing" until 19.1). Pins: design
+**Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.1 is committed (Codex, reviewed by
+Claude, 2026-11-12). Next: Step 19.2 (the Swift package, Codex).**
+- `multi-link menubar --json [--watch] [--notify]` prints the M1 report (rows are the pane's, flattened) and the
+  pane's `codex_done` event lines; the pane watcher skips its claim while `~/.multi-link/menubar.lock` is held.
+- Warm watch tick on real `~`: 208 / 211 ms CPU per 3 s tick (two 30 s samples; first report 2.87 s).
+- Known limit: completions are scanned only for repos with a session active in the last 2 h, so a Codex run that
+  finishes after both it and its Claude parent were quiet for 2 h is not announced.
+- The app should retry taking the lock for a few seconds: a pane watcher probes it briefly before each claim.
+- Keys: `fixtures/expected/menubar/` (`check.sh` exits 0 after 19.1). Pins: design
   "Phase 19 decisions". The watch key reuses the pane's event line, unchanged.
 - For 19.2/19.3: Codex builds Swift with the extra `--add-dir`s and `--disable-sandbox` (design M3 sandbox); sign
   with a bundle-id designated requirement or every rebuild loses notification permission; don't trust the first
@@ -836,6 +842,427 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 19.1: Review round 1 — Codex
+- Did: Addressed Claude's blocking performance finding by filtering the all-time sessions before expensive
+  pane projection/enrichment: only non-imported sessions active within the two-hour window or waiting/stale
+  can nominate a repo. Completion scans now visit only repos with a session active within the window;
+  imported recent sessions still nominate a completion repo, since events are independent of row visibility.
+  Shared one window constant with the scan options. Added a projection callback seam and call-count regression
+  proving old-finished-only and imported-only repos are never projected, plus exact completion-repo selection.
+  Tests cover the inclusive two-hour boundary, old busy, quiet waiting/stale, and deduplication of repo calls.
+- Changed: `crates/cli/src/menubar.rs` (implementation and unit tests), `PROGRESS.md` only in this round.
+- Verify: Both new tests failed before the filters (actual RED output excerpts):
+
+```text
+  left: ["/boundary", "/imported", "/old-busy", "/old-finished", "/recent", "/stale", "/waiting"]
+ right: ["/boundary", "/recent", "/stale", "/waiting"]
+  left: ["/boundary", "/imported", "/old-busy", "/old-finished", "/recent", "/stale", "/waiting"]
+ right: ["/boundary", "/imported", "/recent"]
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 45 filtered out; finished in 0.01s
+```
+
+  Final `TZ=UTC cargo test --workspace` exited 0: **736 passed / 0 failed / 1 ignored** (sum of actual result
+  lines). Relevant test names and all actual result lines pasted below; unrelated per-test/build lines omitted:
+
+```text
+test menubar::tests::menubar_watcher_replays_claudes_script_byte_for_byte ... ok
+test menubar::tests::held_app_lock_leaves_pane_runs_unclaimed_for_app_and_unlock_restores_pane ... ok
+test menubar::tests::projection_never_builds_rows_for_old_finished_or_imported_only_repos ... ok
+test menubar::tests::completion_scans_only_repos_with_activity_in_the_window ... ok
+test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test menubar_matches_claudes_three_keys_byte_for_byte ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+test pane_matches_all_twelve_pretty_json_keys_byte_for_byte ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  Remaining prescribed Verify commands, actual output (build path omitted):
+
+```text
+$ cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.10s
+[exit 0]
+$ cargo fmt --check
+[exit 0]
+$ fixtures/expected/menubar/check.sh
+ok   multi-repo
+ok   waiting-quiet
+ok   open-actions
+[exit 0]
+$ fixtures/expected/open-jump/check.sh
+ok   open open 18000001
+ok   open open 18000002
+ok   open open 18000003
+ok   open open 18000004
+ok   open open 18000005
+ok   open open 18000006
+ok   open open 18000007
+ok   open open 18000008
+ok   open open 18000009
+ok   open open 18000010
+ok   open open 18000011
+ok   open fork 18000001
+ok   open fork 18000002
+ok   open fork 18000003
+ok   open fork 18000004
+ok   open fork 18000005
+ok   open fork 18000006
+ok   open fork 18000007
+ok   open fork 18000008
+ok   open fork 18000009
+ok   open fork 18000010
+ok   open fork 18000011
+[exit 0]
+$ fixtures/expected/phase12/check.sh
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+[exit 0]
+$ fixtures/expected/phase13/check.sh
+ok   links.json
+[exit 0]
+$ fixtures/expected/phase14/check.sh
+ok   live.json
+[exit 0]
+$ fixtures/expected/phase9/check.sh 6
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+[exit 0]
+```
+
+- Review (Claude, 2026-11-12): re-review clean. Re-ran Verify: 736 passed / 0 failed / 1 ignored, clippy and fmt
+  clean, all six `check.sh` exit 0, pane keys unchanged. Warm tick 208 / 211 ms (was 245–259 ms). Earlier text:
+  Ready for Claude re-review and warm CPU remeasurement. No claim that the CPU budget is met;
+  Claude's original 245–259 ms finding is the motivation, not a measurement of this fix. All report, watch,
+  and pane keys remain byte-for-byte matches. No keys or pane implementation changed in this round.
+- Gotchas: The first full-suite attempt observed `held_app_lock_leaves_pane_runs_unclaimed_for_app_and_unlock_restores_pane`
+  fail at its post-release assertion (`48 passed; 1 failed` in the CLI unit suite). The test now explicitly
+  unlocks before dropping the descriptor, so a parallel fork/exec cannot extend a drop-only lock lifetime.
+  The subsequent full workspace run passed. Nothing staged, committed or pushed; pre-existing files left alone.
+
+### 2026-11-12 — Step 19.1: Menu-bar JSON watcher and pane delivery lock — Codex
+- Did: Added the all-repo report and CLI flags under the exact Phase 19 M1/M2 pins. Shared the pane's existing
+  projection, detail enrichment, completion reader, runtime and watch loop. Ordered repos from shown sessions,
+  counted waiting/running, flattened sections, and read the first active step's title from repo/PLAN.md.
+  Pane claims now probe the app lock nonblockingly; menubar claims ignore it. Added byte-for-byte tests for
+  all three report keys and the pane watch-script replay against the menubar event key, a temporary repo title,
+  and held-lock suppression, app claims (two hand-offs to one Codex id), and pane delivery after unlock.
+- Changed: `crates/cli/src/menubar.rs`, `crates/cli/src/pane.rs`, `crates/cli/src/main.rs`,
+  `crates/cli/tests/menubar.rs`, `docs/output-schema.md`, `PROGRESS.md`.
+- Verify: From repo root with the prescribed Rust PATH; `TZ=UTC cargo test --workspace` exited 0:
+  **734 passed / 0 failed / 1 ignored** (sum of the actual result lines below). Actual output excerpts follow
+  (all result lines, plus the relevant named tests; build paths and unrelated per-test lines omitted):
+
+```text
+test menubar::tests::menubar_watcher_replays_claudes_script_byte_for_byte ... ok
+test menubar::tests::held_app_lock_leaves_pane_runs_unclaimed_for_app_and_unlock_restores_pane ... ok
+test pane::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify ... ok
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test menubar_reads_active_step_title_from_temporary_repo_plan ... ok
+test menubar_matches_claudes_three_keys_byte_for_byte ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.28s
+test pane_matches_all_twelve_pretty_json_keys_byte_for_byte ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.04s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.69s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+  `cargo clippy --workspace --all-targets -- -D warnings` exited 0; actual output excerpt (build path omitted):
+
+```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.72s
+```
+
+  Actual formatting and fixture-check output (each exit recorded by the runner):
+
+```text
+$ cargo fmt --check
+[exit 0]
+$ fixtures/expected/menubar/check.sh
+ok   multi-repo
+ok   waiting-quiet
+ok   open-actions
+[exit 0]
+$ fixtures/expected/open-jump/check.sh
+ok   open open 18000001
+ok   open open 18000002
+ok   open open 18000003
+ok   open open 18000004
+ok   open open 18000005
+ok   open open 18000006
+ok   open open 18000007
+ok   open open 18000008
+ok   open open 18000009
+ok   open open 18000010
+ok   open open 18000011
+ok   open fork 18000001
+ok   open fork 18000002
+ok   open fork 18000003
+ok   open fork 18000004
+ok   open fork 18000005
+ok   open fork 18000006
+ok   open fork 18000007
+ok   open fork 18000008
+ok   open fork 18000009
+ok   open fork 18000010
+ok   open fork 18000011
+[exit 0]
+$ fixtures/expected/phase12/check.sh
+ok   links.json
+ok   overview.json
+ok   graph-1.1.json
+[exit 0]
+$ fixtures/expected/phase13/check.sh
+ok   links.json
+[exit 0]
+$ fixtures/expected/phase14/check.sh
+ok   live.json
+[exit 0]
+$ fixtures/expected/phase9/check.sh 6
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   graph-1.1.json (^9[1-6])
+ok   graph-2.1.json (^9[1-6])
+ok   sessions.json (^9[1-6])
+ok   links.json (^9[1-6])
+ok   stderr unreadable: 1
+ok   open open 92000001
+ok   open open 92000002
+ok   open open 92000003
+ok   open open 92000004
+ok   open open 92000005
+ok   open open 92000006
+ok   open open 92000007
+ok   open open 92000008
+ok   open open 92000009
+ok   open open 92000010
+ok   open open 92000011
+ok   open open 92000012
+ok   open open 92000013
+ok   open open 92000014
+ok   open open 94000001
+ok   open open 94000002
+ok   open open 94000003
+ok   open open 94000004
+ok   open open 94000006
+ok   open open 94000007
+ok   open fork 92000001
+ok   open fork 92000002
+ok   open fork 92000003
+ok   open fork 92000004
+ok   open fork 92000005
+ok   open fork 92000006
+ok   open fork 92000007
+ok   open fork 92000008
+ok   open fork 92000009
+ok   open fork 92000010
+ok   open fork 92000011
+ok   open fork 92000012
+ok   open fork 92000013
+ok   open fork 92000014
+ok   open fork 94000001
+ok   open fork 94000002
+ok   open fork 94000003
+ok   open fork 94000004
+ok   open fork 94000006
+ok   open fork 94000007
+note lanes.json is checked by the 9.5 worker-to-App test, not here
+[exit 0]
+```
+
+  RED evidence: before implementation, both CLI tests failed with `unrecognized subcommand 'menubar'`.
+  The title test initially exposed an incomplete synthetic session record (missing required `procStart`),
+  corrected in the test setup. Reverting held-lock suppression made
+  `held_app_lock_leaves_pane_runs_unclaimed_for_app_and_unlock_restores_pane` fail on
+  `assertion failed: !output.contains("codex_done")` (exit 101); disabling menubar notifications made
+  `menubar_watcher_replays_claudes_script_byte_for_byte` fail on exact output equality (exit 101).
+  Both deliberate mutations were restored before the passing workspace run.
+- Review (Claude, 2026-11-12): one finding, tick CPU 245–259 ms over the 250 ms budget (every all-time repo was
+  projected and scanned for completions); fixed in Review round 1. `PLAN.md`, all expected fixtures and
+  `crates/cli/tests/pane.rs` remain unchanged.
+  No staging, commit or push. Existing untracked files were left alone.
+- Gotchas: Tick CPU measurement deliberately skipped per the owner; Claude owns that real-data measurement.
+  The lock always lives in the watched home's `.multi-link/menubar.lock`, including fixture mode;
+  the existing `MULTI_LINK_HOME` override still selects only the shared state/marker directory.
+  A completion skipped while locked stays unclaimed; as pinned in M2, releasing the lock restores future
+  transitions, without replaying completions that were already observed during the accepted loss window.
 
 ### 2026-11-12 — Step 19.0: Facts on this Mac, design pins, answer keys — Claude
 - Did: Scratch spikes (never committed) of an ad-hoc signed SwiftPM `MenuBarExtra` app: notifications, rebuild

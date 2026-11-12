@@ -482,11 +482,76 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
     pane
 }
 
-type WatchError = Box<dyn std::error::Error>;
+/// Shared row projection and enrichment for the pane and the menu bar.
+pub(crate) fn rows(
+    refresh: &Refresh,
+    repo: &Path,
+    mode: RepoMode,
+    root: &Path,
+    sessions: &[Session],
+    resolver: &Resolver,
+    cache: &mut TurnCache,
+) -> Result<serde_json::Value, WatchError> {
+    let mut pane = project(refresh, repo, mode, "");
+    enrich(&mut pane, root, sessions, resolver, cache);
+    Ok(serde_json::to_value(pane)?)
+}
+
+fn enrich(
+    pane: &mut Pane,
+    root: &Path,
+    sessions: &[Session],
+    resolver: &Resolver,
+    turn_cache: &mut TurnCache,
+) {
+    let details = details(root, sessions, resolver, pane, turn_cache);
+    for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
+        if let Some(detail) = details.get(&row.id) {
+            row.said = detail.said.clone();
+            row.openable = detail.opens.is_some();
+            row.opens = detail.opens;
+        }
+        for child in &mut row.children {
+            if let Some(detail) = details.get(&child.id) {
+                child.said = detail.said.clone();
+                child.openable = detail.opens.is_some();
+                child.opens = detail.opens;
+            }
+        }
+    }
+}
+
+/// Probe the app's advisory lock immediately before the pane claims a marker.
+/// Dropping the probe releases the lock before the atomic marker creation.
+pub(crate) struct PaneMarkers {
+    pub(crate) files: FileMarkers,
+    pub(crate) lock: PathBuf,
+}
+impl MarkerStore for PaneMarkers {
+    fn claim(&self, run: &str) -> io::Result<bool> {
+        if let Some(parent) = self.lock.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&self.lock)?;
+        match file.try_lock() {
+            Ok(()) => drop(file),
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(false),
+            Err(std::fs::TryLockError::Error(error)) => return Err(error),
+        }
+        self.files.claim(run)
+    }
+}
+
+pub(crate) type WatchError = Box<dyn std::error::Error>;
 const TICK: Duration = Duration::from_secs(3);
 
 #[derive(Clone, Debug, Deserialize)]
-struct DoneRun {
+pub(crate) struct DoneRun {
     run: String,
     id: String,
     step: Option<String>,
@@ -494,11 +559,11 @@ struct DoneRun {
     done: bool,
 }
 
-trait MarkerStore {
+pub(crate) trait MarkerStore {
     fn claim(&self, run: &str) -> io::Result<bool>;
 }
 
-struct FileMarkers(PathBuf);
+pub(crate) struct FileMarkers(pub(crate) PathBuf);
 impl MarkerStore for FileMarkers {
     fn claim(&self, run: &str) -> io::Result<bool> {
         // Invocation ids are filenames, never paths supplied by a transcript.
@@ -523,7 +588,7 @@ impl MarkerStore for FileMarkers {
 }
 
 #[derive(Default)]
-struct TurnCache {
+pub(crate) struct TurnCache {
     entries: HashMap<PathBuf, (u64, SystemTime, Vec<multi_link_model::Turn>)>,
 }
 impl TurnCache {
@@ -564,7 +629,7 @@ impl TurnCache {
 }
 
 /// Full-refresh links, before the pane's visibility, nesting and time window.
-fn done_runs(
+pub(crate) fn done_runs(
     root: &Path,
     repo: &str,
     sessions: &[Session],
@@ -616,16 +681,16 @@ fn done_runs(
         .collect()
 }
 
-trait WatchRuntime {
+pub(crate) trait WatchRuntime {
     fn parent(&self) -> u32;
     fn elapsed(&self) -> Duration;
     fn now(&self) -> Result<Timestamp, WatchError>;
     fn wait(&mut self, duration: Duration);
 }
 
-struct Runtime {
-    start: Instant,
-    fixed_now: Option<Timestamp>,
+pub(crate) struct Runtime {
+    pub(crate) start: Instant,
+    pub(crate) fixed_now: Option<Timestamp>,
 }
 impl WatchRuntime for Runtime {
     fn parent(&self) -> u32 {
@@ -689,7 +754,7 @@ fn write_line(out: &mut impl Write, value: &impl Serialize) -> Result<(), WatchE
     Ok(())
 }
 
-fn watch_passes(
+pub(crate) fn watch_passes(
     out: &mut impl Write,
     runtime: &mut impl WatchRuntime,
     parent: u32,
@@ -798,7 +863,10 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
     let mut strip_cache = StripCache::default();
     let strip_clock = Instant::now();
     let mut turn_cache = TurnCache::default();
-    let markers = FileMarkers(super::state_dir(&root));
+    let markers = PaneMarkers {
+        files: FileMarkers(super::state_dir(&root)),
+        lock: root.join(".multi-link/menubar.lock"),
+    };
     let mut pass = |now| -> Result<(Pane, Vec<DoneRun>), WatchError> {
         let options = Options {
             state_dir: super::state_dir(&root),
@@ -828,21 +896,7 @@ pub fn run(args: PaneArgs) -> Result<(), WatchError> {
             Vec::new()
         };
         let resolver = scanner.open_resolver(&root)?;
-        let details = details(&root, &sessions, &resolver, &pane, &mut turn_cache);
-        for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
-            if let Some(detail) = details.get(&row.id) {
-                row.said = detail.said.clone();
-                row.openable = detail.opens.is_some();
-                row.opens = detail.opens;
-            }
-            for child in &mut row.children {
-                if let Some(detail) = details.get(&child.id) {
-                    child.said = detail.said.clone();
-                    child.openable = detail.opens.is_some();
-                    child.opens = detail.opens;
-                }
-            }
-        }
+        enrich(&mut pane, &root, &sessions, &resolver, &mut turn_cache);
         let step = pane
             .sections
             .iter()

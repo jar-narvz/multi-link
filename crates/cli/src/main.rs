@@ -1,4 +1,5 @@
 mod hook;
+mod menubar;
 mod pane;
 mod tui;
 
@@ -37,6 +38,8 @@ enum Command {
     Tui(tui::TuiArgs),
     /// Repo sessions for the Claude Code pane.
     Pane(pane::PaneArgs),
+    /// Sessions across repositories for the menu-bar app.
+    Menubar(menubar::MenubarArgs),
     Sessions(CommonArgs),
     Links(CommonArgs),
     /// Home screen data: repo groups, rows, plan (one refresh pass).
@@ -663,6 +666,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Hook { command } => return hook::run(command),
         Command::Tui(args) => return tui::run(args),
         Command::Pane(args) => return pane::run(args),
+        Command::Menubar(args) => return menubar::run(args),
         command => Cli { command },
     };
     if let Command::Open(args) = &cli.command {
@@ -727,6 +731,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Hook { .. }
         | Command::Tui(_)
         | Command::Pane(_)
+        | Command::Menubar(_)
         | Command::Open(_)
         | Command::Graph(_) => {
             unreachable!()
@@ -758,6 +763,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Hook { .. }
         | Command::Tui(_)
         | Command::Pane(_)
+        | Command::Menubar(_)
         | Command::Open(_)
         | Command::Graph(_) => {
             unreachable!()

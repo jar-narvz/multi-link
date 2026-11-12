@@ -1298,3 +1298,42 @@ rollout for `142c`), 21:05. Idle: `1417`, `1418` (repo-m), `1423` (repo-n), `141
 (repo-s). The busy import `142f` is neither a card nor idle.
 Limits of the key: the no-rollout outcome (21:10), the feed's tie order (21:32) and a `from` link whose parent is not a
 card never reach `live.json`; Step 14.1's unit tests (L2 ties, L4 no rollout) must cover them.
+
+## Menubar — `multi-link menubar --json [--watch] [--notify]`
+
+Phase 19 M1/M2; answer keys in `fixtures/expected/menubar/`. Accepts `--root` and `--now`
+with pane semantics; has no `--cwd` or `--session`. One-shot output is pretty JSON;
+watch output is compact, flushed NDJSON using the pane's shared 3-second watch loop.
+
+The report fields, in order, are `v` (1), `now` (Timestamp), `waiting` (integer),
+`running` (boolean), and `repos` (array). `waiting` counts shown Claude rows and
+children in `waiting` or `stale`; `running` is true if any shown row or child is `busy`.
+
+Each repo has `repo`, `name` (last path part), `tier`, `last_activity`, `step`, and
+`rows`, in that order. Repositories come from all-time sessions, including only those
+whose pane has rows. The pane's visibility, nesting, labels, actions and handoffs
+apply unchanged. Rows flatten pane sections in `working`, `waiting`, `recent` order;
+each starts with `section`, then all pane row fields except `is_this`. Children
+retain all their pane fields. There is no current session or strip.
+
+Repo tier is `waiting` if any shown session is waiting, else `busy` if any is busy,
+else `other` (including stale). Sort by tier in that order, then the greatest shown
+session `last_activity` descending, then repo ascending. Hidden sessions affect neither
+tier nor last activity. `step` is null when no active top-level row has a step;
+otherwise it is `{"id": first, "title": string-or-null, "more": distinct-count-minus-one}`.
+Active means `busy`, `waiting` or `stale`; steps follow row order and deduplicate ids.
+The title is read from that repo's `PLAN.md`; missing or unsupported plans give null.
+
+Watch errors, checked ticks and `--notify` completion events use the pane contract
+unchanged. Completion is tracked per invocation, including separate handoffs to one
+Codex session; the first successful scan establishes a baseline without notifications.
+An event is `{"v":1,"event":{"kind":"codex_done","run":invocation,"id":session,
+"step":string-or-null,"said":string-or-null}}`, with `said` capped at 120 characters.
+The permanent, atomically created `notified/<run>` marker precedes output.
+
+Immediately before a pane watcher claims a notification marker, it probes
+`<home>/.multi-link/menubar.lock` with a nonblocking exclusive file lock. A held lock
+suppresses both claim and event, leaving the marker available to the app. A free
+probe is released immediately before the claim. The menubar watcher never probes
+this lock, because the app owns it. Fixture mode uses `<root>` as home. Both watchers
+share the marker directory (`MULTI_LINK_HOME` or `<home>/.multi-link`).
