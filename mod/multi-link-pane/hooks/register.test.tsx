@@ -11,9 +11,16 @@ const PANE = {
 } as const
 
 for (const surface of ['terminal', 'desktop'] as const) {
+  test('lines are cut to the pane body, not the screen, on ' + surface, async ($, on) => {
+    mock.clock(on)
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 150, rows: 44 }, props: { ...PANE.props, bodyColumns: 8, scroll: { offset: 0, bodyRows: 24 } } })
+    for (const text of await texts(ui)) expect(Array.from(text).length <= 8).toBe(true)
+    await ui.unmount()
+  })
+
   test('reading before the first line on ' + surface, async ($, on) => {
     mock.clock(on)
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 40, rows: 24 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 40, rows: 24 }, props: { ...PANE.props, bodyColumns: 40, scroll: { offset: 0, bodyRows: 24 } } })
     expect((await ui.find({ type: 'Text', text: 'reading sessions…' }))?.text)
       .toBe('reading sessions…')
     await ui.unmount()
@@ -1261,7 +1268,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
       pipe.chunk(JSON.stringify(report) + '\n')
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 }, props: { ...PANE.props, bodyColumns: 90, scroll: { offset: 0, bodyRows: 100 } } })
       const shown = await texts(ui)
       expect(shown[0]).toBe('multi-link · ' + report.repo.split('/').pop())
       for (const section of report.sections) {
@@ -1300,7 +1307,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     const line = JSON.stringify(keys['children-exact-likely'])
     pipe.chunk(line.slice(0, 81))
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 }, props: { ...PANE.props, bodyColumns: 90, scroll: { offset: 0, bodyRows: 100 } } })
     expect(await texts(ui)).toContain('reading sessions…')
     pipe.chunk(line.slice(81) + '\n')
     await clock.settle()
@@ -1317,7 +1324,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await ui.unmount()
   })
 
-  for (const failure of ['missing', 'old', 'exit'] as const) {
+  for (const failure of ['missing', 'old', 'old-flag', 'exit'] as const) {
     test(failure + ' and retry on ' + surface, async ($, on) => {
       const clock = setup(on)
       const pipe = watcher(on)
@@ -1325,13 +1332,14 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
       if (failure !== 'missing') {
         if (failure === 'old') pipe.chunk("error: unrecognized subcommand 'pane'", 'stderr')
+        if (failure === 'old-flag') pipe.chunk("error: unexpected argument '--notify' found", 'stderr')
         await clock.settle()
         pipe.end()
       }
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 24 } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 24 }, props: { ...PANE.props, bodyColumns: 90, scroll: { offset: 0, bodyRows: 24 } } })
       const expected = failure === 'missing' ? "multi-link isn't on PATH. See the README."
-        : failure === 'old' ? 'This multi-link is too old for the pane. Update it.'
+        : failure === 'old' || failure === 'old-flag' ? 'This multi-link is too old for the pane. Update it.'
         : 'watcher stopped, retrying'
       expect((await texts(ui)).join('\n')).toContain(expected)
       if (failure === 'exit') {
@@ -1369,7 +1377,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       report.sections[2].rows = []
       pipe.chunk(JSON.stringify(report) + '\n')
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns, rows } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: columns, rows: rows }, props: { ...PANE.props, bodyColumns: columns, scroll: { offset: 0, bodyRows: rows } } })
       const shown = await texts(ui)
       expect(shown.length).toBe(rows)
       expect(shown[0]).toBe('multi-link · repo-m')
@@ -1393,7 +1401,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
         pipe.chunk(JSON.stringify(keys.busy) + '\n')
         await clock.settle()
         if (phase === 'backoff') { pipe.end(); await clock.settle() }
-        const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 } })
+        const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 100 }, props: { ...PANE.props, bodyColumns: 90, scroll: { offset: 0, bodyRows: 100 } } })
         const before = await texts(ui)
         await end($)
         expect(pipe.running()).toBe(0)
@@ -1425,7 +1433,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(report) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 8 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 90, rows: 8 }, props: { ...PANE.props, bodyColumns: 90, scroll: { offset: 0, bodyRows: 8 } } })
     expect(await texts(ui)).toEqual([
       'multi-link · repo-p9c', 'working ─', ' ● worker', 'waiting ─',
       '▌● this session', ' ● “Synthetic exit case 9.”', '+4 more', 'checked 0s ago',
@@ -1442,7 +1450,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify({ ...keys['children-exact-likely'], strip: null }) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 24 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 24 }, props: { ...PANE.props, bodyColumns: 60, scroll: { offset: 0, bodyRows: 24 } } })
     expect(await texts(ui)).toEqual([
       'multi-link · repo-m', 'working ─', '▌● this session  2.4',
       '▌ └ codex 14220000 ● likely', ' ● step 2.3', '  └ codex 14210000 ●',
@@ -1488,7 +1496,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     const clock = setup(on)
     const pipe = watcher(on)
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 }, props: { ...PANE.props, bodyColumns: 120, scroll: { offset: 0, bodyRows: 100 } } })
     for (const report of Object.values(keys)) {
       pipe.chunk(JSON.stringify(report) + '\n')
       await clock.settle()
@@ -1521,7 +1529,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(keys.openable) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 }, props: { ...PANE.props, bodyColumns: 120, scroll: { offset: 0, bodyRows: 100 } } })
     const id = keys.openable.this
     await ui.press({ key: id })
     expect(await texts(ui)).toContain('   asked Synthetic exit case 2.')
@@ -1559,7 +1567,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await clock.advance(2500)
     pipe.chunk('{"v":1,"tick":"2026-11-11T00:00:00Z"}\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 100 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 100 }, props: { ...PANE.props, bodyColumns: 100, scroll: { offset: 0, bodyRows: 100 } } })
     expect((await texts(ui)).at(-1)).toBe('checked 0s ago')
     expect((await texts(ui))[0]).toBe('multi-link · repo-p')
     await end($)
@@ -1580,7 +1588,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const event = { v: 1, event: { kind: 'codex_done', run: 'run-1', id: 'child', step: '17.3', said: 'Quotes " and $ and \n stay data' } }
       pipe.chunk(JSON.stringify(event) + '\n' + JSON.stringify(keys.busy) + '\n')
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 100 }, props: { ...PANE.props, bodyColumns: 120, scroll: { offset: 0, bodyRows: 100 } } })
       expect(calls).toEqual(notify ? [[
         'osascript', '-e', 'on run argv\n  display notification (item 2 of argv) with title (item 1 of argv)\nend run',
         'codex finished (17.3)', event.event.said,
@@ -1605,7 +1613,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
       pipe.chunk(JSON.stringify(report) + '\n')
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: height } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: height }, props: { ...PANE.props, bodyColumns: 100, scroll: { offset: 0, bodyRows: height } } })
       await ui.press({ key: report.this })
       expect((await texts(ui)).some(t => t.startsWith('   asked'))).toBe(asked)
       expect((await texts(ui)).some(t => t.startsWith('   said'))).toBe(said)
@@ -1628,7 +1636,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(report) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 40 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 40 }, props: { ...PANE.props, bodyColumns: 100, scroll: { offset: 0, bodyRows: 40 } } })
     const shown = await texts(ui)
     expect(shown.slice(1, 7)).toEqual([
       'step 17.3 Synthetic strip', '+4 earlier', '▌codex  review     ✓ 2m',
@@ -1649,11 +1657,11 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(report) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 20 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 20 }, props: { ...PANE.props, bodyColumns: 60, scroll: { offset: 0, bodyRows: 20 } } })
     await ui.press({ key: 'child-2' })
     expect(await ui.find({ key: 'open:child-2' })).toBeUndefined()
     await ui.unmount()
-    const short = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 6 } })
+    const short = await $.ui.mount({ ...PANE, surface, viewport: { columns: 60, rows: 6 }, props: { ...PANE.props, bodyColumns: 60, scroll: { offset: 0, bodyRows: 6 } } })
     expect(await short.find({ key: 'child-2' })).toBeDefined()
     expect(await short.find({ key: 'copy:child-2' })).toBeDefined()
     expect(await texts(short)).toContain('▌  +4 runs')
@@ -1693,7 +1701,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       const event = '{"v":1,"event":{"kind":"codex_done","run":"run","id":"id","step":null,"said":null}}\n'
       pipe.chunk(JSON.stringify(keys.busy) + '\n' + event)
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 40 } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 40 }, props: { ...PANE.props, bodyColumns: 120, scroll: { offset: 0, bodyRows: 40 } } })
       expect(calls).toEqual([['osascript', '-e',
         'on run argv\n  display notification (item 2 of argv) with title (item 1 of argv)\nend run',
         'codex finished', 'no final message']])
@@ -1717,7 +1725,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(keys.openable) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 40 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 120, rows: 40 }, props: { ...PANE.props, bodyColumns: 120, scroll: { offset: 0, bodyRows: 40 } } })
     await ui.press({ key: keys.openable.this })
     await ui.press({ key: 'copy:' + keys.openable.this })
     expect((await texts(ui)).at(-1)).toBe('checked 0s ago · could not copy id')
@@ -1740,7 +1748,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.start({ cwd: '/repo', surface, isInteractive: true })
     pipe.chunk(JSON.stringify(report) + '\n')
     await clock.settle()
-    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 40 } })
+    const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: 100, rows: 40 }, props: { ...PANE.props, bodyColumns: 100, scroll: { offset: 0, bodyRows: 40 } } })
     const heading = await ui.find({ key: 'strip:heading' })
     expect(heading?.props.flexDirection).toBe('row')
     expect(heading?.text).toBe('step 17.3 Styled strip')
@@ -1785,7 +1793,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
       pipe.chunk(JSON.stringify(report) + '\n')
       await clock.settle()
-      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns, rows: 40 } })
+      const ui = await $.ui.mount({ ...PANE, surface, viewport: { columns: columns, rows: 40 }, props: { ...PANE.props, bodyColumns: columns, scroll: { offset: 0, bodyRows: 40 } } })
       expect((await ui.find({ key: 'strip:heading' }))?.text).toBe(expectedHeading)
       expect((await ui.find({ key: 'strip:part:0' }))?.text).toBe(expectedPart)
       await end($)

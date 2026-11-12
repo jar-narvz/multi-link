@@ -197,34 +197,50 @@ machine, 1069 files), and the TUI's first home frame came up in 1.82–1.99 s (3
 ## Claude Code pane
 
 A mod for Claude Code that shows this repo's sessions in a pane beside the chat (board 16 option C), so you can see
-what is running without leaving Claude Code. Captured from a real session in this repo (Claude Code 2.1.322, terminal,
-2026-11-11; `docs/phase16-check.md`):
+what is running without leaving Claude Code. Release 1.14 adds a step strip, row actions and a notification when a
+Codex hand-off finishes (board 17: S1, A1, N2). Captured from a real terminal session in a sandbox repo, after it
+handed Step 1.1 to Codex (Claude Code 2.1.322, 2026-11-11; `docs/phase17-check.md`):
 
 ```text
-multi-link · multi-link
-working ─
- ● Continuing previous work  16.3
-  └ codex 01a1cc93 ✓
-  └ codex 01a1cc8a ✓
-  └ codex 01a1cc4d ✓
-  └ codex 01a1cc4b ✓
-waiting ─
+multi-link · repo-p17
+step 1.1 Say ok (Codex)
+▌claude plan       ✓ 1m
+ codex  implement  ✓ 1m
+▌claude review     · 1m
 recent (2h) ─
-▌● this session
-updated 18s ago
+▌● this session  1.1
+▌ └ codex 01a1cdad ✓
+ ✓ “Do Step 1.1 in PLAN.md. Run exactly this Bash command, then r…
+  └ codex 01a1cdaa ✓
+checked 0s ago
 ```
 
 - **Rows** are the repo view's (same labels and status words as the TUI), in three groups: `working`, `waiting`
-  (waiting or stale) and `recent (2h)`. **This session** is marked `▌`, and the Codex runs a Claude session handed off
-  sit under it with `└`; a link matched by time says `likely`, and a hand-off with several possible runs says
-  `N possible runs` instead of guessing.
-- **How it gets data:** the mod starts one `multi-link pane --json --watch` per session, which keeps its cache warm
-  and prints a line only when something changes (or every 30 s). On the owner's machine the pane had data 1.7–2.1 s
-  after it opened (3 runs) and each 3 s refresh cost about 140 ms of CPU. The watcher stops when the session ends and
-  exits on its own if Claude Code goes away.
+  (waiting or stale) and `recent (2h)`; a group with no rows draws no heading. **This session** is marked `▌`, and
+  the Codex runs a Claude session handed off sit under it with `└`. A link matched by time says `likely`, and a
+  hand-off with several possible runs says `N possible runs` instead of guessing.
+- **Step strip:** when this session is on a PLAN.md step, the lines under the header show that step's parts in order,
+  from both tools, as in the TUI's step graph: who did each part, what kind it was, `✓` done / `●` running / `◆`
+  waiting / `·` not known, and active minutes. This session's parts are marked `▌`. At most four show; older parts
+  fold into `+N earlier`.
+- **Row actions:** press a row (click, or Enter when the pane has focus) to open it. An open row shows what it was
+  asked and, for a Codex run, the start of its final message, with buttons: `Copy id` always, and `Open in app` only
+  for a session the Claude desktop app can open. `Open in app` re-checks at the press and never falls back to a
+  terminal resume. One row is open at a time. The footer says what happened.
+- **Notifications (macOS):** when a Codex run that a Claude session in this repo handed off finishes, macOS shows
+  `codex finished (<step>)` with the first 120 characters of its final message. It fires once per hand-off, even with
+  several panes open (each run leaves a marker file in `~/.multi-link/notified/`). It is only for runs the pane saw
+  finish; a run already finished when the pane started is not announced. The text shows on screen, so turn it off
+  with the mod's `notify` option if others can see your screen. macOS may credit the notification to Script Editor
+  (it is sent by `osascript`).
+- **How it gets data:** the mod starts one `multi-link pane --json --watch --notify` per session. That process keeps
+  its cache warm, prints a line when something changes and a short "checked" line every 3 s, so the footer counts
+  from the last check. In the real check each 3 s refresh cost 195–219 ms of CPU, and the pane had data 3.6–4.6 s
+  after `claude` was launched, with two sessions starting at once (Phase 16: 2.8 s, one session). The watcher stops
+  when the session ends and exits on its own if Claude Code goes away.
 - **States:** `reading sessions…` before the first line; `multi-link isn't on PATH` and `This multi-link is too old
   for the pane` say what to fix; errors keep the last data and show in the footer; a stopped watcher retries.
-- **Load it** in one terminal session (needs `multi-link` 1.13 on `PATH`):
+- **Load it** in one terminal session (needs `multi-link` 1.14 on `PATH`):
 
   ```bash
   claude --plugin-dir /path/to/multi-link/mod/multi-link-pane
@@ -233,7 +249,7 @@ updated 18s ago
   or in every session, the desktop app included: set `CLAUDE_CODE_PLUGIN_DIRS` to that folder in the `env` block of
   `~/.claude/settings.json` and restart Claude Code.
 
-  `/multi-link` reopens the pane if you close it. The pane is read-only.
+  `/multi-link` reopens the pane if you close it.
 
 ## States and links (Release 1.6)
 
@@ -363,8 +379,12 @@ state rules.
 
 ## Limitations and validation
 
-- The Claude Code pane (Release 1.13) relies on Claude Code's mod API (checked on 2.1.322). It was checked for real
-  in the terminal and in the Claude desktop app on macOS. It needs `multi-link` on the `PATH` that Claude Code sees.
+- The Claude Code pane (Releases 1.13–1.14) relies on Claude Code's mod API (checked on 2.1.322). It was checked for
+  real in the terminal and in the Claude desktop app on macOS. It needs `multi-link` on the `PATH` that Claude Code
+  sees. Notifications are macOS only. Pressing a row is covered by the mod's test kit and the owner's desktop check
+  (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
+  has no theme background colour). Pane data took 3.6–4.6 s from launch in the Phase 17 check, slower than Phase 16,
+  because the first refresh also builds the strip and reads linked Codex rollouts.
 
 - Claude Code and Codex transcript formats are undocumented and may change. Unknown records
   are skipped and counted; missing evidence can leave states or links unknown.

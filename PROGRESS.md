@@ -1,28 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Step 17.3 is committed (Codex, reviewed by Claude, 2026-11-11).** The mod draws the S1 strip, expands
-one row at a time (A1), copies ids and opens eligible sessions with `multi-link open --app-only <id>` by argv.
-The default-on `notify` option adds `--notify` only on macOS; completion events invoke the fixed N2 AppleScript
-with title/body as separate arguments. Failed delivery is shown in the footer and is not retried. Empty section
-headings are hidden; data, errors, events and tick lines reset `checked Ns ago`. Tests: **86 pass, 0 fail**
-across terminal and desktop; plugin validation passed (existing directory-only license/icon advisories remain).
-Review round 1: accepted behavior retained; the S1 strip now styles heading/part segments individually,
-including theme success/warning status marks and dim minutes, while clipping each complete line once.
-Next: Step 17.4 (Claude): real PTY check with a sandbox Codex hand-off, timings, README, `docs/phase17-check.md`, owner
-confirm. Known deviations to record there: the open row has no highlight (no theme background key exists; board 17 A1
-shows one), and an event's `said` is cut at 120 characters without the H1 `…`.
-
-**Step 17.2 is committed (Codex, reviewed by Claude, 2026-11-11): the watcher prints a tick line on every unchanged
-tick and, with `--notify`, one `codex_done` event per hand-off (permanent `create_new` tombstones in
-`<state dir>/notified/`). The strip is rebuilt only when sessions' `(id, state)`, links or the step change, or every
-30 s. Next: Step 17.3 (the mod).**
-- **For 17.3:** spawn the watcher with `--notify`; event lines are `{"v":1,"event":{"kind":"codex_done","run",
-  "id","step","said"}}` and come before that tick's data or tick line; tick lines are `{"v":1,"tick":"<now>"}` and
-  only reset the "checked Ns ago" clock. `said` is at most 120 characters, no ellipsis.
-- **Known cost (for 17.4):** watcher first line is now 2.2–2.7 s on this repo (16.4 had a 1.64 s median), because the
-  first pass also does the all-time refresh, the strip graph and, with `--notify`, reads every linked rollout once.
-  17.4 must time pane data from the pane opening against the 2.5 s NFR and report it honestly.
+**Phase 17: Step 17.4 is waiting for the owner's desktop check (stop and ask).** Real PTY check done
+(`docs/phase17-check.md`): two panes, one Codex hand-off → exactly one notification, one marker; strip as board 17
+S1; tick CPU 195 ms; two mod fixes (pane size from the pane body, old binary says "too old"). README updated. Next:
+the owner installs 1.14, restarts the desktop app and checks the strip, a row press and the notification; then record
+the answer in `docs/phase17-check.md`, the README limitation line and here, and close Phase 17.
 
 **Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
 [--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
@@ -833,6 +816,27 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-11 — Step 17.4: Real check, README (owner confirm pending) — Claude
+- Did: mode check `codex-quota.py` → `CODEX: OK` (17.4 is a Claude step; Codex used once to review Claude's edit).
+  Scratch PTY harness, two interactive `claude --plugin-dir mod/multi-link-pane` sessions in
+  `~/multi-link-sandbox/repo-p17` (one PLAN.md step), `osascript` logging shim (title and body length only), pane A
+  ran one synthetic `codex exec` for Step 1.1. Four runs; runs 1–2 failed on Claude Code's trust prompt (harness
+  keys), run 3 worked without a step in the hand-off, run 4 is the result. Found and fixed two mod bugs (pane sized
+  from the whole screen; `unexpected argument` from a 1.13 binary looped) with tests that fail without the fixes.
+  Wrote `docs/phase17-check.md`, updated the README pane section and limitation line.
+- Changed: `mod/multi-link-pane/hooks/register.tsx`, `mod/multi-link-pane/hooks/register.test.tsx` (Review log
+  "Step 17.4 scope"), `docs/phase17-check.md`, `README.md`, `docs/design.md` (H6 date), `PLAN.md`, `PROGRESS.md`.
+- Verify: run 4 events — both panes' watchers with `--notify`; strip seen 9 s after the prompt; `osascript calls: 1;
+  new markers: 1`; shim line `4:-e:codex finished (1.1)` with a 2-character body; `tick CPU, one watcher, 30 s idle:
+  195 ms/tick`; pane data 3.64 s (A) and 4.27 s (B) from launch; `watchers 5 s after exit: 0`. `claude plugin
+  validate` ✔; `claude plugin test` 90 pass, 0 fail (86 before + 4 new; the 4 new fail with the fix stashed). NFR:
+  tick CPU ≤ 250 ms passes; pane data is slower than Phase 16's 2.81 s from launch (two sessions starting at once,
+  and the first pass now also builds the strip and reads linked rollouts), recorded as a limitation. Owner check:
+  pending.
+- Review: Claude's edit reviewed by Codex (read-only): "Clean—no findings in the `mod/` diff."
+- Gotchas: Claude Code's trust prompt defaults to "No, exit"; an arrow key sent as one escape sequence right after
+  launch can read as Esc. Trust the sandbox folder once. `e.viewport` in `ui.render` is the screen, not the pane.
 
 ### 2026-11-11 — Step 17.3: Review round 1 — Codex
 - Did: Addressed the S1 styling finding with optional styled segments on Line, rendered as a row Box

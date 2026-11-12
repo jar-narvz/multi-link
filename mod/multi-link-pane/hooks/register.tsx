@@ -165,7 +165,7 @@ export const register: Register = (on, options) => {
       if (!active) return
       stream = undefined
       const elapsed = (await $.clock.now()) - began
-      if (!gotData && elapsed <= 5000 && /unrecognized subcommand/i.test(stderr)) {
+      if (!gotData && elapsed <= 5000 && /unrecognized subcommand|unexpected argument/i.test(stderr)) {
         await update($, pane, s => ({ ...s, notice: tooOld }))
         return
       }
@@ -192,8 +192,9 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const state = await read($, pane)
-    const columns = Math.max(0, e.viewport?.columns ?? e.props.bodyColumns)
-    const rows = Math.max(0, e.viewport?.rows ?? e.props.scroll.bodyRows)
+    // The pane's own body, not the surface: viewport is the whole screen.
+    const columns = Math.max(0, e.props.bodyColumns)
+    const rows = Math.max(0, e.props.scroll.bodyRows)
     const lines = layout(state, rows)
     const notice = async (text: string) => { await update($, pane, s => ({ ...s, actionNotice: text })) }
     const toggle = async (id: string) => { await update($, pane, s => ({ ...s, openId: s.openId === id ? null : id })) }

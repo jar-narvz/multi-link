@@ -2885,6 +2885,14 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
 
 ## Review log
 
+### 2026-11-11 — Step 17.4 scope (Claude, real check)
+- The real PTY check found two mod bugs: the pane sized itself from `e.viewport` (the whole screen) instead of its
+  own body (`e.props.bodyColumns`, `e.props.scroll.bodyRows`), so long rows wrapped and overflow never ran, a Phase 16
+  bug that Phase 17's longer lines exposed; and a 1.13 binary's `unexpected argument '--notify'` looped as a crash
+  instead of "too old". **Accepted:** `mod/multi-link-pane/hooks/register.tsx` and `register.test.tsx` join 17.4's
+  files for these two fixes only. Claude made them, so Codex reviewed them (read-only, clean). Also fixed: the
+  wrong date on design H6 (2026-11-12 → 2026-11-11).
+
 ### 2026-11-11 — Step 17.2 tick cost (Claude, review)
 - Host measurement (release, real `~`, this repo, method of 16.4): warm tick **363 ms CPU** with the strip on,
   388 ms with `--notify`, **189 ms** with a session that has no step (no strip). The 250 ms budget fails, and the
