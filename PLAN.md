@@ -2999,10 +2999,156 @@ split inside an iTerm2 tab beyond selecting its session.
 - Status (2026-11-12): real check, README and docs committed (d492bee). **Owner check pinned for later at the owner's
   request**; the next phase may start before it. Steps are in PROGRESS.md "Current state".
 
+### Phase 19 — multi-link in the macOS menu bar (Release 1.16)
+Need (owner, 2026-11-12, backlog "desktop menu-bar app"): "see what's working, waiting and done in every repo, and
+hear when a Codex run finishes, without a Claude Code window or a terminal open." Today the TUI needs a terminal, the
+pane needs a Claude Code window and covers one repo, and notifications are credited to Script Editor (which drops them
+until it is allowed once; Phase 17). Owner's choices (2026-11-12): **SwiftUI** (Swift 6.2 and Xcode are already on
+this Mac: nothing to install); contents **live across repos**; Codex-done notifications **move into the app**.
+Board 19 (claude.ai artifact R7YEig4gwKVznGB19UCcZH, source `docs/boards/board19-menu-bar.html`): the owner picked
+**P2 · By repo** and **I1 · Waiting count**. Comparables (from their listings, not tried): VibeBar (per-session state
+across tools; no link between a Codex run and its Claude session), Agent Signals (waiting / working / done counters,
+focuses iTerm tabs; iTerm only, wide), OpenAgentPeek (reads session files, jumps to windows, Tauri; flat list). What
+multi-link adds: hand-off links (`exact` / `likely`), PLAN.md steps, and opening without a second copy (Phases 6, 18).
+Owner's follow-up (2026-11-12): a web browser app after this phase (backlog).
+
+Decisions (revised after the Codex critique, Review log 2026-11-12):
+- **M1 One display-ready contract, Rust decides, Swift draws.** A new `multi-link menubar --json [--watch]` prints one
+  report per line, `v: 1`. **Repos:** every repo with at least one row under the pane's visibility rule (activity in
+  the window, default `2h`, **or** `waiting` / `stale` at any age; design "Pinned while writing the keys (Step
+  16.0)"), so a quiet waiting session never vanishes. **Order:** the overview's repo order (output-schema RepoGroup:
+  `tier` waiting, busy, other; then `last_activity` descending; then `repo`), and within a repo the pane's row order.
+  Each repo has `repo` (path), `name` (last path part), `step` and `rows[]` (the pane's row shape: label, state
+  words, `openable`, `opens`, children for hand-offs; no `▌`, since the app has no "this session"). **Step header:**
+  from the overview's `active_steps`: none → `null`; one → `{id, title}` (title from PLAN.md, null if not found);
+  several → the newest by its latest hand-off `at`, plus `more: N`. Top-level `waiting` (waiting + stale Claude
+  sessions shown, I1) and `running` (any `busy` session shown). Labels, states and order come from Rust so the app
+  holds no state rules (Phase 16's reason: one place for the rules, checked by Rust tests and answer keys).
+  `--watch` keeps one warm `Scanner`, prints a report when it changes and `{"v":1,"tick":…}` every 3 s, like
+  `pane --watch`; errors as `{"v":1,"error":…}`.
+- **M2 Notifications move to the app, with a lock that only means "the app is delivering".**
+  `menubar --watch --notify` prints `{"v":1,"notify":{"run","session","step","title","body"}}` (`run` = the hand-off
+  invocation, the marker's key; Phase 17's text) after claiming the marker in `~/.multi-link/notified/` (existing
+  `MarkerStore`: first claimer owns the hand-off, so each fires once, even for two hand-offs to one Codex session).
+  The app holds an advisory `flock` on `~/.multi-link/menubar.lock` **only while** notification permission is granted
+  **and** its watcher is healthy (a line within the last 10 s); it releases the lock when either stops, so a denied
+  permission, a missing or old binary, or a restart backoff hands notifications back to the pane. The lock fd is
+  opened `O_CLOEXEC` so the watcher child never inherits it; the OS drops it when the app dies. `pane --watch
+  --notify` checks the lock **at claim time** (after its own transition is seen, before `claim`), so a pane
+  suppressed while the app owns the lock leaves the marker unclaimed for the app's watcher, which sees the same
+  transition independently. Accepted loss window, documented: a run that finishes while the app's watcher is
+  restarting **and** before the lock is released (≤ 10 s), or while no watcher of either kind runs, is not
+  announced (Phase 17 already skips runs finished before a watcher starts). The app also uses the lock as its
+  single-instance guard only for delivery: a second app instance shows the popover but never posts.
+- **M3 The app is a thin SwiftPM package**, `apps/menubar/` (no Xcode project), macOS 15 deployment target, Swift
+  6.2: `MenuBarExtra` with `.window` style, a model that decodes lines with a line-buffered reader (bytes split
+  anywhere), and one `Process` running the watcher (restarted with backoff 1 s → 30 s when it exits; never after
+  Quit; stderr drained). Process work stays off the main actor; UI state updates on it. It finds `multi-link` in a
+  fixed order (GUI apps don't get the shell's `PATH`): a path saved in the app's settings, then `~/.cargo/bin`,
+  `/opt/homebrew/bin`, `/usr/local/bin`; "not found" lists what it tried. `apps/menubar/build.sh` builds release and
+  writes `build/multi-link.app` (`Contents/MacOS/multi-link-menubar`, `Info.plist` with `CFBundleIdentifier`
+  `dev.multi-link.menubar`, `LSUIElement` true, `LSMinimumSystemVersion` 15.0, `NSAppleEventsUsageDescription`), then
+  signs it ad hoc and runs `codesign --verify --strict`. Never notarized or published. Ad-hoc identity changes on
+  every rebuild, so macOS may ask again for notifications or Automation after a rebuild (19.0 records what happens and
+  the recovery).
+- **M4 Popover P2 and icon I1.** One block per repo: header `name · step <id> <title>` (`+N` when `more`), then its
+  rows with hand-offs under them (`└`), the pane's symbols and colours (boards 16–19). Clicking a row with `openable`
+  runs the resolved binary with argv `["open","--no-resume",id]` (no shell; app link or terminal jump, Phase 18);
+  failures show its stderr in the footer. A Codex row, or one that can't open, offers Copy id. The footer shows
+  `checked Ns ago`, `Open TUI` (Terminal runs the resolved binary's path, shell-quoted, with `tui`) and `Quit`. Icon:
+  a fixed mark plus the waiting count when above 0; a hollow mark when nothing is running. Notifications: the app
+  keeps a `UNUserNotificationCenterDelegate` alive and presents in the foreground as `[.banner, .sound]`, default
+  sound. States: not found, too old (no `menubar` subcommand), notifications off (once, with a button that opens
+  System Settings → Notifications), Automation denied (the open's own -1743 message), watcher stopped (keeps the last
+  data with its age, retries).
+- **M5 Answer keys first.** 19.0 writes `fixtures/expected/menubar/*.json` (one report per scenario) from fixtures
+  covering: several repos with competing waiting / busy tiers, a waiting-only repo quiet for more than 2 h, a
+  stale-only repo, a running Codex child, a finished one, an app-openable row, a terminal one, repos with zero, one
+  and two active steps (one without a PLAN title), and two hand-offs to one Codex session (two notify lines, two
+  `run`s). Swift tests read the same files by a path built from `#filePath`, so both sides read one contract.
+
+Non-goals: Windows and Linux; notarization, a signed release or auto-update; launch at login in the MVP (README shows
+System Settings → Login Items); a settings window beyond the binary path; per-repo filters; Codex `waiting` (still
+unsupported); the web browser app (next phase, backlog).
+
+### Step 19.0 — Facts on this Mac, design pins, answer keys (Claude)
+- Facts, each in a scratch spike (never committed), from a SwiftPM-built, ad-hoc signed `.app` launched with `open`:
+  `MenuBarExtra` shows; `UNUserNotificationCenter` asks, then shows a banner with sound in the foreground and the
+  background; after a rebuild, whether macOS keeps or re-asks the permission (and the recovery); the app runs
+  `multi-link open --no-resume <id>` and the terminal jump works (Automation prompt for the app, -1743 when denied);
+  `Open TUI` opens Terminal running a path with a space; `flock` drops when the app is killed and is not inherited by
+  a child; `swift build` / `swift test` inside the Codex sandbox (the `--add-dir`s needed, for 19.2). Pins in
+  `docs/design.md` → "Phase 19 decisions" (M1–M5, field list, ordering, step rule, loss window). Keys, fixtures and
+  `check.sh` (usage like the open-jump one: `cargo run`, fixed `--now`).
+- Files: `docs/design.md`, `fixtures/expected/menubar/**`, `fixtures/sessions-phase19/**`, `PROGRESS.md`
+- Verify: `fixtures/expected/menubar/check.sh` → exit 2, "menubar subcommand missing" (keys ahead of code);
+  `TZ=UTC cargo test --workspace` → same counts as before (730 passed, 1 ignored); spike results recorded in the
+  PROGRESS entry with their commands.
+
+### Step 19.1 — `multi-link menubar --json [--watch] [--notify]` and the pane lock (Codex)
+- Depends on: 19.0. M1, M2.
+- Files: `crates/cli/src/menubar.rs` (new), `crates/cli/src/pane.rs` (share the row builder; lock check at claim),
+  `crates/cli/src/main.rs` (subcommand), `crates/cli/tests/**`, `docs/output-schema.md` (Menubar), `PROGRESS.md`
+- Verify, from the repo root: `TZ=UTC cargo test --workspace` (0 failed), `cargo clippy --workspace --all-targets --
+  -D warnings`, `cargo fmt --check`; `fixtures/expected/menubar/check.sh` → exit 0; `fixtures/expected/{open-jump,
+  phase12,phase13,phase14}/check.sh` and `phase9/check.sh 6` → exit 0; `crates/cli/tests/pane.rs` keys unchanged
+  byte for byte; tests: a held lock makes `pane --watch --notify` claim no marker and emit no notify call, and the
+  app's watcher then claims it; releasing the lock restores the pane; two hand-offs to one Codex session give two
+  notify lines. Claude measures a warm `menubar --watch` tick on real `~` (`ps` CPU time over 30 s, after the first
+  report, 10 ticks; scratch harness, as Phase 17): ≤ 250 ms per tick.
+
+### Step 19.2 — The Swift package: model, watcher, binary lookup, lock (Codex)
+- Depends on: 19.1. M2, M3, M5.
+- Files: `apps/menubar/Package.swift`, `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `.gitignore`
+  (`apps/menubar/.build/`, `apps/menubar/build/`), `PROGRESS.md`
+- Verify, in `apps/menubar`: `swift build -c release` and `swift test` → 0 failures. Tests: every
+  `fixtures/expected/menubar/*.json` line decodes; the reader handles lines split mid-UTF-8 and mid-line, several lines
+  in one read, tick / error / notify / report dispatch, an unknown `v` (shown as too old); the watcher restarts with
+  backoff after a fake binary exits and never after Quit; stderr is drained; lookup order and the not-found list;
+  "too old" from the fake's unrecognized-subcommand error; the lock is held only while permission and health are
+  both true, released on either loss, opened `O_CLOEXEC`. No UI yet.
+
+### Step 19.3 — Popover, icon, actions, notifications, app bundle (Codex)
+- Depends on: 19.2. M2, M4.
+- Files: `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `apps/menubar/build.sh`, `apps/menubar/Info.plist`,
+  `PROGRESS.md`
+- Verify, in `apps/menubar`: `swift test` → 0 failures (view-model tests: block order and headers incl. `+N`, icon
+  text for waiting 0 / 2 / nothing running, row action from `opens`, open argv `["open","--no-resume",id]`, failure
+  text in the footer, Open TUI command quoting with a space in the path, a notify line → one request whose identifier
+  is `run`, foreground presentation `[.banner, .sound]`); `./build.sh` → exit 0, `codesign --verify --strict
+  build/multi-link.app` exit 0, `codesign -dv` shows `Signature=adhoc`, `plutil -p build/multi-link.app/Contents/
+  Info.plist` shows the M3 keys.
+
+### Step 19.4 — Real check, README, owner confirm (Claude)
+- Depends on: 19.3. `open build/multi-link.app` against real `~`: the icon and popover match board 19 P2 / I1
+  (screenshot); a waiting count appears and clears; a row opens in the app or jumps to Terminal; a real `codex exec`
+  hand-off with a pane also open gives one notification credited to multi-link (one marker, no `osascript` from the
+  pane); quitting the app, or denying its notifications, hands them back to the pane. README: a menu-bar section
+  (build, run, permissions, rebuild re-prompts, login items), Limitations (loss window). `docs/phase19-check.md`.
+  Owner: use it for a while (stop and ask).
+- Files: `docs/phase19-check.md`, `README.md`, `PROGRESS.md`
+- Verify (whole phase): the 19.1 Rust commands and check scripts; `swift test` in `apps/menubar`; `claude plugin
+  test mod/multi-link-pane` (pane unchanged); the real-check items recorded with their commands; the owner's answer
+  recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app.
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-12 — Phase 19 plan critique (Codex, read-only)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | App-lifetime lock silences both front ends when permission is denied or the watcher is down | Accepted: lock only while permission granted and watcher healthy; `O_CLOEXEC`; second instance never posts (M2) |
+| 2 | Lock release alone doesn't restore delivery; transitions recorded before claim | Accepted: pane checks the lock at claim time; app watcher sees the transition itself; loss window ≤ 10 s documented (M2) |
+| 3 | `notify.id` loses the hand-off identity | Accepted: `run` (invocation) plus `session`, `step`; request id = `run`; test two hand-offs to one session (M2, M5) |
+| 4 | Repo inclusion / ordering contradict pane and overview | Accepted: pane visibility rule (quiet waiting/stale kept), overview repo order; keys for each case (M1, M5) |
+| 5 | No source for a repo-level step header | Accepted: rule from `active_steps` (none / one / several → newest + `more`) (M1) |
+| 6 | Terminal actions from a GUI app need an Automation check and quoting | Accepted: 19.0 spikes jump and Open TUI from the `.app`; `NSAppleEventsUsageDescription`; argv, quoting test (M3, M4) |
+| 7 | A posted request isn't a visible, audible notification | Accepted: retained delegate, `[.banner, .sound]` in the foreground; 19.0 checks both (M4) |
+| 8 | Bundle and signing contract implicit; ad-hoc identity changes per build | Accepted: macOS 15 target, bundle contents pinned, `codesign --verify --strict`, launch via `open`, rebuild re-prompt recorded (M3) |
+| 9 | Streaming boundary untested; fixture path unspecified | Accepted: split-chunk, multi-line, dispatch, unknown `v`, stderr, no restart after Quit; fixtures via `#filePath` (19.2) |
+| 10 | Verify lines not reproducible | Accepted: exact commands, working dirs, script list; tick measured by Claude with a scratch harness, as Phase 17 (19.1) |
 
 ### 2026-11-12 — Step 18.1 scope (Claude, Codex stop)
 - Codex stopped: the new `detail` field breaks the exhaustive `OpenAction::Unavailable { reason, command, cwd }`
