@@ -3133,10 +3133,105 @@ unsupported); the web browser app (next phase, backlog).
   test mod/multi-link-pane` (pane unchanged); the real-check items recorded with their commands; the owner's answer
   recorded.
 
+### Phase 20 — Retire the Claude Code pane (Release 1.17)
+Need (owner, 2026-11-12): "I don't think the Claude Code mod pane is good or useful; it might be better without it."
+The menu-bar app (Phase 19) now does the pane's job across every repo, with no Claude Code window, and sends
+notifications under its own name. Keeping both costs a watcher per Claude session (~200 ms CPU per 3 s each), an
+undocumented mod API, and two notifiers racing for each hand-off (the Phase 19 check saw the pane win through Script
+Editor). What is lost: the step strip for the session you are in (the TUI's step graph and the menu-bar block header
+still show steps) and a button beside the chat. Owner chose (2026-11-12): turn it off now and remove it from the repo.
+Git history and the Phase 16–17 check docs keep the record.
+
+Decisions:
+- **R1 Delete the mod.** Every tracked file under `mod/multi-link-pane/`. The untracked `tsconfig.json` there is the
+  owner's: leave it and say so. The owner removes `CLAUDE_CODE_PLUGIN_DIRS` from `~/.claude/settings.json` with one
+  command Claude gives (never hand-edited).
+- **R2 Delete the `multi-link pane` command, keep the row builder.** `pane.rs` becomes `rows.rs`: what `menubar`
+  uses (row projection and enrichment, the watch loop, `done_runs`, markers, turn cache) stays; the subcommand, the
+  step strip, `--cwd` / `--session` / `is_this`, and `PaneMarkers` (the lock probe) go. Why rename: a module named for
+  a feature that no longer exists misleads the next reader. The pane keys' row cases move to menubar keys (R4), so
+  no row case loses coverage.
+- **R3 One notifier; the lock shrinks to a single-instance guard.** Only the menu-bar watcher announces; the marker
+  files stay (once per hand-off across restarts). `DeliveryGate`, the health rule and the "who delivers" lock go.
+  Kept: notify mode follows permission (the watcher runs `--notify` only while the app can deliver, so a pending or
+  denied permission never burns a marker; switching rotates the child as today). The lock file stays as an app
+  single-instance guard held for the app's life: a second instance (another copy of the bundle) shows "multi-link is
+  already running" and quits, so two watchers never race for markers. Why: the lock's delivery role existed only to
+  share with the pane; the instance role is still needed (Codex critique 2).
+- **R4 Keys first, from real output.** 20.0 captures today's `menubar --json` for every fixture root and `--now` the
+  pane keys used that the menubar keys don't cover yet, cross-checks their rows against the pane keys' rows, adds them
+  to `check.sh` and to the byte-for-byte test in `crates/cli/tests/menubar.rs`, and copies every pane fixture a kept
+  test reads (`watch-script.json`, `watch-tick.jsonl`, `watch-codex-done.jsonl`, `children-exact-likely.json`) into
+  `fixtures/expected/menubar/` (menubar-shaped where the test needs it).
+- **R4b Tests move, not vanish.** From `crates/cli/tests/pane.rs` and `pane.rs`'s unit tests, kept behaviour moves to
+  menubar / `rows.rs` tests: orphan-process exit, fresh `--app-only` / open resolution, Unicode truncation and
+  imported-turn exclusion, a real watcher finding an appended completion and writing its marker, no-notify, restart
+  suppression, error recovery, flush, concurrent claim, broken pipe, and the synthetic row cases (started Claude
+  children, unlinked hand-offs, hidden-parent promotion). Only strip, `is_this`, `--cwd`/`--session` and lock tests go.
+- **R5 Docs.** README: the pane section and its limits go, replaced by one line. `docs/output-schema.md`: Menubar
+  becomes self-contained (row, child and hand-off fields, visibility, ordering, `openable`/`opens`, tick/error/event
+  lines, markers) with no reference to pane semantics or the lock's delivery role. Phase 16–19 check docs get a
+  one-line note.
+- **R6 Turn the pane off before the app goes lockless.** Running pane watchers (old binaries) keep racing until their
+  Claude Code sessions restart. The owner removes `CLAUDE_CODE_PLUGIN_DIRS` and restarts Claude Code before the 20.3
+  real check; the check records that no `multi-link pane` process is running.
+
+Non-goals: a replacement step strip in the menu bar; changing the TUI; changing the menubar contract (byte for byte).
+
+### Step 20.0 — Pins and keys before the deletion (Claude)
+- Pins in `docs/design.md` → "Phase 20 decisions". New menubar keys and copied fixtures per R4.
+- Files: `docs/design.md`, `fixtures/expected/menubar/**`, `PROGRESS.md`
+- Verify: `fixtures/expected/menubar/check.sh` → exit 0 with the new keys; each new key's rows equal the matching
+  pane key's rows (minus `is_this`, plus `section`) by a jq comparison recorded in PROGRESS.
+
+### Step 20.1 — Remove the pane command and the mod (Codex)
+- Depends on: 20.0. R1, R2, R4, R5 (schema part).
+- Files: `crates/cli/src/pane.rs` → `crates/cli/src/rows.rs`, `crates/cli/src/menubar.rs`, `crates/cli/src/main.rs`,
+  `crates/cli/tests/pane.rs` (deleted; any row test still useful moves to `crates/cli/tests/menubar.rs`),
+  `fixtures/expected/pane/**` (deleted), `mod/multi-link-pane/**` (tracked files deleted), `docs/output-schema.md`,
+  `PROGRESS.md`
+- Verify, from the repo root: `TZ=UTC cargo test --workspace` (0 failed), `cargo clippy --workspace --all-targets --
+  -D warnings`, `cargo fmt --check`; every `fixtures/expected/*/check.sh` (`phase9` with 6) → exit 0; the byte-for-byte
+  menubar test covers every key; `cargo run -q -p multi-link -- pane --json` → clap "unrecognized subcommand"; no
+  tracked mod file on disk (`git ls-files mod | while read f; do test -e "$f" && echo "$f"; done` prints nothing);
+  every R4b behaviour named by a test (list in PROGRESS). Claude, after review: `git ls-files mod` empty once the
+  deletions are staged; warm `menubar --watch` tick on real `~` with the 19.1 harness (two 30 s samples after the
+  first report, ms = CPU s / 10 ticks) ≤ 250 ms each.
+
+### Step 20.2 — The app without the lock (Codex)
+- Depends on: 20.1. R3.
+- Files: `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `PROGRESS.md`
+- Verify, in `apps/menubar`: `swift test --disable-sandbox` → 0 failures; tests: `--notify` exactly while permission
+  allows (pending → denied → allowed rotates once, no marker claimed while not allowed); no delivery gate or health
+  rule; a second instance with the lock held reports "already running" and starts no watcher; `./build.sh` → built
+  and verified.
+
+### Step 20.3 — Docs, real check, owner confirm (Claude)
+- Depends on: 20.2. README and check-doc notes (R5). Real check after R6 (setting removed, Claude Code restarted, no
+  `multi-link pane` process), with the 1.17 binary installed by the owner and the rebuilt app: one real Codex hand-off gives one notification credited to multi-link (this also closes the pinned
+  Phase 19 check; the pinned Phase 18 pane check is dropped, since its button is gone and the jump was proven from the
+  CLI and TUI). `docs/phase20-check.md`. Owner confirm (stop and ask).
+- Files: `README.md`, `docs/phase16-check.md`, `docs/phase17-check.md`, `docs/phase18-check.md`,
+  `docs/phase19-check.md` (one-line notes), `docs/phase20-check.md`, `PROGRESS.md`
+- Verify (whole phase): the 20.1 Rust commands and check scripts; `swift test`; the real-check items recorded with
+  their commands; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-12 — Phase 20 plan critique (Codex, read-only)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | Always-on `--notify` burns markers while permission is pending or denied | Accepted: notify mode keeps following permission (R3) |
+| 2 | The lock also kept two app instances from racing | Accepted: lock kept as a single-instance guard; second instance quits (R3) |
+| 3 | Old pane watchers keep running after the deletion | Accepted: owner turns the pane off and restarts Claude Code before the real check (R6) |
+| 4 | "Any row test still useful" drops real behaviour tests | Accepted: R4b lists every behaviour to migrate |
+| 5 | Kept tests read pane fixtures that would be deleted | Accepted: every `include_str!` input copied first (R4) |
+| 6 | Pane output can't make whole menubar keys; `check.sh` sorts keys | Accepted: keys captured from real `menubar` output, rows cross-checked, added to the byte test (R4, 20.0) |
+| 7 | `git ls-files mod` can't be empty without staging; tick harness unspecified | Accepted: on-disk check for Codex, index check by Claude; 19.1 harness named (20.1) |
+| 8 | No Pane schema section to move; Menubar leans on pane semantics | Accepted: Menubar made self-contained, lock delivery text removed (R5) |
 
 ### 2026-11-12 — Phase 19 plan critique (Codex, read-only)
 | # | Finding | Decision |
