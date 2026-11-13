@@ -3205,6 +3205,10 @@ Non-goals: a replacement step strip in the menu bar; changing the TUI; changing 
   allows (pending → denied → allowed rotates once, no marker claimed while not allowed); no delivery gate or health
   rule; a second instance with the lock held reports "already running" and starts no watcher; `./build.sh` → built
   and verified.
+- Also (added 2026-11-13, seen live): the watcher waits for the child with `Process.waitUntilExit()`, which blocked the
+  main thread after the child exited (popover frozen 8.7 h, no restart, no "stopped"). Use `terminationHandler` with a
+  continuation; never block a thread. Test: a fake child that exits is restarted and "stopped" is published, with the
+  main actor free. The repo header stays on one line (title cut with an ellipsis); test the long-title case.
 
 ### Step 20.3 — Docs, real check, owner confirm (Claude)
 - Depends on: 20.2. README and check-doc notes (R5). Real check after R6 (setting removed, Claude Code restarted, no
