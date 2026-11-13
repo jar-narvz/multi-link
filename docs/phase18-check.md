@@ -1,5 +1,7 @@
 # Phase 18 check: jump to a running terminal session's tab
 
+> **Phase 20 note (2026-11-12):** the pane's `Jump to terminal` button is gone with the pane, so its pinned owner check is dropped; the jump itself was proven from the CLI and the TUI below.
+
 Step 18.4, 2026-11-12. Phase 18 makes `multi-link open` bring a running Claude session's own Terminal.app (or iTerm2)
 tab to the front, instead of saying `unavailable` and printing a `claude --resume` that would start a second copy. The
 same rule runs from the CLI, the TUI (`o`) and the Claude Code pane (`Jump to terminal`). The target look is board 18

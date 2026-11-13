@@ -1,5 +1,7 @@
 # Phase 19 check: multi-link in the macOS menu bar
 
+> **Phase 20 note (2026-11-12):** the pane is retired, so it no longer races the app for notifications; the pinned owner check below moved to `docs/phase20-check.md`.
+
 Step 19.4, 2026-11-12. Phase 19 adds a SwiftUI menu-bar app (`apps/menubar/`) that shows every repo's sessions and
 hand-offs, fed by `multi-link menubar --json --watch [--notify]` (`crates/cli/src/menubar.rs`). It sends the Codex-done
 notifications itself while it can. The target look is board 19 (`docs/boards/board19-menu-bar.html`), options P2 By

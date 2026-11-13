@@ -1,5 +1,7 @@
 # Phase 17 check: step strip, row actions and Codex-done notifications
 
+> **Retired in Phase 20 (Release 1.17, 2026-11-12):** the pane, its step strip and its Script Editor notifications were removed; the menu-bar app sends the notifications now. Kept as a record.
+
 Step 17.4, 2026-11-11. Phase 17 adds a step strip, row actions and a macOS notification when a Codex hand-off
 finishes to the Claude Code pane (`mod/multi-link-pane/`), from new `multi-link pane` fields and watcher lines
 (`crates/cli/src/pane.rs`). The target look is board 17 (`docs/boards/board17-pane-strip.html`), options S1 Chain,

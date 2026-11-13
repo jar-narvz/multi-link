@@ -1,5 +1,7 @@
 # Phase 16 check: a multi-link pane inside Claude Code
 
+> **Retired in Phase 20 (Release 1.17, 2026-11-12):** the pane and `multi-link pane` were removed; the menu-bar app (Phase 19) replaces them. Kept as a record.
+
 Step 16.4, 2026-11-11. Phase 16 adds `multi-link pane --json [--watch]` (`crates/cli/src/pane.rs`) and a Claude Code
 mod that draws its output beside the chat (`mod/multi-link-pane/`). The target look is board 16 option C, picked by the
 owner; see [design](design.md) → "Phase 16 decisions". The answer keys are `fixtures/expected/pane/*.json`.

@@ -194,79 +194,23 @@ machine, 1069 files), and the TUI's first home frame came up in 1.82–1.99 s (3
 - Uses only the existing theme colours; 256-colour terminals get their 256-colour values, and `NO_COLOR` keeps the
   glyphs with no colour, bold, dim or fade. A refresh error ends it at once with the error footer.
 
-## Claude Code pane
+## Claude Code pane (retired)
 
-A mod for Claude Code that shows this repo's sessions in a pane beside the chat (board 16 option C), so you can see
-what is running without leaving Claude Code. Release 1.14 adds a step strip, row actions and a notification when a
-Codex hand-off finishes (board 17: S1, A1, N2). Captured from a real terminal session in a sandbox repo, after it
-handed Step 1.1 to Codex (Claude Code 2.1.322, 2026-11-11; `docs/phase17-check.md`):
-
-```text
-multi-link · repo-p17
-step 1.1 Say ok (Codex)
-▌claude plan       ✓ 1m
- codex  implement  ✓ 1m
-▌claude review     · 1m
-recent (2h) ─
-▌● this session  1.1
-▌ └ codex 01a1cdad ✓
- ✓ “Do Step 1.1 in PLAN.md. Run exactly this Bash command, then r…
-  └ codex 01a1cdaa ✓
-checked 0s ago
-```
-
-- **Rows** are the repo view's (same labels and status words as the TUI), in three groups: `working`, `waiting`
-  (waiting or stale) and `recent (2h)`; a group with no rows draws no heading. **This session** is marked `▌`, and
-  the Codex runs a Claude session handed off sit under it with `└`. A link matched by time says `likely`, and a
-  hand-off with several possible runs says `N possible runs` instead of guessing.
-- **Step strip:** when this session is on a PLAN.md step, the lines under the header show that step's parts in order,
-  from both tools, as in the TUI's step graph: who did each part, what kind it was, `✓` done / `●` running / `◆`
-  waiting / `·` not known, and active minutes. This session's parts are marked `▌`. At most four show; older parts
-  fold into `+N earlier`.
-- **Row actions:** press a row (click, or Enter when the pane has focus) to open it. An open row shows what it was
-  asked and, for a Codex run, the start of its final message, with buttons: `Copy id` always; `Open in app` for a
-  session the Claude desktop app can open; `Jump to terminal` (Release 1.15) for a running Claude session in a
-  Terminal.app or iTerm2 tab, which brings that tab to the front. Both re-check at the press and never fall back to a
-  terminal resume. One row is open at a time. The footer says what happened, e.g. `jumped to Terminal · window 2 ·
-  tab 1 (ttys006)`. A 1.14 binary still works; it just never offers the jump.
-- **Notifications (macOS):** when a Codex run that a Claude session in this repo handed off finishes, macOS shows
-  `codex finished (<step>)` with the first 120 characters of its final message. It fires once per hand-off, even with
-  several panes open (each run leaves a marker file in `~/.multi-link/notified/`). It is only for runs the pane saw
-  finish; a run already finished when the pane started is not announced. The text shows on screen, so turn it off
-  with the mod's `notify` option if others can see your screen. macOS credits it to **Script Editor** (it is sent by
-  `osascript`), and drops it silently until Script Editor has been allowed once. To allow it, run this, press Run ▶
-  in Script Editor, click Allow, and check that System Settings → Notifications → Script Editor uses Banners:
-
-  ```bash
-  osascript -e 'tell application "Script Editor" to activate' -e 'tell application "Script Editor" to make new document with properties {contents:"display notification \"Notifications are on\" with title \"multi-link\""}'
-  ```
-- **How it gets data:** the mod starts one `multi-link pane --json --watch --notify` per session. That process keeps
-  its cache warm, prints a line when something changes and a short "checked" line every 3 s, so the footer counts
-  from the last check. In the real check each 3 s refresh cost 195–219 ms of CPU, and the pane had data 3.6–4.6 s
-  after `claude` was launched, with two sessions starting at once (Phase 16: 2.8 s, one session). The watcher stops
-  when the session ends and exits on its own if Claude Code goes away.
-- **States:** `reading sessions…` before the first line; `multi-link isn't on PATH` and `This multi-link is too old
-  for the pane` say what to fix; errors keep the last data and show in the footer; a stopped watcher retries.
-- **Load it** in one terminal session (needs `multi-link` 1.14 on `PATH`):
-
-  ```bash
-  claude --plugin-dir /path/to/multi-link/mod/multi-link-pane
-  ```
-
-  or in every session, the desktop app included: set `CLAUDE_CODE_PLUGIN_DIRS` to that folder in the `env` block of
-  `~/.claude/settings.json` and restart Claude Code.
-
-  `/multi-link` reopens the pane if you close it.
+Releases 1.13–1.15 shipped a Claude Code mod that showed this repo's sessions in a pane beside the chat. Release 1.17
+removes it, along with the `multi-link pane` command: the [menu-bar app](#menu-bar-app-macos) shows the same rows for
+every repo and sends the Codex-done notifications itself. The old checks stay in `docs/phase16-check.md` to
+`docs/phase18-check.md`.
 
 ## Menu-bar app (macOS)
 
 A small SwiftUI app (Release 1.16, `apps/menubar/`) puts multi-link in the macOS menu bar, so you can see every repo's
 sessions without a terminal or a Claude Code window (board 19: P2, I1). The icon reads `ml` plus the number of Claude
 sessions waiting on you, or `ml ○` when nothing is running. Its popover has one block per repo, in the home screen's
-order, headed by its current step, with the pane's rows and their Codex hand-offs under them. Clicking a row opens it
+order, headed by its current step, with the repo view's rows and their Codex hand-offs under them. Clicking a row opens it
 in the app or jumps to its terminal tab (`multi-link open --no-resume`); a Codex row copies its id. The footer has
 `Open TUI` and `Quit`. While it runs and is allowed to notify, the app sends the `codex finished (<step>)`
-notifications under its own name, and the pane leaves them to it (a lock file, `~/.multi-link/menubar.lock`).
+notifications under its own name. Only one copy runs at a time (a lock file, `~/.multi-link/menubar.lock`); a second
+one says `multi-link is already running` and quits.
 
 Build it (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
 
@@ -278,7 +222,7 @@ Build it (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
 open /Users/jarednarvaez/multi-link/apps/menubar/build/multi-link.app
 ```
 
-- It needs `multi-link` 1.16. It looks in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin` (GUI apps don't
+- It needs `multi-link` 1.17. It looks in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin` (GUI apps don't
   get your shell's `PATH`), or a path saved with `defaults write dev.multi-link.menubar multiLinkBinary <path>`.
 - macOS asks once to allow its notifications, and once to let it control Terminal for a jump.
 - The build is signed ad hoc for this Mac only, never notarized. Its signature names the bundle id, so rebuilding
@@ -321,9 +265,9 @@ in [docs/phase9-check.md](docs/phase9-check.md).
   | `cannot jump: its tab is gone` | the process runs but no tab has its tty |
   | `cannot jump: blocked by macOS…` | macOS Automation permission was denied |
 
-  The first jump makes macOS ask to let the caller (your terminal, or Claude Code for the pane) control Terminal. If
+  The first jump makes macOS ask to let the caller (your terminal, or the menu-bar app) control Terminal. If
   it was denied, allow it in System Settings → Privacy & Security → Automation. `--app-only` refuses a jump;
-  `--no-resume` (what the pane uses) allows it. Codex sessions and tmux / Herdr panes are not jumped to.
+  `--no-resume` (what the menu-bar app uses) allows it. Codex sessions and tmux / Herdr panes are not jumped to.
 - **Compressed rollouts.** Older Codex rollouts are on disk as `rollout-*.jsonl.zst` (a standard zstd frame holding
   the same JSONL). multi-link decompresses them in pure Rust (`ruzstd`), up to 64 MiB each; a file over the cap or
   that fails to decode is counted as unreadable, never an error. When the same run exists in both forms, the plain
@@ -435,25 +379,19 @@ state rules.
 
 ## Limitations and validation
 
-- The Claude Code pane (Releases 1.13–1.14) relies on Claude Code's mod API (checked on 2.1.322). It was checked for
-  real in the terminal and in the Claude desktop app on macOS. It needs `multi-link` on the `PATH` that Claude Code
-  sees. Notifications are macOS only. Pressing a row was checked by the mod's test kit and by the owner in the desktop
-  app (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
-  has no theme background colour). Pane data took 3.6–4.6 s from launch in the Phase 17 check, slower than Phase 16,
-  because the first refresh also builds the strip and reads linked Codex rollouts.
-
-- The menu-bar app (Release 1.16) was checked on this Mac (`docs/phase19-check.md`): the popover matches board 19,
-  and one hand-off made one notification. A notification sent by the app itself has **not** been seen yet: in the
-  check the pane, still on the 1.14 binary, announced it through Script Editor. Pressing rows and Open TUI in the
-  shipped app, and handing notifications back on quit, are covered by tests only. A Codex run that finishes after it
-  and its Claude session were both quiet for 2 h is not announced. A completion in the first few seconds after the
-  app takes over notifications is not announced either.
+- The menu-bar app (Releases 1.16–1.17) was checked on this Mac (`docs/phase19-check.md`, `docs/phase20-check.md`):
+  the popover matches board 19, and a real Codex hand-off showed a banner credited to multi-link. It did so only after
+  System Settings → Notifications → multi-link → **Allow Notifications** was turned on; before that, macOS dropped two
+  banners without an error and the app still counted them as announced, so those hand-offs were never shown. Pressing
+  rows and Open TUI in the shipped app, the single-instance guard and the one-line header are covered by tests only.
+  A Codex run that finishes after it and its Claude session were both quiet for 2 h is not announced. A completion in
+  the first few seconds after the app starts notifying is not announced either.
 
 - The terminal jump (Release 1.15) is macOS only and was checked live with Terminal.app from the CLI and the TUI
   (`docs/phase18-check.md`). **iTerm2 is untested** (not installed; covered by tests only), and so are tmux, other
   terminals, a real tab-gone process and a denied Automation prompt (fixtures and fake-runner tests). A session never
   sent a prompt has no transcript yet, so no list shows it. It relies on the session record's `pid`/`procStart`
-  (undocumented). A running terminal session adds one `ps` per refresh (226 ms per pane tick in the check).
+  (undocumented). A running terminal session adds one `ps` per refresh (226 ms per refresh tick in the check).
 
 - Claude Code and Codex transcript formats are undocumented and may change. Unknown records
   are skipped and counted; missing evidence can leave states or links unknown.

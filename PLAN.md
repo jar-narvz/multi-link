@@ -3219,6 +3219,23 @@ Non-goals: a replacement step strip in the menu bar; changing the TUI; changing 
   `docs/phase19-check.md` (one-line notes), `docs/phase20-check.md`, `PROGRESS.md`
 - Verify (whole phase): the 20.1 Rust commands and check scripts; `swift test`; the real-check items recorded with
   their commands; the owner's answer recorded.
+- Status (2026-11-13): done. Owner: "Yes, from multi-link" on the third real hand-off, after turning on Allow
+  Notifications for multi-link; the first two were claimed but never shown (`docs/phase20-check.md`). → Step 20.4.
+
+### Step 20.4 — Notify only when macOS really allows it (Codex)
+- Need (seen live in 20.3): with Allow Notifications off, `alertSetting` stayed `.enabled`, so the app ran `--notify`,
+  claimed two markers and macOS dropped both banners without an error. Those hand-offs are lost for good.
+- Depends on: 20.3. Change the app's "can deliver" rule (`canDeliver` in `InstanceLock.swift`) to
+  `authorizationStatus == .authorized && alertSetting == .enabled`. Why both: the 19.0 spikes saw `authorizationStatus`
+  report denied while the alert setting was enabled (and banners dropped), and `requestAuthorization`'s first callback
+  is not trusted (design M3 permission); `.provisional` / `.ephemeral` count as not allowed. Update design M3
+  permission to say so.
+- Files: `apps/menubar/Sources/MenubarCore/InstanceLock.swift`, `apps/menubar/Tests/**`, `docs/design.md` (M3
+  permission row), `PROGRESS.md`
+- Verify, in `apps/menubar`: `swift test --disable-sandbox` → 0 failures, with a test that every status other than
+  `.authorized`, and `.authorized` with alerts disabled, gives "cannot deliver" (the watcher runs without `--notify`);
+  `./build.sh` → built and verified. Real check (Claude): rebuild, relaunch, one real hand-off still gives a banner
+  from multi-link (permission is on now).
 
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).

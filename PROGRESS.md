@@ -1,23 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 20 is in progress (retire the Claude Code pane; owner, 2026-11-12). Step 20.0 is committed (Claude).
-Step 20.1 is committed (Codex, reviewed by Claude). Step 20.2 is committed (Codex, reviewed by Claude).
-Next: Step 20.3 (Claude): docs and the owner's real check.**
-- `rows.rs` retains projection, enrichment, completion tracking and the watch loop; `pane` and the tracked mod
-  files are deleted on disk. All five menubar report keys remain byte-for-byte equal; R4b coverage is mapped below.
-- Step 20.2: the app holds `menubar.lock` for its lifetime as a single-instance guard; a second instance reports
-  "multi-link is already running" and quits without resolving a binary, starting a watcher or requesting permission.
-  Watcher notify mode follows permission alone; `DeliveryGate` and the 10 s health timeout are removed.
-  Child exit uses `terminationHandler` with a continuation; long repo headers truncate on one line.
-  Release build, all 22 Swift tests and the signed/verified bundle build pass (actual output below).
-- Perf limit (not from 20.1): on today's larger real data the warm `menubar --watch` tick is near or over 250 ms with
-  the code from before 20.1 too (before 234 / 363 ms, after 276 / 244 ms; same harness, back to back). Backlog item.
-- Keys: `fixtures/expected/menubar/` now has five reports plus `watch-script.json`, `watch-tick.jsonl` and
-  `watch-codex-done.jsonl`; every pane key's rows are proven equal to them (design "Phase 20 decisions").
-- The owner turns the pane off with the command Claude gave (removes `CLAUDE_CODE_PLUGIN_DIRS`) and restarts Claude
-  Code before the 20.3 check. The pinned Phase 18 pane check is dropped; the pinned Phase 19 notification check
-  moves to 20.3.
+**Phase 20: Step 20.3 is done (Claude, 2026-11-13); next is Step 20.4 (Codex).** The pane and `multi-link pane`
+are gone (Release 1.17); the menu-bar app is the only notifier and holds `~/.multi-link/menubar.lock` as a
+single-instance guard.
+- Owner check done: a real hand-off showed a banner credited to multi-link (`docs/phase20-check.md`), closing the
+  pinned Phase 19 check. The pinned Phase 18 pane check is dropped.
+- Step 20.4: the app's "can deliver" rule must require `authorizationStatus == .authorized` as well as the alert
+  setting. With Allow Notifications off, the alert setting still said enabled and two hand-offs were claimed but
+  never shown.
+- Installed: `~/.cargo/bin/multi-link` is 1.17; the app's binary-path setting is removed; the app runs from
+  `apps/menubar/build/multi-link.app`.
+- Perf limit (not from 20.1): the warm `menubar --watch` tick is near or over 250 ms on today's data (before 20.1
+  234 / 363 ms, after 276 / 244 ms). Backlog item.
+- The untracked `mod/` folder is a leftover of the deleted mod (R1 left the owner's untracked files); the owner may
+  delete it.
 
 **Phase 19: Step 19.4 is done; the owner check is pinned for later (Claude, 2026-11-12).** The SwiftUI menu-bar app
 (`apps/menubar/`, built by `build.sh`) shows every repo's sessions (board 19 P2 + I1) from `multi-link menubar --watch`.
@@ -857,6 +854,22 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-13 — Step 20.3: Docs, real check, owner confirm — Claude
+- Did: README's pane section became a one-line retirement note; pane mentions left the menu-bar, terminal-jump and
+  limitations text; the menu-bar limit now records the live result. One-line Phase 20 notes on the Phase 16–19 check
+  docs. Real check: stopped the two leftover 1.16 pane watchers (owner installed 1.17 but did not restart Claude Code),
+  ended the stuck pre-20.2 app, cleared the binary-path setting, relaunched the app, ran three real Codex hand-offs.
+- Changed: `README.md`, `docs/phase16-check.md`, `docs/phase17-check.md`, `docs/phase18-check.md`,
+  `docs/phase19-check.md`, `docs/phase20-check.md` (new), `PLAN.md` (20.3 status, new Step 20.4), `PROGRESS.md`.
+- Verify: `TZ=UTC cargo test --workspace` 731 passed / 0 failed / 1 ignored; clippy `-D warnings` and `cargo fmt
+  --check` clean; `fixtures/expected/{menubar,open-jump,phase12,phase13,phase14}/check.sh` and `phase9/check.sh 6` exit
+  0; `swift test` 22 passed; `./build.sh` built and verified. Real check: app ran `~/.cargo/bin/multi-link menubar
+  --json --watch --notify` as the only watcher; markers 37 → 38 → 39 with no banner, then 39 → 40 with a banner.
+- Review: owner confirm "Yes, from multi-link" (2026-11-13), after turning on Allow Notifications for multi-link.
+- Gotchas: macOS's `alertSetting` stayed `.enabled` with Allow Notifications off (ncprefs flags `0x1080200e`, bit 25
+  clear → `0x1280200e` after), so the app claimed two markers whose banners macOS dropped silently. Step 20.4 fixes the
+  rule. An app built before 20.2 may not quit (stuck main thread); end its process.
 
 ### 2026-11-12 — Step 20.2: App instance guard, permission-only notify and watcher exit — Codex
 - Did: Implemented Phase 20 R3 and both step additions dated 2026-11-13. Moved the close-on-exec lock from the
