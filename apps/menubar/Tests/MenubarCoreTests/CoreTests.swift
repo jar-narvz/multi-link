@@ -9,7 +9,7 @@ private let emptyReport = #"{"v":1,"now":"2026-11-10T22:20:00.000Z","waiting":0,
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .appendingPathComponent("../../../../fixtures/expected/menubar").standardized
     let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-    for file in files where file.pathExtension == "json" {
+    for file in files where file.pathExtension == "json" && file.lastPathComponent != "watch-script.json" {
         guard case .report(let report) = try WireMessage.decode(Data(contentsOf: file)) else {
             Issue.record("Expected report: \(file.lastPathComponent)"); continue
         }
@@ -52,37 +52,17 @@ private let emptyReport = #"{"v":1,"now":"2026-11-10T22:20:00.000Z","waiting":0,
     }
 }
 
-@Test func deliveryLockRequiresPermissionAndHealthAndRetries() throws {
+@Test func instanceLockIsExclusiveAndCloseOnExec() throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let path = dir.appendingPathComponent("state/menubar.lock").path
-    let lock = DeliveryLock(path: path)
-    var gate = DeliveryGate(lock: lock)
-    let now = Date(timeIntervalSince1970: 100)
-    let denied = !gate.update(canDeliver: false, lastLine: now, now: now)
-    #expect(denied)
-    let unhealthy = !gate.update(canDeliver: true, lastLine: nil, now: now)
-    #expect(unhealthy)
-    let probe = DeliveryLock(path: path)
-    #expect(probe.acquire())
-    let contended = !gate.update(canDeliver: true, lastLine: now, now: now)
-    #expect(contended)
-    probe.release()
-    let waitingForRetry = !gate.update(canDeliver: true, lastLine: now, now: now.addingTimeInterval(1))
-    #expect(waitingForRetry)
-    let acquiredOnRetry = gate.update(canDeliver: true, lastLine: now, now: now.addingTimeInterval(2))
-    #expect(acquiredOnRetry)
-    #expect(!probe.acquire())
-    #expect(lock.closeOnExec)
-    let permissionLost = !gate.update(canDeliver: false, lastLine: now, now: now.addingTimeInterval(3))
-    #expect(permissionLost)
-    #expect(probe.acquire())
-    probe.release()
-    let reacquired = gate.update(canDeliver: true, lastLine: now, now: now.addingTimeInterval(4))
-    #expect(reacquired)
-    let healthExpired = !gate.update(canDeliver: true, lastLine: now, now: now.addingTimeInterval(10.01))
-    #expect(healthExpired)
-    #expect(probe.acquire())
+    let first = InstanceLock(path: path)
+    let second = InstanceLock(path: path)
+    #expect(first.acquire())
+    #expect(first.closeOnExec)
+    #expect(!second.acquire())
+    first.release()
+    #expect(second.acquire())
 }
 
 actor Permission: NotificationPermission {
@@ -109,7 +89,7 @@ actor Updates {
     exit 7
     """)
     let updates = Updates()
-    let watcher = Watcher(binary: binary.path, permission: Permission(), lockPath: dir.appendingPathComponent("lock").path,
+    let watcher = Watcher(binary: binary.path, permission: Permission(),
                           timing: .init(initialBackoff: 0.02, maximumBackoff: 0.08, maintenance: 0.01, permissionPoll: 60)) {
         await updates.add($0)
     }
@@ -125,6 +105,38 @@ actor Updates {
     #expect(await updates.statuses() == before)
 }
 
+@MainActor @Test func exitingChildPublishesStoppedAndRestartsWithMainActorFree() async throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let binary = dir.appendingPathComponent("exits")
+    try script(at: binary, body: """
+    cd "$(dirname "$0")"
+    echo start >> starts
+    echo '\(emptyReport)'
+    exit 7
+    """)
+    let model = MenubarModel()
+    let updates = Updates()
+    let watcher = Watcher(binary: binary.path, permission: Permission(),
+                          timing: .init(initialBackoff: 0.02, maximumBackoff: 0.02)) {
+        await updates.add($0)
+        await model.receive($0)
+    }
+    await watcher.start()
+    var heartbeats = 0
+    for _ in 0..<200 {
+        heartbeats += 1 // This loop and model updates must keep running on the main actor.
+        if await updates.statuses().filter({ if case .stopped = $0 { true } else { false } }).count >= 3 { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    await watcher.quit()
+    let statuses = await updates.statuses()
+    #expect(statuses.contains(.stopped("Watcher exited (7)", retryIn: 0.02)))
+    #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8).split(separator: "\n").count >= 3)
+    #expect(heartbeats > 1)
+    #expect(model.status == .quit)
+}
+
 @Test func watcherRecognizesOldBinaryAndUnknownVersion() async throws {
     for body in ["echo \"error: unrecognized subcommand 'menubar'\" >&2; exit 2", "echo '{\"v\":99}'; sleep 1"] {
         let dir = try temporaryDirectory()
@@ -132,7 +144,7 @@ actor Updates {
         let binary = dir.appendingPathComponent("old")
         try script(at: binary, body: body)
         let updates = Updates()
-        let watcher = Watcher(binary: binary.path, permission: Permission(), lockPath: dir.appendingPathComponent("lock").path) { await updates.add($0) }
+        let watcher = Watcher(binary: binary.path, permission: Permission()) { await updates.add($0) }
         await watcher.start()
         try await eventually { await updates.statuses().contains(.tooOld) }
         await watcher.quit()
@@ -140,65 +152,110 @@ actor Updates {
     }
 }
 
-@Test func injectedPermissionControlsDeliveryAndQuitReleasesLock() async throws {
+@Test func permissionRotatesOnceWithoutClaimingMarkersWhilePendingOrDenied() async throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let binary = dir.appendingPathComponent("fake")
-    try script(at: binary, body: "while :; do echo '\(emptyReport)'; sleep 0.05; done")
+    try script(at: binary, body: """
+    cd "$(dirname "$0")"
+    echo "$*" >> starts
+    if [ "$4" = '--notify' ]; then
+        touch marker
+        echo '{"v":1,"event":{"kind":"codex_done","run":"one","id":"session","step":null,"said":"done"}}'
+    fi
+    echo '\(emptyReport)'
+    exec sleep 30
+    """)
     let permission = Permission()
     let updates = Updates()
-    let path = dir.appendingPathComponent("lock").path
-    let watcher = Watcher(binary: binary.path, permission: permission, lockPath: path,
-                          timing: .init(maintenance: 0.01, permissionPoll: 60)) { await updates.add($0) }
+    let watcher = Watcher(binary: binary.path, permission: permission,
+                          timing: .init(maintenance: 0.01, permissionPoll: 0.03)) { await updates.add($0) }
     await watcher.start()
     try await eventually { await updates.statuses().contains(.watching) }
-    #expect(await updates.deliveries().last != true)
+    #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("marker").path))
+    await watcher.refreshPermission() // Pending -> denied: still cannot deliver.
+    #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == "menubar --json --watch\n")
+    #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("marker").path))
     await permission.set(true)
     await watcher.refreshPermission()
-    try await eventually { await updates.deliveries().last == true }
-    let probe = DeliveryLock(path: path)
-    #expect(!probe.acquire())
-    await permission.set(false)
+    try await eventually { await updates.completions().count == 1 }
     await watcher.refreshPermission()
-    #expect(probe.acquire())
-    probe.release()
+    #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == "menubar --json --watch\nmenubar --json --watch --notify\n")
+    #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("marker").path))
+    await permission.set(false) // Polling also revokes notify without opening the popover.
+    try await eventually {
+        (try? String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8).split(separator: "\n").count) == 3
+    }
+    #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == "menubar --json --watch\nmenubar --json --watch --notify\nmenubar --json --watch\n")
     await watcher.quit()
-    #expect(probe.acquire())
 }
 
-@Test func secondInstanceCannotClaimAndTakesOverAfterQuit() async throws {
+@Test func quietWatcherKeepsNotifyPastFormerHealthDeadline() async throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let binary = dir.appendingPathComponent("delivery fake")
+    let binary = dir.appendingPathComponent("quiet")
     try script(at: binary, body: """
-    if [ "$4" = '--notify' ]; then
-        echo '{"v":1,"event":{"kind":"codex_done","run":"invocation","id":"session","step":null,"said":"done"}}'
-    fi
-    while :; do echo '\(emptyReport)'; sleep 0.05; done
+    cd "$(dirname "$0")"
+    echo "$*" >> starts
+    echo '\(emptyReport)'
+    exec sleep 30
     """)
     let permission = Permission()
     await permission.set(true)
-    let first = Updates()
-    let second = Updates()
+    let updates = Updates()
+    let watcher = Watcher(binary: binary.path, permission: permission,
+                          timing: .init(maintenance: 0.01)) { await updates.add($0) }
+    await watcher.start()
+    try await eventually { await updates.statuses().contains(.watching) }
+    try await Task.sleep(for: .milliseconds(10200))
+    #expect(await updates.deliveries() == [true])
+    #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == "menubar --json --watch --notify\n")
+    await watcher.quit()
+}
+
+@Test func watcherLaunchFailurePublishesStoppedAndCanQuit() async throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let updates = Updates()
+    let watcher = Watcher(binary: dir.appendingPathComponent("missing").path, permission: Permission()) {
+        await updates.add($0)
+    }
+    await watcher.start()
+    try await eventually { await updates.statuses().contains { if case .stopped = $0 { true } else { false } } }
+    await watcher.quit()
+    #expect(await updates.statuses().last == .quit)
+}
+
+@MainActor @Test func secondAppInstanceReportsAlreadyRunningWithoutStartingWatcher() async throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
     let path = dir.appendingPathComponent("lock").path
-    let timing = WatcherTiming(maintenance: 0.01, permissionPoll: 0.03)
-    let a = Watcher(binary: binary.path, permission: permission, lockPath: path, timing: timing) { await first.add($0) }
-    let b = Watcher(binary: binary.path, permission: permission, lockPath: path, timing: timing) { await second.add($0) }
-    await a.start()
-    try await eventually { await first.completions().count == 1 }
-    await b.start()
-    try await eventually { await second.statuses().contains(.watching) }
-    #expect(await second.completions().isEmpty)
-    #expect(await second.deliveries().last != true)
-    await a.quit()
-    try await eventually { await second.completions().count == 1 }
-    #expect(await second.completions().first?.run == "invocation")
-    await permission.set(false) // Automatic polling, without a popover refresh.
-    try await eventually { await second.deliveries().last == false }
-    let probe = DeliveryLock(path: path)
+    var resolutions = 0
+    var prompts = 0
+    func controller() -> AppController {
+        AppController(resolveBinary: { resolutions += 1; return .notFound([]) },
+                      permission: Permission(), lockPath: path,
+                      requestAuthorization: { _ in prompts += 1 })
+    }
+    let first = controller()
+    await first.start()
+    let probe = InstanceLock(path: path)
+    #expect(!probe.acquire()) // Held even with permission denied and no binary.
+    probe.release()
+    let second = controller()
+    await second.start()
+    #expect(second.model.actionNotice == "multi-link is already running")
+    #expect(resolutions == 1)
+    #expect(prompts == 1)
+    await second.quit()
+    #expect(!probe.acquire())
+    await first.quit()
     #expect(probe.acquire())
     probe.release()
-    await b.quit()
+    let third = controller()
+    await third.start()
+    #expect(resolutions == 2)
+    await third.quit()
 }
 
 @Test(arguments: [#"{"v":1,"error":"transient scan failure"}"#, "{malformed}"])
@@ -220,25 +277,25 @@ func transientScanOutputKeepsDeliveryAndChild(_ line: String) async throws {
     await permission.set(true)
     let updates = Updates()
     let path = dir.appendingPathComponent("lock").path
-    let watcher = Watcher(binary: binary.path, permission: permission, lockPath: path,
+    let watcher = Watcher(binary: binary.path, permission: permission,
                           timing: .init(maintenance: 0.01)) { await updates.add($0) }
     await watcher.start()
     try await eventually { await updates.values.contains { if case .line(.tick("ready")) = $0 { true } else { false } } }
     let starts = try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8)
-    #expect(starts.split(separator: "\n").count == 2) // Initial child, then delivery-enabled child.
+    #expect(starts.split(separator: "\n").count == 1) // Permission allows notify on the first child.
     try Data().write(to: dir.appendingPathComponent("emit"))
     let expected: WireMessage = line == "{malformed}" ? .malformed : .error("transient scan failure")
     try await eventually { await updates.values.contains { if case .line(let message) = $0 { message == expected } else { false } } }
     try await Task.sleep(for: .milliseconds(200))
     #expect(await updates.deliveries() == [true])
     #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == starts)
-    let probe = DeliveryLock(path: path)
-    #expect(!probe.acquire())
+    let probe = InstanceLock(path: path)
+    #expect(probe.acquire()) // Watchers no longer own the instance lock.
     probe.release()
     await watcher.quit()
 }
 
-@Test func unexpectedExitReleasesDeliveryDuringBackoff() async throws {
+@Test func unexpectedExitPreservesPermissionDuringBackoff() async throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let binary = dir.appendingPathComponent("fake")
@@ -252,14 +309,14 @@ func transientScanOutputKeepsDeliveryAndChild(_ line: String) async throws {
     await permission.set(true)
     let updates = Updates()
     let path = dir.appendingPathComponent("lock").path
-    let watcher = Watcher(binary: binary.path, permission: permission, lockPath: path,
+    let watcher = Watcher(binary: binary.path, permission: permission,
                           timing: .init(maintenance: 0.01)) { await updates.add($0) }
     await watcher.start()
     try await eventually { await updates.deliveries().last == true }
     try Data().write(to: dir.appendingPathComponent("stop"))
     try await eventually { await updates.statuses().contains { if case .stopped = $0 { true } else { false } } }
-    #expect(await updates.deliveries().last == false)
-    let probe = DeliveryLock(path: path)
+    #expect(await updates.deliveries().last == true)
+    let probe = InstanceLock(path: path)
     #expect(probe.acquire())
     probe.release()
     await watcher.quit()

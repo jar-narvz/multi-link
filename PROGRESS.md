@@ -2,13 +2,15 @@
 
 ## Current state
 **Phase 20 is in progress (retire the Claude Code pane; owner, 2026-11-12). Step 20.0 is committed (Claude).
-Step 20.1 is committed (Codex, reviewed by Claude). Next: Step 20.2 (the app without the delivery lock,
-plus the stuck-watcher fix; Codex).**
+Step 20.1 is committed (Codex, reviewed by Claude). Step 20.2 is committed (Codex, reviewed by Claude).
+Next: Step 20.3 (Claude): docs and the owner's real check.**
 - `rows.rs` retains projection, enrichment, completion tracking and the watch loop; `pane` and the tracked mod
   files are deleted on disk. All five menubar report keys remain byte-for-byte equal; R4b coverage is mapped below.
-- Next: Step 20.2. Also fix there: the app blocked its main thread in `Process.waitUntilExit()` after the watcher
-  child exited (seen live 2026-11-13: popover frozen 8.7 h, no restart, no "stopped" status); and the repo header
-  wraps to two lines once a step title is shown.
+- Step 20.2: the app holds `menubar.lock` for its lifetime as a single-instance guard; a second instance reports
+  "multi-link is already running" and quits without resolving a binary, starting a watcher or requesting permission.
+  Watcher notify mode follows permission alone; `DeliveryGate` and the 10 s health timeout are removed.
+  Child exit uses `terminationHandler` with a continuation; long repo headers truncate on one line.
+  Release build, all 22 Swift tests and the signed/verified bundle build pass (actual output below).
 - Perf limit (not from 20.1): on today's larger real data the warm `menubar --watch` tick is near or over 250 ms with
   the code from before 20.1 too (before 234 / 363 ms, after 276 / 244 ms; same harness, back to back). Backlog item.
 - Keys: `fixtures/expected/menubar/` now has five reports plus `watch-script.json`, `watch-tick.jsonl` and
@@ -855,6 +857,144 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 20.2: App instance guard, permission-only notify and watcher exit — Codex
+- Did: Implemented Phase 20 R3 and both step additions dated 2026-11-13. Moved the close-on-exec lock from the
+  watcher to `AppController`: acquired before binary lookup or authorization, retained through denied permission,
+  missing binary, watcher restarts and backoff, released after watcher shutdown. A rejected second controller
+  reports "multi-link is already running"; the app delegate shows the alert and quits.
+  Removed `DeliveryGate`, its retry logic and the 10 s output-health rule. Permission alone selects `--notify`,
+  including on the first child; permission changes rotate the child, and polling still detects revocation.
+  Replaced the watcher's `waitUntilExit()` with a continuation resumed by `terminationHandler`, installed before
+  launch; launch errors resume the same wait and both pipes drain before retry. Kept bounded restart backoff.
+  Extracted the actual repository header view with one line and tail ellipsis; tested its constrained layout.
+- Changed: `apps/menubar/Sources/MenubarCore/DeliveryLock.swift` → `InstanceLock.swift`,
+  `apps/menubar/Sources/MenubarCore/{AppController,Watcher,Presentation}.swift`,
+  `apps/menubar/Sources/MenubarApp/App.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/{CoreTests,PresentationTests}.swift`, `PROGRESS.md`.
+- Verify: All three requested commands ran in `apps/menubar`, each exited 0. Actual output follows.
+
+  `swift build -c release --disable-sandbox`:
+
+  ```text
+  [0/1] Planning build
+  Building for production...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  [4/6] Compiling MenubarCore Actions.swift
+  [5/7] Compiling MenubarApp App.swift
+  [5/7] Write Objects.LinkFileList
+  [6/7] Linking multi-link-menubar
+  Build complete! (4.85s)
+  ```
+
+  `swift test --disable-sandbox`:
+
+  ```text
+  [0/1] Planning build
+  Building for debugging...
+  [0/8] Write sources
+  [2/8] Write swift-version--58304C5D6DBC2206.txt
+  [4/17] Compiling MenubarCore AppController.swift
+  [5/17] Compiling MenubarCore BinaryLookup.swift
+  [6/17] Emitting module MenubarCore
+  [7/17] Compiling MenubarCore Model.swift
+  [8/17] Compiling MenubarCore InstanceLock.swift
+  [9/17] Compiling MenubarCore Watcher.swift
+  [10/17] Compiling MenubarCore Notifications.swift
+  [11/17] Compiling MenubarCore Presentation.swift
+  [12/17] Compiling MenubarCore Actions.swift
+  [13/20] Emitting module MenubarApp
+  [13/20] Write Objects.LinkFileList
+  [14/20] Linking multi-link-menubar
+  [15/20] Applying multi-link-menubar
+  [17/20] Compiling MenubarCoreTests CoreTests.swift
+  [18/20] Emitting module MenubarCoreTests
+  [19/21] Compiling MenubarCoreTests PresentationTests.swift
+  [19/21] Write Objects.LinkFileList
+  [20/21] Linking multi-link-menubarPackageTests
+  Build complete! (5.09s)
+  Test Suite 'All tests' started at 2026-11-12 23:06:29.406.
+  Test Suite 'All tests' passed at 2026-11-12 23:06:29.408.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+  ◇ Test run started.
+  ↳ Testing Library Version: 1501
+  ↳ Target Platform: arm64e-apple-macos14.0
+  ◇ Test headersWithAndWithoutStepTitle() started.
+  ◇ Test startupWatchesWhileAuthorizationPendingAndRefreshesAfterward() started.
+  ◇ Test transientScanOutputKeepsDeliveryAndChild(_:) started.
+  ◇ Test symbolsActionsAndColors() started.
+  ◇ Test secondAppInstanceReportsAlreadyRunningWithoutStartingWatcher() started.
+  ◇ Test commandsAndResults() started.
+  ◇ Test fixtureBlocksAndChildLines() started.
+  ◇ Test completionRequestAndForegroundDelegate() started.
+  ◇ Test fixtureContractAndByteFraming() started.
+  ◇ Test presentationContract() started.
+  ◇ Test longRepoHeaderStaysOneLine() started.
+  ◇ Test exitingChildPublishesStoppedAndRestartsWithMainActorFree() started.
+  ◇ Test permissionRotatesOnceWithoutClaimingMarkersWhilePendingOrDenied() started.
+  ◇ Test modelKeepsLastReportOnErrors() started.
+  ◇ Test watcherLaunchFailurePublishesStoppedAndCanQuit() started.
+  ◇ Test instanceLockIsExclusiveAndCloseOnExec() started.
+  ◇ Test lookupOrderAndNotFound() started.
+  ◇ Test watcherDrainsStderrRestartsWithBackoffAndQuits() started.
+  ◇ Test case passing 1 argument line → "{"v":1,"error":"transient scan failure"}" to transientScanOutputKeepsDeliveryAndChild(_:) started.
+  ◇ Test actionProcessUsesExactArgvAndDrainsBothPipes() started.
+  ◇ Test unexpectedExitPreservesPermissionDuringBackoff() started.
+  ◇ Test watcherRecognizesOldBinaryAndUnknownVersion() started.
+  ◇ Test quietWatcherKeepsNotifyPastFormerHealthDeadline() started.
+  ◇ Test case passing 1 argument line → "{malformed}" to transientScanOutputKeepsDeliveryAndChild(_:) started.
+  ✔ Test headersWithAndWithoutStepTitle() passed after 0.001 seconds.
+  ✔ Test symbolsActionsAndColors() passed after 0.001 seconds.
+  ✔ Test commandsAndResults() passed after 0.001 seconds.
+  ✔ Test completionRequestAndForegroundDelegate() passed after 0.001 seconds.
+  ✔ Test instanceLockIsExclusiveAndCloseOnExec() passed after 0.003 seconds.
+  ✔ Test lookupOrderAndNotFound() passed after 0.006 seconds.
+  ✔ Test fixtureBlocksAndChildLines() passed after 1.077 seconds.
+  ✔ Test fixtureContractAndByteFraming() passed after 1.077 seconds.
+  ✔ Test presentationContract() passed after 1.077 seconds.
+  ✔ Test modelKeepsLastReportOnErrors() passed after 1.077 seconds.
+  ✔ Test longRepoHeaderStaysOneLine() passed after 1.079 seconds.
+  ✔ Test watcherLaunchFailurePublishesStoppedAndCanQuit() passed after 1.344 seconds.
+  ✔ Test secondAppInstanceReportsAlreadyRunningWithoutStartingWatcher() passed after 1.718 seconds.
+  ✔ Test actionProcessUsesExactArgvAndDrainsBothPipes() passed after 1.718 seconds.
+  ✔ Test unexpectedExitPreservesPermissionDuringBackoff() passed after 1.718 seconds.
+  ✔ Test transientScanOutputKeepsDeliveryAndChild(_:) with 2 test cases passed after 1.719 seconds.
+  ✔ Test permissionRotatesOnceWithoutClaimingMarkersWhilePendingOrDenied() passed after 1.731 seconds.
+  ✔ Test exitingChildPublishesStoppedAndRestartsWithMainActorFree() passed after 1.779 seconds.
+  ✔ Test startupWatchesWhileAuthorizationPendingAndRefreshesAfterward() passed after 1.867 seconds.
+  ✔ Test watcherDrainsStderrRestartsWithBackoffAndQuits() passed after 2.071 seconds.
+  ✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 3.196 seconds.
+  ✔ Test quietWatcherKeepsNotifyPastFormerHealthDeadline() passed after 11.922 seconds.
+  ✔ Test run with 22 tests in 0 suites passed after 11.923 seconds.
+  ```
+
+  `./build.sh`:
+
+  ```text
+  [0/1] Planning build
+  Building for production...
+  [0/2] Write swift-version--58304C5D6DBC2206.txt
+  Build complete! (0.17s)
+  build/multi-link.app: replacing existing signature
+  Built and verified build/multi-link.app
+  ```
+
+  `git diff --check` → exit 0, no output.
+- Review: Claude, 2026-11-12, clean in round 1. Re-ran Verify: `swift build -c release` complete, `swift test` 22
+  passed, `./build.sh` "Built and verified build/multi-link.app" (matches the pasted output). No `waitUntilExit`
+  is left in `Watcher.swift` (the one in `Actions.swift` runs off the main actor in a detached task, unchanged).
+  Files match the step. The live check of the stale-popover fix is part of Step 20.3.
+- Gotchas: The owner's live `sample(1)` evidence identified `-[NSConcreteTask waitUntilExit]` from closure #3 in
+  `Watcher.supervise()` while no child existed; that indefinite live hang was not reproduced here. Tests verify
+  immediate-exit restart, exact stopped status and main-actor/model progress, launch failure, permission rotation
+  and fake-child marker suppression, single-instance exclusion and reacquisition, quiet output past the former
+  health deadline, and long-header height equal to a short header. The long-header regression failed before the
+  one-line fix (65 points versus 13); the new instance/permission assertions also failed against the old code.
+  The existing fixture decoder initially failed on the Phase 20 copied `watch-script.json` (no `v`); it now excludes
+  that script descriptor while decoding every report JSON. The real notification/popover check remains in 20.3;
+  this run built the bundle without launching or replacing the owner's running app. Existing untracked `.claude/`
+  and `mod/` content was left alone. `PLAN.md` and design pins were not edited.
 
 ### 2026-11-12 — Step 20.1: Remove the pane command and the mod — Codex
 - Did: Created `rows.rs` from the shared row/watch code and deleted `pane.rs` on disk (no `git mv`). Removed

@@ -22,7 +22,15 @@ struct MenubarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = AppController()
     func applicationDidFinishLaunching(_ notification: Notification) {
-        Task { await controller.start() }
+        Task {
+            await controller.start()
+            if controller.alreadyRunning {
+                let alert = NSAlert()
+                alert.messageText = "multi-link is already running"
+                alert.runModal()
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Task {
@@ -43,9 +51,7 @@ private struct Popover: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(controller.model.blocks) { block in
-                        Text(block.header.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(0.7)
+                        RepositoryHeader(block.header)
                             .foregroundStyle(color(palette.dim))
                             .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 2)
                         ForEach(Array(block.rows.enumerated()), id: \.offset) { _, row in

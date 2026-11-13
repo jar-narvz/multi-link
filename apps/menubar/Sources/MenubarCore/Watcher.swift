@@ -23,14 +23,12 @@ public actor Watcher {
     private let permission: any NotificationPermission
     private let timing: WatcherTiming
     private let publish: @Sendable (WatcherUpdate) async -> Void
-    private var gate: DeliveryGate
     private var runner: Task<Void, Never>?
     private var maintenanceTask: Task<Void, Never>?
     private var process: Process?
     private var quitting = false
     private var incompatible = false
     private var allowed = false
-    private var lastLine: Date?
     private var lastPermissionCheck = Date.distantPast
     private var reader = LineReader()
     private var stderrTail = Data()
@@ -40,15 +38,12 @@ public actor Watcher {
     private var delivery = false
 
     public init(binary: String, permission: any NotificationPermission,
-                lockPath: String = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent(".multi-link/menubar.lock").path,
                 timing: WatcherTiming = .init(),
                 onUpdate: @escaping @Sendable (WatcherUpdate) async -> Void) {
         self.binary = binary
         self.permission = permission
         self.timing = timing
         self.publish = onUpdate
-        self.gate = DeliveryGate(lock: DeliveryLock(path: lockPath))
     }
 
     public func start() async {
@@ -74,7 +69,6 @@ public actor Watcher {
         runner?.cancel()
         maintenanceTask?.cancel()
         stopChild()
-        lastLine = nil
         await reconcileDelivery()
         await runner?.value
         await publish(.status(.quit))
@@ -92,14 +86,13 @@ public actor Watcher {
     }
 
     private func reconcileDelivery() async {
-        let held = gate.update(canDeliver: allowed && !quitting && !incompatible,
-                               lastLine: lastLine, now: Date())
+        let held = allowed && !quitting && !incompatible
         if held != delivery {
             delivery = held
             await publish(.delivery(held))
         }
         // A non-delivering watcher must not claim permanent notified/<run> markers.
-        // Rotate once when delivery changes, preserving the recent health timestamp.
+        // Rotate once when permission changes.
         if let process, process.isRunning, notifyMode != held, !rotating {
             rotating = true
             stopChild()
@@ -125,11 +118,6 @@ public actor Watcher {
             child.standardInput = FileHandle.nullDevice
             var failure: String
             do {
-                try child.run()
-                process = child
-                // Close parent write ends; otherwise EOF never arrives after the child exits.
-                try? stdout.fileHandleForWriting.close()
-                try? stderr.fileHandleForWriting.close()
                 let outputTask = Task.detached { [self] in
                     let handle = stdout.fileHandleForReading
                     defer { try? handle.close() }
@@ -144,9 +132,24 @@ public actor Watcher {
                         await self.readError(data)
                     }
                 }
-                await Task.detached { child.waitUntilExit() }.value
+                // Install the handler before launch, including for children that exit immediately.
+                // Suspension leaves every executor (and the main run loop) free to make progress.
+                let launchError: Error? = await withCheckedContinuation { continuation in
+                    child.terminationHandler = { _ in continuation.resume(returning: nil) }
+                    do {
+                        try child.run()
+                        process = child
+                    } catch {
+                        child.terminationHandler = nil
+                        continuation.resume(returning: error)
+                    }
+                    // Parent write ends must close even when launch fails, so readers reach EOF.
+                    try? stdout.fileHandleForWriting.close()
+                    try? stderr.fileHandleForWriting.close()
+                }
                 await outputTask.value
                 await errorTask.value
+                if let launchError { throw launchError }
                 failure = String(decoding: stderrTail, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 if failure.isEmpty { failure = "Watcher exited (\(child.terminationStatus))" }
             } catch {
@@ -160,16 +163,14 @@ public actor Watcher {
             guard !quitting && !Task.isCancelled else { return }
             if oldCommand || incompatible {
                 incompatible = true
-                lastLine = nil
                 await reconcileDelivery()
                 await publish(.status(.tooOld))
                 return
             }
             if rotating {
-                // Intentional mode changes do not reset health or introduce restart backoff.
+                // Intentional mode changes do not introduce restart backoff.
                 continue
             }
-            lastLine = nil
             await reconcileDelivery()
             await publish(.status(.stopped(failure, retryIn: delay)))
             do { try await Task.sleep(for: .seconds(delay)) }
@@ -181,16 +182,9 @@ public actor Watcher {
     private func readOutput(_ data: Data) async {
         guard !quitting, !incompatible else { return }
         for message in reader.append(data) {
-            switch message {
-            case .tooOld:
+            if case .tooOld = message {
                 incompatible = true
-                lastLine = nil
                 stopChild()
-            case .malformed:
-                break // Neither evidence of health nor a reason to discard recent health.
-            default:
-                // A failed scan still proves the live watcher is communicating.
-                lastLine = Date()
             }
             await reconcileDelivery()
             if case .completion = message {

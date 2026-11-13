@@ -15,7 +15,8 @@ public final class AppController {
 
     private let resolveBinary: @MainActor () -> BinaryResolution
     private let permission: any NotificationPermission
-    private let lockPath: String
+    private let instanceLock: InstanceLock
+    public private(set) var alreadyRunning = false
     private let requestAuthorization: @MainActor (CompletionNotifications) async -> Void
 
     public init(
@@ -33,13 +34,18 @@ public final class AppController {
     ) {
         self.resolveBinary = resolveBinary
         self.permission = permission
-        self.lockPath = lockPath
+        self.instanceLock = InstanceLock(path: lockPath)
         self.requestAuthorization = requestAuthorization
     }
 
     public func start() async {
-        guard !started else { return }
+        guard !started, !quitting else { return }
         started = true
+        guard instanceLock.acquire() else {
+            alreadyRunning = true
+            model.actionNotice = "multi-link is already running"
+            return
+        }
         model.onCompletion = { [weak self] event in
             guard let self else { return }
             Task {
@@ -54,7 +60,7 @@ public final class AppController {
             _ = await permission.canDeliver()
         case .found(let path):
             binary = path
-            let watcher = Watcher(binary: path, permission: permission, lockPath: lockPath) { [weak model] update in
+            let watcher = Watcher(binary: path, permission: permission) { [weak model] update in
                 await model?.receive(update)
             }
             self.watcher = watcher
@@ -106,6 +112,7 @@ public final class AppController {
     public func quit() async {
         quitting = true
         await watcher?.quit()
+        instanceLock.release()
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 public enum BoardTint: Sendable { case foreground, dim, claude, codex, ok, warn, stale }
 
@@ -147,5 +148,19 @@ extension MenubarModel {
         case .stopped(let error, let delay): message = "Watcher stopped: \(error) · retrying in \(Int(delay))s"
         }
         return [checked, message, actionNotice].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// Shared header layout so long step titles use the same single-line policy in every block.
+public struct RepositoryHeader: View {
+    private let text: String
+    public init(_ text: String) { self.text = text }
+    public var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(0.7)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

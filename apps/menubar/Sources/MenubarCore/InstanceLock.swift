@@ -13,8 +13,8 @@ public struct SystemNotificationPermission: NotificationPermission {
     }
 }
 
-/// Exclusively owned by a Watcher actor (or a single synchronous caller).
-public final class DeliveryLock {
+/// Held by AppController for the app lifetime, independent of permission or watcher health.
+public final class InstanceLock {
     private let path: String
     private var descriptor: Int32 = -1
     public init(path: String) { self.path = path }
@@ -45,27 +45,5 @@ public final class DeliveryLock {
         flock(descriptor, LOCK_UN)
         Darwin.close(descriptor)
         descriptor = -1
-    }
-}
-
-struct DeliveryGate {
-    let lock: DeliveryLock
-    private var nextAttempt = Date.distantPast
-    private(set) var held = false
-
-    init(lock: DeliveryLock) { self.lock = lock }
-
-    mutating func update(canDeliver: Bool, lastLine: Date?, now: Date) -> Bool {
-        guard canDeliver, let lastLine, now.timeIntervalSince(lastLine) <= 10 else {
-            lock.release()
-            held = false
-            nextAttempt = .distantPast
-            return false
-        }
-        if !held && now >= nextAttempt {
-            held = lock.acquire()
-            nextAttempt = now.addingTimeInterval(2)
-        }
-        return held
     }
 }

@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import Foundation
 import Testing
 import UserNotifications
@@ -183,4 +185,11 @@ private actor PendingAuthorization {
         continuation?.resume()
         continuation = nil
     }
+}
+
+@Test @MainActor func longRepoHeaderStaysOneLine() {
+    let long = NSHostingView(rootView: RepositoryHeader("repo · step 20.2 " + String(repeating: "A long step title ", count: 12)).frame(width: 336))
+    let short = NSHostingView(rootView: RepositoryHeader("repo · step 20.2 Short").frame(width: 336))
+    #expect(long.fittingSize.height == short.fittingSize.height)
+    #expect(long.fittingSize.height > 0)
 }
