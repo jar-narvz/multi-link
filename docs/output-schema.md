@@ -1301,20 +1301,59 @@ card never reach `live.json`; Step 14.1's unit tests (L2 ties, L4 no rollout) mu
 
 ## Menubar — `multi-link menubar --json [--watch] [--notify]`
 
-Phase 19 M1/M2; answer keys in `fixtures/expected/menubar/`. Accepts `--root` and `--now`
-with pane semantics; has no `--cwd` or `--session`. One-shot output is pretty JSON;
-watch output is compact, flushed NDJSON using the pane's shared 3-second watch loop.
+Answer keys are in `fixtures/expected/menubar/`. `--root <home-shaped directory>` enables
+fixture mode (paths map to themselves and process probes are unavailable); otherwise
+scan the real home with real repo mapping and process probes. `--now <Timestamp>` fixes
+the scan clock; otherwise use the current time. The activity window is 2 hours.
+One-shot output is pretty JSON (2-space indentation, literal Unicode, trailing newline).
+Watch output is compact, flushed NDJSON, checked every 3 seconds with one warm Scanner.
+`--json` is required; `--notify` requires `--watch`.
 
 The report fields, in order, are `v` (1), `now` (Timestamp), `waiting` (integer),
 `running` (boolean), and `repos` (array). `waiting` counts shown Claude rows and
 children in `waiting` or `stale`; `running` is true if any shown row or child is `busy`.
 
 Each repo has `repo`, `name` (last path part), `tier`, `last_activity`, `step`, and
-`rows`, in that order. Repositories come from all-time sessions, including only those
-whose pane has rows. The pane's visibility, nesting, labels, actions and handoffs
-apply unchanged. Rows flatten pane sections in `working`, `waiting`, `recent` order;
-each starts with `section`, then all pane row fields except `is_this`. Children
-retain all their pane fields. There is no current session or strip.
+`rows`, in that order. Repositories come from all-time sessions. Only repositories
+with visible rows are included. A row is visible when it is not imported and has
+activity in the 2-hour window, or is a non-imported `waiting` or `stale` session.
+Every Claude session, including a started Claude child, is a top-level row. A Codex
+session nests under its overview placing Claude parent only when that parent is
+visible in the same repo; otherwise it is promoted to a top-level row. Cross-repo
+children appear only in their own repo. Each session appears once.
+
+Rows flatten sections in `working` (busy), `waiting` (waiting or stale), `recent`
+(all other states) order. Within each section, sort by `started_at` descending, then
+id ascending; children use the same sort. No current session gets priority.
+
+A row contains `section`, `id`, `harness`, `label`, `step`, `state`, `phrase`,
+`asked`, `said`, `openable`, `opens`, `children`, `handoffs`. Every field is present; absent
+optional values are null and empty collections are `[]`.
+- `id`, `harness`, `state`: session id and the shared report enum values.
+- `label`: the repo view's home label (session title when present, otherwise its
+  step or fallback label). `step`: Claude's first `made` step; for Codex, the placing
+  hand-off's step, preserving placement even when its parent is hidden. Without an
+  overview parent, use the latest hand-off by (`at`, invocation); missing step is null.
+- `phrase`: the repo view's status words, using the local offset at `now`, without
+  the place prefix or candidate-count suffix. Activity ages use window-clipped bursts.
+  Golden commands use `TZ=UTC`.
+- `asked`: the session's asked preview from the shared session-row model (W3).
+- `said`: Codex only, the original `last_agent_message` from the last completed real
+  turn, excluding `external-import*` turns. Take 120 Unicode characters, appending
+  `…` if cut; null when no completion text exists. Claude always has null.
+- `opens`: `"app"` when a fresh open resolver returns `AppLink`, `"terminal"` for
+  `Jump`, otherwise null (including Resume and Unavailable). `openable` is exactly
+  whether `opens` is non-null. Action resolution uses current app and terminal records.
+
+A child contains `id`, `harness`, `state`, `phrase`, `asked`, `said`, `openable`,
+`opens`, `match`, in that serialization order. The shared meanings above apply;
+`match` is `"exact"` for an exact placing link, otherwise `"likely"`.
+
+A hand-off contains `step` (string or null), `outcome` (repo-view words), `candidates`
+(array of session ids in link-report order), in that order. Only ambiguous or
+unlinked hand-offs in the 2-hour links report are included, on their Claude parent,
+sorted by (`at`, invocation). They never create children: outcomes include
+`N possible runs` and `no codex run found`. Codex rows have no hand-offs.
 
 Repo tier is `waiting` if any shown session is waiting, else `busy` if any is busy,
 else `other` (including stale). Sort by tier in that order, then the greatest shown
@@ -1324,16 +1363,35 @@ otherwise it is `{"id": first, "title": string-or-null, "more": distinct-count-m
 Active means `busy`, `waiting` or `stale`; steps follow row order and deduplicate ids.
 The title is read from that repo's `PLAN.md`; missing or unsupported plans give null.
 
-Watch errors, checked ticks and `--notify` completion events use the pane contract
-unchanged. Completion is tracked per invocation, including separate handoffs to one
-Codex session; the first successful scan establishes a baseline without notifications.
-An event is `{"v":1,"event":{"kind":"codex_done","run":invocation,"id":session,
-"step":string-or-null,"said":string-or-null}}`, with `said` capped at 120 characters.
-The permanent, atomically created `notified/<run>` marker precedes output.
+The watcher prints the first successful report immediately, then a report whenever
+data changes after recursively removing `now` and every `phrase` for comparison.
+An unchanged successful scan emits `{"v":1,"tick":Timestamp}` instead. A failed scan
+emits `{"v":1,"error":string}`, keeps running, and forces the next successful scan
+to emit a full report even if unchanged. Each line is flushed. The watcher exits on
+a broken output pipe or within one tick after its original parent pid changes;
+parent pid 1 at startup exits immediately without a scan.
 
-Immediately before a pane watcher claims a notification marker, it probes
-`<home>/.multi-link/menubar.lock` with a nonblocking exclusive file lock. A held lock
-suppresses both claim and event, leaving the marker available to the app. A free
-probe is released immediately before the claim. The menubar watcher never probes
-this lock, because the app owns it. Fixture mode uses `<root>` as home. Both watchers
-share the marker directory (`MULTI_LINK_HOME` or `<home>/.multi-link`).
+With `--notify`, completion tracking uses full sessions and links for repos with
+activity in the 2-hour window, independently of visible rows (including hidden and
+imported sessions). Each exact or heuristic hand-off to a Codex session is one run,
+identified by its invocation id. Its turn window starts at the hand-off time and
+ends, exclusively, at the next owned hand-off to that same child. The latest real
+turn starting in that window determines completion; only `task_complete` makes it
+done. A missing rollout or turn is not done. Imported turns are excluded.
+
+A run's first observation is a baseline without notification. Only a later
+not-done to done transition emits an event; disappearing runs and failed scans
+preserve prior observations. Separate hand-offs to one Codex session can each emit.
+Event lines precede the report or tick for that scan:
+`{"v":1,"event":{"kind":"codex_done","run":invocation,"id":session,"step":string-or-null,"said":string-or-null}}`.
+Event `said` uses graph completion text capped at 120 Unicode characters without
+an added ellipsis. No `--notify` means no events and no marker claims.
+
+Before emitting an event, atomically create the permanent `notified/<run>` marker
+under `MULTI_LINK_HOME`, or `<home>/.multi-link` by default (`<root>` is home in
+fixture mode). Invocation ids must be nonempty filenames, excluding `.` and `..`,
+with no slash or backslash. Existing markers suppress output, including after
+restart; concurrent watchers can claim a run only once. Markers are never removed,
+even when output fails after claiming. Claim errors emit an error line and force
+full data on the next successful scan. The watcher does not use an app lock to
+claim or deliver notifications.

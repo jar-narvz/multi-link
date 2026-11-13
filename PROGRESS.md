@@ -2,7 +2,15 @@
 
 ## Current state
 **Phase 20 is in progress (retire the Claude Code pane; owner, 2026-11-12). Step 20.0 is committed (Claude).
-Next: Step 20.1 (remove the `pane` command and the mod; Codex).**
+Step 20.1 is committed (Codex, reviewed by Claude). Next: Step 20.2 (the app without the delivery lock,
+plus the stuck-watcher fix; Codex).**
+- `rows.rs` retains projection, enrichment, completion tracking and the watch loop; `pane` and the tracked mod
+  files are deleted on disk. All five menubar report keys remain byte-for-byte equal; R4b coverage is mapped below.
+- Next: Step 20.2. Also fix there: the app blocked its main thread in `Process.waitUntilExit()` after the watcher
+  child exited (seen live 2026-11-13: popover frozen 8.7 h, no restart, no "stopped" status); and the repo header
+  wraps to two lines once a step title is shown.
+- Perf limit (not from 20.1): on today's larger real data the warm `menubar --watch` tick is near or over 250 ms with
+  the code from before 20.1 too (before 234 / 363 ms, after 276 / 244 ms; same harness, back to back). Backlog item.
 - Keys: `fixtures/expected/menubar/` now has five reports plus `watch-script.json`, `watch-tick.jsonl` and
   `watch-codex-done.jsonl`; every pane key's rows are proven equal to them (design "Phase 20 decisions").
 - The owner turns the pane off with the command Claude gave (removes `CLAUDE_CODE_PLUGIN_DIRS`) and restarts Claude
@@ -847,6 +855,324 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 20.1: Remove the pane command and the mod — Codex
+- Did: Created `rows.rs` from the shared row/watch code and deleted `pane.rs` on disk (no `git mv`). Removed
+  the pane command, strip/cache, current-session priority and fields, and `PaneMarkers`. Kept row enrichment,
+  `TurnCache`, `done_runs`, `FileMarkers`, and the watch loop. Moved retained tests before deleting the old suite
+  and its keys. Added both Phase 9 reports to the existing three-key byte comparison, now covering all five keys.
+  Made Menubar's schema self-contained. Deleted only tracked mod files; untracked `tsconfig.json` is untouched.
+- Changed: `crates/cli/src/{main,menubar,rows,pane}.rs` (`rows` added, `pane` deleted),
+  `crates/cli/tests/{menubar,pane}.rs` (`pane` deleted), `fixtures/expected/pane/**` (15 files deleted),
+  `mod/multi-link-pane/{.claude-plugin/plugin.json,hooks/hooks.json,hooks/register.test.tsx,hooks/register.tsx,types/index.d.ts}`
+  (deleted), `docs/output-schema.md`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. Before production edits, migrated menubar integration tests:
+  `TZ=UTC cargo test -p multi-link --test menubar` → actual decisive output:
+  ```text
+  test retired_pane_command_is_rejected ... FAILED
+  test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.42s
+  ```
+  The failure was the expected missing clap rejection; retained behavior and all five keys passed.
+  After extraction, one migrated watcher test initially indexed the wrong repo in the multi-repo key;
+  corrected it to repo-m's busy parent's child, then reran successfully before deleting the old files.
+- R4b coverage (new locations; test names retained where possible):
+  - Orphan-process exit → `crates/cli/tests/menubar.rs::{watcher_exits_within_one_tick_after_parent_exits,
+    watcher_started_with_parent_one_exits_immediately}`; immediate pre-scan guard also
+    `rows::watch_tests::watch_parent_one_exits_before_clock_or_pass`.
+  - Fresh `--app-only` resolution → `crates/cli/tests/menubar.rs::app_only_accepts_app_link_and_refuses_resume_after_app_record_disappears`.
+  - Open resolution (terminal/app/unavailable, rows and children) →
+    `crates/cli/tests/menubar.rs::menubar_opens_distinguishes_terminal_app_and_unavailable`.
+  - Unicode truncation and imported-turn exclusion →
+    `crates/cli/tests/menubar.rs::said_uses_last_completed_real_turn_and_cuts_at_120_unicode_characters`;
+    event cap also `rows::watch_tests::disappeared_run_and_failed_scan_keep_state_and_body_is_capped`.
+  - Real watcher finds appended completion and writes permanent marker →
+    `crates/cli/tests/menubar.rs::notify_flag_uses_full_refresh_and_writes_permanent_invocation_marker`.
+  - No-notify → `rows::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify`.
+  - Restart suppression → `rows::watch_tests::watch_scripts_match_byte_for_byte_with_and_without_notify`
+    (second watcher with the same permanent markers).
+  - Error recovery → `rows::watch_tests::watch_errors_continue_and_unchanged_success_restores_data` and
+    `rows::watch_tests::disappeared_run_and_failed_scan_keep_state_and_body_is_capped`.
+  - Flush → `rows::watch_tests::watch_first_change_ticks_and_all_phrases_are_filtered_and_flushed`
+    and the real orphan-process test (first line flushed before parent exits).
+  - Concurrent claim → `rows::watch_tests::simultaneous_watchers_only_one_claims`.
+  - Broken pipe → `rows::watch_tests::broken_pipe_after_claim_leaves_tombstone`.
+  - Started Claude children → `rows::tests::started_claude_child_is_its_own_row_in_its_state_section`.
+  - Unlinked hand-offs → `rows::tests::unlinked_handoff_has_words_and_no_child`.
+  - Hidden-parent promotion → `rows::tests::hidden_parent_promotes_codex_but_preserves_placing_step_and_label`.
+  - Also retained: `rows::tests::{flat_newest_first_then_id_and_no_imports,
+    rows_labels_and_phrases_equal_public_repo_view_functions,turn_cache_reads_original_said_from_compressed_rollouts,
+    turn_cache_shares_parses_and_reads_growth_and_new_mtime}` and
+    `rows::watch_tests::full_runs_include_hidden_old_imports_and_use_each_handoff_window`.
+- Verify (final): `TZ=UTC cargo test --workspace` → exit 0; actual target/result output:
+  <details><summary>Cargo results</summary>
+
+  ```text
+  Running unittests src/main.rs
+  test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+  Running tests/cli.rs
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+  Running tests/graph.rs
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+  Running tests/hook_check.rs
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+  Running tests/live.rs
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  Running tests/menubar.rs
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+  Running tests/open_jump.rs
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.82s
+  Running tests/phase12.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running tests/phase13.rs
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+  Running tests/phase9.rs
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+  Running unittests src/lib.rs
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/app_record.rs
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  Running tests/calls.rs
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running tests/fixtures.rs
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+  Running tests/invocation.rs
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+  Running tests/last_turn.rs
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/phase6.rs
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/phase7.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running unittests src/lib.rs
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/calls.rs
+  test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/compressed.rs
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s
+  Running tests/fixtures.rs
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  Running tests/phase6.rs
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running unittests src/lib.rs
+  test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+  Running tests/compressed.rs
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running tests/graph.rs
+  test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running tests/graph_commit.rs
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+  Running tests/hook.rs
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+  Running tests/links.rs
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  Running tests/live.rs
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+  Running tests/open_jump.rs
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  Running tests/overview.rs
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+  Running tests/parallel_scan.rs
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+  Running tests/phase6.rs
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  Running tests/repo_probe.rs
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  Running tests/session_end.rs
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+  Running tests/sessions.rs
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+  Running tests/started.rs
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+  Running tests/transcript_exit.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+  Running unittests src/lib.rs
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/hook.rs
+  test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  Running tests/settings.rs
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running unittests src/lib.rs
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/calls.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/graph.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/live.rs
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/model.rs
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running unittests src/lib.rs
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/fixtures.rs
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running unittests src/lib.rs
+  test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+  Running tests/graph.rs
+  test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+  Running tests/home.rs
+  test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+  Running tests/live.rs
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+  Running tests/loading.rs
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  Running tests/loading_app.rs
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/phase6_shape.rs
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Running tests/phase8_shape.rs
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  Running tests/started.rs
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+  Running tests/theme.rs
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  Running tests/timeline.rs
+  test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  Running tests/view.rs
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_claude
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_codex
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_core
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_hook
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_model
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_plan
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Doc-tests multi_link_tui
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  </details>
+  Latest `TZ=UTC cargo test -p multi-link --test menubar` after tightening first-report assertions → exit 0;
+  actual decisive output:
+  ```text
+  test menubar_matches_claudes_five_keys_byte_for_byte ... ok
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.43s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.66s
+  ```
+  `cargo fmt --check` and `git diff --check` → no output, exit 0.
+  Every `fixtures/expected/*/check.sh` (Phase 9 with `6`) → all exit 0; actual output:
+  <details><summary>Fixture checks</summary>
+
+  ```text
+  $ fixtures/expected/menubar/check.sh
+  ok   multi-repo
+  ok   waiting-quiet
+  ok   open-actions
+  ok   phase9-early
+  ok   phase9-noon
+  exit 0
+  $ fixtures/expected/open-jump/check.sh
+  ok   open open 18000001
+  ok   open open 18000002
+  ok   open open 18000003
+  ok   open open 18000004
+  ok   open open 18000005
+  ok   open open 18000006
+  ok   open open 18000007
+  ok   open open 18000008
+  ok   open open 18000009
+  ok   open open 18000010
+  ok   open open 18000011
+  ok   open fork 18000001
+  ok   open fork 18000002
+  ok   open fork 18000003
+  ok   open fork 18000004
+  ok   open fork 18000005
+  ok   open fork 18000006
+  ok   open fork 18000007
+  ok   open fork 18000008
+  ok   open fork 18000009
+  ok   open fork 18000010
+  ok   open fork 18000011
+  exit 0
+  $ fixtures/expected/phase12/check.sh
+  ok   links.json
+  ok   overview.json
+  ok   graph-1.1.json
+  exit 0
+  $ fixtures/expected/phase13/check.sh
+  ok   links.json
+  exit 0
+  $ fixtures/expected/phase14/check.sh
+  ok   live.json
+  exit 0
+  $ fixtures/expected/phase9/check.sh 6
+  ok   sessions.json (^9[1-6])
+  ok   links.json (^9[1-6])
+  ok   graph-1.1.json (^9[1-6])
+  ok   graph-2.1.json (^9[1-6])
+  ok   sessions.json (^9[1-6])
+  ok   links.json (^9[1-6])
+  ok   stderr unreadable: 1
+  ok   open open 92000001
+  ok   open open 92000002
+  ok   open open 92000003
+  ok   open open 92000004
+  ok   open open 92000005
+  ok   open open 92000006
+  ok   open open 92000007
+  ok   open open 92000008
+  ok   open open 92000009
+  ok   open open 92000010
+  ok   open open 92000011
+  ok   open open 92000012
+  ok   open open 92000013
+  ok   open open 92000014
+  ok   open open 94000001
+  ok   open open 94000002
+  ok   open open 94000003
+  ok   open open 94000004
+  ok   open open 94000006
+  ok   open open 94000007
+  ok   open fork 92000001
+  ok   open fork 92000002
+  ok   open fork 92000003
+  ok   open fork 92000004
+  ok   open fork 92000005
+  ok   open fork 92000006
+  ok   open fork 92000007
+  ok   open fork 92000008
+  ok   open fork 92000009
+  ok   open fork 92000010
+  ok   open fork 92000011
+  ok   open fork 92000012
+  ok   open fork 92000013
+  ok   open fork 92000014
+  ok   open fork 94000001
+  ok   open fork 94000002
+  ok   open fork 94000003
+  ok   open fork 94000004
+  ok   open fork 94000006
+  ok   open fork 94000007
+  note lanes.json is checked by the 9.5 worker-to-App test, not here
+  exit 0
+  ```
+  </details>
+  `cargo run -q -p multi-link -- pane --json` → exit 2; actual output:
+  ```text
+  error: unrecognized subcommand 'pane'
+
+    tip: a similar subcommand exists: 'open'
+
+  Usage: multi-link <COMMAND>
+
+  For more information, try '--help'.
+  ```
+  `git ls-files mod | while read f; do test -e "$f" && echo "$f"; done` → no output.
+  Disk check: `untracked tsconfig preserved: True`.
+- Review (Claude, 2026-11-13): clean, no findings. Re-ran Verify: 731 passed / 0 failed / 1 ignored, clippy and
+  fmt clean, all six `check.sh` exit 0, `multi-link pane` → "unrecognized subcommand", R4b mapping checked. After
+  staging, `git ls-files mod` is empty. Warm tick on real `~`: 271 / 248 ms; the pre-20.1 build on the same data gave
+  234 / 363 ms, so the budget overrun comes from data growth, not this step (recorded as a limit).
+- Gotchas: Removed only retired command/current-session/strip/cwd/lock tests; the worktree-cwd projection test
+  belonged to the removed `--cwd` interface. Historical docs/README and app lock behavior are for 20.2/20.3.
+  The menubar fixture files and their check script were not edited. Existing untracked `.claude/` files are untouched.
 
 ### 2026-11-12 — Step 20.0: Pins and keys before the deletion — Claude
 - Did: Captured `menubar --json` for the pane keys' two uncovered root/time pairs, copied and reshaped the watch

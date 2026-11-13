@@ -1,65 +1,30 @@
-//! The pane projects the worker's repo view, using its labels, placement and status words.
+//! Shared session rows, completion tracking and the menubar watch loop.
 use std::{
-    collections::{HashMap, HashSet, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
+    collections::{HashMap, HashSet},
     io::{self, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
 
-use clap::Args;
 use multi_link_core::{
-    FixtureProcessProbe, Options, ProcessProbe, RealProcessProbe, RepoMode, Scanner, graph,
+    RepoMode, graph,
     open::{OpenAction, Resolver},
 };
-use multi_link_model::{
-    GraphReport, Harness, Match, PartStatus, Session, SessionRow, State, Timestamp,
-};
+use multi_link_model::{Harness, Match, Session, SessionRow, State, Timestamp};
 use multi_link_tui::{Refresh, view};
 use serde::{Deserialize, Serialize};
 
-#[derive(Args)]
-pub struct PaneArgs {
-    /// Print the pane object as pretty JSON.
-    #[arg(long, required = true)]
-    json: bool,
-    /// Stream compact JSON changes and a checked tick every 3 seconds.
-    #[arg(long)]
-    watch: bool,
-    /// Emit at-most-once Codex completion events (watch mode only).
-    #[arg(long, requires = "watch")]
-    notify: bool,
-    /// Home-shaped root; enables fixture mode.
-    #[arg(long)]
-    root: Option<PathBuf>,
-    #[arg(long)]
-    now: Option<Timestamp>,
-    /// Checkout directory to map to a repo.
-    #[arg(long)]
-    cwd: PathBuf,
-    /// Current Claude Code session id.
-    #[arg(long)]
-    session: String,
-}
-
 #[derive(Debug, Serialize)]
-struct Pane {
-    v: u8,
-    repo: String,
-    now: Timestamp,
-    #[serde(rename = "this")]
-    this_session: String,
-    seen: bool,
-    strip: Option<Strip>,
+struct Rows {
     sections: Vec<Section>,
 }
 #[derive(Debug, Serialize)]
 struct Section {
     name: &'static str,
-    rows: Vec<PaneRow>,
+    rows: Vec<Row>,
 }
 #[derive(Debug, Serialize)]
-struct PaneRow {
+struct Row {
     id: String,
     harness: Harness,
     label: String,
@@ -70,7 +35,6 @@ struct PaneRow {
     said: Option<String>,
     openable: bool,
     opens: Option<&'static str>,
-    is_this: bool,
     children: Vec<Child>,
     handoffs: Vec<Handoff>,
 }
@@ -93,168 +57,6 @@ struct Handoff {
     candidates: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
-struct Strip {
-    step: String,
-    title: Option<String>,
-    parts: Vec<StripPart>,
-}
-#[derive(Clone, Debug, Serialize)]
-struct StripPart {
-    harness: Harness,
-    kind: String,
-    status: Option<&'static str>,
-    active_min: i64,
-    is_this: bool,
-}
-
-/// Hash only graph invalidation inputs, without serializing the refresh. Sorting
-/// record hashes makes scanner ordering irrelevant to the session/link sets.
-/// Activity timestamps advance while work continues; the 30 s cap updates ages.
-fn strip_fingerprint(sessions: &[Session], links: &[multi_link_model::Link]) -> u64 {
-    let mut session_keys: Vec<_> = sessions
-        .iter()
-        .map(|session| {
-            let mut hash = DefaultHasher::new();
-            (&session.id, std::mem::discriminant(&session.state)).hash(&mut hash);
-            hash.finish()
-        })
-        .collect();
-    let mut link_keys: Vec<_> = links
-        .iter()
-        .map(|link| {
-            let mut hash = DefaultHasher::new();
-            (
-                &link.step,
-                &link.parent,
-                &link.invocation,
-                &link.subagent,
-                std::mem::discriminant(&link.form),
-                link.background,
-                link.at,
-                &link.checkout,
-                &link.launch_dir,
-            )
-                .hash(&mut hash);
-            (
-                std::mem::discriminant(&link.r#match),
-                &link.child,
-                link.evidence.map(|value| std::mem::discriminant(&value)),
-            )
-                .hash(&mut hash);
-            link.candidates.len().hash(&mut hash);
-            for candidate in &link.candidates {
-                (&candidate.id, candidate.gap_ms).hash(&mut hash);
-            }
-            hash.finish()
-        })
-        .collect();
-    session_keys.sort_unstable();
-    link_keys.sort_unstable();
-    let mut hash = DefaultHasher::new();
-    (session_keys, link_keys).hash(&mut hash);
-    hash.finish()
-}
-
-struct CachedStrip {
-    fingerprint: u64,
-    rebuilt_at: Duration,
-    strip: Strip,
-}
-
-#[derive(Default)]
-struct StripCache {
-    entry: Option<CachedStrip>,
-}
-impl StripCache {
-    fn get(
-        &mut self,
-        step: Option<&str>,
-        sessions: &[Session],
-        links: &[multi_link_model::Link],
-        elapsed: Duration,
-        rebuild: impl FnOnce(&str) -> Result<Strip, WatchError>,
-    ) -> Result<Option<Strip>, WatchError> {
-        let Some(step) = step else {
-            self.entry = None;
-            return Ok(None);
-        };
-        let fingerprint = strip_fingerprint(sessions, links);
-        if let Some(entry) = &self.entry
-            && entry.strip.step == step
-            && entry.fingerprint == fingerprint
-            && elapsed.saturating_sub(entry.rebuilt_at) < Duration::from_secs(30)
-        {
-            return Ok(Some(entry.strip.clone()));
-        }
-        // Refresh even unchanged inputs after 30 s for staleness and active minutes.
-        let strip = rebuild(step)?;
-        self.entry = Some(CachedStrip {
-            fingerprint,
-            rebuilt_at: elapsed,
-            strip: strip.clone(),
-        });
-        Ok(Some(strip))
-    }
-}
-
-fn strip(report: &GraphReport, sessions: &[Session], this: &str) -> Strip {
-    let live = graph::live_parts(report, sessions);
-    let parts = report
-        .parts
-        .iter()
-        .enumerate()
-        .map(|(i, part)| {
-            let latest = !report.parts.iter().enumerate().any(|(j, p)| {
-                p.harness == part.harness
-                    && p.session == part.session
-                    && (p.from, j) > (part.from, i)
-            });
-            let status = match part.harness {
-                Harness::Codex => match part.status {
-                    Some(PartStatus::Done) => Some("done"),
-                    Some(PartStatus::Stale) => Some("stale"),
-                    Some(PartStatus::Working) if live.contains(&i) => Some("running"),
-                    _ => None,
-                },
-                Harness::Claude if live.contains(&i) => Some("running"),
-                Harness::Claude
-                    if latest
-                        && sessions.iter().any(|s| {
-                            Some(s.id.as_str()) == part.session.as_deref()
-                                && s.harness == Harness::Claude
-                                && s.state == State::Waiting
-                        }) =>
-                {
-                    Some("waiting")
-                }
-                Harness::Claude
-                    if report
-                        .parts
-                        .iter()
-                        .skip(i + 1)
-                        .any(|p| p.chain == part.chain) =>
-                {
-                    Some("done")
-                }
-                Harness::Claude => None,
-            };
-            StripPart {
-                harness: part.harness,
-                kind: part.kind.clone(),
-                status,
-                active_min: (part.active_ms / 60_000).max(1),
-                is_this: part.session.as_deref() == Some(this),
-            }
-        })
-        .collect();
-    Strip {
-        step: report.step.id.clone(),
-        title: report.step.title.clone(),
-        parts,
-    }
-}
-
 #[derive(Default)]
 struct Details {
     said: Option<String>,
@@ -262,7 +64,7 @@ struct Details {
 }
 
 /// Read graph-style turn windows with original completion text. The graph's
-/// reader normalizes whitespace and cuts text before the pane's H1/H4 cap.
+/// reader normalizes whitespace and cuts text before the row/event preview cap.
 fn raw_turns(path: &Path) -> io::Result<Vec<multi_link_model::Turn>> {
     let reader = multi_link_codex::open_rollout(path)?;
     let mut active: Option<(String, usize)> = None;
@@ -309,10 +111,10 @@ fn details(
     root: &Path,
     sessions: &[Session],
     resolver: &Resolver,
-    pane: &Pane,
+    rows: &Rows,
     turn_cache: &mut TurnCache,
 ) -> HashMap<String, Details> {
-    let visible: HashSet<&str> = pane
+    let visible: HashSet<&str> = rows
         .sections
         .iter()
         .flat_map(|s| &s.rows)
@@ -366,17 +168,11 @@ fn newest_first(a: &&SessionRow, b: &&SessionRow) -> std::cmp::Ordering {
         .then_with(|| a.id.cmp(&b.id))
 }
 
-fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
-    let repo = mode.map(cwd).repo.to_string_lossy().into_owned();
+fn project(refresh: &Refresh, repo: &Path, mode: RepoMode) -> Rows {
+    let repo = mode.map(repo).repo.to_string_lossy().into_owned();
     let now = refresh.overview.now;
     let offset = view::local_offset(now);
-    let mut pane = Pane {
-        v: 1,
-        repo,
-        now,
-        this_session: this.into(),
-        seen: false,
-        strip: None,
+    let mut rows = Rows {
         sections: ["working", "waiting", "recent"]
             .map(|name| Section {
                 name,
@@ -384,8 +180,8 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
             })
             .into(),
     };
-    let Some(group) = refresh.overview.repos.iter().find(|g| g.repo == pane.repo) else {
-        return pane;
+    let Some(group) = refresh.overview.repos.iter().find(|g| g.repo == repo) else {
+        return rows;
     };
     let sessions: Vec<_> = view::sessions(group).collect();
     // Overview already chose the placing parent (T11). Preserve it even when hidden,
@@ -400,17 +196,13 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
         row.harness == Harness::Codex
             && parent(row).is_some_and(|p| p.harness == Harness::Claude && visible(p))
     };
-    let mut rows: Vec<_> = sessions
+    let mut top_level: Vec<_> = sessions
         .iter()
         .copied()
         .filter(|r| visible(r) && !nested(r))
         .collect();
-    rows.sort_by(|a, b| {
-        (b.id == this)
-            .cmp(&(a.id == this))
-            .then_with(|| newest_first(a, b))
-    });
-    for row in rows {
+    top_level.sort_by(newest_first);
+    for row in top_level {
         let mut children: Vec<_> = row
             .children
             .iter()
@@ -453,13 +245,12 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
                 candidates: link.candidates.iter().map(|c| c.id.clone()).collect(),
             })
             .collect();
-        pane.seen |= row.id == this || children.iter().any(|c| c.id == this);
         let section = match row.state {
             State::Busy => 0,
             State::Waiting | State::Stale => 1,
             _ => 2,
         };
-        pane.sections[section].rows.push(PaneRow {
+        rows.sections[section].rows.push(Row {
             id: row.id.clone(),
             harness: row.harness,
             label: view::home_label(group, row),
@@ -474,15 +265,14 @@ fn project(refresh: &Refresh, cwd: &Path, mode: RepoMode, this: &str) -> Pane {
             said: None,
             openable: false,
             opens: None,
-            is_this: row.id == this,
             children,
             handoffs,
         });
     }
-    pane
+    rows
 }
 
-/// Shared row projection and enrichment for the pane and the menu bar.
+/// Project and enrich the visible rows of one repository.
 pub(crate) fn rows(
     refresh: &Refresh,
     repo: &Path,
@@ -492,20 +282,20 @@ pub(crate) fn rows(
     resolver: &Resolver,
     cache: &mut TurnCache,
 ) -> Result<serde_json::Value, WatchError> {
-    let mut pane = project(refresh, repo, mode, "");
-    enrich(&mut pane, root, sessions, resolver, cache);
-    Ok(serde_json::to_value(pane)?)
+    let mut rows = project(refresh, repo, mode);
+    enrich(&mut rows, root, sessions, resolver, cache);
+    Ok(serde_json::to_value(rows)?)
 }
 
 fn enrich(
-    pane: &mut Pane,
+    rows: &mut Rows,
     root: &Path,
     sessions: &[Session],
     resolver: &Resolver,
     turn_cache: &mut TurnCache,
 ) {
-    let details = details(root, sessions, resolver, pane, turn_cache);
-    for row in pane.sections.iter_mut().flat_map(|s| &mut s.rows) {
+    let details = details(root, sessions, resolver, rows, turn_cache);
+    for row in rows.sections.iter_mut().flat_map(|s| &mut s.rows) {
         if let Some(detail) = details.get(&row.id) {
             row.said = detail.said.clone();
             row.openable = detail.opens.is_some();
@@ -518,32 +308,6 @@ fn enrich(
                 child.opens = detail.opens;
             }
         }
-    }
-}
-
-/// Probe the app's advisory lock immediately before the pane claims a marker.
-/// Dropping the probe releases the lock before the atomic marker creation.
-pub(crate) struct PaneMarkers {
-    pub(crate) files: FileMarkers,
-    pub(crate) lock: PathBuf,
-}
-impl MarkerStore for PaneMarkers {
-    fn claim(&self, run: &str) -> io::Result<bool> {
-        if let Some(parent) = self.lock.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(&self.lock)?;
-        match file.try_lock() {
-            Ok(()) => drop(file),
-            Err(std::fs::TryLockError::WouldBlock) => return Ok(false),
-            Err(std::fs::TryLockError::Error(error)) => return Err(error),
-        }
-        self.files.claim(run)
     }
 }
 
@@ -628,7 +392,7 @@ impl TurnCache {
     }
 }
 
-/// Full-refresh links, before the pane's visibility, nesting and time window.
+/// Full-refresh links, before row visibility, nesting and time window.
 pub(crate) fn done_runs(
     root: &Path,
     repo: &str,
@@ -843,114 +607,12 @@ pub(crate) fn watch_passes(
     Ok(())
 }
 
-pub fn run(args: PaneArgs) -> Result<(), WatchError> {
-    let mut runtime = Runtime {
-        start: Instant::now(),
-        fixed_now: args.now,
-    };
-    // Capture the parent before even resolving the home or running a cold pass.
-    let parent = runtime.parent();
-    if args.watch && parent == 1 {
-        return Ok(());
-    }
-    let fixture_probe = FixtureProcessProbe;
-    let real_probe = RealProcessProbe::default();
-    let (root, repo_mode, probe): (_, _, &dyn ProcessProbe) = match args.root {
-        Some(root) => (root, RepoMode::Fixture, &fixture_probe),
-        None => (super::home()?, RepoMode::Real, &real_probe),
-    };
-    let mut scanner = Scanner::default();
-    let mut strip_cache = StripCache::default();
-    let strip_clock = Instant::now();
-    let mut turn_cache = TurnCache::default();
-    let markers = PaneMarkers {
-        files: FileMarkers(super::state_dir(&root)),
-        lock: root.join(".multi-link/menubar.lock"),
-    };
-    let mut pass = |now| -> Result<(Pane, Vec<DoneRun>), WatchError> {
-        let options = Options {
-            state_dir: super::state_dir(&root),
-            now,
-            since: Some(Duration::from_secs(2 * 60 * 60)),
-            repo_mode,
-            probe,
-        };
-        let refresh = super::tui::refresh_with_live(&mut scanner, &root, &options, None, false)?;
-        let mut pane = project(&refresh, &args.cwd, repo_mode, &args.session);
-        let all = Options {
-            since: None,
-            state_dir: options.state_dir.clone(),
-            ..options
-        };
-        let (all_sessions, all_links) = scanner.refresh(&root, &all)?;
-        let sessions = all_sessions.report.sessions;
-        let runs = if args.notify {
-            done_runs(
-                &root,
-                &pane.repo,
-                &sessions,
-                &all_links.report.links,
-                &mut turn_cache,
-            )
-        } else {
-            Vec::new()
-        };
-        let resolver = scanner.open_resolver(&root)?;
-        enrich(&mut pane, &root, &sessions, &resolver, &mut turn_cache);
-        let step = pane
-            .sections
-            .iter()
-            .flat_map(|s| &s.rows)
-            .find(|r| r.is_this)
-            .and_then(|r| r.step.as_deref());
-        pane.strip = strip_cache.get(
-            step,
-            &sessions,
-            &all_links.report.links,
-            strip_clock.elapsed(),
-            |step| {
-                let mut plans = |folder: &Path| {
-                    multi_link_plan::steps_report(
-                        Path::new(""),
-                        &[folder.to_string_lossy().into_owned()],
-                    )
-                    .repos
-                    .remove(0)
-                };
-                let report = scanner.graph(&root, &options, &pane.repo, step, &mut plans)?;
-                Ok(strip(&report, &sessions, &args.session))
-            },
-        )?;
-        Ok((pane, runs))
-    };
-    let mut out = io::stdout().lock();
-    if args.watch {
-        // If setup lost the original parent, do not adopt the new one.
-        if runtime.parent() != parent {
-            return Ok(());
-        }
-        watch_passes(
-            &mut out,
-            &mut runtime,
-            parent,
-            args.notify,
-            &markers,
-            |now| {
-                let (pane, runs) = pass(now)?;
-                Ok((serde_json::to_value(pane)?, runs))
-            },
-        )
-    } else {
-        super::json(&mut out, &pass(runtime.now()?)?.0)?;
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use multi_link_core::{FixtureProcessProbe, Options, Scanner};
     use multi_link_model::Row;
-    use std::{fs, process::Command};
+    use std::fs;
 
     const REPO: &str = "/home/dev/repo-m";
     const OWNER: &str = "14110000-0000-4000-8000-000000001411";
@@ -968,8 +630,8 @@ mod tests {
             .unwrap()
     }
 
-    fn pane(refresh: &Refresh, this: &str) -> Pane {
-        project(refresh, Path::new(REPO), RepoMode::Fixture, this)
+    fn projected(refresh: &Refresh) -> Rows {
+        project(refresh, Path::new(REPO), RepoMode::Fixture)
     }
 
     fn sample(refresh: &Refresh) -> SessionRow {
@@ -1007,15 +669,13 @@ mod tests {
         child.children.clear();
         parent.children = vec![child];
         set_rows(&mut refresh, vec![parent]);
-        let pane = pane(&refresh, "started-claude-child");
-        assert_eq!(pane.sections[0].rows.len(), 1);
-        assert_eq!(pane.sections[0].rows[0].id, OWNER);
-        assert!(pane.sections[0].rows[0].children.is_empty());
-        assert_eq!(pane.sections[1].rows.len(), 1);
-        assert_eq!(pane.sections[1].rows[0].id, "started-claude-child");
-        assert!(pane.sections[1].rows[0].is_this);
-        assert!(pane.seen);
-        assert!(pane.sections[2].rows.is_empty());
+        let rows = projected(&refresh);
+        assert_eq!(rows.sections[0].rows.len(), 1);
+        assert_eq!(rows.sections[0].rows[0].id, OWNER);
+        assert!(rows.sections[0].rows[0].children.is_empty());
+        assert_eq!(rows.sections[1].rows.len(), 1);
+        assert_eq!(rows.sections[1].rows[0].id, "started-claude-child");
+        assert!(rows.sections[2].rows.is_empty());
     }
 
     #[test]
@@ -1036,8 +696,8 @@ mod tests {
         refresh.links.links = vec![link];
         parent.children.clear();
         set_rows(&mut refresh, vec![parent]);
-        let pane = pane(&refresh, OWNER);
-        let row = &pane.sections[0].rows[0];
+        let rows = projected(&refresh);
+        let row = &rows.sections[0].rows[0];
         assert!(row.children.is_empty());
         assert_eq!(row.handoffs.len(), 1);
         assert_eq!(row.handoffs[0].step.as_deref(), Some("16.1"));
@@ -1046,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn this_first_then_flat_newest_first_then_id_and_no_imports() {
+    fn flat_newest_first_then_id_and_no_imports() {
         let mut refresh = fixture();
         let mut owner = sample(&refresh);
         owner.children.clear();
@@ -1061,16 +721,15 @@ mod tests {
         imported.id = "imported".into();
         imported.imported = true;
         set_rows(&mut refresh, vec![owner, newer, imported]);
-        let pane = pane(&refresh, OWNER);
+        let rows = projected(&refresh);
         assert_eq!(
-            pane.sections[0]
+            rows.sections[0]
                 .rows
                 .iter()
                 .map(|r| r.id.as_str())
                 .collect::<Vec<_>>(),
-            [OWNER, "a-tied", "b-newer"]
+            ["a-tied", "b-newer", OWNER]
         );
-        assert!(!self::pane(&refresh, "imported").seen);
     }
 
     #[test]
@@ -1080,36 +739,29 @@ mod tests {
         let child_id = parent.children[0].id.clone();
         parent.imported = true;
         set_rows(&mut refresh, vec![parent]);
-        let pane = pane(&refresh, &child_id);
-        let rows: Vec<_> = pane.sections.iter().flat_map(|s| &s.rows).collect();
+        let rows = projected(&refresh);
+        let rows: Vec<_> = rows.sections.iter().flat_map(|s| &s.rows).collect();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, child_id);
         assert_eq!(rows[0].step.as_deref(), Some("2.3"));
         assert_eq!(rows[0].label, "step 2.3");
         assert!(rows[0].children.is_empty());
-        assert!(pane.seen);
     }
 
     #[test]
     fn rows_labels_and_phrases_equal_public_repo_view_functions() {
         let refresh = fixture();
         for group in &refresh.overview.repos {
-            let pane = project(
-                &refresh,
-                Path::new(&group.repo),
-                RepoMode::Fixture,
-                "unknown",
-            );
-            assert!(!pane.seen);
+            let rows = project(&refresh, Path::new(&group.repo), RepoMode::Fixture);
             let expected: Vec<_> = view::sessions(group).filter(|r| visible(r)).collect();
-            let actual_count: usize = pane
+            let actual_count: usize = rows
                 .sections
                 .iter()
                 .flat_map(|s| &s.rows)
                 .map(|r| 1 + r.children.len())
                 .sum();
             assert_eq!(actual_count, expected.len(), "{}", group.repo);
-            for row in pane.sections.iter().flat_map(|s| &s.rows) {
+            for row in rows.sections.iter().flat_map(|s| &s.rows) {
                 let source = expected.iter().find(|r| r.id == row.id).unwrap();
                 assert_eq!(row.label, view::home_label(group, source));
                 assert_eq!(
@@ -1133,165 +785,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn strip_statuses_use_current_parts_and_preserve_graph_order() {
-        let mut report: GraphReport = serde_json::from_str(include_str!(
-            "../../../fixtures/expected/phase12/graph-1.1.json"
-        ))
-        .unwrap();
-        let mut session: Session = serde_json::from_value(
-            serde_json::from_str::<serde_json::Value>(include_str!(
-                "../../../fixtures/expected/sessions.json"
-            ))
-            .unwrap()["sessions"][0]
-                .clone(),
-        )
-        .unwrap();
-        session.id = OWNER.into();
-        session.harness = Harness::Claude;
-        session.state = State::Busy;
-        let mut old = report.parts[0].clone();
-        old.session = Some(OWNER.into());
-        old.from = Some(Timestamp::from_epoch_ms(report.now.epoch_ms() - 60_000).unwrap());
-        old.to = old.from;
-        old.active_ms = 59_999;
-        let mut done = old.clone();
-        done.harness = Harness::Codex;
-        done.session = Some("done".into());
-        done.kind = "implement".into();
-        done.status = Some(PartStatus::Done);
-        let mut current = old.clone();
-        current.kind = "review".into();
-        current.from = Some(report.now);
-        current.to = Some(report.now);
-        current.active_ms = 120_999;
-        let mut stale = done.clone();
-        stale.chain = 1;
-        stale.status = Some(PartStatus::Stale);
-        let mut unknown = done.clone();
-        unknown.chain = 2;
-        unknown.status = Some(PartStatus::Unavailable);
-        let mut tail = current.clone();
-        tail.chain = 3;
-        tail.session = Some("other".into());
-        report.parts = vec![old, done, current, stale, unknown, tail];
-        let actual = strip(&report, &[session.clone()], OWNER);
-        assert_eq!(
-            actual.parts.iter().map(|p| p.status).collect::<Vec<_>>(),
-            [
-                Some("done"),
-                Some("done"),
-                Some("running"),
-                Some("stale"),
-                None,
-                None
-            ]
-        );
-        assert_eq!(
-            actual
-                .parts
-                .iter()
-                .map(|p| p.kind.as_str())
-                .collect::<Vec<_>>(),
-            [
-                "plan",
-                "implement",
-                "review",
-                "implement",
-                "implement",
-                "review"
-            ]
-        );
-        assert_eq!(
-            actual.parts.iter().map(|p| p.is_this).collect::<Vec<_>>(),
-            [true, false, true, false, false, false]
-        );
-        assert_eq!(actual.parts[0].active_min, 1);
-        assert_eq!(actual.parts[2].active_min, 2);
-        session.state = State::Waiting;
-        let waiting = strip(&report, &[session], OWNER);
-        assert_eq!(waiting.parts[0].status, Some("done"));
-        assert_eq!(waiting.parts[2].status, Some("waiting"));
-        let mut working = report.parts[1].clone();
-        working.session = Some("working".into());
-        working.status = Some(PartStatus::Working);
-        working.run_available = Some(true);
-        working.chain = 4;
-        let mut resumed = working.clone();
-        resumed.from = Some(report.now);
-        resumed.to = Some(report.now);
-        report.parts.extend([working, resumed]);
-        let codex = strip(&report, &[], OWNER);
-        assert_eq!(codex.parts[6].status, None);
-        assert_eq!(codex.parts[7].status, Some("running"));
-    }
-
-    #[test]
-    fn strip_cache_rebuilds_only_on_input_changes_or_thirty_seconds() {
-        use std::cell::Cell;
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/sessions-phase14");
-        let options = Options {
-            state_dir: root.join(".multi-link"),
-            now: Timestamp::parse("2026-11-10T22:20:00Z").unwrap(),
-            since: None,
-            repo_mode: RepoMode::Fixture,
-            probe: &FixtureProcessProbe,
-        };
-        let (all_sessions, all_links) = Scanner::default().refresh(&root, &options).unwrap();
-        let mut sessions = all_sessions.report.sessions;
-        let mut links = all_links.report.links;
-        let builds = Cell::new(0);
-        let build = |step: &str| -> Result<Strip, WatchError> {
-            builds.set(builds.get() + 1);
-            Ok(Strip {
-                step: step.into(),
-                title: Some(format!("build {}", builds.get())),
-                parts: vec![],
-            })
-        };
-        let mut cache = StripCache::default();
-        let mut check =
-            |step, sessions: &[Session], links: &[multi_link_model::Link], elapsed, expected| {
-                let result = cache
-                    .get(step, sessions, links, Duration::from_secs(elapsed), build)
-                    .unwrap();
-                assert_eq!(builds.get(), expected);
-                assert_eq!(
-                    result.as_ref().map(|s| s.title.as_deref().unwrap()),
-                    step.map(|_| format!("build {expected}")).as_deref()
-                );
-            };
-        check(Some("17.2"), &sessions, &links, 0, 1);
-        check(Some("17.2"), &sessions, &links, 29, 1);
-        check(Some("17.2"), &sessions, &links, 30, 2);
-        check(Some("17.2"), &sessions, &links, 31, 2);
-        sessions.reverse();
-        links.reverse();
-        sessions[0].asked = Some("unrelated prompt metadata".into());
-        check(Some("17.2"), &sessions, &links, 31, 2);
-        sessions[0].state = if sessions[0].state == State::Busy {
-            State::Waiting
-        } else {
-            State::Busy
-        };
-        check(Some("17.2"), &sessions, &links, 32, 3);
-        links.push(links[0].clone());
-        links.last_mut().unwrap().invocation = "new-invocation".into();
-        check(Some("17.2"), &sessions, &links, 33, 4);
-        check(Some("17.3"), &sessions, &links, 34, 5);
-        sessions[0].last_activity = Timestamp::parse("2026-11-10T22:20:01Z").unwrap();
-        check(Some("17.3"), &sessions, &links, 35, 5);
-        sessions[0].id = "new-session".into();
-        check(Some("17.3"), &sessions, &links, 36, 6);
-        links[0].step = Some("other-step".into());
-        check(Some("17.3"), &sessions, &links, 37, 7);
-        sessions[0].last_activity = Timestamp::parse("2026-11-10T22:20:02Z").unwrap();
-        check(Some("17.3"), &sessions, &links, 66, 7);
-        check(Some("17.3"), &sessions, &links, 67, 8);
-        check(None, &sessions, &links, 68, 8);
-        check(Some("17.3"), &sessions, &links, 69, 9);
     }
 
     #[test]
@@ -1379,105 +872,12 @@ mod tests {
         );
         assert_eq!(reads.get(), 3);
     }
-
-    fn git(path: &Path, args: &[&str]) {
-        let mut command = Command::new("git");
-        for (name, _) in std::env::vars_os() {
-            if name.as_encoded_bytes().starts_with(b"GIT_") {
-                command.env_remove(name);
-            }
-        }
-        let output = command.arg("-C").arg(path).args(args).output().unwrap();
-        assert!(output.status.success(), "git {args:?}: {output:?}");
-    }
-
-    #[test]
-    fn temporary_git_worktree_cwds_share_one_pane_from_real_refresh() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().canonicalize().unwrap();
-        let main = root.join("main");
-        let tree = root.join("tree");
-        fs::create_dir(&main).unwrap();
-        git(&main, &["init", "-b", "main"]);
-        git(
-            &main,
-            &[
-                "-c",
-                "user.name=Synthetic",
-                "-c",
-                "user.email=test@example.invalid",
-                "-c",
-                "commit.gpgsign=false",
-                "commit",
-                "--allow-empty",
-                "-m",
-                "Synthetic",
-            ],
-        );
-        git(
-            &main,
-            &["worktree", "add", "-b", "step", tree.to_str().unwrap()],
-        );
-        let transcripts = root.join(".claude/projects/synthetic");
-        fs::create_dir_all(&transcripts).unwrap();
-        let mut cwds = Vec::new();
-        for (index, checkout) in [&main, &tree].iter().enumerate() {
-            let cwd = checkout.join("nested");
-            fs::create_dir(&cwd).unwrap();
-            let id = format!("aaaaaaaa-0000-4000-8000-{index:012}");
-            let record = serde_json::json!({
-                "type": "user", "sessionId": id, "cwd": cwd, "timestamp": "2026-11-10T22:19:00Z",
-                "uuid": format!("synthetic-{index}"), "parentUuid": null,
-                "message": {"role": "user", "content": "synthetic worktree test"}
-            });
-            fs::write(
-                transcripts.join(format!("{id}.jsonl")),
-                format!("{record}\n"),
-            )
-            .unwrap();
-            cwds.push(cwd);
-        }
-        let options = Options {
-            state_dir: super::super::state_dir(&root),
-            now: Timestamp::parse("2026-11-10T22:20:00Z").unwrap(),
-            since: Some(Duration::from_secs(7200)),
-            repo_mode: RepoMode::Real,
-            probe: &FixtureProcessProbe,
-        };
-        let refresh = super::super::tui::refresh_with_live(
-            &mut Scanner::default(),
-            &root,
-            &options,
-            None,
-            false,
-        )
-        .unwrap();
-        assert_eq!(refresh.overview.repos.len(), 1);
-        let expected = [
-            "aaaaaaaa-0000-4000-8000-000000000000",
-            "aaaaaaaa-0000-4000-8000-000000000001",
-        ];
-        for cwd in cwds {
-            let pane = project(&refresh, &cwd, RepoMode::Real, expected[0]);
-            assert_eq!(pane.repo, main.to_str().unwrap());
-            let ids: Vec<_> = pane
-                .sections
-                .iter()
-                .flat_map(|s| &s.rows)
-                .map(|r| r.id.as_str())
-                .collect();
-            assert_eq!(ids, expected);
-            assert!(pane.seen);
-        }
-        let empty = project(&refresh, &root.join("missing"), RepoMode::Real, expected[0]);
-        assert_eq!(empty.repo, root.join("missing").to_str().unwrap());
-        assert!(!empty.seen);
-    }
 }
 
 #[cfg(test)]
 mod watch_tests {
     use super::*;
+    use multi_link_core::{FixtureProcessProbe, Options, Scanner};
     use serde_json::{Value, json};
 
     struct FakeRuntime {
@@ -1527,7 +927,7 @@ mod watch_tests {
     }
     fn object() -> Value {
         serde_json::from_str(include_str!(
-            "../../../fixtures/expected/pane/children-exact-likely.json"
+            "../../../fixtures/expected/menubar/multi-repo.json"
         ))
         .unwrap()
     }
@@ -1545,8 +945,8 @@ mod watch_tests {
             assert_eq!(flushed.get(), passes);
             let mut value = object();
             value["now"] = json!(now);
-            for section in value["sections"].as_array_mut().unwrap() {
-                for row in section["rows"].as_array_mut().unwrap() {
+            for repo in value["repos"].as_array_mut().unwrap() {
+                for row in repo["rows"].as_array_mut().unwrap() {
                     row["phrase"] = json!(format!("row {passes}"));
                     for child in row["children"].as_array_mut().unwrap() {
                         child["phrase"] = json!(format!("child {passes}"));
@@ -1554,7 +954,7 @@ mod watch_tests {
                 }
             }
             if passes >= 1 {
-                value["sections"][0]["rows"][0]["children"][0]["state"] = json!("waiting");
+                value["repos"][1]["rows"][1]["children"][0]["state"] = json!("waiting");
             }
             passes += 1;
             Ok(value)
@@ -1574,11 +974,11 @@ mod watch_tests {
             ["2026-11-10T22:20:00.000Z", "2026-11-10T22:20:03.000Z"]
         );
         assert_eq!(
-            lines[0]["sections"][0]["rows"][0]["children"][0]["state"],
+            lines[0]["repos"][1]["rows"][1]["children"][0]["state"],
             "busy"
         );
         assert_eq!(
-            lines[1]["sections"][0]["rows"][0]["children"][0]["state"],
+            lines[1]["repos"][1]["rows"][1]["children"][0]["state"],
             "waiting"
         );
         assert_eq!(lines.len(), 13);
@@ -1637,7 +1037,7 @@ mod watch_tests {
     }
     fn replay(notify: bool, store: &impl MarkerStore) -> String {
         let script: Value = serde_json::from_str(include_str!(
-            "../../../fixtures/expected/pane/watch-script.json"
+            "../../../fixtures/expected/menubar/watch-script.json"
         ))
         .unwrap();
         let ticks = script["ticks"].as_array().unwrap();
@@ -1658,9 +1058,11 @@ mod watch_tests {
             if let Some(error) = tick["error"].as_str() {
                 return Err(io::Error::other(error).into());
             }
-            let mut pane = script["pane"].clone();
-            pane["now"] = json!(now);
-            Ok((pane, serde_json::from_value(tick["runs"].clone()).unwrap()))
+            let report = json!({"v":1,"now":now,"waiting":0,"running":false,"repos":[]});
+            Ok((
+                report,
+                serde_json::from_value(tick["runs"].clone()).unwrap(),
+            ))
         })
         .unwrap();
         String::from_utf8(output.bytes).unwrap()
@@ -1672,12 +1074,12 @@ mod watch_tests {
         let store = FileMarkers(temp.path().to_owned());
         assert_eq!(
             replay(false, &store),
-            include_str!("../../../fixtures/expected/pane/watch-tick.jsonl")
+            include_str!("../../../fixtures/expected/menubar/watch-tick.jsonl")
         );
         assert!(!temp.path().join("notified").exists());
         assert_eq!(
             replay(true, &store),
-            include_str!("../../../fixtures/expected/pane/watch-codex-done.jsonl")
+            include_str!("../../../fixtures/expected/menubar/watch-codex-done.jsonl")
         );
         assert_eq!(
             std::fs::read_dir(temp.path().join("notified"))
@@ -1688,7 +1090,7 @@ mod watch_tests {
         // Permanent markers suppress a second watcher even after its own baseline.
         assert_eq!(
             replay(true, &store),
-            include_str!("../../../fixtures/expected/pane/watch-tick.jsonl")
+            include_str!("../../../fixtures/expected/menubar/watch-tick.jsonl")
         );
     }
 

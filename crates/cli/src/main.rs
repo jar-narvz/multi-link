@@ -1,6 +1,6 @@
 mod hook;
 mod menubar;
-mod pane;
+mod rows;
 mod tui;
 
 use std::{
@@ -36,8 +36,6 @@ enum Command {
     },
     /// Interactive dashboard.
     Tui(tui::TuiArgs),
-    /// Repo sessions for the Claude Code pane.
-    Pane(pane::PaneArgs),
     /// Sessions across repositories for the menu-bar app.
     Menubar(menubar::MenubarArgs),
     Sessions(CommonArgs),
@@ -665,7 +663,6 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let cli = match cli.command {
         Command::Hook { command } => return hook::run(command),
         Command::Tui(args) => return tui::run(args),
-        Command::Pane(args) => return pane::run(args),
         Command::Menubar(args) => return menubar::run(args),
         command => Cli { command },
     };
@@ -730,7 +727,6 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let common = match &cli.command {
         Command::Hook { .. }
         | Command::Tui(_)
-        | Command::Pane(_)
         | Command::Menubar(_)
         | Command::Open(_)
         | Command::Graph(_) => {
@@ -762,7 +758,6 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
         Command::Hook { .. }
         | Command::Tui(_)
-        | Command::Pane(_)
         | Command::Menubar(_)
         | Command::Open(_)
         | Command::Graph(_) => {

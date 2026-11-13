@@ -1,5 +1,5 @@
-//! All-repository projection of the pane's shared rows and notification watcher.
-use crate::pane::{
+//! All-repository session reports and completion notifications.
+use crate::rows::{
     self, DoneRun, FileMarkers, MarkerStore, Runtime, TurnCache, WatchError, WatchRuntime,
 };
 use clap::Args;
@@ -67,7 +67,7 @@ fn project(
     cache: &mut TurnCache,
 ) -> Result<Report, WatchError> {
     project_with_rows(refresh.overview.now, sessions, |repo| {
-        pane::rows(
+        rows::rows(
             refresh,
             Path::new(repo),
             mode,
@@ -91,7 +91,7 @@ fn project_with_rows(
         running: false,
         repos: Vec::new(),
     };
-    // Avoid mapping repos and enriching rows that the pane cannot show. Quiet
+    // Avoid mapping repos and enriching rows that the row projection cannot show. Quiet
     // waiting/stale sessions remain candidates even outside the activity window.
     let repos: BTreeSet<_> = sessions
         .iter()
@@ -101,19 +101,17 @@ fn project_with_rows(
         .map(|s| s.repo.as_str())
         .collect();
     for repo in repos {
-        let pane = rows_for(repo)?;
+        let projected = rows_for(repo)?;
         let mut rows = Vec::new();
         let mut steps = Vec::new();
         let mut shown = HashSet::new();
         let mut waiting = false;
         let mut busy = false;
-        for section in pane["sections"].as_array().unwrap() {
+        for section in projected["sections"].as_array().unwrap() {
             for row in section["rows"].as_array().unwrap() {
                 let mut flattened = json!({"section": section["name"]});
                 for (key, value) in row.as_object().unwrap() {
-                    if key != "is_this" {
-                        flattened[key] = value.clone();
-                    }
+                    flattened[key] = value.clone();
                 }
                 if matches!(row["state"].as_str(), Some("busy" | "waiting" | "stale"))
                     && let Some(step) = row["step"].as_str()
@@ -205,7 +203,7 @@ fn completion_repos(sessions: &[Session], now: Timestamp) -> BTreeSet<&str> {
         .collect()
 }
 
-/// The app owns the lock, so its watcher claims directly through the shared loop.
+/// Run the shared watcher with permanent completion markers.
 fn watch(
     out: &mut impl io::Write,
     runtime: &mut impl WatchRuntime,
@@ -214,7 +212,7 @@ fn watch(
     markers: &impl MarkerStore,
     pass: impl FnMut(Timestamp) -> Result<(Value, Vec<DoneRun>), WatchError>,
 ) -> Result<(), WatchError> {
-    pane::watch_passes(out, runtime, parent, notify, markers, pass)
+    rows::watch_passes(out, runtime, parent, notify, markers, pass)
 }
 
 pub fn run(args: MenubarArgs) -> Result<(), WatchError> {
@@ -256,7 +254,7 @@ pub fn run(args: MenubarArgs) -> Result<(), WatchError> {
         let mut runs = Vec::new();
         if args.notify {
             for repo in completion_repos(&sessions, now) {
-                runs.extend(pane::done_runs(
+                runs.extend(rows::done_runs(
                     &root,
                     repo,
                     &sessions,
@@ -372,9 +370,9 @@ mod tests {
         }
     }
 
-    fn replay(markers: &impl MarkerStore, app: bool) -> String {
+    fn replay(markers: &impl MarkerStore) -> String {
         let script: Value = serde_json::from_str(include_str!(
-            "../../../fixtures/expected/pane/watch-script.json"
+            "../../../fixtures/expected/menubar/watch-script.json"
         ))
         .unwrap();
         let ticks = script["ticks"].as_array().unwrap();
@@ -399,11 +397,7 @@ mod tests {
                 serde_json::from_value(tick["runs"].clone()).unwrap(),
             ))
         };
-        if app {
-            watch(&mut output, &mut runtime, 42, true, markers, pass).unwrap();
-        } else {
-            pane::watch_passes(&mut output, &mut runtime, 42, true, markers, pass).unwrap();
-        }
+        watch(&mut output, &mut runtime, 42, true, markers, pass).unwrap();
         String::from_utf8(output).unwrap()
     }
 
@@ -412,7 +406,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let markers = FileMarkers(temp.path().into());
         assert_eq!(
-            replay(&markers, true),
+            replay(&markers),
             include_str!("../../../fixtures/expected/menubar/watch-codex-done.jsonl")
         );
         assert_eq!(
@@ -420,46 +414,6 @@ mod tests {
                 .unwrap()
                 .count(),
             2
-        );
-    }
-
-    #[test]
-    fn held_app_lock_leaves_pane_runs_unclaimed_for_app_and_unlock_restores_pane() {
-        let temp = tempfile::tempdir().unwrap();
-        let lock = temp.path().join("menubar.lock");
-        let held = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(&lock)
-            .unwrap();
-        held.lock().unwrap();
-        let pane_markers = pane::PaneMarkers {
-            files: FileMarkers(temp.path().into()),
-            lock,
-        };
-        let output = replay(&pane_markers, false);
-        assert!(!output.contains("codex_done"));
-        assert!(!temp.path().join("notified").exists());
-        // The app ignores its own lock and claims both hand-offs to the same session.
-        assert_eq!(
-            replay(&FileMarkers(temp.path().into()), true),
-            include_str!("../../../fixtures/expected/menubar/watch-codex-done.jsonl")
-        );
-        // Release explicitly: another parallel test may briefly fork with the
-        // descriptor before exec closes it, extending a drop-only lock's life.
-        held.unlock().unwrap();
-        drop(held);
-        // Fresh state models future hand-offs; the pane resumes delivery after unlock.
-        let fresh = tempfile::tempdir().unwrap();
-        let restored = pane::PaneMarkers {
-            files: FileMarkers(fresh.path().into()),
-            lock: temp.path().join("menubar.lock"),
-        };
-        assert_eq!(
-            replay(&restored, false),
-            include_str!("../../../fixtures/expected/menubar/watch-codex-done.jsonl")
         );
     }
 }
