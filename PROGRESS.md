@@ -1,6 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 20 is in progress (retire the Claude Code pane; owner, 2026-11-12). Step 20.0 is committed (Claude).
+Next: Step 20.1 (remove the `pane` command and the mod; Codex).**
+- Keys: `fixtures/expected/menubar/` now has five reports plus `watch-script.json`, `watch-tick.jsonl` and
+  `watch-codex-done.jsonl`; every pane key's rows are proven equal to them (design "Phase 20 decisions").
+- The owner turns the pane off with the command Claude gave (removes `CLAUDE_CODE_PLUGIN_DIRS`) and restarts Claude
+  Code before the 20.3 check. The pinned Phase 18 pane check is dropped; the pinned Phase 19 notification check
+  moves to 20.3.
+
 **Phase 19: Step 19.4 is done; the owner check is pinned for later (Claude, 2026-11-12).** The SwiftUI menu-bar app
 (`apps/menubar/`, built by `build.sh`) shows every repo's sessions (board 19 P2 + I1) from `multi-link menubar --watch`.
 - Checked live: the popover matches the board (owner); the icon showed only after the owner freed two menu-bar items
@@ -839,6 +847,15 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 20.0: Pins and keys before the deletion — Claude
+- Did: Captured `menubar --json` for the pane keys' two uncovered root/time pairs, copied and reshaped the watch
+  fixtures kept tests read, cross-checked all 12 pane keys' rows against the menubar keys, pinned R2–R4.
+- Changed: `docs/design.md`, `fixtures/expected/menubar/{phase9-early,phase9-noon}.json`,
+  `fixtures/expected/menubar/{watch-script.json,watch-tick.jsonl}`, `fixtures/expected/menubar/check.sh`, `PROGRESS.md`.
+- Verify: `fixtures/expected/menubar/check.sh` → ok ×5, exit 0. Cross-check: 12 keys, 55 rows, 0 mismatches.
+- Review: Claude's own step; the Codex plan critique (8 findings, all accepted) is in the PLAN Review log.
+- Gotchas: pane rows are keyed by id for the cross-check, since the pane orders rows around "this session".
 
 ### 2026-11-12 — Step 19.4: Real check, README (owner check pinned) — Claude
 - Did: Ran `apps/menubar/build/multi-link.app` against real `~` with the app's binary path set to the release build.

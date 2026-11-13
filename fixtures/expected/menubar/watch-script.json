@@ -1,0 +1,180 @@
+{
+  "about": "Step 17.0 watcher script: each tick's pass result (the pane object with `now` set to the tick, and the hand-off runs H4 reads), replayed by 17.2's tests with an injected runtime and a fresh marker dir. `error` = the pass failed. Synthetic ids and text.",
+  "pane": {
+    "v": 1,
+    "repo": "/home/dev/repo-w",
+    "now": null,
+    "this": "wwwwwwww-0000-4000-8000-000000000000",
+    "seen": false,
+    "strip": null,
+    "sections": [
+      {
+        "name": "working",
+        "rows": []
+      },
+      {
+        "name": "waiting",
+        "rows": []
+      },
+      {
+        "name": "recent",
+        "rows": []
+      }
+    ]
+  },
+  "ticks": [
+    {
+      "now": "2026-11-10T22:20:00Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": false
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        }
+      ]
+    },
+    {
+      "now": "2026-11-10T22:20:03Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        }
+      ]
+    },
+    {
+      "now": "2026-11-10T22:20:06Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        }
+      ]
+    },
+    {
+      "now": "2026-11-10T22:20:09Z",
+      "error": "synthetic scan failure"
+    },
+    {
+      "now": "2026-11-10T22:20:12Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_late",
+          "id": "cccccccc-0000-4000-8000-00000000000l",
+          "step": null,
+          "said": null,
+          "done": true
+        }
+      ]
+    },
+    {
+      "now": "2026-11-10T22:20:15Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_late",
+          "id": "cccccccc-0000-4000-8000-00000000000l",
+          "step": null,
+          "said": null,
+          "done": true
+        },
+        {
+          "run": "toolu_watch_b",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.5",
+          "said": "synthetic said b",
+          "done": false
+        }
+      ]
+    },
+    {
+      "now": "2026-11-10T22:20:18Z",
+      "runs": [
+        {
+          "run": "toolu_watch_a",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.4",
+          "said": "synthetic said a",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_old",
+          "id": "cccccccc-0000-4000-8000-00000000000o",
+          "step": "2.3",
+          "said": "synthetic said old",
+          "done": true
+        },
+        {
+          "run": "toolu_watch_late",
+          "id": "cccccccc-0000-4000-8000-00000000000l",
+          "step": null,
+          "said": null,
+          "done": true
+        },
+        {
+          "run": "toolu_watch_b",
+          "id": "cccccccc-0000-4000-8000-00000000000a",
+          "step": "2.5",
+          "said": "synthetic said b",
+          "done": true
+        }
+      ]
+    }
+  ]
+}

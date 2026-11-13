@@ -1388,3 +1388,15 @@ Real facts (19.0, 2026-11-12, this Mac, macOS 15.7.3, Swift 6.2.4, scratch spike
   single-quoted path plus ` tui` opened Terminal running the TUI.
 - `flock(LOCK_EX|LOCK_NB)` on a file opened `O_CREAT|O_RDWR|O_CLOEXEC`: held while the app ran (a second process got
   `EWOULDBLOCK`), not visible in its child's open files (`lsof`), free right after `pkill`.
+
+## Phase 20 decisions
+
+Step 20.0, 2026-11-12. PLAN.md Phase 20 R1–R6, pinned. The Claude Code pane is retired: the menu-bar app does its job
+across every repo.
+
+| Id | Pin |
+| --- | --- |
+| R2 module | `crates/cli/src/pane.rs` → `crates/cli/src/rows.rs`. Kept: row projection and enrichment, the watch loop, `done_runs`, `FileMarkers`, `TurnCache`. Removed: the `pane` subcommand, the step strip, `--cwd`/`--session`/`is_this`, `PaneMarkers`. |
+| R3 notify | The app runs `menubar --json --watch --notify` only while it can deliver, and without `--notify` otherwise (rotation as in 19.2). `DeliveryGate` and the 10 s health rule go. `~/.multi-link/menubar.lock` stays, held for the app's whole life as a single-instance guard: a second instance shows "multi-link is already running", starts no watcher and quits. |
+| R4 keys | Two keys captured from `menubar --json` at the pane keys' other times: `phase9-early.json` (phase9, 06:00) and `phase9-noon.json` (phase9, 12:00); with the three 19.0 keys they cover every pane key's root and time. `watch-script.json` copied; `watch-tick.jsonl` rebuilt menubar-shaped (report lines `{"v":1,"now","waiting":0,"running":false,"repos":[]}`). Tests that used `pane/children-exact-likely.json` as a pass value use `menubar/multi-repo.json`. |
+| R4 cross-check | All 12 pane keys, 55 rows: each pane row minus `is_this` equals the menubar row with the same id in the same repo minus `section`, and the id sets match (scratch script, 2026-11-12). |

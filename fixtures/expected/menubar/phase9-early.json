@@ -1,0 +1,443 @@
+{
+  "v": 1,
+  "now": "2026-11-09T06:00:00.000Z",
+  "waiting": 3,
+  "running": false,
+  "repos": [
+    {
+      "repo": "/home/dev/repo-p9e",
+      "name": "repo-p9e",
+      "tier": "waiting",
+      "last_activity": "2026-11-09T08:10:30.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "waiting",
+          "id": "94000007-0000-4000-8000-000094000007",
+          "harness": "claude",
+          "label": "“Synthetic session end case 7.”",
+          "step": null,
+          "state": "waiting",
+          "phrase": "waiting on you · since 8:12am",
+          "asked": "Synthetic session end case 7.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p9c",
+      "name": "repo-p9c",
+      "tier": "waiting",
+      "last_activity": "2026-11-09T06:00:30.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "waiting",
+          "id": "92000012-0000-4000-8000-00009200000c",
+          "harness": "claude",
+          "label": "“Synthetic exit case 12.”",
+          "step": null,
+          "state": "waiting",
+          "phrase": "waiting on you · since 6:02am",
+          "asked": "Synthetic exit case 12.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "waiting",
+          "id": "92000009-0000-4000-8000-000092000009",
+          "harness": "claude",
+          "label": "“Synthetic exit case 9.”",
+          "step": null,
+          "state": "stale",
+          "phrase": "stale since 5:30am",
+          "asked": "Synthetic exit case 9.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000011-0000-4000-8000-00009200000b",
+          "harness": "claude",
+          "label": "“Synthetic exit case 11.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 11.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000010-0000-4000-8000-00009200000a",
+          "harness": "claude",
+          "label": "“Synthetic exit case 10.”",
+          "step": null,
+          "state": "idle",
+          "phrase": "idle · last active 19 min ago",
+          "asked": "Synthetic exit case 10.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000008-0000-4000-8000-000092000008",
+          "harness": "claude",
+          "label": "“Synthetic exit case 8.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 8.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000007-0000-4000-8000-000092000007",
+          "harness": "claude",
+          "label": "“Synthetic resumed prompt.”",
+          "step": null,
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic exit case 7.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000006-0000-4000-8000-000092000006",
+          "harness": "claude",
+          "label": "“Synthetic exit case 6.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 6.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000005-0000-4000-8000-000092000005",
+          "harness": "claude",
+          "label": "“Synthetic exit case 5.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 5.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000004-0000-4000-8000-000092000004",
+          "harness": "claude",
+          "label": "“Synthetic exit case 4.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 4.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000003-0000-4000-8000-000092000003",
+          "harness": "claude",
+          "label": "“Synthetic exit case 3.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 3.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000002-0000-4000-8000-000092000002",
+          "harness": "claude",
+          "label": "“Synthetic exit case 2.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 2.",
+          "said": null,
+          "openable": true,
+          "opens": "app",
+          "children": [],
+          "handoffs": []
+        },
+        {
+          "section": "recent",
+          "id": "92000001-0000-4000-8000-000092000001",
+          "harness": "claude",
+          "label": "“Synthetic exit case 1.”",
+          "step": null,
+          "state": "finished",
+          "phrase": "finished",
+          "asked": "Synthetic exit case 1.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r6",
+      "name": "repo-r6",
+      "tier": "other",
+      "last_activity": "2026-11-09T06:02:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000006-0000-4000-8000-000093000006",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 6.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": [
+            {
+              "step": "1.1",
+              "outcome": "no codex run found",
+              "candidates": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-p9l",
+      "name": "repo-p9l",
+      "tier": "other",
+      "last_activity": "2026-11-09T06:01:30.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "95000002-0000-4000-8000-000095000002",
+          "harness": "claude",
+          "label": "step 2.2",
+          "step": "2.2",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic lane parent 2.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r5",
+      "name": "repo-r5",
+      "tier": "other",
+      "last_activity": "2026-11-09T05:52:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000005-0000-4000-8000-000093000005",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 5.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": [
+            {
+              "step": "1.1",
+              "outcome": "no codex run found",
+              "candidates": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r4",
+      "name": "repo-r4",
+      "tier": "other",
+      "last_activity": "2026-11-09T05:42:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000004-0000-4000-8000-000093000004",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 4.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [],
+          "handoffs": [
+            {
+              "step": "1.1",
+              "outcome": "no codex run found",
+              "candidates": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r3",
+      "name": "repo-r3",
+      "tier": "other",
+      "last_activity": "2026-11-09T05:32:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000003-0000-4000-8000-000093000003",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 3.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "93c00003-0000-4000-8000-000093c00003",
+              "harness": "codex",
+              "state": "unknown",
+              "phrase": "done 5:31am",
+              "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 3.",
+              "said": "<text>",
+              "openable": false,
+              "opens": null,
+              "match": "likely"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r2",
+      "name": "repo-r2",
+      "tier": "other",
+      "last_activity": "2026-11-09T05:22:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000002-0000-4000-8000-000093000002",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 2.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "93c00002-0000-4000-8000-000093c00002",
+              "harness": "codex",
+              "state": "unknown",
+              "phrase": "done 5:21am",
+              "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 2.",
+              "said": "<text>",
+              "openable": false,
+              "opens": null,
+              "match": "likely"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    },
+    {
+      "repo": "/home/dev/repo-r1",
+      "name": "repo-r1",
+      "tier": "other",
+      "last_activity": "2026-11-09T05:12:20.000Z",
+      "step": null,
+      "rows": [
+        {
+          "section": "recent",
+          "id": "93000001-0000-4000-8000-000093000001",
+          "harness": "claude",
+          "label": "step 1.1",
+          "step": "1.1",
+          "state": "unknown",
+          "phrase": "state unknown",
+          "asked": "Synthetic redirect case 1.",
+          "said": null,
+          "openable": false,
+          "opens": null,
+          "children": [
+            {
+              "id": "93c00001-0000-4000-8000-000093c00001",
+              "harness": "codex",
+              "state": "unknown",
+              "phrase": "done 5:11am",
+              "asked": "Read AGENTS.md, then do Step 1.1 in PLAN.md. Synthetic redirect case 1.",
+              "said": "<text>",
+              "openable": false,
+              "opens": null,
+              "match": "exact"
+            }
+          ],
+          "handoffs": []
+        }
+      ]
+    }
+  ]
+}

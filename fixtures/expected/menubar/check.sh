@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 19 answer-key check (Step 19.0). Usage, from the repo root: fixtures/expected/menubar/check.sh
-# Compares `multi-link menubar --json` for three fixture scenarios with the keys in this folder, using
+# Compares `multi-link menubar --json` for five fixture scenarios with the keys in this folder, using
 # `cargo run` (never the installed binary) and a fixed --now. watch-codex-done.jsonl is checked by 19.1's
 # watcher test (it replays fixtures/expected/pane/watch-script.json), not here. Keys are Claude's; do not edit them.
 set -euo pipefail
@@ -20,4 +20,7 @@ check() { # key name, root, now
 check multi-repo fixtures/sessions-phase14 2026-11-10T22:20:00Z
 check waiting-quiet fixtures/sessions-phase9 2026-11-09T07:30:00Z
 check open-actions fixtures/sessions-phase18 2026-11-12T09:00:00Z
+# Step 20.0: the pane keys' other roots and times, captured from `menubar --json` before the pane was removed.
+check phase9-early fixtures/sessions-phase9 2026-11-09T06:00:00Z
+check phase9-noon fixtures/sessions-phase9 2026-11-09T12:00:00Z
 exit $fail
