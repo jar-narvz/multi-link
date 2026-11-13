@@ -3236,6 +3236,8 @@ Non-goals: a replacement step strip in the menu bar; changing the TUI; changing 
   `.authorized`, and `.authorized` with alerts disabled, gives "cannot deliver" (the watcher runs without `--notify`);
   `./build.sh` → built and verified. Real check (Claude): rebuild, relaunch, one real hand-off still gives a banner
   from multi-link (permission is on now).
+- Status (2026-11-13): done. Rebuilt app chose `--notify` under the new rule; a real hand-off showed its banner
+  (owner: "Yes, it showed"). Phase 20 is done.
 
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).

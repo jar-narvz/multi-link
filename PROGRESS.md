@@ -1,14 +1,15 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 20: Step 20.3 is done (Claude, 2026-11-13); next is Step 20.4 (Codex).** The pane and `multi-link pane`
+**Phase 20 is done (Claude, 2026-11-13).** The pane and `multi-link pane`
 are gone (Release 1.17); the menu-bar app is the only notifier and holds `~/.multi-link/menubar.lock` as a
 single-instance guard.
 - Owner check done: a real hand-off showed a banner credited to multi-link (`docs/phase20-check.md`), closing the
   pinned Phase 19 check. The pinned Phase 18 pane check is dropped.
-- Step 20.4: the app's "can deliver" rule must require `authorizationStatus == .authorized` as well as the alert
-  setting. With Allow Notifications off, the alert setting still said enabled and two hand-offs were claimed but
-  never shown.
+- Step 20.4: "can deliver" now requires `authorizationStatus == .authorized` and `alertSetting == .enabled`.
+  Regression coverage checks every other status and authorized-without-alerts, including watcher arguments;
+  denied permission leaves the watcher without `--notify`. Checked live: a real hand-off still shows a banner.
+- Next: the web browser app (backlog), reading the same `menubar` contract.
 - Installed: `~/.cargo/bin/multi-link` is 1.17; the app's binary-path setting is removed; the app runs from
   `apps/menubar/build/multi-link.app`.
 - Perf limit (not from 20.1): the warm `menubar --watch` tick is near or over 250 ms on today's data (before 20.1
@@ -854,6 +855,59 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-13 — Step 20.4: Notify only when macOS really allows it — Codex
+- Did: Require authorized status plus enabled alerts from one notification-settings snapshot. Extracted the
+  delivery predicate for testing; seven settings cases check its result and the real watcher's exact arguments,
+  including not-determined, denied, provisional, ephemeral, authorized/disabled, authorized/not-supported and
+  authorized/enabled. Updated only the design M3 permission row. Extended the quiet-watcher test child's lifetime
+  so slow parallel startup cannot exhaust it during the 10-second health-deadline check.
+- Changed: `apps/menubar/Sources/MenubarCore/InstanceLock.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift`, `docs/design.md`, `PROGRESS.md`.
+- Verify: In `apps/menubar`, regression against the extracted old alert-only rule:
+  `swift test --disable-sandbox --filter notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts` → exit 1:
+  ```text
+  ✘ Test notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts() failed after 1.141 seconds with 8 issues.
+  ✘ Test run with 1 test in 0 suites failed after 1.141 seconds with 8 issues.
+  ```
+  After the predicate fix and quiet-child lifetime adjustment, `swift test --disable-sandbox` → exit 0
+  (actual decisive output):
+  ```text
+  Build complete! (2.31s)
+  ✔ Test notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts() passed after 3.469 seconds.
+  ✔ Test quietWatcherKeepsNotifyPastFormerHealthDeadline() passed after 11.739 seconds.
+  ✔ Test run with 23 tests in 0 suites passed after 11.739 seconds.
+  ```
+  Then `./build.sh` → exit 0 (actual output):
+  ```text
+  [0/1] Planning build
+  Building for production...
+  [0/3] Write sources
+  [1/3] Write swift-version--58304C5D6DBC2206.txt
+  [3/4] Compiling MenubarCore Actions.swift
+  [4/6] Compiling MenubarApp App.swift
+  [4/6] Write Objects.LinkFileList
+  [5/6] Linking multi-link-menubar
+  Build complete! (4.11s)
+  build/multi-link.app: replacing existing signature
+  Built and verified build/multi-link.app
+  ```
+- Review: Claude, 2026-11-13, clean in round 1 (one stale test comment about the removed 10 s health rule reworded by
+  Claude; comment only). Re-ran Verify: `swift test` 23 passed, `./build.sh` built and verified. Real check: the 20.2
+  app quit cleanly when asked (the pre-20.2 build could not); the rebuilt app chose `--notify` under the new rule, so
+  macOS reports `.authorized` with Allow Notifications on; a real Step 20.4 hand-off made one marker (41 → 42) and the
+  owner saw the banner: "Yes, it showed".
+- Gotchas: `.ephemeral` is unavailable by name on macOS, so its test constructs raw value 4; the initial test
+  compile exposed that availability restriction. Before extending the quiet fake's sleep from 30 to 300 seconds,
+  two full-suite runs failed its exact single-start assertion after parallel runs delayed main-actor tests by
+  about 30 seconds; the quiet test passed alone (10.392 seconds), and the header test passed alone (0.035 seconds).
+  Actual failed suite summaries:
+  ```text
+  ✘ Test run with 23 tests in 0 suites failed after 40.649 seconds with 1 issue.
+  ✘ Test run with 23 tests in 0 suites failed after 40.387 seconds with 1 issue.
+  ```
+  The final full suite passed as pasted above. No real notification check or app relaunch performed; Claude's
+  real hand-off/banner check remains pending. Nothing staged or committed.
 
 ### 2026-11-13 — Step 20.3: Docs, real check, owner confirm — Claude
 - Did: README's pane section became a one-line retirement note; pane mentions left the menu-bar, terminal-jump and

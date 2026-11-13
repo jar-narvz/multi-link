@@ -9,7 +9,12 @@ public protocol NotificationPermission: Sendable {
 public struct SystemNotificationPermission: NotificationPermission {
     public init() {}
     public func canDeliver() async -> Bool {
-        await UNUserNotificationCenter.current().notificationSettings().alertSetting == .enabled
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return Self.canDeliver(authorizationStatus: settings.authorizationStatus, alertSetting: settings.alertSetting)
+    }
+
+    static func canDeliver(authorizationStatus: UNAuthorizationStatus, alertSetting: UNNotificationSetting) -> Bool {
+        authorizationStatus == .authorized && alertSetting == .enabled
     }
 }
 

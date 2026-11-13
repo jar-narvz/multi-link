@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import Testing
+import UserNotifications
 @testable import MenubarCore
 
 private let emptyReport = #"{"v":1,"now":"2026-11-10T22:20:00.000Z","waiting":0,"running":false,"repos":[]}"#
@@ -69,6 +70,46 @@ actor Permission: NotificationPermission {
     var allowed = false
     func canDeliver() async -> Bool { allowed }
     func set(_ value: Bool) { allowed = value }
+}
+
+private struct SettingsPermission: NotificationPermission {
+    let status: UNAuthorizationStatus
+    let alerts: UNNotificationSetting
+
+    func canDeliver() async -> Bool {
+        SystemNotificationPermission.canDeliver(authorizationStatus: status, alertSetting: alerts)
+    }
+}
+
+@Test func notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts() async throws {
+    // App Clip's ephemeral status is unavailable by name on macOS; test its raw value.
+    let ephemeral = try #require(UNAuthorizationStatus(rawValue: 4))
+    let cases: [(UNAuthorizationStatus, UNNotificationSetting, Bool)] = [
+        (.notDetermined, .enabled, false), (.denied, .enabled, false),
+        (.provisional, .enabled, false), (ephemeral, .enabled, false),
+        (.authorized, .disabled, false), (.authorized, .notSupported, false),
+        (.authorized, .enabled, true),
+    ]
+    for (status, alerts, expected) in cases {
+        let permission = SettingsPermission(status: status, alerts: alerts)
+        #expect(await permission.canDeliver() == expected)
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let binary = dir.appendingPathComponent("fake")
+        try script(at: binary, body: """
+        cd "$(dirname "$0")"
+        echo "$*" > starts
+        echo '\(emptyReport)'
+        exec sleep 30
+        """)
+        let updates = Updates()
+        let watcher = Watcher(binary: binary.path, permission: permission) { await updates.add($0) }
+        await watcher.start()
+        try await eventually { await updates.statuses().contains(.watching) }
+        await watcher.quit()
+        let expectedArguments = expected ? "menubar --json --watch --notify\n" : "menubar --json --watch\n"
+        #expect(try String(contentsOf: dir.appendingPathComponent("starts"), encoding: .utf8) == expectedArguments)
+    }
 }
 actor Updates {
     var values: [WatcherUpdate] = []
@@ -194,11 +235,12 @@ actor Updates {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let binary = dir.appendingPathComponent("quiet")
+    // Outlive slow parallel UI startup and the test's wait past the former 10 s health deadline.
     try script(at: binary, body: """
     cd "$(dirname "$0")"
     echo "$*" >> starts
     echo '\(emptyReport)'
-    exec sleep 30
+    exec sleep 300
     """)
     let permission = Permission()
     await permission.set(true)
