@@ -3126,6 +3126,8 @@ unsupported); the web browser app (next phase, backlog).
   pane); quitting the app, or denying its notifications, hands them back to the pane. README: a menu-bar section
   (build, run, permissions, rebuild re-prompts, login items), Limitations (loss window). `docs/phase19-check.md`.
   Owner: use it for a while (stop and ask).
+- Status (2026-11-12): real check, README and docs done; **owner check pinned for later** with Phase 18's (both need
+  the 1.16 binary installed). Steps in PROGRESS.md "Current state".
 - Files: `docs/phase19-check.md`, `README.md`, `PROGRESS.md`
 - Verify (whole phase): the 19.1 Rust commands and check scripts; `swift test` in `apps/menubar`; `claude plugin
   test mod/multi-link-pane` (pane unchanged); the real-check items recorded with their commands; the owner's answer

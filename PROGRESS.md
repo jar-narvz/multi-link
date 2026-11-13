@@ -1,28 +1,18 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 19 is in progress (menu-bar app, SwiftUI, board 19 P2 + I1). Step 19.1 is committed (Codex, reviewed by
-Claude, 2026-11-12). Step 19.2 is committed (Codex, reviewed by Claude, 2026-11-12). Step 19.3 is committed
-(Codex, reviewed by Claude, 2026-11-12). Next: Step 19.4 (real check, README, owner confirm; Claude).
-After review: Step 19.4 (real check and owner confirmation).**
-- Swift app: board 19 P2 / I1 popover, core presentation/actions, retained notification delegate, permission banner,
-  and signed app bundle. All 18 Swift tests pass after Review round 1; release bundle verifies with the pinned designated requirement.
-  App not launched; actual appearance, Automation prompts and banners remain for Step 19.4.
-- `multi-link menubar --json [--watch] [--notify]` prints the M1 report (rows are the pane's, flattened) and the
-  pane's `codex_done` event lines; the pane watcher skips its claim while `~/.multi-link/menubar.lock` is held.
-- Warm watch tick on real `~`: 208 / 211 ms CPU per 3 s tick (two 30 s samples; first report 2.87 s).
-- Known limit: completions are scanned only for repos with a session active in the last 2 h, so a Codex run that
-  finishes after both it and its Claude parent were quiet for 2 h is not announced.
-- The Swift app retries the delivery lock every 2 s while permission and watcher health permit ownership;
-  a pane watcher probes it briefly before each claim. Permission uses notification settings alertSetting, never
-  the requestAuthorization callback; tests inject permission without touching UNUserNotificationCenter.
-- Keys: `fixtures/expected/menubar/` (`check.sh` exits 0 after 19.1). Pins: design
-  "Phase 19 decisions". The watch key reuses the pane's event line, unchanged.
-- For 19.2/19.3: Codex builds Swift with the extra `--add-dir`s and `--disable-sandbox` (design M3 sandbox); sign
-  with a bundle-id designated requirement or every rebuild loses notification permission; don't trust the first
-  `requestAuthorization` callback; never launch the app from a temp folder.
-- Bundle id `dev.multi-link.menubar`. macOS already has notification entries for the spike ids
-  `dev.multi-link.spike19` / `spike19b` (harmless; the owner can remove them in System Settings → Notifications).
+**Phase 19: Step 19.4 is done; the owner check is pinned for later (Claude, 2026-11-12).** The SwiftUI menu-bar app
+(`apps/menubar/`, built by `build.sh`) shows every repo's sessions (board 19 P2 + I1) from `multi-link menubar --watch`.
+- Checked live: the popover matches the board (owner); the icon showed only after the owner freed two menu-bar items
+  (notch); one real hand-off made one notification, but from Script Editor, because the pane's 1.14 watcher has no
+  lock check (`docs/phase19-check.md`).
+- **Pinned owner check (shared with Phase 18):** `cargo install --path /Users/jarednarvaez/multi-link/crates/cli
+  --locked`, restart Claude Code, then (a) Phase 18's `Jump to terminal` from the pane and (b) one Codex hand-off with
+  the menu-bar app open: the notification should come from multi-link. If (b) shows nothing, require
+  `authorizationStatus == .authorized` in the app's permission check (design M3 permission).
+- The app's binary-path setting points at `target/release/multi-link` for the check; remove it after the install
+  with `defaults delete dev.multi-link.menubar multiLinkBinary`.
+- Next after the owner checks: the web browser app (backlog), reading the same `menubar` contract.
 
 **Phase 18: Step 18.4 is done; the owner check is pending (Claude, 2026-11-12).** `multi-link open`, the TUI's `o`
 and the pane's `Jump to terminal` bring a running Claude session's Terminal.app / iTerm2 tab to the front (board 18 J1).
@@ -849,6 +839,21 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-12 — Step 19.4: Real check, README (owner check pinned) — Claude
+- Did: Ran `apps/menubar/build/multi-link.app` against real `~` with the app's binary path set to the release build.
+  Watched the watcher switch to `--notify` and take the lock; the owner confirmed the popover matches board 19. The
+  notch hid the icon until the owner freed two menu-bar items (window x 825 → 863 → 908). A real `codex exec` hand-off
+  made one marker (28 → 29), announced by the pane through Script Editor (installed 1.14 binary, no lock check). The
+  owner declined installing the new binary now, so the multi-link-credited notification is pinned with Phase 18's check.
+  Wrote `docs/phase19-check.md` and the README menu-bar section and limitations.
+- Changed: `docs/phase19-check.md`, `README.md`, `PROGRESS.md`.
+- Verify: all six `check.sh` exit 0 and `claude plugin test` 134 pass (re-run); Rust unchanged since 19.1 (736 / 0 /
+  1); `swift test` 18 passed and `build.sh` verified at 19.3. Owner's answers: "Matches the board", "From Script
+  Editor"; owner check pinned.
+- Review: Claude's own step (docs only).
+- Gotchas: on a notched MacBook a full menu bar hides new status items; macOS showed nothing left of x ≈ 898 even
+  though the notch ends at 848. The owner saw no notification prompt for the app, yet its alert setting read enabled.
 
 ### 2026-11-12 — Step 19.3: Review round 1 — Codex
 - Did: Fixed all three Claude findings. Startup resolves the binary and starts the watcher before awaiting

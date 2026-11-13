@@ -258,6 +258,35 @@ checked 0s ago
 
   `/multi-link` reopens the pane if you close it.
 
+## Menu-bar app (macOS)
+
+A small SwiftUI app (Release 1.16, `apps/menubar/`) puts multi-link in the macOS menu bar, so you can see every repo's
+sessions without a terminal or a Claude Code window (board 19: P2, I1). The icon reads `ml` plus the number of Claude
+sessions waiting on you, or `ml ○` when nothing is running. Its popover has one block per repo, in the home screen's
+order, headed by its current step, with the pane's rows and their Codex hand-offs under them. Clicking a row opens it
+in the app or jumps to its terminal tab (`multi-link open --no-resume`); a Codex row copies its id. The footer has
+`Open TUI` and `Quit`. While it runs and is allowed to notify, the app sends the `codex finished (<step>)`
+notifications under its own name, and the pane leaves them to it (a lock file, `~/.multi-link/menubar.lock`).
+
+Build it (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
+
+```bash
+/Users/jarednarvaez/multi-link/apps/menubar/build.sh
+```
+
+```bash
+open /Users/jarednarvaez/multi-link/apps/menubar/build/multi-link.app
+```
+
+- It needs `multi-link` 1.16. It looks in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin` (GUI apps don't
+  get your shell's `PATH`), or a path saved with `defaults write dev.multi-link.menubar multiLinkBinary <path>`.
+- macOS asks once to allow its notifications, and once to let it control Terminal for a jump.
+- The build is signed ad hoc for this Mac only, never notarized. Its signature names the bundle id, so rebuilding
+  keeps the notification permission.
+- On a MacBook with a notch and a full menu bar, macOS hides new items behind the notch. If `ml` doesn't appear, remove
+  or ⌘-drag away a menu-bar icon or two.
+- To start it at login, add it in System Settings → General → Login Items.
+
 ## States and links (Release 1.6)
 
 Each rule below reads a format that Claude Code or Codex does not document; only the `SessionEnd` hook event is
@@ -412,6 +441,13 @@ state rules.
   app (`docs/phase17-check.md`); scripted terminal keys did not reach the pane. The open row has no highlight (the mod API
   has no theme background colour). Pane data took 3.6–4.6 s from launch in the Phase 17 check, slower than Phase 16,
   because the first refresh also builds the strip and reads linked Codex rollouts.
+
+- The menu-bar app (Release 1.16) was checked on this Mac (`docs/phase19-check.md`): the popover matches board 19,
+  and one hand-off made one notification. A notification sent by the app itself has **not** been seen yet: in the
+  check the pane, still on the 1.14 binary, announced it through Script Editor. Pressing rows and Open TUI in the
+  shipped app, and handing notifications back on quit, are covered by tests only. A Codex run that finishes after it
+  and its Claude session were both quiet for 2 h is not announced. A completion in the first few seconds after the
+  app takes over notifications is not announced either.
 
 - The terminal jump (Release 1.15) is macOS only and was checked live with Terminal.app from the CLI and the TUI
   (`docs/phase18-check.md`). **iTerm2 is untested** (not installed; covered by tests only), and so are tmux, other
