@@ -1,0 +1,218 @@
+<title>multi-link Board 21</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: board header, four icon options as selectable cards, then the chosen icon in context (notification, Dock, Finder sizes) and the setup window it ships with. */
+:root {
+  --bg:#f3f2f0; --card:#ffffff; --fg:#1d1c1a; --muted:#6b6863; --line:#dedbd6; --sel:#ece8e2;
+  --claude:#c2714a; --codex:#3f7fd0; --ok:#3f8f55; --warn:#a86a12;
+  --pop:#fbfaf8; --pop-line:#e2ded8; --desk1:#c9c3ba; --desk2:#a9b4c2;
+  --display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --body:"Inter", ui-sans-serif, system-ui, sans-serif;
+  --mac:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#121110; --card:#1b1a18; --fg:#ece8e1; --muted:#9a948a; --line:#2e2c28; --sel:#2c2a27;
+  --claude:#df9b79; --codex:#8cb9f1; --ok:#7fbf8e; --warn:#e0b060;
+  --pop:#201f1d; --pop-line:#34312d; --desk1:#2b2f38; --desk2:#3a3230; color-scheme:dark } }
+:root[data-theme="dark"] {
+  --bg:#121110; --card:#1b1a18; --fg:#ece8e1; --muted:#9a948a; --line:#2e2c28; --sel:#2c2a27;
+  --claude:#df9b79; --codex:#8cb9f1; --ok:#7fbf8e; --warn:#e0b060;
+  --pop:#201f1d; --pop-line:#34312d; --desk1:#2b2f38; --desk2:#3a3230; color-scheme:dark }
+body { background:var(--bg); color:var(--fg); font-family:var(--body); line-height:1.5; }
+.wrap { max-width:1080px; margin:0 auto; padding-block:32px 64px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); display:grid; gap:40px; }
+h1, h2 { font-family:var(--display); font-weight:600; text-wrap:balance; margin:0; }
+h1 { font-size:1.75rem; }
+h2 { font-size:1.125rem; }
+.lede { color:var(--muted); max-width:68ch; margin:6px 0 0; }
+.eyebrow { font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+section { display:grid; gap:14px; }
+.options { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px; }
+.opt { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; display:grid; gap:12px; text-align:left; font:inherit; color:inherit; cursor:pointer; min-width:0; }
+.opt:hover { border-color:var(--muted); }
+.opt:focus-visible { outline:2px solid var(--codex); outline-offset:2px; }
+.opt[aria-pressed="true"] { border-color:var(--fg); box-shadow:0 0 0 1px var(--fg); }
+.opt .head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.opt .id { font-family:var(--display); font-weight:600; }
+.opt .pick { font-size:.72rem; color:var(--muted); }
+.opt[aria-pressed="true"] .pick { color:var(--fg); font-weight:600; }
+.big { display:grid; place-items:center; background:var(--sel); border-radius:10px; padding:14px 0; }
+.big svg { width:148px; height:148px; display:block; }
+.sizes { display:flex; align-items:flex-end; gap:14px; }
+.sizes figure { margin:0; display:grid; justify-items:center; gap:4px; font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+.sizes svg { display:block; }
+.opt p { margin:0; font-size:.86rem; color:var(--muted); }
+.context { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; }
+.panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; display:grid; gap:12px; min-width:0; }
+.desk { border-radius:10px; padding:18px; background:linear-gradient(135deg, var(--desk1), var(--desk2)); display:grid; gap:16px; justify-items:end; }
+.desk.light { background:linear-gradient(135deg, #d9d3ca, #b9c4d2); }
+.desk.dark { background:linear-gradient(135deg, #23262d, #3a3230); }
+.banner { width:min(344px, 100%); border-radius:16px; padding:11px 12px; display:grid; grid-template-columns:38px 1fr auto; gap:10px; align-items:center; font-family:var(--mac); backdrop-filter:blur(20px); }
+.desk.light .banner { background:rgba(246,245,243,.86); color:#1d1c1a; box-shadow:0 6px 20px rgba(0,0,0,.18); }
+.desk.dark .banner { background:rgba(44,42,40,.86); color:#ece8e1; box-shadow:0 6px 20px rgba(0,0,0,.45); }
+.banner svg { width:38px; height:38px; display:block; }
+.banner b { display:block; font-size:13px; font-weight:600; }
+.banner span { display:block; font-size:13px; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.banner time { font-size:11px; opacity:.6; align-self:start; }
+.banner > div { min-width:0; }
+.dock { display:flex; gap:10px; padding:8px 12px; border-radius:18px; align-items:flex-end; }
+.desk.light .dock { background:rgba(255,255,255,.4); }
+.desk.dark .dock { background:rgba(30,30,30,.45); }
+.dock .slot { width:52px; height:52px; border-radius:12px; }
+.desk.light .dock .slot { background:rgba(255,255,255,.55); }
+.desk.dark .dock .slot { background:rgba(255,255,255,.12); }
+.dock svg { width:52px; height:52px; display:block; }
+.note { font-size:.82rem; color:var(--muted); margin:0; }
+/* Setup window mock */
+.win { max-width:520px; width:100%; background:var(--pop); border:1px solid var(--pop-line); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.18); font-family:var(--mac); overflow:hidden; }
+.bar { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--pop-line); }
+.dots { display:flex; gap:6px; }
+.dots i { width:12px; height:12px; border-radius:50%; display:block; background:var(--line); }
+.bar .t { flex:1; text-align:center; font-size:13px; font-weight:600; margin-right:54px; }
+.intro { display:grid; grid-template-columns:44px 1fr; gap:12px; padding:16px 18px 6px; align-items:center; }
+.intro svg { width:44px; height:44px; display:block; }
+.intro b { font-size:15px; }
+.intro p { margin:2px 0 0; font-size:12.5px; color:var(--muted); }
+.rows { list-style:none; margin:0; padding:6px 10px 10px; display:grid; }
+.row { display:grid; grid-template-columns:22px 1fr auto; gap:10px; align-items:center; padding:10px 8px; border-top:1px solid var(--pop-line); }
+.row:first-child { border-top:0; }
+.row .st { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; }
+.st.ok { background:var(--ok); color:var(--pop); }
+.st.todo { border:1.5px solid var(--warn); color:var(--warn); }
+.st.opt { border:1.5px dashed var(--muted); }
+.row b { font-size:13px; font-weight:600; display:block; }
+.row small { font-size:12px; color:var(--muted); display:block; }
+.row > div { min-width:0; }
+.btn { font:inherit; font-size:12.5px; padding:4px 11px; border-radius:6px; border:1px solid var(--pop-line); background:var(--card); color:var(--fg); white-space:nowrap; }
+.btn.primary { background:var(--codex); border-color:var(--codex); color:#fff; }
+.done-lbl { font-size:12.5px; color:var(--ok); font-weight:600; }
+.foot { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 18px; border-top:1px solid var(--pop-line); font-size:12px; color:var(--muted); }
+.wins { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
+.legend { display:flex; flex-wrap:wrap; gap:14px; font-size:.82rem; color:var(--muted); }
+.legend span { display:inline-flex; gap:6px; align-items:center; }
+@media (prefers-reduced-motion: no-preference) { .opt { transition:border-color .15s, box-shadow .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Board 21 · Phase 21 · 2026-11-13</div>
+    <h1>An icon for multi-link</h1>
+    <p class="lede">macOS shows the app's icon on every notification, in the Dock and in Finder. Today the app has none, so the banner is blank. Pick one of four. Each is shown at the sizes macOS draws it; tap a card to see it in the banner and Dock below. Orange is Claude and blue is Codex, the same colours the TUI and menu bar use.</p>
+  </header>
+
+  <section aria-labelledby="opts-h">
+    <h2 id="opts-h">Options</h2>
+    <div class="options" id="options"></div>
+  </section>
+
+  <section aria-labelledby="ctx-h">
+    <h2 id="ctx-h">In context: <span id="ctx-name">A</span></h2>
+    <div class="context">
+      <div class="panel">
+        <div class="eyebrow">Notification, light and dark desktop</div>
+        <div class="desk light"><div class="banner"><span data-icon></span><div><b>codex finished (20.4)</b><span>ok, Step 20.4 hand-off done.</span></div><time>now</time></div></div>
+        <div class="desk dark"><div class="banner"><span data-icon></span><div><b>codex finished (20.4)</b><span>ok, Step 20.4 hand-off done.</span></div><time>now</time></div></div>
+        <p class="note">Text from the real Step 20.4 hand-off on 2026-11-13.</p>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Dock, light and dark</div>
+        <div class="desk light"><div class="dock"><div class="slot"></div><span data-icon></span><div class="slot"></div></div></div>
+        <div class="desk dark"><div class="dock"><div class="slot"></div><span data-icon></span><div class="slot"></div></div></div>
+        <p class="note">The app lives in the menu bar and normally has no Dock icon; the Dock shows it while the setup window is open, and Finder and Launchpad always do.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="setup-h">
+    <h2 id="setup-h">The setup window it ships with</h2>
+    <p class="lede" style="margin:0">One design, for your OK too. Opens on first launch and from <b>Setup…</b> in the popover. Each row re-checks every 2 s while the window is open and turns green on its own. Left: first launch, notifications already allowed. Middle: what each problem looks like. Right: opened straight from the download, before it's in Applications.</p>
+    <div class="wins">
+    <div class="win" role="img" aria-label="Setup window mockup">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+      <div class="intro"><span data-icon></span><div><b>Three clicks and you're set</b><p>Everything stays on this Mac. Nothing here sends data anywhere.</p></div></div>
+      <ul class="rows">
+        <li class="row"><span class="st todo">!</span><div><b>Claude hooks</b><small>Exact hand-off links and "waiting on you". Backs up ~/.claude/settings.json first.</small></div><button class="btn primary" type="button" tabindex="-1">Turn on</button></li>
+        <li class="row"><span class="st ok">✓</span><div><b>Notifications</b><small>A banner when a Codex hand-off finishes.</small></div><span class="done-lbl">Allowed</span></li>
+        <li class="row"><span class="st todo">!</span><div><b>Start at login</b><small>Keeps the menu-bar icon after a restart.</small></div><button class="btn" type="button" tabindex="-1">Turn on</button></li>
+        <li class="row"><span class="st todo">!</span><div><b>Jump to Terminal tabs</b><small>macOS asks once to let multi-link control Terminal.</small></div><button class="btn" type="button" tabindex="-1">Allow…</button></li>
+      </ul>
+      <div class="foot"><span>Can't see <b>ml</b> in the menu bar? The notch can hide it: ⌘-drag another icon away.</span><button class="btn" type="button" tabindex="-1">Done</button></div>
+    </div>
+    <div class="win" role="img" aria-label="Setup window with problems">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+      <ul class="rows">
+        <li class="row"><span class="st todo">!</span><div><b>Claude hooks</b><small>You changed multi-link's PreToolUse hook in ~/.claude/settings.json, so it's left as is. The other events are on.</small></div><button class="btn" type="button" tabindex="-1">Show file</button></li>
+        <li class="row"><span class="st todo">!</span><div><b>Notifications</b><small>Turned off in System Settings. Turn on Allow Notifications for multi-link.</small></div><button class="btn primary" type="button" tabindex="-1">Open Settings</button></li>
+        <li class="row"><span class="st todo">!</span><div><b>Start at login</b><small>macOS wants you to approve it in Login Items.</small></div><button class="btn" type="button" tabindex="-1">Open Settings</button></li>
+        <li class="row"><span class="st todo">!</span><div><b>Jump to Terminal tabs</b><small>Blocked earlier. Allow multi-link under Privacy &amp; Security → Automation.</small></div><button class="btn" type="button" tabindex="-1">Open Settings</button></li>
+        <li class="row"><span class="st ok">✓</span><div><b>Claude hooks are on</b><small>Start a new Claude session to load them. <a href="#setup-h" style="color:var(--muted)">Remove hooks</a></small></div><span class="done-lbl">On</span></li>
+      </ul>
+    </div>
+    <div class="win" role="img" aria-label="Move to Applications gate">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+      <div class="intro"><span data-icon></span><div><b>Move multi-link to Applications first</b><p>It's running from the download. Drag it into Applications, then open it from there. Setup waits until then, so nothing points at a copy that goes away.</p></div></div>
+      <div class="foot"><span>Applications or ~/Applications both work.</span><button class="btn primary" type="button" tabindex="-1">Show in Finder</button></div>
+    </div>
+    </div>
+    <div class="legend"><span><span class="st ok" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">✓</span> done</span><span><span class="st todo" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">!</span> needs one click</span></div>
+  </section>
+</div>
+
+<script>
+// Icon artwork on Apple's 1024 grid: 824 px tile, inset 100, corner radius 185.
+const C = { claude:"#E58A57", codex:"#5C9BF0", ink:"#ECE8E1", tileA:"#2A2724", tileB:"#141312", light:"#F7F5F2", lightB:"#E7E2DB", inkDark:"#2A2724" };
+const tile = (id, a, b) => `<defs><linearGradient id="g${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#g${id})"/>`;
+const OPTIONS = [
+  { id:"A", name:"ml monogram", desc:"The menu-bar mark, drawn: m in Claude orange, l in Codex blue. Reads as the same app as the menu-bar item.",
+    svg:(k)=>`${tile("A"+k, C.tileA, C.tileB)}
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="74">
+        <path d="M262 700 V460 M262 520 C262 420 400 420 400 520 V700 M400 520 C400 420 538 420 538 520 V700" stroke="${C.claude}"/>
+        <path d="M680 300 V640 C680 690 710 712 762 712" stroke="${C.codex}"/>
+      </g>` },
+  { id:"B", name:"Two links", desc:"Two interlocked rings, one per tool. The name, said literally. Strongest at 16 px.",
+    svg:(k)=>`${tile("B"+k, C.tileA, C.tileB)}
+      <defs><clipPath id="cB${k}"><circle cx="512" cy="660" r="70"/></clipPath></defs>
+      <g fill="none" stroke-width="62">
+        <circle cx="420" cy="512" r="172" stroke="${C.claude}"/>
+        <circle cx="604" cy="512" r="172" stroke="${C.codex}"/>
+        <g clip-path="url(#cB${k})"><circle cx="420" cy="512" r="172" stroke="${C.tileB}" stroke-width="92"/><circle cx="420" cy="512" r="172" stroke="${C.claude}"/></g>
+      </g>` },
+  { id:"C", name:"Hand-off", desc:"A Claude session handing off to a Codex run, drawn with the popover's └ child line. Says what the app tracks.",
+    svg:(k)=>`${tile("C"+k, C.tileA, C.tileB)}
+      <path d="M372 470 V600 C372 650 400 672 450 672 H560" fill="none" stroke="${C.ink}" stroke-width="46" stroke-linecap="round"/>
+      <circle cx="372" cy="372" r="104" fill="${C.claude}"/>
+      <circle cx="662" cy="672" r="104" fill="${C.codex}"/>` },
+  { id:"D", name:"Many into one (light)", desc:"Claude and Codex lines meeting in one view. The only light tile: stands out in a dark Dock, softer in a light one.",
+    svg:(k)=>`${tile("D"+k, C.light, C.lightB)}
+      <g fill="none" stroke-linecap="round" stroke-width="62">
+        <path d="M300 300 C300 470 512 450 512 600" stroke="${C.claude}"/>
+        <path d="M724 300 C724 470 512 450 512 600" stroke="${C.codex}"/>
+        <path d="M512 600 V650" stroke="${C.inkDark}"/>
+      </g>
+      <circle cx="512" cy="712" r="66" fill="none" stroke="${C.inkDark}" stroke-width="44"/>` },
+];
+const svgFor = (o, k, size) => `<svg viewBox="100 100 824 824" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${o.svg(k)}</svg>`;
+let n = 0;
+const root = document.getElementById("options");
+OPTIONS.forEach((o) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "opt"; b.dataset.id = o.id; b.setAttribute("aria-pressed", "false");
+  b.innerHTML = `<div class="head"><span class="id">${o.id} · ${o.name}</span><span class="pick">Selected</span></div>
+    <div class="big">${svgFor(o, n++, 148)}</div>
+    <div class="sizes">${[64, 32, 16].map(s => `<figure>${svgFor(o, n++, s)}<figcaption>${s}px</figcaption></figure>`).join("")}</div>
+    <p>${o.desc}</p>`;
+  b.addEventListener("click", () => select(o.id));
+  root.appendChild(b);
+});
+function select(id) {
+  const o = OPTIONS.find(x => x.id === id) || OPTIONS[0];
+  document.querySelectorAll(".opt").forEach(el => el.setAttribute("aria-pressed", String(el.dataset.id === o.id)));
+  document.querySelectorAll(".opt .pick").forEach(el => el.textContent = el.closest(".opt").dataset.id === o.id ? "Showing below" : "Show below");
+  document.getElementById("ctx-name").textContent = `${o.id} · ${o.name}`;
+  document.querySelectorAll("[data-icon]").forEach(el => { el.innerHTML = svgFor(o, n++, 52); });
+  try { localStorage.setItem("board21", o.id); } catch (e) {}
+}
+let start = "A";
+try { start = localStorage.getItem("board21") || "A"; } catch (e) {}
+select(start);
+</script>

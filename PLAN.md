@@ -3239,10 +3239,143 @@ Non-goals: a replacement step strip in the menu bar; changing the TUI; changing 
 - Status (2026-11-13): done. Rebuilt app chose `--notify` under the new rule; a real hand-off showed its banner
   (owner: "Yes, it showed"). Phase 20 is done.
 
+### Phase 21 — Easy first install: one download, one setup window, a logo (Release 1.18)
+Need (owner, 2026-11-13): "the easiest for new users, with minimal downloading or command lines, literally giving
+them little to no work to set it up", and "a logo on the multi-link notification". Today a new user clones the repo,
+installs Rust, runs `cargo install`, runs `hook check` and the command it prints, restarts Claude, installs Xcode or
+the Swift 6.2 tools, runs `build.sh`, opens the app, finds Allow Notifications (Phase 20 lost two banners while it
+was off), accepts the Terminal prompt, clears the notch and adds a login item by hand: two toolchains, about ten steps.
+The notification shows a blank icon because the app has none (macOS uses the app icon).
+Desired state (needs): a user downloads one file, opens it and clicks through one checklist; no toolchain, no
+terminal; every part's state is visible and fixable in one click; terminal users get the same checks in one command.
+Comparables (2026-11-13): Ollama (drag-to-Applications DMG; first run offers to put its CLI on `PATH` with an admin
+prompt, which surprises some users), Rectangle (a permission window that polls macOS and turns each item green as soon
+as it is granted; no restart), Stats (an open-source menu-bar app shipped as a DMG and a brew cask). Owner chose
+(2026-11-13): a DMG, unsigned for now ("free first", no Apple Developer account); setup in both the app and the CLI;
+logo from a board of options.
+
+Decisions (amended after the Codex critique, Review log 2026-11-13):
+- **E1 One download.** `multi-link-<version>-arm64.dmg` holds `multi-link.app` and an `Applications` link. The app
+  bundles the CLI at `Contents/MacOS/multi-link` (arm64 release build) and uses it before any lookup (saved path,
+  `~/.cargo/bin`, Homebrew stay as fallbacks for source builds). Why bundle: one download, and the app and its CLI
+  are always the same version. Signed inside out (the CLI, then the app), both ad hoc with bundle-id designated
+  requirements; built by `apps/menubar/release.sh` with built-in tools only (`swift`, `cargo`, `iconutil`, `codesign
+  -`, `hdiutil`). The owner uploads it to a GitHub release (publishing: stop and ask).
+- **E2 Unsigned, said plainly.** First open of a downloaded copy is blocked by Gatekeeper; README shows the one-time
+  System Settings → Privacy & Security → Open Anyway step (it asks for the Mac's password; managed Macs may forbid
+  it). multi-link never strips quarantine or works around Gatekeeper. Notarization is a later phase if the owner
+  enrolls and needs its own signing setup. That permissions survive an update is a hypothesis 21.0 tests.
+- **E3 Setup checks and fixes live in Rust.** `multi-link setup` (text; asks before each change; `--yes` applies the
+  safe fixes) and `multi-link setup --json` (strictly read-only; schema, exit codes and item ids pinned in 21.0)
+  report `cli` (this binary's path, whether it runs from a mounted or translocated copy), `hooks` (the existing hook
+  check states, and the settings file it read, so a Finder-launched app shows its real target) and `app` (installed
+  in `/Applications` or `~/Applications`). `multi-link hook apply` writes what `hook check --merged` gives today:
+  multi-link's `missing` / `outdated` / `duplicate` events are fixed, `customized` events are left as they are,
+  unreadable files are refused; plus a backup, a private temp file, the file's mode and an atomic rename. New over
+  today's printed command: it re-reads the file just before the rename and refuses if it changed since it was read
+  (the remaining race is stated in the README). `multi-link hook remove` takes multi-link's entries out the same way,
+  so uninstall needs no hand edit. AGENTS.md's read-only rule for `~/.claude/` gets one narrow exception: these two
+  commands, run on an explicit user action, may write the one settings file. Why Rust: one tested writer for the app
+  and the CLI.
+- **E4 Setup window in the app.** Shown on first launch and from the popover footer (`Setup…`). If the app runs from
+  the DMG or a translocated copy it shows only "Move multi-link to Applications" (no hooks, login item or prompts
+  before that). Rows, each with state and one button: Claude hooks (`hook apply`, after naming the file and the
+  backup; `customized` / unreadable shown with what to do; "start a new Claude session to load them"); notifications
+  (the request moves here from app start; green only on the Phase 20 rule `.authorized && alertSetting == .enabled`;
+  otherwise `Open Notification Settings`; the watcher re-checks when this changes); start at login
+  (`SMAppService.mainApp`: every status, `.requiresApproval` → `Open Login Items Settings`, errors shown, turn off
+  too); terminal jump (`AEDeterminePermissionToAutomateTarget` for Terminal: polled without asking, asks only on the
+  button; denied → how to re-allow). Rows re-check every 2 s while open (Rectangle) without ever prompting. Notch tip
+  in the footer.
+- **E5 Hooks follow the app.** Hooks call the bundled CLI's absolute path. If the app moves or is replaced, the app
+  re-checks at launch and puts a dot on `Setup…`; `hook check` says `outdated`. README gets Uninstall: the setup
+  window's "Remove hooks" (or `multi-link hook remove`), turn off start at login, delete the app. A deleted app leaves
+  hooks pointing nowhere until then (stated in the README).
+- **E6 Logo.** Board 21 shows 4 icon designs at 148/64/32/16 px, in a mock notification and Dock in light and dark,
+  plus the setup window with its error states; the owner picks one and OKs the window. Shipped as `AppIcon.icns`
+  (`iconutil` from a committed iconset rendered from the SVG source) and `CFBundleIconFile`. The menu-bar `ml` text
+  item stays (board 19 I1).
+- **E7 Assumptions to prove first (21.0 spikes).** The DMG is downloaded through Safari from a local web server (real
+  quarantine), with a new bundle id per run (`dev.multi-link.spike21a`, `…b`, so no retained permission). (a) Opening
+  from the mounted DMG, then from `/Applications` and `~/Applications` after Open Anyway; (b) the bundled CLI runs
+  when the app spawns it, as a Claude Code hook, and from Terminal by absolute path, with no second block; (c)
+  `SMAppService.mainApp` statuses and register / unregister for an ad-hoc app, and a real login launch (owner logs
+  out and in once); (d) a never-seen bundle id gets the notification prompt from a button; (e) the packaged jump's
+  Automation attribution (app, not Terminal) and `AEDeterminePermissionToAutomateTarget` without a prompt; (f) a
+  second build of the same bundle id keeps notification and Automation permission. A failed (b) or (f) changes E1 /
+  E5 (stop and ask), never a quarantine workaround. A fresh macOS user account for the 21.4 check is the owner's
+  call (it needs an admin password).
+
+Non-goals: notarization / Developer ID (owner: free first); putting the CLI on `PATH` from the app (deferred: an admin
+link into `/usr/local/bin` has too many edge cases for this phase; cargo users already have it); choosing another
+Claude config folder in the app; Intel Macs (arm64 only; the DMG says so); auto-update; a Homebrew cask; CI release
+builds; Windows/Linux; changing the menubar contract or the TUI.
+
+### Step 21.0 — Spikes, setup contract, board 21 (Claude)
+- E7 (a)–(f) on this Mac; results and the `setup --json` contract (items, states, exit codes, which Swift row reads
+  which item) pinned in design "Phase 21 decisions". Board 21 (`docs/boards/board21-logo.html`): the owner picks the
+  logo and OKs the setup window.
+- Files: `docs/design.md`, `docs/boards/board21-logo.html`, `PROGRESS.md`
+- Verify: each spike's command and observed result recorded; the owner's logo pick and window OK recorded.
+
+### Step 21.1 — `multi-link setup`, `hook apply`, `hook remove` (Codex)
+- Depends on: 21.0. E3, E5. Files: `crates/cli/src/**`, `crates/hook/src/**`, `crates/cli/tests/**`,
+  `docs/output-schema.md` ("Setup"), `AGENTS.md` (the one exception), `PROGRESS.md`
+- Verify: `TZ=UTC cargo test --workspace`, clippy `-D warnings`, `cargo fmt --check`; tests: `hook apply` writes the
+  same bytes as today's printed command on every `hook check` fixture (missing, outdated, duplicate, customized
+  events kept, absent file); refuses unreadable files and a file changed between read and rename, original bytes kept;
+  backup private and present; a second apply is a no-op; write / rename failures leave the original; symlinked
+  settings handled as `hook check` does; `hook remove` leaves only non-multi-link entries; `setup --json` writes
+  nothing (fixture home byte-identical after) and matches the pinned contract; `setup` answered no changes nothing.
+
+### Step 21.2 — App bundle: bundled CLI, icon, signing (Codex)
+- Depends on: 21.1. E1, E6. Files: `apps/menubar/build.sh`, `apps/menubar/Info.plist`, `apps/menubar/Resources/**`,
+  `apps/menubar/Sources/MenubarCore/BinaryLookup.swift`, `apps/menubar/Tests/**`, `PROGRESS.md`
+- Verify, in `apps/menubar`: `swift test --disable-sandbox` → 0 failures (bundled CLI preferred over every lookup);
+  `./build.sh` → both executables signed inside out, `codesign --verify --strict` on the CLI and the app, icon present
+  (`CFBundleIconFile` resolves).
+
+### Step 21.3 — App: setup window (Codex)
+- Depends on: 21.2. E4, E5. Files: `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `PROGRESS.md`
+- Verify: `swift test --disable-sandbox` → 0 failures (rows from a fake `setup --json`; fake notification, login and
+  Automation sources for every state; translocated copy shows only "Move to Applications"; polling never prompts;
+  first launch shows the window once); `./build.sh` built and verified; styled screenshots of the window (all green,
+  and with each error state) compared with board 21.
+
+### Step 21.4 — `release.sh` and the DMG (Codex)
+- Depends on: 21.3. E1, E2. Files: `apps/menubar/release.sh`, `.gitignore`, `PROGRESS.md`
+- Verify: `apps/menubar/release.sh` → `apps/menubar/build/multi-link-<version>-arm64.dmg`; `hdiutil verify` passes;
+  mounted, it holds the app (both executables verify, icon inside) and an `Applications` link; the copied app
+  launches from `~/Applications` (non-quarantined smoke run).
+
+### Step 21.5 — Docs, first-run real check, owner confirm (Claude)
+- Depends on: 21.4. README: Install becomes "download, drag, Open Anyway, Setup", with the source build below;
+  Uninstall; limits (unsigned, arm64 only, hooks after a deleted app, the hook-write race). Real check: the 21.4 DMG
+  downloaded through Safari (real quarantine) under a new bundle id, through every setup row, an upgrade over it
+  keeping permissions, and one real hand-off showing the notification with the new icon. `docs/phase21-check.md`.
+  Owner confirm; the owner publishes the release.
+- Files: `README.md`, `docs/phase21-check.md`, `PROGRESS.md`
+- Verify (whole phase): the Rust and Swift commands above, `release.sh`, the real-check items with their commands,
+  the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-13 — Phase 21 plan critique (Codex, read-only)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | AGENTS.md forbids writes in `~/.claude/`; E3 said customized files stay unchanged, but today's merger keeps customized events and fixes the rest | Accepted. One narrow AGENTS.md exception (21.1); `hook apply` keeps today's per-event behaviour |
+| 2 | Hand-set quarantine is weak evidence; a clean `CLAUDE_CONFIG_DIR` doesn't reset macOS permissions | Accepted in part. Safari download from a local server (real quarantine), new bundle id per run, open from the DMG and both Applications folders. A fresh macOS account or VM is the owner's call (admin password), not required |
+| 3 | Byte-equal to today's command inherits its lost-update race; test failures | Accepted. Re-read before rename, refuse stale writes, failure and no-op tests; the remaining race goes in the README |
+| 4 | Notification row must use Phase 20's full rule; move the startup request into the setup action | Accepted |
+| 5 | SMAppService has more states than registered / not | Accepted. All statuses, Login Items settings action, unregister, one real login launch |
+| 6 | The admin CLI link is unspecified and edge-case heavy | Accepted: deferred (non-goal for Phase 21) |
+| 7 | One harmless Terminal script doesn't prove the packaged jump's permission; never prompt while polling | Accepted. `AEDeterminePermissionToAutomateTarget`, ask only on the button; spike (e) checks attribution |
+| 8 | Nested signing; `hdiutil verify` doesn't prove launch; permission retention across builds is a hypothesis | Accepted. Inside-out signing, both verified, smoke launch, spike (f) |
+| 9 | Persistent setup from a mounted/translocated copy; uninstall needs a writer too | Accepted. Move-to-Applications gate; `hook remove`; README states hooks after a deleted app |
+| 10 | Pin the setup contract; split 21.2; board needs the setup panel and error states | Accepted. Contract in 21.0; 21.2 split into bundle (21.2) and window (21.3); board 21 gets error states. Choosing another config folder in the app is a non-goal |
 
 ### 2026-11-12 — Phase 20 plan critique (Codex, read-only)
 | # | Finding | Decision |
