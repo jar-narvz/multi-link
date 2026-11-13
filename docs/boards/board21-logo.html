@@ -88,6 +88,30 @@ section { display:grid; gap:14px; }
 .done-lbl { font-size:12.5px; color:var(--ok); font-weight:600; }
 .foot { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 18px; border-top:1px solid var(--pop-line); font-size:12px; color:var(--muted); }
 .wins { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
+.cta { padding:6px 18px 4px; display:grid; gap:4px; justify-items:start; }
+.big-btn { font-size:14px; padding:8px 16px; font-weight:600; width:100%; }
+.cta small { font-size:12px; color:var(--muted); }
+.pill { font-size:10.5px; font-weight:600; color:var(--ok); border:1px solid var(--ok); border-radius:999px; padding:0 6px; margin-left:4px; vertical-align:1px; }
+.row details { margin-top:4px; font-size:12px; color:var(--muted); }
+.row details p { margin:4px 0 0; }
+summary { cursor:pointer; color:var(--codex); font-size:12px; }
+.foot.col { display:grid; gap:8px; justify-content:stretch; }
+.foot-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.touch dl { display:grid; grid-template-columns:1fr; gap:2px; margin:8px 0 0; font-size:12px; }
+.touch dt { color:var(--fg); font-weight:600; }
+.touch dd { margin:0 0 6px; }
+.quiet { color:var(--muted); font-size:12px; }
+.st.run { border:2px solid var(--codex); border-right-color:transparent; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .st.run { animation:none; } }
+.btn.primary:disabled { opacity:.7; }
+.pop { max-width:360px; width:100%; background:var(--pop); border:1px solid var(--pop-line); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.18); font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; overflow:hidden; }
+.setup-line { display:flex; align-items:center; gap:8px; margin:0 8px 6px; padding:7px 8px; border-radius:7px; background:var(--sel); font-family:var(--mac); font-size:12.5px; font-weight:600; }
+.setup-line .chev { margin-left:auto; color:var(--muted); }
+.pop-h { padding:8px 12px 2px; font-size:10px; letter-spacing:.06em; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--mac); font-weight:600; }
+.pop-r { padding:2px 12px; white-space:pre; }
+.pop-f { padding:8px 12px; margin-top:6px; border-top:1px solid var(--pop-line); color:var(--muted); font-family:var(--mac); }
+.cl { color:var(--claude); } .cx { color:var(--codex); } .dim { color:var(--muted); }
 .legend { display:flex; flex-wrap:wrap; gap:14px; font-size:.82rem; color:var(--muted); }
 .legend span { display:inline-flex; gap:6px; align-items:center; }
 @media (prefers-reduced-motion: no-preference) { .opt { transition:border-color .15s, box-shadow .15s; } }
@@ -97,7 +121,7 @@ section { display:grid; gap:14px; }
   <header>
     <div class="eyebrow">Board 21 · Phase 21 · 2026-11-13</div>
     <h1>An icon for multi-link</h1>
-    <p class="lede">macOS shows the app's icon on every notification, in the Dock and in Finder. Today the app has none, so the banner is blank. Pick one of four. Each is shown at the sizes macOS draws it; tap a card to see it in the banner and Dock below. Orange is Claude and blue is Codex, the same colours the TUI and menu bar use.</p>
+    <p class="lede">macOS shows the app's icon on every notification, in the Dock and in Finder. Today the app has none, so the banner is blank. Owner picked <b>C · Hand-off</b> (2026-11-13). The other three stay for the record. Each is shown at the sizes macOS draws it; tap a card to see it in the banner and Dock below. Orange is Claude and blue is Codex, the same colours the TUI and menu bar use.</p>
   </header>
 
   <section aria-labelledby="opts-h">
@@ -124,37 +148,59 @@ section { display:grid; gap:14px; }
   </section>
 
   <section aria-labelledby="setup-h">
-    <h2 id="setup-h">The setup window it ships with</h2>
-    <p class="lede" style="margin:0">One design, for your OK too. Opens on first launch and from <b>Setup…</b> in the popover. Each row re-checks every 2 s while the window is open and turns green on its own. Left: first launch, notifications already allowed. Middle: what each problem looks like. Right: opened straight from the download, before it's in Applications.</p>
+    <h2 id="setup-h">The setup window</h2>
+    <p class="lede" style="margin:0">A separate window on first launch. One button turns on all three; the rows stay for anything that needs you. The Terminal permission is not here: macOS asks the first time you jump to a tab. <b>Press "Turn on everything"</b> to watch the sequence; open "What this does" and "What does multi-link touch?".</p>
     <div class="wins">
-    <div class="win" role="img" aria-label="Setup window mockup">
-      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
-      <div class="intro"><span data-icon></span><div><b>Three clicks and you're set</b><p>Everything stays on this Mac. Nothing here sends data anywhere.</p></div></div>
-      <ul class="rows">
-        <li class="row"><span class="st todo">!</span><div><b>Claude hooks</b><small>Exact hand-off links and "waiting on you". Backs up ~/.claude/settings.json first.</small></div><button class="btn primary" type="button" tabindex="-1">Turn on</button></li>
-        <li class="row"><span class="st ok">✓</span><div><b>Notifications</b><small>A banner when a Codex hand-off finishes.</small></div><span class="done-lbl">Allowed</span></li>
-        <li class="row"><span class="st todo">!</span><div><b>Start at login</b><small>Keeps the menu-bar icon after a restart.</small></div><button class="btn" type="button" tabindex="-1">Turn on</button></li>
-        <li class="row"><span class="st todo">!</span><div><b>Jump to Terminal tabs</b><small>macOS asks once to let multi-link control Terminal.</small></div><button class="btn" type="button" tabindex="-1">Allow…</button></li>
-      </ul>
-      <div class="foot"><span>Can't see <b>ml</b> in the menu bar? The notch can hide it: ⌘-drag another icon away.</span><button class="btn" type="button" tabindex="-1">Done</button></div>
+      <div class="win" aria-label="Setup window, first launch">
+        <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+        <div class="intro"><span data-icon></span><div><b>Three things, one click</b><p>Everything stays on this Mac.</p></div></div>
+        <div class="cta"><button class="btn primary big-btn" id="all" type="button">Turn on everything</button><small id="all-note">or turn each on below</small></div>
+        <ul class="rows" id="rows">
+          <li class="row" data-step="0"><span class="st todo">!</span><div><b>Notifications</b><small data-msg>A banner when a Codex hand-off finishes.</small></div><button class="btn" type="button" data-one>Turn on</button></li>
+          <li class="row" data-step="1"><span class="st todo">!</span><div><b>Start at login</b><small data-msg>Keeps the <code>ml</code> icon in the menu bar after a restart.</small></div><button class="btn" type="button" data-one>Turn on</button></li>
+          <li class="row" data-step="2"><span class="st todo">!</span><div><b>Claude hooks <span class="pill">Recommended</span></b><small data-msg>Exact hand-off links and "waiting on you".</small>
+            <details><summary>What this does</summary><p>Adds multi-link's entries to <code>~/.claude/settings.json</code>. A copy of the file is saved beside it first (<code>settings.json.multi-link-backup-…</code>). Your other hooks stay as they are. multi-link works without them; links are then matched by time more often. Remove them any time from this window.</p></details></div><button class="btn" type="button" data-one>Turn on</button></li>
+        </ul>
+        <div class="foot col">
+          <details class="touch"><summary>What does multi-link touch?</summary>
+            <dl>
+              <dt>Reads, never changes</dt><dd>Your Claude and Codex sessions in <code>~/.claude</code> and <code>~/.codex</code>.</dd>
+              <dt>Writes</dt><dd>Its own state in <code>~/.multi-link</code>.</dd>
+              <dt>Changes only when you click</dt><dd>Claude settings (backup first), a login item, notification permission.</dd>
+              <dt>Network</dt><dd>None. Nothing leaves this Mac.</dd>
+            </dl>
+          </details>
+          <div class="foot-row"><a href="#setup-h" id="replay" class="quiet" hidden>Replay</a><span></span><button class="btn" type="button" id="done">Later</button></div>
+        </div>
+      </div>
+
+      <div class="win" role="img" aria-label="Setup window with problems">
+        <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+        <div class="intro"><span data-icon></span><div><b>2 things need you</b><p>"Turn on everything" ran; macOS needs these from you.</p></div></div>
+        <ul class="rows">
+          <li class="row"><span class="st todo">!</span><div><b>Notifications</b><small>Turned off in System Settings. Turn on Allow Notifications for multi-link.</small></div><button class="btn primary" type="button" tabindex="-1">Open Settings</button></li>
+          <li class="row"><span class="st todo">!</span><div><b>Start at login</b><small>macOS wants you to approve it in Login Items.</small></div><button class="btn" type="button" tabindex="-1">Open Settings</button></li>
+          <li class="row"><span class="st ok">✓</span><div><b>Claude hooks</b><small>On, except PreToolUse: you changed that one, so it's left as is. Start a new Claude session to load them.</small></div><button class="btn" type="button" tabindex="-1">Show file</button></li>
+        </ul>
+        <div class="foot"><span>Rows turn green on their own once you've done it.</span><button class="btn" type="button" tabindex="-1">Later</button></div>
+      </div>
+
+      <div class="win" role="img" aria-label="Move to Applications gate">
+        <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
+        <div class="intro"><span data-icon></span><div><b>Move multi-link to Applications first</b><p>It's running from the download. Drag it into Applications, then open it from there. Setup waits until then, so nothing points at a copy that goes away.</p></div></div>
+        <div class="foot"><span>Applications or ~/Applications both work.</span><button class="btn primary" type="button" tabindex="-1">Show in Finder</button></div>
+      </div>
+
+      <div class="pop" role="img" aria-label="Menu-bar popover with the setup line">
+        <div class="eyebrow" style="padding:10px 12px 6px">In the popover, until setup is done</div>
+        <div class="setup-line"><span class="st todo" style="width:16px;height:16px;font-size:10px">!</span><span>Finish setup · 2 left</span><span class="chev">›</span></div>
+        <div class="pop-h">MULTI-LINK · STEP 21.0 SPIKES, SETUP CONTRACT, BOARD 21</div>
+        <div class="pop-r"><span class="cl">▌claude</span> plan <span class="dim">· 4m</span></div>
+        <div class="pop-r"><span class="dim"> └</span> <span class="cx">codex</span> 01a1cd ✓ <span class="dim">2m</span></div>
+        <div class="pop-f">checked 1s ago · Setup… · Open TUI · Quit</div>
+      </div>
     </div>
-    <div class="win" role="img" aria-label="Setup window with problems">
-      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
-      <ul class="rows">
-        <li class="row"><span class="st todo">!</span><div><b>Claude hooks</b><small>You changed multi-link's PreToolUse hook in ~/.claude/settings.json, so it's left as is. The other events are on.</small></div><button class="btn" type="button" tabindex="-1">Show file</button></li>
-        <li class="row"><span class="st todo">!</span><div><b>Notifications</b><small>Turned off in System Settings. Turn on Allow Notifications for multi-link.</small></div><button class="btn primary" type="button" tabindex="-1">Open Settings</button></li>
-        <li class="row"><span class="st todo">!</span><div><b>Start at login</b><small>macOS wants you to approve it in Login Items.</small></div><button class="btn" type="button" tabindex="-1">Open Settings</button></li>
-        <li class="row"><span class="st todo">!</span><div><b>Jump to Terminal tabs</b><small>Blocked earlier. Allow multi-link under Privacy &amp; Security → Automation.</small></div><button class="btn" type="button" tabindex="-1">Open Settings</button></li>
-        <li class="row"><span class="st ok">✓</span><div><b>Claude hooks are on</b><small>Start a new Claude session to load them. <a href="#setup-h" style="color:var(--muted)">Remove hooks</a></small></div><span class="done-lbl">On</span></li>
-      </ul>
-    </div>
-    <div class="win" role="img" aria-label="Move to Applications gate">
-      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="t">Set up multi-link</div></div>
-      <div class="intro"><span data-icon></span><div><b>Move multi-link to Applications first</b><p>It's running from the download. Drag it into Applications, then open it from there. Setup waits until then, so nothing points at a copy that goes away.</p></div></div>
-      <div class="foot"><span>Applications or ~/Applications both work.</span><button class="btn primary" type="button" tabindex="-1">Show in Finder</button></div>
-    </div>
-    </div>
-    <div class="legend"><span><span class="st ok" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">✓</span> done</span><span><span class="st todo" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">!</span> needs one click</span></div>
+    <div class="legend"><span><span class="st ok" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">✓</span> done</span><span><span class="st todo" style="width:14px;height:14px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%">!</span> needs one click</span><span><span class="st run" style="width:14px;height:14px;display:inline-block;border-radius:50%"></span> working</span></div>
   </section>
 </div>
 
@@ -210,9 +256,47 @@ function select(id) {
   document.querySelectorAll(".opt .pick").forEach(el => el.textContent = el.closest(".opt").dataset.id === o.id ? "Showing below" : "Show below");
   document.getElementById("ctx-name").textContent = `${o.id} · ${o.name}`;
   document.querySelectorAll("[data-icon]").forEach(el => { el.innerHTML = svgFor(o, n++, 52); });
-  try { localStorage.setItem("board21", o.id); } catch (e) {}
+  try { localStorage.setItem("board21-pick", o.id); } catch (e) {}
 }
-let start = "A";
-try { start = localStorage.getItem("board21") || "A"; } catch (e) {}
+let start = "C";
+try { start = localStorage.getItem("board21-pick") || "A"; } catch (e) {}
 select(start);
+
+// Setup window sequence (mock): runs the rows in order, as the real button will.
+const rows = [...document.querySelectorAll("#rows .row")];
+const MSG = [
+  ["macOS is asking: click Allow", "Allowed. Banners are on."],
+  ["Adding a login item…", "On. multi-link starts when you log in."],
+  ["Backing up settings.json, adding hooks…", "On. Start a new Claude session to load them."],
+];
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const wait = (ms) => new Promise(r => setTimeout(r, reduce ? 0 : ms));
+const orig = rows.map(r => r.querySelector("[data-msg]").innerHTML);
+function setRow(i, state, text) {
+  const r = rows[i], st = r.querySelector(".st"), btn = r.querySelector("[data-one]");
+  st.className = "st " + state; st.textContent = state === "ok" ? "✓" : state === "todo" ? "!" : "";
+  r.querySelector("[data-msg]").innerHTML = text;
+  if (state === "ok" && btn) { const lbl = document.createElement("span"); lbl.className = "done-lbl"; lbl.textContent = "On"; lbl.dataset.one = ""; btn.replaceWith(lbl); }
+}
+async function runRow(i) {
+  if (rows[i].querySelector(".st.ok")) return;
+  setRow(i, "run", MSG[i][0]); await wait(i === 0 ? 1700 : 900); setRow(i, "ok", MSG[i][1]);
+}
+function refresh() {
+  const left = rows.filter(r => !r.querySelector(".st.ok")).length;
+  const all = document.getElementById("all");
+  if (!left) { all.textContent = "All set ✓"; all.disabled = true; document.getElementById("all-note").textContent = "You can close this window."; document.getElementById("done").textContent = "Done"; document.getElementById("replay").hidden = false; }
+}
+document.getElementById("all").addEventListener("click", async (e) => {
+  const all = e.currentTarget; all.disabled = true;
+  for (let i = 0; i < rows.length; i++) { all.textContent = `Turning on… ${i + 1} of 3`; await runRow(i); }
+  refresh();
+});
+rows.forEach((r, i) => r.querySelector("[data-one]").addEventListener("click", async () => { await runRow(i); refresh(); }));
+document.getElementById("replay").addEventListener("click", (e) => {
+  e.preventDefault();
+  rows.forEach((r, i) => { const lbl = r.querySelector("[data-one]"); const b = Object.assign(document.createElement("button"), { className:"btn", type:"button", textContent:"Turn on" }); b.dataset.one = ""; b.addEventListener("click", async () => { await runRow(i); refresh(); }); lbl.replaceWith(b); setRow(i, "todo", orig[i]); });
+  const all = document.getElementById("all"); all.disabled = false; all.textContent = "Turn on everything";
+  document.getElementById("all-note").textContent = "or turn each on below"; document.getElementById("done").textContent = "Later"; e.currentTarget.hidden = true;
+});
 </script>
