@@ -14,7 +14,8 @@ confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 repl
 `multi-link hook check`, which reports your hooks and prints one command that updates them ([hook setup](#hook-setup)).
 Release 1.11 adds the [live grid](#live-grid): what every working, waiting or stale agent is doing now, on one screen.
 Release 1.12 makes the first load fast (the first home frame came up in 1.82–1.99 s on real data, down from about 9 s)
-and shows a [loading screen](#loading-screen) while it runs.
+and shows a [loading screen](#loading-screen) while it runs. Release 1.18 makes the [menu-bar app](#menu-bar-app-macos)
+one download with a setup window and an icon ([install](#install)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -212,7 +213,8 @@ in the app or jumps to its terminal tab (`multi-link open --no-resume`); a Codex
 notifications under its own name. Only one copy runs at a time (a lock file, `~/.multi-link/menubar.lock`); a second
 one says `multi-link is already running` and quits.
 
-Build it (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
+Release 1.18 ships it as one download with the CLI inside and a setup window ([install](#install)). To build it
+yourself (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
 
 ```bash
 /Users/jarednarvaez/multi-link/apps/menubar/build.sh
@@ -222,14 +224,16 @@ Build it (Xcode or the Swift 6.2 command-line tools; macOS 15+) and open it:
 open /Users/jarednarvaez/multi-link/apps/menubar/build/multi-link.app
 ```
 
-- It needs `multi-link` 1.17. It looks in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin` (GUI apps don't
-  get your shell's `PATH`), or a path saved with `defaults write dev.multi-link.menubar multiLinkBinary <path>`.
-- macOS asks once to allow its notifications, and once to let it control Terminal for a jump.
-- The build is signed ad hoc for this Mac only, never notarized. Its signature names the bundle id, so rebuilding
-  keeps the notification permission.
+- It runs the CLI bundled inside it (`Contents/MacOS/multi-link`), so the app and its CLI are always the same
+  version. Only if that is missing does it look in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin`, or a
+  path saved with `defaults write dev.multi-link.menubar multiLinkBinary <path>`.
+- The setup window (first launch, or `Setup…` in the popover) turns on the Claude hooks and asks for notifications;
+  **Open at login** in the popover starts it at login. macOS asks once to let it control Terminal, on the first jump.
+- `apps/menubar/release.sh` builds the app and packs it into `apps/menubar/build/multi-link-<version>-arm64.dmg`.
+- The app is signed ad hoc, never notarized. Its signature names the bundle id, so a new version keeps the
+  notification permission (Gatekeeper still asks for Open Anyway once per version).
 - On a MacBook with a notch and a full menu bar, macOS hides new items behind the notch. If `ml` doesn't appear, remove
   or ⌘-drag away a menu-bar icon or two.
-- To start it at login, add it in System Settings → General → Login Items.
 
 ## States and links (Release 1.6)
 
@@ -308,6 +312,29 @@ corresponding external program; hook recording writes multi-link's own state dir
 
 ## Install
 
+### Download the Mac app (recommended)
+
+For Apple silicon Macs (arm64) on macOS 15 or later. No Rust, Xcode or terminal needed.
+
+1. Download `multi-link-1.18-arm64.dmg` from the [releases page](https://github.com/jar-narvz/multi-link/releases).
+2. Open it and drag **multi-link** onto **Applications** (`~/Applications` works too) before opening it. A copy
+   opened inside the download is blocked the same way (step 3) and then shows only "Move multi-link to Applications
+   first", starting nothing.
+3. Open multi-link from Applications. macOS blocks it the first time, because the app is not notarized (below): click
+   **Done**, then open System Settings → Privacy & Security, scroll to "multi-link was blocked…", click **Open
+   Anyway** and enter your Mac's password. This is needed once per copy and once per new version.
+4. The setup window opens. Click **Turn on everything**: it adds multi-link's Claude hooks (after saving a backup of
+   your settings file beside it), asks macOS to allow notifications, and turns on **Open at login**. Rows turn green
+   on their own once each part is on; if macOS says notifications are off, **Open Settings** goes straight there.
+   Start a new Claude session so it loads the hooks.
+
+The menu-bar item `ml` is the app; `Setup…` in its popover reopens the window. The app carries its own copy of the
+command-line tool, so it needs nothing else installed. Terminal users get the same checks with
+`/Applications/multi-link.app/Contents/MacOS/multi-link setup` (it asks before each change; it is not put on your
+`PATH`).
+
+### Build from source
+
 Requires macOS, Rust/Cargo and git. From the repo:
 
 ```sh
@@ -316,13 +343,26 @@ multi-link tui
 ```
 
 This puts the binary at `~/.cargo/bin/multi-link`. To try it without installing, use
-`cargo build --release -p multi-link` and run `target/release/multi-link` instead.
+`cargo build --release -p multi-link` and run `target/release/multi-link` instead. `multi-link setup` checks and
+fixes the hooks from there. The app and the DMG are built with `apps/menubar/build.sh` and `apps/menubar/release.sh`
+(Swift 6.2 tools; [menu-bar app](#menu-bar-app-macos)).
+
+### Uninstall
+
+1. In the app, `Setup…` → **Remove hooks** (or run
+   `/Applications/multi-link.app/Contents/MacOS/multi-link hook remove`; `multi-link hook remove` for a cargo install). Only
+   multi-link's entries leave the settings file; a backup is saved beside it first.
+2. Uncheck **Open at login** in the popover.
+3. Quit the app and move it to the Trash. A cargo install is removed with `cargo uninstall multi-link`.
+
+multi-link's own state (`~/.multi-link`) stays until you delete it.
 
 ### Hook setup
 
 The screens work without hooks. The Claude Code hook adds exact links for hand-offs whose Codex id only reaches the
 hook, step tags as they happen, "waiting on you" when the app has no session record, and `session_end` when a
-session exits. multi-link never edits your Claude settings; it checks them and prints a command you run.
+session exits. multi-link changes your Claude settings only when you ask it to: the setup window's **Turn on**,
+`multi-link setup` (it asks first), or `multi-link hook apply`. `hook check` only reads them.
 
 ```sh
 multi-link hook check
@@ -347,6 +387,11 @@ in the same folder, gives it the file's mode and moves it into place in one step
 if any part fails it removes the temp file and the original stays as it was. Only multi-link's own entries for
 `missing`, `outdated` and `duplicate` events change; your other hooks, keys and their order stay. Run
 `multi-link hook check` again to see exit 0, then start a new Claude session so it loads the hooks.
+
+`multi-link hook apply` does the same in one step (same `--scope` / `--settings`), and also re-reads the file just
+before the final rename, refusing if it changed since it was read. It prints `updated <file> (backup: <path>)`,
+`created <file>` or `no change: <file>`. `multi-link hook remove` takes multi-link's entries out the same way, with a
+backup.
 
 Run the check with the binary you want the hooks to call (normally the installed one): the hooks are compared with
 that binary's path. `hook install` still prints the bare snippet, and `hook uninstall` prints what to remove.
@@ -422,11 +467,24 @@ state rules.
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
+- Mac app download limits (Release 1.18). The app is **not notarized** (no Apple Developer account), so macOS blocks
+  the first open of every downloaded copy and every new version until you click Open Anyway in Privacy & Security
+  with your Mac's password; a managed Mac may not allow that. multi-link never removes the quarantine flag or works
+  around Gatekeeper. The DMG is **Apple silicon (arm64) only**, macOS 15 or later. The app counts itself as "running
+  from the download" only under `/Volumes/` or an `AppTranslocation` folder; a DMG mounted by hand elsewhere
+  (`hdiutil -mountpoint`) is not caught, and setup would point the hooks at it (seen once in the
+  [Phase 21 check](docs/phase21-check.md)). The hooks call the app's bundled CLI by its full path: **if the app is
+  deleted or moved without Remove hooks first**, every hook call fails until you run `multi-link hook remove` (or
+  re-open the app from its new place and click Turn on). The CLI is not put on your `PATH`. The real first-run check
+  (Safari download, Open Anyway, the setup rows on real clicks, an upgrade, a login launch, a hand-off banner with
+  the new icon) is pending the owner ([checklist](docs/phase21-check.md#owner-checklist)).
 - Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
   (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
   duplicate key or with a number serde_json would not write back as the same text: beyond 64-bit integers, and also
   forms like `1e5` or `1.50`. An edit to the settings file in the milliseconds between `--merged` reading it and the
-  final `mv` is lost; there is no lock that Claude Code also honours. "Current" means current in that one file: it
+  final `mv` is lost; there is no lock that Claude Code also honours. `hook apply` (and the setup window) re-reads the
+  file just before its rename and refuses a changed file, which narrows that window to the moment between that
+  re-read and the rename; an edit landing exactly there is still lost. "Current" means current in that one file: it
   does not read other settings levels (project, local, managed policy), so it cannot prove they let the hooks run.
   The binary path is compared as text, not checked to exist.
 - Step graph limits: Step 8.4's own graph is misnamed (24 runs as fix rounds) and 10 of its 25 runs are unlinked.

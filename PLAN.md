@@ -3360,14 +3360,22 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
   downloaded through Safari (real quarantine) under a new bundle id, through every setup row, an upgrade over it
   keeping permissions, one real login launch from "Open at login", and one real hand-off showing the notification with the new icon. `docs/phase21-check.md`.
   Owner confirm; the owner publishes the release.
-- Files: `README.md`, `docs/phase21-check.md`, `PROGRESS.md`
+- Files: `README.md`, `docs/phase21-check.md`, `PROGRESS.md`, `apps/menubar/Info.plist` (amended 2026-11-14:
+  release version, Review log)
 - Verify (whole phase): the Rust and Swift commands above, `release.sh`, the real-check items with their commands,
   the owner's answer recorded.
+- Status (2026-11-14): Claude's part done (docs, version, every check that needs no owner action, in
+  `docs/phase21-check.md`). The owner checklist there is pending; Phase 21 closes on the owner's answer.
 
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-14 — Step 21.5 Files amendment: release version (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | The DMG was named from `CFBundleShortVersionString` `1.0`, while the project's releases are numbered 1.x (this phase is Release 1.18); the crate is `0.1.0` and the CLI has no `--version`, so the release label is the only version a user sees | Accepted. `apps/menubar/Info.plist` → `1.18` (`CFBundleShortVersionString` and `CFBundleVersion`), added to Step 21.5's Files. Why: the DMG, the GitHub release tag and the README say one number; `1.0` would read as a separate product line. No code or test reads the version |
 
 ### 2026-11-13 — Phase 21 plan critique (Codex, read-only)
 | # | Finding | Decision |

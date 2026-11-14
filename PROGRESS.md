@@ -1,69 +1,38 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.4 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.5 (Claude), docs, the
-first-run real check and the owner confirm.
-- `apps/menubar/release.sh` (run it outside Codex's sandbox: it calls `build.sh`, which needs `iconutil`) rebuilds
-  `build/multi-link.app`, then makes `apps/menubar/build/multi-link-<version>-arm64.dmg` (UDZO, volume
-  `multi-link <version>`; the app plus an `Applications` → `/Applications` link), runs `hdiutil verify`, mounts it
-  read-only, checks both signatures and the icon, detaches, and prints the DMG path. It installs nothing.
-- The DMG today: `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.0-arm64.dmg` (2,900,724 bytes,
-  git-ignored). `<version>` is the app's `CFBundleShortVersionString`, still `1.0` in `apps/menubar/Info.plist`, while
-  the CLI is 1.17. Whether the release should be named 1.0 or bumped is 21.5's call (Info.plist is not in 21.5's
-  file list as planned; amend the step if it changes).
-- Checked by Claude: the DMG verifies, mounts with the app and the link, both executables are arm64 and verify
-  `--strict`, `AppIcon.icns` is inside; a `ditto` copy to `~/Applications` launched (locally built, so no quarantine:
-  only `com.apple.provenance`) and its CLI's `setup --json` read `cli: ok` with the `~/Applications` path. The owner's
-  app was running, so the copy hit the single-instance guard ("already running") and showed neither the setup window
-  nor the gate; it was quit, the copy deleted, and the app's defaults are unchanged (no `multiLinkSetupShown`).
-- What 21.5's real check still needs from the owner (none of it was done here): serve the DMG from a local web server
-  and download it in Safari for real quarantine, under a never-seen bundle id (per E7, a temporary id build; do not
-  ship it); quit the running dev app first so the single-instance guard does not hide the window; open the mounted
-  copy (expect the "Move to Applications" gate), drag to Applications, Open Anyway with the Mac password; walk every
-  setup row and "Turn on everything" (the hook write changes the owner's real `~/.claude/settings.json`, backup made);
-  an upgrade over it (new build, same id) keeping notification permission and needing Open Anyway again; one real
-  logout/login launch from "Open at login"; one real hand-off showing the notification with the new icon.
-- Leftovers outside the repo: the three 21.0 spike DMGs are still mounted (`/Volumes/multi-link spike21a`, `… 1`,
-  `… 2`, images in `~/Downloads`); the owner may eject them.
-- What 21.4 can rely on: `apps/menubar/build.sh` still makes and verifies `build/multi-link.app` (bundled CLI + app
-  signed inside out, icon) and is unchanged by 21.3; run it outside Codex's sandbox (`iconutil`). The app now has the
-  setup window (`Sources/MenubarApp/SetupView.swift`, logic in `Sources/MenubarCore/Setup.swift`): two rows (Claude
-  hooks, Notifications), "Turn on everything" (hook apply if fixable → notification request → login item), 2 s
-  read-only polling, "Open at login" + "Finish setup · N left" + "Setup…" (amber dot when hooks were fixable at launch)
-  in the popover. App start no longer requests notification permission.
-- Launched from `/Volumes/…` or an `AppTranslocation` path, the app shows only the "Move multi-link to Applications"
-  gate and starts nothing (no watcher, no lock, no CLI); the first-launch flag (`multiLinkSetupShown` in
-  `dev.multi-link.menubar` defaults) is only set by a launch from a real location. 21.4's DMG smoke run from the
-  mounted image should therefore show the gate.
-- `multi-link-menubar --render-setup <dir>` renders fake-state PNGs (light/dark) without starting the app; use it
-  for any later window screenshots.
-- Not checked live: the real window, Dock icon lifecycle, notification prompt and `SMAppService` register on this Mac
-  (not launched, to keep the owner's first-launch flag and login items untouched). These belong to 21.5's real check.
-- What 21.3 can rely on: `./build.sh` makes `build/multi-link.app` from scratch with the release CLI at
-  `Contents/MacOS/multi-link` (signed `dev.multi-link.cli`, then the app `dev.multi-link.menubar`, inside out, both
-  `codesign --verify --strict`), and `Contents/Resources/AppIcon.icns` (`CFBundleIconFile` `AppIcon`) from the
-  committed `apps/menubar/Resources/AppIcon.iconset`. `BinaryLookup` tries the bundled CLI first (sibling of
-  `Bundle.main.executableURL`), so the app's `setup --json` / `hook apply` run the bundled CLI with no new code; its
-  `setup --json` reports `binary` = the bundle path (`app: elsewhere` from `apps/menubar/build`).
-- Icon: edit `Resources/AppIcon.svg`, then `swift apps/menubar/Resources/render-iconset.swift` re-renders the
-  iconset (AppKit draws the SVG); `build.sh` never re-renders. `iconutil` fails inside Codex's sandbox ("Invalid
-  Iconset"): run `./build.sh` outside it (Claude does).
-- What 21.2/21.3 can rely on: `multi-link setup --json` (read-only, contract in design "Phase 21 decisions" and
-  `docs/output-schema.md` "Setup"; exit 0/1/2), `multi-link hook apply` and `hook remove` (same `--scope` /
-  `--settings` as `hook check`; stdout `updated <file> (backup: <path>)` / `created <file>` / `no change: <file>`;
-  refusals exit non-zero and keep the original). The app's Turn on runs `hook apply` with the bundled CLI, then
-  re-reads `setup --json`.
-- `setup`'s `binary` (and the hook path it writes) is the canonical `current_exe`; the app's bundled CLI path is
-  already canonical. AGENTS.md now allows these commands to write the one Claude settings file on a user action.
-- Step 21.0 is done (Claude, 2026-11-13); spikes, setup contract and owner picks remain in design
-  "Phase 21 decisions". No real Claude settings were changed by this implementation run.
-- Spikes: the bundled CLI runs with no second block (app spawn, shell, Claude hook); notification and Automation
-  permissions survive a new build of the same bundle id; Gatekeeper does not: every new version and every copy
-  needs Open Anyway. Running from the DMG is translocated.
-- Owner, 2026-11-13: icon C; start at login is an "Open at login" popover checkbox (on via "Turn on everything"), not
-  a setup row; the Terminal permission is not a row. The window has two rows: Claude hooks, Notifications.
-- Leftovers: `/Applications/multi-link spike21a.app` (spike, the owner may delete it); the spike's notification and
-  Automation entries in System Settings; the local server on `127.0.0.1:8765` is stopped.
+**Phase 21: Step 21.5 is done; the owner check is pending (Claude, 2026-11-14).** Release 1.18: the menu-bar app is
+one DMG (`apps/menubar/build/multi-link-1.18-arm64.dmg`, 2,900,741 bytes, git-ignored) with the CLI inside, a
+two-row setup window, "Open at login" and icon C. README Install is "download, drag, Open Anyway, Setup", with the
+source build, Uninstall and the download limits.
+- **Owner check pending:** the numbered checklist in `docs/phase21-check.md` → "Owner checklist" (Safari download
+  of a never-seen-id build, Open Anyway, every setup row, a hand-off banner with icon C, an upgrade keeping
+  permissions, one login launch, switching to the real 1.18 app, publishing). Phase 21 closes when the owner's answer
+  is recorded there ("Owner answer") and here. Publishing (push + `gh release create v1.18`) is the owner's.
+- Check builds: `~/multi-link-sandbox/check21/` (outside the repo) has `check-dmg.sh` and the `dev.multi-link.check21`
+  DMGs `v1/…1.18…` and `v2/…1.18.1…` that the checklist downloads from `127.0.0.1:8765`.
+- Version: `apps/menubar/Info.plist` is `1.18` (PLAN.md Review log, 2026-11-14), so `release.sh` names the DMG
+  `1.18`. An old `multi-link-1.0-arm64.dmg` from 21.4 is still in `apps/menubar/build/` (git-ignored, unused).
+- Found in the check: a DMG mounted by hand outside `/Volumes` (`hdiutil -mountpoint`) is not `cli: temporary`.
+  Finder always mounts under `/Volumes`, so it is a README limit, not a fix; a later phase could also treat any
+  read-only volume as temporary. During the check this made `setup --yes` write the owner's real
+  `~/.claude/settings.json` for about a minute; Claude restored the exact bytes from its backup (details in the
+  check file). That backup file is still in `~/.claude/`.
+- `hook apply` backups are named `<file>.multi-link-backup-<nanoseconds>-<random>`, while `hook check`'s printed
+  command uses `-<UTC time>-XXXXXX`. Harmless; the README names neither for `hook apply`.
+- The owner's dev app (`apps/menubar/build/multi-link.app`, `dev.multi-link.menubar`) is still running; `release.sh`
+  rebuilt that bundle under it. Checklist item 1 quits it; item 15 replaces it with the real 1.18 app in
+  `/Applications` (hooks then call `/Applications/multi-link.app/Contents/MacOS/multi-link`).
+- How the pieces work: `release.sh` runs `build.sh` (bundled CLI signed `dev.multi-link.cli`, then the app, inside
+  out; `AppIcon.icns` from the committed iconset), packs a UDZO DMG with an `Applications` link, verifies and mounts
+  it read-only to check signatures and the icon. Run both outside Codex's sandbox (`iconutil`). Launched from
+  `/Volumes/…` or `AppTranslocation`, the app shows only the "Move multi-link to Applications first" gate and starts
+  nothing. `multi-link setup [--json|--yes]`, `hook apply`, `hook remove`: contract in design "Phase 21 decisions"
+  and `docs/output-schema.md` "Setup". `multi-link-menubar --render-setup <dir>` renders fake-state window PNGs.
+- Leftovers outside the repo: three 21.0 spike DMGs still mounted (`/Volumes/multi-link spike21a`, `… 1`, `… 2`);
+  the spike's notification entries in System Settings.
+- Next after the owner's answer: the backlog (PLAN.md), e.g. a notarized download if the owner enrolls, or the web
+  browser app.
 
 **Phase 20 is done (Claude, 2026-11-13).** The pane and `multi-link pane`
 are gone (Release 1.17); the menu-bar app is the only notifier and holds `~/.multi-link/menubar.lock` as a
@@ -919,6 +888,38 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.5: Docs, first-run real check, owner confirm — Claude
+- Did: README Install rewritten as "download, drag, Open Anyway, Setup", with the source build below and a new
+  Uninstall; the menu-bar and hook sections now describe the bundled CLI, the setup window, Open at login,
+  `hook apply` / `hook remove`; Limitations gained the Mac app download limits (not notarized, Open Anyway per copy and
+  version, arm64 / macOS 15 only, hooks after a deleted or moved app, a hand-mounted DMG not seen as temporary) and
+  the narrowed hook-write race. Release version decided: `Info.plist` `1.0` → `1.18` (Files amendment in PLAN.md
+  Review log). `docs/phase21-check.md`: every check Claude could run, with commands and results, and a 17-item owner
+  checklist (each one command or one click). Claude-only step (no `codex exec`); no quota check needed.
+- Changed: `README.md`, `docs/phase21-check.md`, `apps/menubar/Info.plist`, `PLAN.md` (Step 21.5 Files amendment,
+  status, Review log), `PROGRESS.md`
+- Verify:
+  - `TZ=UTC cargo test --workspace` → 747 passed / 0 failed / 1 ignored (69 `test result: ok` lines);
+    `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; `cargo fmt --check` → exit 0.
+  - `apps/menubar`: `swift test --disable-sandbox` → `Test run with 36 tests in 0 suites passed after 11.880 seconds`.
+  - `apps/menubar/release.sh` → `hdiutil: verify: checksum of ".../multi-link-1.18-arm64.dmg" is VALID`, prints
+    `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.18-arm64.dmg` (2,900,741 bytes, sha256
+    `0a5b1dcea63866162946f5a9b72aa295d1bc80e77d977c778685335ee32b42e8`); both executables arm64.
+  - Real-check items Claude could do (table in `docs/phase21-check.md`): never-seen-id DMGs built and served from
+    `127.0.0.1:8765` (`200 OK`, byte-identical download); mounted under `/Volumes` the bundled CLI reads `cli:
+    temporary` (exit 1) and `setup --yes` refuses (`move multi-link to Applications first`, exit 1, scratch file
+    unchanged); the real gate window from the mounted DMG (screenshot in `~/multi-link-sandbox/check21/`), no child
+    process or defaults; `hook apply` → current → `no change` → `hook remove` on a scratch copy of the settings.
+  - Owner's answer: pending (checklist items 1–17).
+- Review: Claude step; the README numbers trace to this run's outputs (DMG size, test counts) or earlier check files.
+  No independent reviewer for docs-only changes plus a two-value plist edit.
+- Gotchas: mounting a check DMG with `hdiutil attach -mountpoint <scratch>` made the CLI say `cli: ok`, and
+  `setup --yes` (meant to show the refusal) wrote the owner's real `~/.claude/settings.json` (5 hook paths pointed at
+  the mount). Restored byte-for-byte from the backup it made within about a minute; `hook check` → current, exit 0.
+  Test setup writes only with `CLAUDE_CONFIG_DIR` or `--settings` pointing at a scratch copy. The 1.18 DMG name comes
+  from `Info.plist`, so rebuild with `release.sh` after any version change. Logging out kills the local server, so
+  the checklist does the upgrade before the login launch.
 
 ### 2026-11-14 — Step 21.4: `release.sh` and the DMG — Codex
 - Did: Added an executable POSIX sh release script with `set -eu` and its own-directory working directory.
