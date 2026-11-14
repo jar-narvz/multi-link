@@ -1,7 +1,30 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.3 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.4 (Codex), `release.sh` and the DMG.
+**Phase 21: Step 21.4 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.5 (Claude), docs, the
+first-run real check and the owner confirm.
+- `apps/menubar/release.sh` (run it outside Codex's sandbox: it calls `build.sh`, which needs `iconutil`) rebuilds
+  `build/multi-link.app`, then makes `apps/menubar/build/multi-link-<version>-arm64.dmg` (UDZO, volume
+  `multi-link <version>`; the app plus an `Applications` → `/Applications` link), runs `hdiutil verify`, mounts it
+  read-only, checks both signatures and the icon, detaches, and prints the DMG path. It installs nothing.
+- The DMG today: `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.0-arm64.dmg` (2,900,724 bytes,
+  git-ignored). `<version>` is the app's `CFBundleShortVersionString`, still `1.0` in `apps/menubar/Info.plist`, while
+  the CLI is 1.17. Whether the release should be named 1.0 or bumped is 21.5's call (Info.plist is not in 21.5's
+  file list as planned; amend the step if it changes).
+- Checked by Claude: the DMG verifies, mounts with the app and the link, both executables are arm64 and verify
+  `--strict`, `AppIcon.icns` is inside; a `ditto` copy to `~/Applications` launched (locally built, so no quarantine:
+  only `com.apple.provenance`) and its CLI's `setup --json` read `cli: ok` with the `~/Applications` path. The owner's
+  app was running, so the copy hit the single-instance guard ("already running") and showed neither the setup window
+  nor the gate; it was quit, the copy deleted, and the app's defaults are unchanged (no `multiLinkSetupShown`).
+- What 21.5's real check still needs from the owner (none of it was done here): serve the DMG from a local web server
+  and download it in Safari for real quarantine, under a never-seen bundle id (per E7, a temporary id build; do not
+  ship it); quit the running dev app first so the single-instance guard does not hide the window; open the mounted
+  copy (expect the "Move to Applications" gate), drag to Applications, Open Anyway with the Mac password; walk every
+  setup row and "Turn on everything" (the hook write changes the owner's real `~/.claude/settings.json`, backup made);
+  an upgrade over it (new build, same id) keeping notification permission and needing Open Anyway again; one real
+  logout/login launch from "Open at login"; one real hand-off showing the notification with the new icon.
+- Leftovers outside the repo: the three 21.0 spike DMGs are still mounted (`/Volumes/multi-link spike21a`, `… 1`,
+  `… 2`, images in `~/Downloads`); the owner may eject them.
 - What 21.4 can rely on: `apps/menubar/build.sh` still makes and verifies `build/multi-link.app` (bundled CLI + app
   signed inside out, icon) and is unchanged by 21.3; run it outside Codex's sandbox (`iconutil`). The app now has the
   setup window (`Sources/MenubarApp/SetupView.swift`, logic in `Sources/MenubarCore/Setup.swift`): two rows (Claude
@@ -896,6 +919,52 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.4: `release.sh` and the DMG — Codex
+- Did: Added an executable POSIX sh release script with `set -eu` and its own-directory working directory.
+  Rejects non-arm64 hosts, runs `./build.sh`, reads the built bundle version via PlistBuddy, stages the app
+  with `ditto` plus an Applications symlink in a fresh temporary directory, replaces the same-version DMG,
+  and creates UDZO with volume name `multi-link <version>`. Verifies the image, mounts read-only with
+  `-nobrowse -noautoopen`, verifies the mounted CLI and app signatures, checks the bundle's named icon and
+  exact Applications symlink target, detaches, and prints the absolute DMG path. Exit/signal traps attempt
+  detach and remove temporary staging; a failed detach retains the directory for manual cleanup.
+- Changed: `apps/menubar/release.sh`, `PROGRESS.md`. Existing build ignore covers the DMG; `.gitignore` unchanged.
+- Verify: `sh -n apps/menubar/release.sh` → no output, exit 0.
+  `apps/menubar/release.sh` → exit 1, actual output:
+  ```text
+    Finished `release` profile [optimized] target(s) in 0.16s
+warning: /Users/jarednarvaez/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/jarednarvaez/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/jarednarvaez/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'menubar': failed storing manifest for 'menubar' in cache: attempt to write a readonly database
+[0/1] Planning build
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.17s)
+Resources/AppIcon.iconset:Invalid Iconset.
+Resources/AppIcon.iconset:Invalid Iconset.
+  ```
+  `git diff --check` → no output, exit 0.
+  `git check-ignore apps/menubar/build/multi-link-1.0-arm64.dmg` → exit 0, actual output:
+  ```text
+apps/menubar/build/multi-link-1.0-arm64.dmg
+  ```
+- Review: Claude, 2026-11-14, no fix round. Diff matches the step (only `release.sh` and `PROGRESS.md`; `.gitignore`
+  already covers `apps/menubar/build/`). Notes, none blocking: `mounted=1` is set before `hdiutil attach`, so a failed
+  attach makes the trap report "Could not detach" and keep the temp dir; the arm64 check is the host's, not `lipo` on
+  the built executables (Claude checked them: both arm64). Claude re-ran Verify outside the sandbox:
+  `apps/menubar/release.sh` → exit 0, build verified, `hdiutil verify` → `checksum of ".../multi-link-1.0-arm64.dmg"
+  is VALID`, mounted checks passed, `"disk10" ejected.`, printed
+  `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.0-arm64.dmg`; nothing left mounted. Mounted again:
+  `Applications -> /Applications` and `multi-link.app`; `lipo -archs` → `arm64` for `multi-link` and
+  `multi-link-menubar`; `Contents/Resources/AppIcon.icns`; both `codesign --verify --strict` → OK. `ditto` to
+  `~/Applications/multi-link.app`, `open` → process running from `~/Applications` (xattr only
+  `com.apple.provenance`, no quarantine); its `setup --json` → `binary` `~/Applications/.../multi-link`, `cli: ok`.
+  Quit (SIGTERM), copy deleted, defaults unchanged.
+- Gotchas: Claude runs the full `release.sh` and the `~/Applications` smoke run outside the sandbox.
+  DMG creation, hdiutil verify, mounted checks, detach and launch are unverified here because build.sh
+  stopped at iconutil. The script does not install or copy into `~/Applications`, alter signing, notarize,
+  or make network calls. Existing untracked `.claude/` and `mod/` left untouched.
 
 ### 2026-11-14 — Step 21.3: Review round 1 — Codex
 - Did: Fixed all four Claude findings. SetupModel.launchAction() now returns gate/show/none, preserving the
