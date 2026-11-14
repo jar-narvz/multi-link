@@ -2,7 +2,6 @@
 use std::{
     fs,
     io::{self, Read, Write},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, Instant},
@@ -24,6 +23,20 @@ pub enum HookCommand {
         settings: Option<PathBuf>,
         #[arg(long)]
         merged: bool,
+    },
+    /// Back up and atomically merge generated hooks into one settings file.
+    Apply {
+        #[arg(long, value_enum, default_value = "user")]
+        scope: Scope,
+        #[arg(long)]
+        settings: Option<PathBuf>,
+    },
+    /// Back up and remove only recognized multi-link hook entries.
+    Remove {
+        #[arg(long, value_enum, default_value = "user")]
+        scope: Scope,
+        #[arg(long)]
+        settings: Option<PathBuf>,
     },
     /// Print JSON on stdout and paste instructions on stderr; never edit settings.
     Install {
@@ -132,6 +145,14 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
             };
             std::process::exit(code);
         }
+        HookCommand::Apply { scope, settings } => {
+            change_settings(scope, settings, false)?;
+            return Ok(());
+        }
+        HookCommand::Remove { scope, settings } => {
+            change_settings(scope, settings, true)?;
+            return Ok(());
+        }
         HookCommand::Install { scope } => (scope, false),
         HookCommand::Uninstall { scope } => (scope, true),
     };
@@ -165,7 +186,7 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn settings_target(scope: Scope) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub(crate) fn settings_target(scope: Scope) -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(match scope {
         Scope::User => match std::env::var_os("CLAUDE_CONFIG_DIR") {
             Some(config) => PathBuf::from(config).join("settings.json"),
@@ -190,7 +211,7 @@ fn settings_target(scope: Scope) -> Result<PathBuf, Box<dyn std::error::Error>> 
 
 // Follow existing symlinks, including ancestors of an absent target. A dangling
 // symlink is an error, rather than a missing file to replace.
-fn resolved_settings(path: &Path) -> io::Result<PathBuf> {
+pub(crate) fn resolved_settings(path: &Path) -> io::Result<PathBuf> {
     match fs::symlink_metadata(path) {
         Ok(_) => fs::canonicalize(path),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -206,7 +227,7 @@ fn resolved_settings(path: &Path) -> io::Result<PathBuf> {
     }
 }
 
-fn path_text(path: &Path) -> Result<&str, Box<dyn std::error::Error>> {
+pub(crate) fn path_text(path: &Path) -> Result<&str, Box<dyn std::error::Error>> {
     let text = path.to_str().ok_or("path is not UTF-8")?;
     if text.contains(['\n', '\r']) {
         return Err("path contains a newline".into());
@@ -245,37 +266,11 @@ fn check_settings(
     explicit: Option<PathBuf>,
     merged: bool,
 ) -> Result<i32, Box<dyn std::error::Error>> {
-    let target = match explicit {
-        Some(path) => path,
-        None => settings_target(scope)?,
-    };
-    path_text(&target)?;
-    let absolute = if target.is_absolute() {
-        target
-    } else {
-        std::env::current_dir()?.join(target)
-    };
-    let target =
-        resolved_settings(&absolute).map_err(|e| format!("{}: {e}", absolute.display()))?;
-    path_text(&target)?;
-    let (text, mode) = match fs::metadata(&target) {
-        Ok(metadata) => {
-            if !metadata.is_file() {
-                return Err(
-                    format!("{}: settings must be a regular file", target.display()).into(),
-                );
-            }
-            (
-                fs::read_to_string(&target).map_err(|e| format!("{}: {e}", target.display()))?,
-                Some(metadata.permissions().mode() & 0o7777),
-            )
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => ("{}".into(), None),
-        Err(error) => return Err(format!("{}: {error}", target.display()).into()),
-    };
+    let source = read_settings(scope, explicit)?;
+    let target = &source.path;
+    let mode = source.mode;
     let exe = std::env::current_exe()?;
-    let result = settings::check(&text, path_text(&exe)?)
-        .map_err(|e| format!("{}: {e}", target.display()))?;
+    let result = inspect(&source, &exe)?;
     if merged {
         super::json(&mut io::stdout().lock(), &result.merged)?;
         return Ok(0);
@@ -295,8 +290,85 @@ fn check_settings(
     } else {
         if result.needs_fix {
             println!("Run this command to back up existing settings and merge generated hooks:");
-            println!("{}", merge_command(&target, &exe, mode)?);
+            println!("{}", merge_command(target, &exe, mode)?);
         }
         Ok(1)
     }
+}
+
+pub(crate) fn read_settings(
+    scope: Scope,
+    explicit: Option<PathBuf>,
+) -> Result<super::settings_write::Snapshot, Box<dyn std::error::Error>> {
+    let target = explicit.map(Ok).unwrap_or_else(|| settings_target(scope))?;
+    path_text(&target)?;
+    let absolute = if target.is_absolute() {
+        target
+    } else {
+        std::env::current_dir()?.join(target)
+    };
+    let target =
+        resolved_settings(&absolute).map_err(|e| format!("{}: {e}", absolute.display()))?;
+    path_text(&target)?;
+    super::settings_write::Snapshot::read(target.clone())
+        .map_err(|e| format!("{}: {e}", target.display()).into())
+}
+pub(crate) fn inspect(
+    source: &super::settings_write::Snapshot,
+    exe: &Path,
+) -> Result<settings::Check, Box<dyn std::error::Error>> {
+    settings::check(source.text()?, path_text(exe)?)
+        .map_err(|e| format!("{}: {e}", source.path.display()).into())
+}
+pub(crate) fn apply(
+    source: &super::settings_write::Snapshot,
+    exe: &Path,
+    backup: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let result = inspect(source, exe)?;
+    if result.needs_fix {
+        write_settings(source, &result.merged, backup)?;
+    }
+    Ok(result.needs_fix)
+}
+fn write_settings(
+    source: &super::settings_write::Snapshot,
+    value: &serde_json::Value,
+    backup: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut bytes = Vec::new();
+    // The exact serializer used by hook check --merged, including its newline.
+    super::json(&mut bytes, value)?;
+    super::settings_write::replace(source, &bytes, backup, |_| Ok(()))?;
+    Ok(())
+}
+fn change_settings(
+    scope: Scope,
+    explicit: Option<PathBuf>,
+    remove: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = read_settings(scope, explicit)?;
+    let backup = super::settings_write::backup_path(&source.path)?;
+    let changed = if remove {
+        if let Some(value) = settings::remove(source.text()?)? {
+            write_settings(&source, &value, &backup)?;
+            true
+        } else {
+            false
+        }
+    } else {
+        apply(&source, &std::env::current_exe()?, &backup)?
+    };
+    if !changed {
+        println!("no change: {}", source.path.display());
+    } else if source.original.is_some() {
+        println!(
+            "updated {} (backup: {})",
+            source.path.display(),
+            backup.display()
+        );
+    } else {
+        println!("created {}", source.path.display());
+    }
+    Ok(())
 }

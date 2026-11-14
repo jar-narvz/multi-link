@@ -1395,3 +1395,70 @@ restart; concurrent watchers can claim a run only once. Markers are never remove
 even when output fails after claiming. Claim errors emit an error line and force
 full data on the next successful scan. The watcher does not use an app lock to
 claim or deliver notifications.
+
+## Setup
+
+`multi-link setup --json` is strictly read-only. `--json --yes` is a usage error (exit 2).
+The binding decisions are in `docs/design.md` → Phase 21 decisions →
+`multi-link setup --json` contract (E3). One object is printed on stdout:
+
+```json
+{
+  "v": 1,
+  "binary": "/Applications/multi-link.app/Contents/MacOS/multi-link",
+  "items": [
+    { "id": "cli", "state": "ok" },
+    { "id": "hooks", "state": "fixable", "file": "/home/dev/.claude/settings.json", "exists": true,
+      "events": [ { "event": "Stop", "status": "missing", "details": [] } ] },
+    { "id": "app", "state": "installed", "path": "/Applications/multi-link.app" }
+  ]
+}
+```
+
+`binary` is canonical `current_exe`. `items` always contains `cli`, `hooks`, `app`, in that order.
+Unknown future fields are ignored by readers; changing `v` is a breaking change.
+
+- `cli.state`: `temporary` when `binary` is under `/Volumes/` or contains `/AppTranslocation/`;
+  otherwise `ok`.
+- `hooks.file`: the resolved user settings target, following symlinks exactly as `hook check` does.
+  Uses `$CLAUDE_CONFIG_DIR/settings.json` when set, otherwise `$HOME/.claude/settings.json`.
+  `exists` reports whether the file exists. `events` contains today's `hook check` findings for
+  `binary`, each with `event`, `status`, and `details` (including an empty array).
+  `state` is `unreadable` if the file cannot be read or parsed (`events: []`); otherwise `fixable`
+  if any event is `missing`, `outdated`, or `duplicate` (including an absent file with `exists: false`);
+  otherwise `attention` if any event is `customized` or `unknown event`; otherwise `ok`.
+  The existing `disableAllHooks` finding is included unchanged.
+- `app.state`: for a binary at `<X>.app/Contents/MacOS/multi-link`, `installed` if `<X>.app`
+  is directly in `/Applications` or `~/Applications`, otherwise `elsewhere`. Both have `path`
+  naming the app. `none` for a binary outside that bundle layout; `path` is absent.
+
+Exit 0: every item is `ok`, `attention`, `installed`, `elsewhere`, or `none`.
+Exit 1: any item is `temporary`, `fixable`, or `unreadable`.
+Exit 2: setup itself failed (message on stderr, no JSON).
+
+`multi-link setup` prints one line per item. For `hooks: fixable`, it names the settings file
+and backup (or says a new file needs no backup), asks `[y/N]`, and runs hook apply after yes.
+`--yes` answers yes. Without a TTY and without `--yes`, it asks nothing and changes nothing.
+With `cli: temporary`, it refuses every fix, says "move multi-link to Applications first", and
+exits 1. Exit codes otherwise follow the JSON rules, re-reading after fixes. After applying hooks,
+start a new Claude session to load them.
+
+`multi-link hook apply` and `multi-link hook remove` select the same target as `hook check`:
+`--scope user` (default), `--scope local` (git root, falling back to cwd, plus
+`.claude/settings.local.json`), or `--settings <file>` overriding scope. Existing symlinks stay
+in place; their resolved target is written. Dangling symlinks and non-regular settings are refused.
+
+Apply reuses the checker's merge: missing/outdated/duplicate events are fixed, customized events
+and unrelated data are kept. Its bytes are exactly `hook check --merged` output (pretty JSON
+plus newline). A current file is untouched, with no backup. Remove uses the checker's recognition
+for multi-link entries at any binary path, including customized entries and unknown events;
+it leaves other entries, events, and keys. A removal with no recognized entries is also untouched.
+
+Both writers refuse unreadable or unparseable settings. Before replacing an existing file they
+save its original bytes in a private (0600) sibling `<file>.multi-link-backup-<timestamp>-<random>`.
+They write a private temp file in the same directory, preserve the original settings mode,
+re-read the target immediately before rename, and refuse if its bytes changed since the initial
+read. Refusal or write/rename failure leaves the target untouched and removes the temp file;
+a completed backup may remain. Replacement is an atomic rename. An absent file gets its parent
+directories created, mode 0600, and no backup. There remains a race between the final byte
+comparison and rename; the byte comparison is not an atomic compare-and-swap operation.

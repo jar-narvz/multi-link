@@ -1,6 +1,8 @@
 mod hook;
 mod menubar;
 mod rows;
+mod settings_write;
+mod setup;
 mod tui;
 
 use std::{
@@ -30,6 +32,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Inspect installation and optionally apply safe hook fixes.
+    Setup(setup::SetupArgs),
     Hook {
         #[command(subcommand)]
         command: hook::HookCommand,
@@ -661,6 +665,16 @@ fn graph_text(writer: &mut impl Write, report: &GraphReport) -> io::Result<()> {
 
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let cli = match cli.command {
+        Command::Setup(args) => {
+            let code = match setup::run(args) {
+                Ok(code) => code,
+                Err(e) => {
+                    eprintln!("multi-link: {e}");
+                    2
+                }
+            };
+            std::process::exit(code);
+        }
         Command::Hook { command } => return hook::run(command),
         Command::Tui(args) => return tui::run(args),
         Command::Menubar(args) => return menubar::run(args),
@@ -725,7 +739,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let common = match &cli.command {
-        Command::Hook { .. }
+        Command::Setup(_)
+        | Command::Hook { .. }
         | Command::Tui(_)
         | Command::Menubar(_)
         | Command::Open(_)
@@ -756,7 +771,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut stdout = io::stdout().lock();
     match &cli.command {
-        Command::Hook { .. }
+        Command::Setup(_)
+        | Command::Hook { .. }
         | Command::Tui(_)
         | Command::Menubar(_)
         | Command::Open(_)

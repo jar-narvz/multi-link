@@ -27,6 +27,9 @@ by PLAN.md step. Design: `docs/design.md`.
 - **Read-only access to agent data.** Never edit, move or delete anything in `~/.claude/` or `~/.codex/`,
   and project code never writes there. Transcripts the harnesses write themselves when a session runs
   (e.g. Claude's sandbox sessions in Step 0.2a) are fine.
+  One narrow exception: `multi-link hook apply`, `multi-link hook remove`, and `multi-link setup`
+  when it runs hook apply, on an explicit user action, may write the one selected Claude settings
+  file (plus its private backup and temporary file). No other agent data may be changed.
 - **No real transcripts in git.** Real session files go in `fixtures/raw/` (git-ignored).
   Only scrubbed copies go in `fixtures/`. See `fixtures/README.md`.
 - **No network calls** in project code.

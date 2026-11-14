@@ -1,9 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.0 is done (Claude, 2026-11-13).** Spikes, setup contract and owner picks are in design
-"Phase 21 decisions". Next: Step 21.1 (Codex): `multi-link setup [--yes] [--json]`, `hook apply`, `hook remove`.
-- 21.1 must match the pinned `setup --json` contract (items `cli` / `hooks` / `app`, states, exit codes 0/1/2).
+**Phase 21: Step 21.1 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.2 (Codex), app bundle:
+bundled CLI at `Contents/MacOS/multi-link`, icon, inside-out signing.
+- What 21.2/21.3 can rely on: `multi-link setup --json` (read-only, contract in design "Phase 21 decisions" and
+  `docs/output-schema.md` "Setup"; exit 0/1/2), `multi-link hook apply` and `hook remove` (same `--scope` /
+  `--settings` as `hook check`; stdout `updated <file> (backup: <path>)` / `created <file>` / `no change: <file>`;
+  refusals exit non-zero and keep the original). The app's Turn on runs `hook apply` with the bundled CLI, then
+  re-reads `setup --json`.
+- `setup`'s `binary` (and the hook path it writes) is the canonical `current_exe`; the app's bundled CLI path is
+  already canonical. AGENTS.md now allows these commands to write the one Claude settings file on a user action.
+- Step 21.0 is done (Claude, 2026-11-13); spikes, setup contract and owner picks remain in design
+  "Phase 21 decisions". No real Claude settings were changed by this implementation run.
 - Spikes: the bundled CLI runs with no second block (app spawn, shell, Claude hook); notification and Automation
   permissions survive a new build of the same bundle id; Gatekeeper does not: every new version and every copy
   needs Open Anyway. Running from the DMG is translocated.
@@ -866,6 +874,119 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.1: Setup and safe hook settings writers — Codex
+- Did: Added read-only versioned setup JSON, pinned item states and exit codes, text confirmation,
+  no-TTY no-change behaviour, `--yes`, and the temporary-copy fix refusal. Added hook apply/remove
+  with the checker's scope/explicit-target resolution and recognition. Apply reuses the checker and
+  its JSON serializer; remove deletes recognized entries and the containers emptied by that removal,
+  preserving pre-existing empty containers, other hooks, matchers on retained groups and other keys. Added private sibling backups, private staging, original mode,
+  final byte comparison, atomic rename, and cleanup with injectable write/backup/rename faults.
+  Absent settings are created without a backup; semantic no-ops preserve original bytes.
+  Tests use temporary homes/configs or explicit temporary settings paths, including a real PTY
+  declining setup, symlinks, read-only whole-home snapshots, and a temporary app copy.
+  Review fix round: removed uninstall debris while preserving existing empty groups/events/objects;
+  added hook apply/remove stdout outcomes with backup paths, leaving setup output unchanged;
+  added cleanup, shared-matcher preservation and exact CLI output regression assertions.
+- Changed: `AGENTS.md`, `crates/cli/src/{main,hook,setup,settings_write}.rs`,
+  `crates/cli/tests/setup.rs`, `crates/hook/src/settings.rs`, `docs/output-schema.md`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. All three commands below exited 0. Actual test result
+  summaries are pasted in test-binary/doc-test order; the existing ignored Codex performance test
+  remains ignored.
+  `TZ=UTC cargo test --workspace` → exit 0:
+  ```text
+  test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.88s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+  test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+  test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  `cargo clippy --workspace --all-targets -- -D warnings` → exit 0:
+  ```text
+      Checking multi-link v0.1.0 (<repo>/crates/cli)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.76s
+  ```
+  `cargo fmt --check` → exit 0, no output.
+- Review: Claude, 2026-11-14, clean after round 2 (Codex loop; `codex-quota.py` → `CODEX: OK`, 0% / 16%).
+  Round 1 findings, both fixed: (1) `hook remove` left `{"hooks":[]}` / `{"matcher":"Bash","hooks":[]}` groups
+  after uninstall; now drops only containers its removal emptied. (2) `hook apply` / `remove` printed nothing, so
+  the backup path was never shown; now `updated <file> (backup: …)` / `created <file>` / `no change: <file>`.
+  Accepted as is: `setup` writes the canonical binary path while `hook check` compares `current_exe` (pinned in
+  the contract; only differs when run through a symlink, e.g. a Homebrew link). Claude re-ran Verify: workspace
+  tests all ok (setup.rs 13/13), clippy exit 0, fmt exit 0, matching the paste. Real `~/.claude/settings.json`
+  unchanged (mtime Nov 12, no new backups).
+- Gotchas: The final byte comparison cannot close the remaining comparison-to-rename race; this
+  is documented in the Setup schema (README work belongs to the later documentation step).
+  A completed backup can remain after refusal/failure. Pre-existing empty containers survive removal;
+  containers emptied by removal are dropped. The PTY test uses Python's stdlib.
+  Initial feature tests failed on missing subcommands; review regression tests reproduced uninstall
+  debris and silent hook commands, then passed after the fixes. Initial clippy reported needless
+  borrows/clones and one non-octal test mode literal; fixed before the full final Verify above.
+  The existing ignored Codex performance test remains ignored (see actual test output).
 
 ### 2026-11-13 — Step 21.0: Spikes, setup contract, board 21 — Claude
 - Did: Built a spike app (`~/multi-link-sandbox/spike21/`, bundle id `dev.multi-link.spike21a`, release CLI inside,

@@ -24,7 +24,7 @@ pub fn snippet(binary: &str) -> Value {
     }})
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct Finding {
     pub event: String,
     pub status: String,
@@ -310,4 +310,31 @@ pub fn check_value(value: &Value, binary_path: &str) -> Result<Check, String> {
         merged,
         needs_fix,
     })
+}
+
+/// Remove recognized multi-link entries at every event, preserving other data.
+/// Return None for a semantic no-op, so callers retain the original bytes.
+pub fn remove(text: &str) -> Result<Option<Value>, String> {
+    let mut value = parse(text)?;
+    validate(&value)?;
+    let mut changed = false;
+    if let Some(events) = value.get_mut("hooks").and_then(Value::as_object_mut) {
+        events.retain(|_, groups| {
+            let groups = groups.as_array_mut().unwrap();
+            let before = groups.len();
+            groups.retain_mut(|group| {
+                let hooks = group["hooks"].as_array_mut().unwrap();
+                let before = hooks.len();
+                hooks.retain(|entry| binary(entry).is_none());
+                let removed = before != hooks.len();
+                changed |= removed;
+                !removed || !hooks.is_empty()
+            });
+            groups.len() == before || !groups.is_empty()
+        });
+        if changed && events.is_empty() {
+            value.as_object_mut().unwrap().remove("hooks");
+        }
+    }
+    Ok(changed.then_some(value))
 }
