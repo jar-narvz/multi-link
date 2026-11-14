@@ -317,11 +317,9 @@ actor Updates {
     defer { try? FileManager.default.removeItem(at: dir) }
     let path = dir.appendingPathComponent("lock").path
     var resolutions = 0
-    var prompts = 0
     func controller() -> AppController {
         AppController(resolveBinary: { resolutions += 1; return .notFound([]) },
-                      permission: Permission(), lockPath: path,
-                      requestAuthorization: { _ in prompts += 1 })
+                      permission: Permission(), lockPath: path)
     }
     let first = controller()
     await first.start()
@@ -332,7 +330,6 @@ actor Updates {
     await second.start()
     #expect(second.model.actionNotice == "multi-link is already running")
     #expect(resolutions == 1)
-    #expect(prompts == 1)
     await second.quit()
     #expect(!probe.acquire())
     await first.quit()

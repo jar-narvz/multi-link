@@ -138,7 +138,7 @@ private actor NotificationSink {
     #expect(header(title: nil, more: 2) == "repo · step 19.3 +2")
 }
 
-@Test @MainActor func startupWatchesWhileAuthorizationPendingAndRefreshesAfterward() async throws {
+@Test @MainActor func startupWatchesWithoutRequestingAuthorization() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
@@ -150,41 +150,24 @@ private actor NotificationSink {
     """.utf8).write(to: binary)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: binary.path)
     let permission = Permission()
-    let prompt = PendingAuthorization()
     let controller = AppController(
         resolveBinary: { .found(binary.path) }, permission: permission,
-        lockPath: dir.appendingPathComponent("menubar.lock").path,
-        requestAuthorization: { _ in await prompt.request() })
+        lockPath: dir.appendingPathComponent("menubar.lock").path)
     let startup = Task { await controller.start() }
     for _ in 0..<200 {
-        let requests = await prompt.requests
-        if controller.model.report != nil && requests == 1 { break }
+        if controller.model.report != nil { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     let reportBeforeAnswer = controller.model.report
     let ownsBeforeAnswer = controller.model.ownsDelivery
-    await controller.start() // A second start must not request authorization again.
+    await controller.start() // Starting again remains read-only.
     await permission.set(true)
-    await prompt.answer()
+    await controller.refreshPermission()
     await startup.value
     #expect(reportBeforeAnswer?.repos.isEmpty == true)
     #expect(!ownsBeforeAnswer)
-    #expect(await prompt.requests == 1)
     #expect(!controller.model.showsNotificationsOff)
     await controller.quit()
-}
-
-private actor PendingAuthorization {
-    var requests = 0
-    private var continuation: CheckedContinuation<Void, Never>?
-    func request() async {
-        requests += 1
-        await withCheckedContinuation { continuation = $0 }
-    }
-    func answer() {
-        continuation?.resume()
-        continuation = nil
-    }
 }
 
 @Test @MainActor func longRepoHeaderStaysOneLine() {

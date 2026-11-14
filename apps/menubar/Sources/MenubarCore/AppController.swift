@@ -17,7 +17,6 @@ public final class AppController {
     private let permission: any NotificationPermission
     private let instanceLock: InstanceLock
     public private(set) var alreadyRunning = false
-    private let requestAuthorization: @MainActor (CompletionNotifications) async -> Void
 
     public init(
         resolveBinary: @escaping @MainActor () -> BinaryResolution = {
@@ -25,17 +24,11 @@ public final class AppController {
         },
         permission: any NotificationPermission = SystemNotificationPermission(),
         lockPath: String = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".multi-link/menubar.lock").path,
-        requestAuthorization: @escaping @MainActor (CompletionNotifications) async -> Void = { delegate in
-            let center = UNUserNotificationCenter.current()
-            center.delegate = delegate
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
-        }
+            .appendingPathComponent(".multi-link/menubar.lock").path
     ) {
         self.resolveBinary = resolveBinary
         self.permission = permission
         self.instanceLock = InstanceLock(path: lockPath)
-        self.requestAuthorization = requestAuthorization
     }
 
     public func start() async {
@@ -66,16 +59,11 @@ public final class AppController {
             self.watcher = watcher
             await watcher.start()
         }
-        // The watcher runs while the owner answers the prompt. The callback's result
-        // never drives delivery: re-read settings when it returns, even after an error.
-        guard !quitting else { return }
-        await requestAuthorization(notifications)
-        guard !quitting else { return }
-        if let watcher {
-            await watcher.refreshPermission()
-        } else {
-            _ = await permission.canDeliver()
-        }
+    }
+
+    public func refreshPermission() async {
+        if let watcher { await watcher.refreshPermission() }
+        else { model.updatePermission(await permission.canDeliver()) }
     }
 
     public func popoverOpened() async { await watcher?.refreshPermission() }

@@ -1,15 +1,33 @@
 import AppKit
 import MenubarCore
 import SwiftUI
+import UserNotifications
 
 @main
+@MainActor enum EntryPoint {
+    static func main() {
+        let args = CommandLine.arguments
+        if args.count > 1, args[1] == "--render-setup" {
+            guard args.count == 3 else { fputs("usage: --render-setup <dir>\n", stderr); exit(2) }
+            _ = NSApplication.shared
+            Task { @MainActor in
+                do { try await renderSetup(to: args[2]); exit(0) }
+                catch { print(error.localizedDescription); exit(1) }
+            }
+            NSApplication.shared.run()
+            return
+        }
+        MenubarApp.main()
+    }
+}
+
 struct MenubarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     private var controller: AppController { delegate.controller }
 
     var body: some Scene {
         MenuBarExtra {
-            Popover(controller: controller)
+            Popover(controller: controller, setup: delegate.setup, openSetup: { delegate.setupWindow.show() })
         } label: {
             Text(controller.model.iconText)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -21,15 +39,27 @@ struct MenubarApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = AppController()
+    let setup = SetupModel(runner: BundledSetupRunner(), notifications: SystemSetupNotifications(),
+                           login: SystemLoginItem(), defaults: SystemSetupDefaults(), bundlePath: Bundle.main.bundlePath)
+    lazy var setupWindow = SetupWindowController(model: setup)
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task {
+            if setup.isTemporary {
+                if setup.launchAction() == .gate { setupWindow.show() }
+                return
+            }
+            UNUserNotificationCenter.current().delegate = controller.notifications
+            setup.onPermissionChange = { [weak self] in await self?.controller.refreshPermission() }
             await controller.start()
             if controller.alreadyRunning {
                 let alert = NSAlert()
                 alert.messageText = "multi-link is already running"
                 alert.runModal()
                 NSApplication.shared.terminate(nil)
+                return
             }
+            await setup.refresh()
+            if setup.launchAction() == .show { setupWindow.show() }
         }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -43,11 +73,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private struct Popover: View {
     let controller: AppController
+    let setup: SetupModel
+    let openSetup: () -> Void
     @Environment(\.colorScheme) private var scheme
     private var palette: BoardPalette { BoardPalette(dark: scheme == .dark) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            SetupFinishLine(model: setup, open: openSetup)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(controller.model.blocks) { block in
@@ -75,10 +108,13 @@ private struct Popover: View {
                 .font(.system(size: 11)).padding(12)
             }
             Rectangle().fill(color(palette.line)).frame(height: 1)
+            SetupLoginControl(model: setup)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 HStack(alignment: .top, spacing: 4) {
                     Text(controller.model.footer(now: context.date)).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
+                    SetupFooterButton(model: setup, open: openSetup)
+                    Text("·")
                     Button("Open TUI") { Task { await controller.openTUI() } }
                     Text("·")
                     Button("Quit") { NSApplication.shared.terminate(nil) }
@@ -90,7 +126,7 @@ private struct Popover: View {
         .frame(width: 360)
         .foregroundStyle(color(palette.foreground))
         .background(color(palette.background))
-        .task { await controller.popoverOpened() }
+        .task { await controller.popoverOpened(); await setup.refresh() }
     }
 }
 

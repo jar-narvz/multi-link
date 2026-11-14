@@ -1,7 +1,21 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.2 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.3 (Codex), the setup window.
+**Phase 21: Step 21.3 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.4 (Codex), `release.sh` and the DMG.
+- What 21.4 can rely on: `apps/menubar/build.sh` still makes and verifies `build/multi-link.app` (bundled CLI + app
+  signed inside out, icon) and is unchanged by 21.3; run it outside Codex's sandbox (`iconutil`). The app now has the
+  setup window (`Sources/MenubarApp/SetupView.swift`, logic in `Sources/MenubarCore/Setup.swift`): two rows (Claude
+  hooks, Notifications), "Turn on everything" (hook apply if fixable → notification request → login item), 2 s
+  read-only polling, "Open at login" + "Finish setup · N left" + "Setup…" (amber dot when hooks were fixable at launch)
+  in the popover. App start no longer requests notification permission.
+- Launched from `/Volumes/…` or an `AppTranslocation` path, the app shows only the "Move multi-link to Applications"
+  gate and starts nothing (no watcher, no lock, no CLI); the first-launch flag (`multiLinkSetupShown` in
+  `dev.multi-link.menubar` defaults) is only set by a launch from a real location. 21.4's DMG smoke run from the
+  mounted image should therefore show the gate.
+- `multi-link-menubar --render-setup <dir>` renders fake-state PNGs (light/dark) without starting the app; use it
+  for any later window screenshots.
+- Not checked live: the real window, Dock icon lifecycle, notification prompt and `SMAppService` register on this Mac
+  (not launched, to keep the owner's first-launch flag and login items untouched). These belong to 21.5's real check.
 - What 21.3 can rely on: `./build.sh` makes `build/multi-link.app` from scratch with the release CLI at
   `Contents/MacOS/multi-link` (signed `dev.multi-link.cli`, then the app `dev.multi-link.menubar`, inside out, both
   `codesign --verify --strict`), and `Contents/Resources/AppIcon.icns` (`CFBundleIconFile` `AppIcon`) from the
@@ -882,6 +896,131 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.3: Review round 1 — Codex
+- Did: Fixed all four Claude findings. SetupModel.launchAction() now returns gate/show/none, preserving the
+  first-launch defaults flag for temporary copies; tests cover both temporary path forms, moving to Applications,
+  showing real setup once, and continuing to gate temporary copies even after setup was shown. A green hooks
+  refresh clears the launch attention dot; the regression covers both ok and attention and ensures it stays clear.
+  Hid Turn on everything and its helper when both rows and login are on; with green rows and login off, the button
+  is normal size/non-primary. Notifications Open Settings is primary. Shared SetupFooterButton renders Setup… then
+  a 6 pt palette.warn circle, with accessibility label "Setup, needs attention", in the app and renderer.
+  Added all-green-login-off render states to verify the normal-button case in both themes.
+- Changed: `apps/menubar/Sources/MenubarCore/Setup.swift`,
+  `apps/menubar/Sources/MenubarApp/{App.swift,SetupView.swift,SetupRenderer.swift}`,
+  `apps/menubar/Tests/MenubarCoreTests/SetupTests.swift`, `PROGRESS.md`.
+- Verify: Before the fix, `swift test --disable-sandbox --filter hooksAttentionDotClearsWhenRefreshReadsGreen`
+  (in apps/menubar) → exit 1; actual summary:
+  ```text
+  ✘ Test hooksAttentionDotClearsWhenRefreshReadsGreen() failed after 0.005 seconds with 4 issues.
+  ✘ Test run with 1 test in 0 suites failed after 0.005 seconds with 4 issues.
+  ```
+  After fixes, `swift test --disable-sandbox --package-path apps/menubar` (repo root) → exit 0; actual summary:
+  ```text
+  ✔ Test notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts() passed after 2.675 seconds.
+  ✔ Test watcherRecognizesOldBinaryAndUnknownVersion() passed after 2.897 seconds.
+  ✔ Test quietWatcherKeepsNotifyPastFormerHealthDeadline() passed after 11.220 seconds.
+  ✔ Test run with 36 tests in 0 suites passed after 11.220 seconds.
+  ```
+- Verify: In apps/menubar, `swift run --disable-sandbox multi-link-menubar --render-setup /tmp/multi-link-setup-21-r1`
+  → exit 0; actual filename output:
+  ```text
+  all-green-light.png
+  all-green-dark.png
+  all-green-login-off-light.png
+  all-green-login-off-dark.png
+  first-launch-light.png
+  first-launch-dark.png
+  hooks-fixable-light.png
+  hooks-fixable-dark.png
+  hooks-attention-light.png
+  hooks-attention-dark.png
+  hooks-unreadable-light.png
+  hooks-unreadable-dark.png
+  notifications-denied-light.png
+  notifications-denied-dark.png
+  apply-error-light.png
+  apply-error-dark.png
+  translocated-gate-light.png
+  translocated-gate-dark.png
+  popover-requiresApproval-light.png
+  popover-requiresApproval-dark.png
+  popover-error-light.png
+  popover-error-dark.png
+  ```
+  Inspected all-green light (no CTA), all-green-login-off dark (normal CTA), notifications-denied light (primary
+  settings button), and popover-requiresApproval dark (amber dot after Setup…). All use the shared live views.
+  `git diff --check` → no output, exit 0. Logs: `/tmp/multi-link-21-r1-{red,test,render}.log`.
+- Review: Claude, 2026-11-14. Re-ran outside the sandbox: `swift test --disable-sandbox` → 36 passed; `./build.sh` → "Built and verified build/multi-link.app (bundled CLI, app, icon)"; `codesign --verify --strict` on the CLI and `--deep` on the app → ok; `build/multi-link.app/Contents/MacOS/multi-link-menubar --render-setup <scratch>` → the same 22 PNGs. All four findings fixed; renders compared with board 21 (copy, green ✓ / amber ! circles, blue primary, readable in light and dark). Clean; no round 2. Mode: Codex loop (`tools/codex-quota.py` → CODEX: OK, 17% / 19%).
+- Gotchas: SwiftPM still emits inaccessible-cache/read-only manifest cache warnings; renderer still emits the
+  sandbox's LaunchServices/hiservices diagnostics but writes all PNGs and exits 0. No real settings/services
+  touched by tests or rendering. Nothing staged or committed; pre-existing changes/untracked files left alone.
+
+### 2026-11-14 — Step 21.3: App setup window — Codex
+- Did: Added an observable MenubarCore setup model with injected CLI, notification settings/request, login item,
+  defaults and bundle path. Reads versioned `setup --json`, handles every hooks state and malformed JSON, counts
+  only the two setup rows, and preserves apply/remove stderr and login registration/unregistration errors.
+  Explicit Turn on everything runs apply (fixable only), notification request, registration, then re-reads;
+  refresh/poll never writes or prompts. Notification delivery remains authorized + alerts enabled, with watcher
+  refreshes on permission changes and after requests. Removed the startup authorization request entirely.
+  Added a separate NSWindow, Dock activation while open, first-launch flag, 2 s polling while shown, disclosures,
+  quiet Remove hooks, Finder reveals and the temporary-copy gate. Added Finish setup, Setup… with launch-fixable
+  dot, and Open at login with approval/error UI in the popover footer. The hook runner requires the bundled CLI.
+  Added fake-only early render entry point, bypassing AppDelegate, controller, watcher and lock, and matching
+  SwiftUI control styles because native AppKit controls produce ImageRenderer placeholder glyphs.
+- Changed: `apps/menubar/Sources/MenubarCore/{Setup.swift,AppController.swift,Actions.swift}`,
+  `apps/menubar/Sources/MenubarApp/{App.swift,SetupView.swift,SetupRenderer.swift}`,
+  `apps/menubar/Tests/MenubarCoreTests/{SetupTests.swift,CoreTests.swift,PresentationTests.swift}`, `PROGRESS.md`.
+- Verify: In `apps/menubar`, `swift test --disable-sandbox` → exit 0; actual final summary:
+  ```text
+  ✔ Test notificationDeliveryRequiresAuthorizedStatusAndEnabledAlerts() passed after 3.499 seconds.
+  ✔ Test quietWatcherKeepsNotifyPastFormerHealthDeadline() passed after 10.771 seconds.
+  ✔ Test run with 35 tests in 0 suites passed after 10.772 seconds.
+  ```
+  Nine setup tests cover every hooks state/bad JSON, all notification states (including raw status 4 for ephemeral,
+  whose named case is unavailable on macOS), login statuses/errors, ordered actions and re-reads, hook stderr,
+  watcher permission refresh, both temporary-path forms, polling and first-launch persistence across fake models.
+  Existing startup/watcher tests now exercise startup without a request and explicit permission refresh.
+  SwiftPM emitted its existing inaccessible user-cache/read-only manifest cache warnings; no compiler warnings.
+- Verify: `./build.sh` → exit 1, release Swift compiled; actual decisive output from the final build attempt:
+  ```text
+  Build complete! (6.25s)
+  Resources/AppIcon.iconset:Invalid Iconset.
+  Resources/AppIcon.iconset:Invalid Iconset.
+  ```
+  Signing verification remains for Claude outside the sandbox (known iconutil restriction).
+- Verify: `swift run --disable-sandbox multi-link-menubar --render-setup /tmp/multi-link-setup-21` → exit 0;
+  actual filename output (each rendered at 2x):
+  ```text
+  all-green-light.png
+  all-green-dark.png
+  first-launch-light.png
+  first-launch-dark.png
+  hooks-fixable-light.png
+  hooks-fixable-dark.png
+  hooks-attention-light.png
+  hooks-attention-dark.png
+  hooks-unreadable-light.png
+  hooks-unreadable-dark.png
+  notifications-denied-light.png
+  notifications-denied-dark.png
+  apply-error-light.png
+  apply-error-dark.png
+  translocated-gate-light.png
+  translocated-gate-dark.png
+  popover-requiresApproval-light.png
+  popover-requiresApproval-dark.png
+  popover-error-light.png
+  popover-error-dark.png
+  ```
+  Inspected representative green, first-launch, attention, unreadable, denied, apply-error, gate and popover images;
+  native placeholder glyphs were corrected with shared SwiftUI styles. Renderer also emits macOS LaunchServices /
+  hiservices connection diagnostics in this sandbox, but generates all PNGs and exits successfully.
+  Logs: `/tmp/multi-link-21-{test,build,render}.log`. `git diff --check` → no output, exit 0.
+- Review: Claude, 2026-11-14, round 1 (4 findings, fixed in the entry above): (1) a launch from the download marked first launch as done, so the moved copy never showed setup; (2) "Turn on everything" stayed primary when everything was on; (3) the Setup dot never cleared after hooks turned green; (4) Open Settings not primary on the denied row (board 21) and a text bullet instead of a dot. Scope: only the step's files plus PROGRESS.md. `./build.sh` passed outside the sandbox.
+- Gotchas: Live permission prompts, Login Items approval, Finder reveals and Dock/window lifecycle need Claude's
+  live app verification; automated tests/rendering use fakes and do not access the real services/settings file.
+  No files staged or committed. Existing untracked `.claude/` and `mod/` left alone.
 
 ### 2026-11-14 — Step 21.2: App bundle, bundled CLI, icon, signing — Codex
 - Did: `BinaryLookup` gets an injectable `bundledPath` (default: `multi-link` next to the app's executable), tried
