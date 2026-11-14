@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Board 21, option C (Hand-off), on Apple's full canvas with transparent margins. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2724"/>
+      <stop offset="1" stop-color="#141312"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <path d="M372 470 V600 C372 650 400 672 450 672 H560" fill="none" stroke="#ECE8E1" stroke-width="46" stroke-linecap="round"/>
+  <circle cx="372" cy="372" r="104" fill="#E58A57"/>
+  <circle cx="662" cy="672" r="104" fill="#5C9BF0"/>
+</svg>

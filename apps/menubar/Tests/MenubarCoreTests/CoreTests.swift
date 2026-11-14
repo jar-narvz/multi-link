@@ -42,7 +42,7 @@ private let emptyReport = #"{"v":1,"now":"2026-11-10T22:20:00.000Z","waiting":0,
 @Test func lookupOrderAndNotFound() throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let lookup = BinaryLookup(home: dir.path, systemDirectories: [dir.appendingPathComponent("brew").path, dir.appendingPathComponent("local").path])
+    let lookup = BinaryLookup(home: dir.path, systemDirectories: [dir.appendingPathComponent("brew").path, dir.appendingPathComponent("local").path], bundledPath: nil)
     let saved = dir.appendingPathComponent("saved path/multi-link").path
     let paths = lookup.candidates(savedPath: saved)
     #expect(paths == [saved, dir.path + "/.cargo/bin/multi-link", dir.path + "/brew/multi-link", dir.path + "/local/multi-link"])
@@ -51,6 +51,50 @@ private let emptyReport = #"{"v":1,"now":"2026-11-10T22:20:00.000Z","waiting":0,
         try script(at: URL(fileURLWithPath: path), body: "exit 0")
         #expect(lookup.resolve(savedPath: saved) == .found(path))
     }
+}
+
+@Test func bundledLookupPrefersCLIOverEveryFallback() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let bundled = dir.appendingPathComponent("multi-link.app/Contents/MacOS/multi-link").path
+    let saved = dir.appendingPathComponent("saved/multi-link").path
+    let lookup = BinaryLookup(home: dir.path, systemDirectories: [dir.path + "/brew", dir.path + "/local"],
+                              bundledPath: bundled)
+    let fallbacks = [saved, dir.path + "/.cargo/bin/multi-link", dir.path + "/brew/multi-link", dir.path + "/local/multi-link"]
+    for path in [bundled] + fallbacks {
+        try script(at: URL(fileURLWithPath: path), body: "exit 0")
+    }
+    #expect(lookup.candidates(savedPath: saved) == [bundled] + fallbacks)
+    #expect(lookup.resolve(savedPath: saved) == .found(bundled))
+}
+
+@Test func unusableBundledCLIKeepsFallbackOrder() throws {
+    for state in ["absent", "not executable", "directory"] {
+        let dir = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let bundled = dir.appendingPathComponent("bundled")
+        if state == "not executable" {
+            try Data("not executable".utf8).write(to: bundled)
+            try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: bundled.path)
+        } else if state == "directory" {
+            try FileManager.default.createDirectory(at: bundled, withIntermediateDirectories: true)
+        }
+        let saved = dir.appendingPathComponent("saved/multi-link").path
+        let lookup = BinaryLookup(home: dir.path, systemDirectories: [dir.path + "/brew", dir.path + "/local"],
+                                  bundledPath: bundled.path)
+        let fallbacks = [saved, dir.path + "/.cargo/bin/multi-link", dir.path + "/brew/multi-link", dir.path + "/local/multi-link"]
+        #expect(lookup.resolve(savedPath: saved) == .notFound([bundled.path] + fallbacks))
+        for path in fallbacks.reversed() {
+            try script(at: URL(fileURLWithPath: path), body: "exit 0")
+            #expect(lookup.resolve(savedPath: saved) == .found(path))
+        }
+    }
+}
+
+@Test func defaultBundledCandidateIsNextToExecutable() throws {
+    let executable = try #require(Bundle.main.executableURL)
+    #expect(BinaryLookup().candidates(savedPath: nil).first ==
+            executable.deletingLastPathComponent().appendingPathComponent("multi-link").path)
 }
 
 @Test func instanceLockIsExclusiveAndCloseOnExec() throws {

@@ -1,8 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.1 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.2 (Codex), app bundle:
-bundled CLI at `Contents/MacOS/multi-link`, icon, inside-out signing.
+**Phase 21: Step 21.2 is done (Codex, reviewed by Claude, 2026-11-14).** Next: Step 21.3 (Codex), the setup window.
+- What 21.3 can rely on: `./build.sh` makes `build/multi-link.app` from scratch with the release CLI at
+  `Contents/MacOS/multi-link` (signed `dev.multi-link.cli`, then the app `dev.multi-link.menubar`, inside out, both
+  `codesign --verify --strict`), and `Contents/Resources/AppIcon.icns` (`CFBundleIconFile` `AppIcon`) from the
+  committed `apps/menubar/Resources/AppIcon.iconset`. `BinaryLookup` tries the bundled CLI first (sibling of
+  `Bundle.main.executableURL`), so the app's `setup --json` / `hook apply` run the bundled CLI with no new code; its
+  `setup --json` reports `binary` = the bundle path (`app: elsewhere` from `apps/menubar/build`).
+- Icon: edit `Resources/AppIcon.svg`, then `swift apps/menubar/Resources/render-iconset.swift` re-renders the
+  iconset (AppKit draws the SVG); `build.sh` never re-renders. `iconutil` fails inside Codex's sandbox ("Invalid
+  Iconset"): run `./build.sh` outside it (Claude does).
 - What 21.2/21.3 can rely on: `multi-link setup --json` (read-only, contract in design "Phase 21 decisions" and
   `docs/output-schema.md` "Setup"; exit 0/1/2), `multi-link hook apply` and `hook remove` (same `--scope` /
   `--settings` as `hook check`; stdout `updated <file> (backup: <path>)` / `created <file>` / `no change: <file>`;
@@ -874,6 +882,40 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.2: App bundle, bundled CLI, icon, signing — Codex
+- Did: `BinaryLookup` gets an injectable `bundledPath` (default: `multi-link` next to the app's executable), tried
+  before the saved path, cargo and system dirs; `AppController.swift` unchanged. Tests: bundled preferred over every
+  fallback; absent / not executable / directory bundled path keeps the old order; nil skipped; default path. Tests
+  seen failing first (6 expectation issues), then passing. `build.sh` rebuilds the `.app` from scratch, builds the
+  locked release CLI, copies both executables, runs `iconutil` on the committed iconset, fails if
+  `<CFBundleIconFile>.icns` is missing, signs the CLI then the app (no `--deep` signing), verifies the CLI strict
+  and the app strict + deep. Icon C as `Resources/AppIcon.svg` (full 1024 canvas, tile inset 100) rendered by
+  `render-iconset.swift` (AppKit drew the SVG and gradient; no CoreGraphics fallback) into 10 PNGs.
+- Changed: `apps/menubar/build.sh`, `apps/menubar/Info.plist`, `apps/menubar/Sources/MenubarCore/BinaryLookup.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift`, `apps/menubar/Resources/AppIcon.svg`,
+  `apps/menubar/Resources/render-iconset.swift`, `apps/menubar/Resources/AppIcon.iconset/*.png` (10), `PROGRESS.md`
+- Verify (in `apps/menubar`, run by Claude outside the sandbox; Codex's own run got the tests and stopped at
+  `iconutil`, see Gotchas):
+  ```text
+  swift test --disable-sandbox → ✔ Test run with 26 tests in 0 suites passed after 11.451 seconds.
+  ./build.sh → … replacing existing signature (CLI, then app) … Built and verified build/multi-link.app (bundled CLI, app, icon); exit 0
+  codesign -dv Contents/MacOS/multi-link → Identifier=dev.multi-link.cli, Signature=adhoc
+  codesign -dv multi-link.app → Identifier=dev.multi-link.menubar, Signature=adhoc
+  codesign -d -r- → designated => identifier "dev.multi-link.cli" / designated => identifier "dev.multi-link.menubar"
+  codesign --verify --strict CLI → ok; codesign --verify --strict --deep app → ok
+  plutil -extract CFBundleIconFile → AppIcon; Contents/Resources/AppIcon.icns: Mac OS X icon, 352221 bytes, "ic12" type
+  Contents/MacOS/multi-link setup --json → binary <repo>/apps/menubar/build/multi-link.app/Contents/MacOS/multi-link,
+    cli ok, hooks fixable, app elsewhere
+  ```
+- Review: Claude, 2026-11-14, clean in round 0 (Codex loop; `codex-quota.py` → `CODEX: OK`, 13% / 18%). Diff matches
+  the step's files; the 1024 px PNG checked by eye against board 21 option C; all 10 PNG sizes checked with `sips`.
+  Codex's entry (about 200 pasted log lines, marked blocked) replaced with this summary after Claude's unsandboxed
+  Verify. Note for later: the default `bundledPath` exists in any process, so `swift run` / tests also look next to
+  their own executable first (harmless: nothing is there).
+- Gotchas: inside Codex's seatbelt sandbox `iconutil` says "Invalid Iconset" even for Apple's own iconset, and
+  `sips` / ImageIO ICNS encoding fail too; outside the sandbox the same iconset converts. The CLI has no
+  `--version` flag (use `menubar --json` or `setup --json` to smoke it).
 
 ### 2026-11-14 — Step 21.1: Setup and safe hook settings writers — Codex
 - Did: Added read-only versioned setup JSON, pinned item states and exit codes, text confirmation,

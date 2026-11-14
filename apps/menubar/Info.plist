@@ -4,6 +4,7 @@
 <dict>
     <key>CFBundleIdentifier</key><string>dev.multi-link.menubar</string>
     <key>CFBundleExecutable</key><string>multi-link-menubar</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleName</key><string>multi-link</string>
     <key>CFBundleDisplayName</key><string>multi-link</string>
     <key>CFBundlePackageType</key><string>APPL</string>

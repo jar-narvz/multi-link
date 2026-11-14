@@ -6,17 +6,22 @@ public enum BinaryResolution: Equatable, Sendable {
 }
 
 public struct BinaryLookup: Sendable {
+    public let bundledPath: String?
     public let home: String
     public let systemDirectories: [String]
 
     public init(home: String = FileManager.default.homeDirectoryForCurrentUser.path,
-                systemDirectories: [String] = ["/opt/homebrew/bin", "/usr/local/bin"]) {
+                systemDirectories: [String] = ["/opt/homebrew/bin", "/usr/local/bin"],
+                bundledPath: String? = Bundle.main.executableURL?
+                    .deletingLastPathComponent().appendingPathComponent("multi-link").path) {
+        self.bundledPath = bundledPath
         self.home = home
         self.systemDirectories = systemDirectories
     }
 
     public func candidates(savedPath: String?) -> [String] {
         var paths: [String] = []
+        if let bundledPath { paths.append(bundledPath) }
         if let savedPath, !savedPath.isEmpty { paths.append(savedPath) }
         paths.append(home + "/.cargo/bin/multi-link")
         paths += systemDirectories.map { $0 + "/multi-link" }
