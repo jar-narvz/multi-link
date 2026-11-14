@@ -3317,6 +3317,12 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
   logo and OKs the setup window.
 - Files: `docs/design.md`, `docs/boards/board21-logo.html`, `PROGRESS.md`
 - Verify: each spike's command and observed result recorded; the owner's logo pick and window OK recorded.
+- Status (2026-11-13): done. (b) and (f) passed, so E1 and E5 stand. Amended from the results and the owner
+  (design "Phase 21 decisions"): E2, every new version and every copy needs Open Anyway once (permissions do
+  survive an update); E4, start at login moves to an "Open at login" popover checkbox turned on by "Turn on
+  everything", and the terminal jump is not a row (macOS asks on first jump), so the window has two rows (Claude
+  hooks, Notifications). The `setup --json` contract is pinned there. Icon C picked. Real login launch not checked
+  (moves to 21.5).
 
 ### Step 21.1 — `multi-link setup`, `hook apply`, `hook remove` (Codex)
 - Depends on: 21.0. E3, E5. Files: `crates/cli/src/**`, `crates/hook/src/**`, `crates/cli/tests/**`,
@@ -3337,8 +3343,8 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
 
 ### Step 21.3 — App: setup window (Codex)
 - Depends on: 21.2. E4, E5. Files: `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `PROGRESS.md`
-- Verify: `swift test --disable-sandbox` → 0 failures (rows from a fake `setup --json`; fake notification, login and
-  Automation sources for every state; translocated copy shows only "Move to Applications"; polling never prompts;
+- Verify: `swift test --disable-sandbox` → 0 failures (rows from a fake `setup --json`; fake notification and login
+  sources for every state, as amended in 21.0; translocated copy shows only "Move to Applications"; polling never prompts;
   first launch shows the window once); `./build.sh` built and verified; styled screenshots of the window (all green,
   and with each error state) compared with board 21.
 
@@ -3352,7 +3358,7 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
 - Depends on: 21.4. README: Install becomes "download, drag, Open Anyway, Setup", with the source build below;
   Uninstall; limits (unsigned, arm64 only, hooks after a deleted app, the hook-write race). Real check: the 21.4 DMG
   downloaded through Safari (real quarantine) under a new bundle id, through every setup row, an upgrade over it
-  keeping permissions, and one real hand-off showing the notification with the new icon. `docs/phase21-check.md`.
+  keeping permissions, one real login launch from "Open at login", and one real hand-off showing the notification with the new icon. `docs/phase21-check.md`.
   Owner confirm; the owner publishes the release.
 - Files: `README.md`, `docs/phase21-check.md`, `PROGRESS.md`
 - Verify (whole phase): the Rust and Swift commands above, `release.sh`, the real-check items with their commands,

@@ -1400,3 +1400,84 @@ across every repo.
 | R3 notify | The app runs `menubar --json --watch --notify` only while it can deliver, and without `--notify` otherwise (rotation as in 19.2). `DeliveryGate` and the 10 s health rule go. `~/.multi-link/menubar.lock` stays, held for the app's whole life as a single-instance guard: a second instance shows "multi-link is already running", starts no watcher and quits. |
 | R4 keys | Two keys captured from `menubar --json` at the pane keys' other times: `phase9-early.json` (phase9, 06:00) and `phase9-noon.json` (phase9, 12:00); with the three 19.0 keys they cover every pane key's root and time. `watch-script.json` copied; `watch-tick.jsonl` rebuilt menubar-shaped (report lines `{"v":1,"now","waiting":0,"running":false,"repos":[]}`). Tests that used `pane/children-exact-likely.json` as a pass value use `menubar/multi-repo.json`. |
 | R4 cross-check | All 12 pane keys, 55 rows: each pane row minus `is_this` equals the menubar row with the same id in the same repo minus `section`, and the id sets match (scratch script, 2026-11-12). |
+
+## Phase 21 decisions
+
+Step 21.0, 2026-11-13. PLAN.md Phase 21 E1–E7, pinned from spikes on the owner's Mac (macOS 15, arm64). Owner picks:
+icon **C · Hand-off** (board 21); setup window OK'd from the board 21 mock ("Looks good, go"), then two rows changed
+(below).
+
+### Spike results (E7)
+
+Spike app: `~/multi-link-sandbox/spike21/` (outside the repo, not shipped), bundle id `dev.multi-link.spike21a`, the
+release CLI copied to `Contents/MacOS/multi-link`, signed inside out ad hoc with bundle-id designated requirements
+(`make.sh`), DMG with an `Applications` link. Served from `127.0.0.1:8765`, downloaded in Chrome (quarantine
+`…;Chrome;…` set), log `~/multi-link-sandbox/spike21/dev.multi-link.spike21a.log`.
+
+| Spike | Observed |
+| --- | --- |
+| (a) v1, first open from `/Applications` | A warning **with an Open button** (owner); no Open Anyway needed. Launched untranslocated. Only seen on the Mac that built the app; not assumed for other Macs. |
+| (a) v2 from the mounted DMG | "Not Opened · Apple could not verify…", **Done only** (owner screenshot). After Open Anyway it ran **translocated** (`/private/var/folders/…/AppTranslocation/…`). |
+| (a) v2 from `/Applications`, replacing v1 | "Not Opened", Done / Move to Trash. Blocked again even after the DMG copy was approved: **Open Anyway is needed per copy and per new version**, with the Mac's password (owner). `~/Applications` not tried. |
+| (b) bundled CLI | Runs with no second block in all three ways: spawned by the app (`menubar --json`, exit 0, v1 and v2); from the shell by absolute path (`menubar --json`, exit 0); as a Claude Code `Stop` hook in a sandbox `claude -p --settings` run (full JSON, exit 0). The CLI carries the app's quarantine xattr (`03c1`, approved). |
+| (c) start at login | v1: `notFound` at launch; `register()` ok → `enabled`; `unregister()` threw `SMAppServiceErrorDomain Code=1 "Operation not permitted"`, after which status read `notFound`. v2 launch: `notFound`. A real logout/login launch was **not** checked (21.5). |
+| (d) notifications, never-seen id | Button → macOS prompt; `requestAuthorization` returned nil and status read **denied** (`authorizationStatus=1`) right after; the owner turned it on in System Settings and it read `authorized`/`enabled` (2/2) a minute later. A row must never turn green on the button alone. |
+| (e) Automation | Check without asking: `-1744` (would ask), no prompt. Ask on the button: granted (`0`); a grandchild `/bin/sh -c osascript … Terminal` (as app → CLI → osascript) then ran (exit 0): the permission is the app's and carries to its children. |
+| (f) second build, same id | v2 started with notifications `2/2` and Automation `0 granted`, no prompt; its test banner showed (owner). **Permissions survive an update**; Gatekeeper does not (row a). |
+
+E1 and E5 stand ((b) and (f) passed). E2 changes: the README says every new version needs Open Anyway once, and that
+opening from the DMG runs a temporary copy.
+
+### Changes to E4 (owner, 2026-11-13)
+
+- **Start at login is not a setup row.** It is an "Open at login" checkbox in the popover menu, turned on by "Turn on
+  everything" (and on first setup), off by the user any time. Why: the window stays short, but the app (the only
+  notifier) still comes back after a restart. Every `SMAppService` status handled; `.requiresApproval` → open Login
+  Items settings; an `unregister` error is shown, not swallowed (seen in (c)).
+- **Terminal permission is not a row.** macOS asks on the first jump (seen in (e)); the existing jump error text covers
+  a denial. No `AEDeterminePermissionToAutomateTarget` polling is needed in the window.
+- The window therefore has two rows, **Claude hooks** and **Notifications**, plus "Turn on everything" (hooks apply →
+  notification request → login item). Board 21 still draws three rows; this section wins where they differ.
+  "Finish setup · N left" counts rows that are not green (0–2).
+
+### `multi-link setup --json` contract (E3)
+
+Strictly read-only. `--json` with `--yes` is a usage error (exit 2). One JSON object on stdout:
+
+```json
+{
+  "v": 1,
+  "binary": "/Applications/multi-link.app/Contents/MacOS/multi-link",
+  "items": [
+    { "id": "cli",   "state": "ok" },
+    { "id": "hooks", "state": "fixable", "file": "/Users/u/.claude/settings.json", "exists": true,
+      "events": [ { "event": "Stop", "status": "missing", "details": [] } ] },
+    { "id": "app",   "state": "installed", "path": "/Applications/multi-link.app" }
+  ]
+}
+```
+
+| Item | States | Rule |
+| --- | --- | --- |
+| `cli` | `ok`, `temporary` | `temporary` when `binary` (canonical `current_exe`) is under `/Volumes/` or contains `/AppTranslocation/`. |
+| `hooks` | `ok`, `fixable`, `attention`, `unreadable` | `events` is today's `hook check` findings for `binary`. `unreadable`: the file can't be read or parsed (`events` empty). `fixable`: any event `missing` / `outdated` / `duplicate` (an absent file is `fixable`, `exists: false`). `attention`: none fixable, but some `customized` / `unknown event`. Else `ok`. `file` is the resolved target, symlinks followed as `hook check` does. |
+| `app` | `installed`, `elsewhere`, `none` | `binary` is `<X>.app/Contents/MacOS/multi-link`: `installed` if `<X>.app` is directly in `/Applications` or `~/Applications` (with `path`), else `elsewhere`; `none` if not inside an app (a cargo install). |
+
+Exit codes: `0` every item `ok` / `attention` / `installed` / `elsewhere` / `none`; `1` any `temporary`, `fixable` or
+`unreadable`; `2` setup itself failed (message on stderr, no JSON). Unknown future fields are ignored by readers; a
+new `v` is a breaking change.
+
+`multi-link setup` (text): one line per item; for `hooks: fixable` it names the file and the backup, then asks
+`[y/N]` and runs `hook apply`. `--yes` answers yes. Without a TTY and without `--yes` it asks nothing and changes
+nothing. With `cli: temporary` it refuses every fix ("move multi-link to Applications first"), exit 1. Exit codes as
+`--json`, read after any fixes.
+
+### Which Swift part reads what
+
+| App part | Source |
+| --- | --- |
+| Move-to-Applications gate | The app's own `Bundle.main.bundlePath`, same rule as `cli: temporary`; nothing else runs before it. |
+| Claude hooks row | `hooks` from the bundled CLI's `setup --json`. `ok` green; `attention` green with "except <events>: you changed that one, so it's left as is"; `fixable` → Turn on runs `hook apply`, then re-reads; `unreadable` amber with Show file. After any change: "start a new Claude session to load them". |
+| Notifications row | `UNUserNotificationCenter` only, Phase 20 rule `.authorized && alertSetting == .enabled`; denied → Open Settings. The request moves from app start to this row's button. |
+| Open at login (menu) | `SMAppService.mainApp` only. |
+| Re-check | Every 2 s while the window is open, never prompting. |

@@ -1,6 +1,17 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 21: Step 21.0 is done (Claude, 2026-11-13).** Spikes, setup contract and owner picks are in design
+"Phase 21 decisions". Next: Step 21.1 (Codex): `multi-link setup [--yes] [--json]`, `hook apply`, `hook remove`.
+- 21.1 must match the pinned `setup --json` contract (items `cli` / `hooks` / `app`, states, exit codes 0/1/2).
+- Spikes: the bundled CLI runs with no second block (app spawn, shell, Claude hook); notification and Automation
+  permissions survive a new build of the same bundle id; Gatekeeper does not: every new version and every copy
+  needs Open Anyway. Running from the DMG is translocated.
+- Owner, 2026-11-13: icon C; start at login is an "Open at login" popover checkbox (on via "Turn on everything"), not
+  a setup row; the Terminal permission is not a row. The window has two rows: Claude hooks, Notifications.
+- Leftovers: `/Applications/multi-link spike21a.app` (spike, the owner may delete it); the spike's notification and
+  Automation entries in System Settings; the local server on `127.0.0.1:8765` is stopped.
+
 **Phase 20 is done (Claude, 2026-11-13).** The pane and `multi-link pane`
 are gone (Release 1.17); the menu-bar app is the only notifier and holds `~/.multi-link/menubar.lock` as a
 single-instance guard.
@@ -855,6 +866,36 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-13 — Step 21.0: Spikes, setup contract, board 21 — Claude
+- Did: Built a spike app (`~/multi-link-sandbox/spike21/`, bundle id `dev.multi-link.spike21a`, release CLI inside,
+  signed inside out ad hoc) as v1 and v2 DMGs served on `127.0.0.1:8765`; the owner downloaded them in Chrome,
+  opened, approved and clicked through. Read the spike log, ran the bundled CLI from the shell and as a `Stop` hook
+  in a sandbox `claude -p --settings` run. Pinned results, E4 changes and the `setup --json` contract in design;
+  recorded Step 21.0's status and amendments in PLAN.
+- Changed: `docs/design.md`, `PLAN.md`, `PROGRESS.md`. Board 21 unchanged (committed in `fc7205f`; design wins on
+  the two removed rows).
+- Verify: each spike's observation is in design "Phase 21 decisions" → Spike results, from the log
+  `~/multi-link-sandbox/spike21/dev.multi-link.spike21a.log` and the owner's screenshots. Key log lines:
+  ```text
+  v1 requestAuthorization returned nil; then authorizationStatus=1 alertSetting=2
+  v1 register ok; status enabled
+  v1 automation (ask): 0 granted
+  v1 grandchild osascript: exit 0: Terminal
+  v1 unregister error: Error Domain=SMAppServiceErrorDomain Code=1 "Operation not permitted"
+  v2 LAUNCH path=/private/var/folders/…/AppTranslocation/…/multi-link spike21a.app translocated=true
+  v2 automation (no ask): 0 granted
+  v2 notifications: authorizationStatus=2 alertSetting=2
+  v2 LAUNCH path=/Applications/multi-link spike21a.app translocated=false quarantine=exit 0: 03c1;…;Chrome;…
+  ```
+  Shell: `".../multi-link spike21a.app/Contents/MacOS/multi-link" menubar --json` → exit 0. Hook run: the `Stop`
+  hook's output file ended with the menubar JSON and `exit 0`. Owner picks: icon C ("i choose C"); window "Looks good,
+  go"; "Open at login" → "Menu checkbox, on".
+- Review: Claude step (no Codex); the 21.1 hand-off is the next review point.
+- Gotchas: v1's first open showed a warning with an Open button, but v2 got the hard "Not Opened" block from both the
+  DMG and `/Applications`; v1 was opened on the Mac that built it, so the soft warning is not assumed elsewhere.
+  `requestAuthorization` reports denied right after the prompt; never mark the row done on the button.
+  `sfltool dumpbtm` asks for an admin password: don't use it to read login items.
 
 ### 2026-11-13 — Step 20.4: Notify only when macOS really allows it — Codex
 - Did: Require authorized status plus enabled alerts from one notification-settings snapshot. Extracted the
