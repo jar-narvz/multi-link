@@ -118,19 +118,12 @@ public actor Watcher {
             child.standardInput = FileHandle.nullDevice
             var failure: String
             do {
+                // Reads block on their own threads (BlockingIO), so these tasks only suspend.
                 let outputTask = Task.detached { [self] in
-                    let handle = stdout.fileHandleForReading
-                    defer { try? handle.close() }
-                    while let data = Self.readChunk(handle) {
-                        await self.readOutput(data)
-                    }
+                    await BlockingIO.forEachChunk(of: stdout.fileHandleForReading) { await self.readOutput($0) }
                 }
                 let errorTask = Task.detached { [self] in
-                    let handle = stderr.fileHandleForReading
-                    defer { try? handle.close() }
-                    while let data = Self.readChunk(handle) {
-                        await self.readError(data)
-                    }
+                    await BlockingIO.forEachChunk(of: stderr.fileHandleForReading) { await self.readError($0) }
                 }
                 // Install the handler before launch, including for children that exit immediately.
                 // Suspension leaves every executor (and the main run loop) free to make progress.
@@ -207,18 +200,6 @@ public actor Watcher {
             oldCommand = true
         }
         if stderrTail.count > 16384 { stderrTail = Data(stderrTail.suffix(16384)) }
-    }
-
-    /// Foundation's read(upToCount:) may wait to fill the requested size on pipes.
-    /// One POSIX read returns the bytes available now, keeping heartbeats live.
-    private nonisolated static func readChunk(_ handle: FileHandle) -> Data? {
-        var bytes = [UInt8](repeating: 0, count: 65536)
-        while true {
-            let count = Darwin.read(handle.fileDescriptor, &bytes, bytes.count)
-            if count > 0 { return Data(bytes.prefix(count)) }
-            if count < 0 && errno == EINTR { continue }
-            return nil
-        }
     }
 
     private func stopChild() {

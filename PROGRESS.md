@@ -1,6 +1,19 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.5 fix round 1 is committed (Claude edits, Codex reviewed, 2026-11-15); the step stays open
+until the owner pushes and the CI run on that commit is green.** What the rest of 22.5 and 22.6 need:
+- **First run (43678448297 on `6b0a20a`):** toolchain, cask tests, Rust tests, clippy, fmt passed in ~1.5 min;
+  `swift test` hung silently 28 min (owner cancelled). Cause: blocking pipe reads / `waitUntilExit` inside
+  `Task.detached` ran on Swift's cooperative pool (1 thread per core, 3 on macos-15), so parallel watcher tests
+  starved it and deadlocked. Fixed in `MenubarCore/BlockingIO.swift` (dedicated threads, lossless backpressure);
+  regression test `moreWatchersThanCoresAllReportAndQuit`. Local repro: `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`.
+- **CI now:** Swift step has `timeout-minutes: 10` and runs under `script -q /dev/null` (a pty), because piped test
+  output is block-buffered and showed nothing. A future hang shows the last "◇ Test … started" lines.
+- **Next run, check:** the Swift step prints test lines as it goes and ends "Test run with 41 tests … passed" in
+  well under a minute; then "Build app" passes; the run is green with arm64, Xcode 26.3, Swift 6.2, Rust 1.99.1.
+  If red: `gh run view <id> --log-failed`, fix in a new 22.5 round.
+
 **Phase 22: Step 22.4 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.5–22.6 need:
 - **"Use in Terminal" (R5):** `apps/menubar/Sources/MenubarCore/TerminalLink.swift` (`FileSystemTerminalLinkProbe`,
   read-only lstat/realpath) and `SetupModel.terminalLinks` / `terminalCommand`; view `terminalLine` in `SetupView.swift`.
@@ -998,6 +1011,41 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-15 — Step 22.5: first remote run, fix round 1 (Swift test hang) — Claude (Codex review)
+- Did: Read run 43678448297 (steps 1–7 green; `swift test` built in 17.9 s then printed nothing for 28 min;
+  cleanup killed 3 `bash`, 1 `sleep`, `swiftpm-testing`, i.e. watcher fake scripts still looping). Found two causes:
+  (1) `Watcher` (stdout + stderr reader per child) and `MenubarActions.run` (2 drains + `waitUntilExit`) blocked
+  inside `Task.detached`, i.e. on the cooperative pool (width = cores; 3 on the runner), so parallel tests blocked
+  every pool thread and the tasks that quit the children never ran; (2) piped stdout is block-buffered, so no test
+  line reached the log. Reproduced (1) locally: `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` (1-thread pool) → suite hangs
+  with no output; old code + new test hangs even on the 14-core pool. Showed (2) by timestamping piped lines: all
+  arrived at exit. Fix: new `BlockingIO` (blocking calls on dedicated threads; `forEachChunk` reads the next chunk
+  only after the consumer took the last, keeping pipe backpressure); Watcher and Actions use it. New test
+  `moreWatchersThanCoresAllReportAndQuit` (cores+2 watchers and cores+2 actions writing 256 KiB to both pipes,
+  15 s bound). CI: Swift step `timeout-minutes: 10`, `script -q /dev/null swift test --disable-sandbox < /dev/null`
+  (pty → line-by-line output; BSD `script` returns the child's status, checked with `exit 3` → 3).
+  Mode: Codex loop (`python3 -I tools/codex-quota.py` → primary 0%, secondary 25%, CODEX: OK).
+- Changed: `.github/workflows/ci.yml`, `apps/menubar/Sources/MenubarCore/{BlockingIO,Watcher,Actions}.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift` (Files amendment in PLAN.md Review log, 2026-11-15),
+  `PLAN.md` (Review log only), `PROGRESS.md`.
+- Verify (local; the step's remote Verify waits for the owner's push): `sh tools/tests/cask.sh` → exit 0 (last:
+  "PASS: workflow triggers, pins, default branch, event and token boundaries"); `TZ=UTC cargo test --workspace
+  --locked` → exit 0, 748 passed, 0 failed; clippy `-D warnings` → exit 0; `cargo fmt --check` → exit 0;
+  `actionlint .github/workflows/*.yml` → exit 0; `script -q /dev/null swift test --disable-sandbox < /dev/null` →
+  exit 0, "✔ Test moreWatchersThanCoresAllReportAndQuit() passed after 2.839 seconds.", "✔ Test run with 41 tests in
+  0 suites passed after 11.741 seconds."; `./build.sh` → "Built and verified build/multi-link.app (bundled CLI, app,
+  icon)". Suite with a 1-thread pool (test binary run directly): 41 passed in 11.6 s. Old code check: old
+  Watcher+Actions → test stalls 31.7 s (default pool) / hangs (1 thread); old Actions alone → hangs (killed at 45 s).
+- Review: Codex (read-only, 2 rounds). R1: unbounded AsyncStream buffering dropped backpressure → accepted
+  (semaphore handshake); test did not exercise Actions (`/bin/echo` never fills a pipe) → accepted (256 KiB writers,
+  confirmed old Actions hangs). R2: both fixed; new P2 "cancelling the consumer can strand the reader in `read()`" →
+  rejected: no caller cancels these tasks; readers end at EOF, which `stopChild` guarantees (terminate, SIGKILL
+  after 2 s); same as the old code; documented in `forEachChunk`'s comment.
+- Gotchas: `swift test` output to a pipe/file shows nothing until exit; use `script -q /dev/null` to watch it.
+  `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` on `swift test` itself hangs SwiftPM, so set it only on the test binary
+  (`swiftpm-testing-helper` with `DYLD_FRAMEWORK_PATH` = Xcode's MacOSX platform Frameworks). The Mac slept through
+  much of the Verify run (lid closed); keep-awake `session_idle` was denied by auto mode.
 
 ### 2026-11-14 — Step 22.4: "Use in Terminal" in the setup window — Codex
 - Did: Implemented R5 plus the owner's additions in Codex loop mode (codex-quota CODEX: OK, 22% / 24%).

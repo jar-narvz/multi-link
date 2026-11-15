@@ -50,7 +50,12 @@ jobs:
         run: cargo fmt --check
       - name: Swift tests
         working-directory: apps/menubar
-        run: swift test --disable-sandbox
+        # Locally ~12 s. A hang fails this step in 10 min instead of the job's 60.
+        timeout-minutes: 10
+        # Piped stdout is block-buffered: the 22.5 hang printed nothing for 28 min. `script` gives the tests a
+        # pseudo-terminal, so each "◇ Test … started" line streams out and a hang names its test.
+        # BSD `script` exits with the command's status.
+        run: script -q /dev/null swift test --disable-sandbox < /dev/null
       - name: Build app
         working-directory: apps/menubar
         run: ./build.sh

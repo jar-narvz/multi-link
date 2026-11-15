@@ -3530,6 +3530,11 @@ the `setup --json` contract.
 
 ## Review log
 
+### 2026-11-15 — Step 22.5 Files amendment: cooperative-pool deadlock (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | CI run 43678448297 hung 28 min in `swift test` with no output. Cause: `Watcher` (2 readers per child) and `MenubarActions.run` did blocking `read()` / `readDataToEndOfFile` / `waitUntilExit` inside `Task.detached`, which runs on Swift's cooperative pool (one thread per core; macos-15 runners have 3). Parallel tests blocked every pool thread, so the tasks that quit the children never ran. Reproduced locally with `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`. A real app bug too, not only a test artifact | Accepted. Files gain `apps/menubar/Sources/MenubarCore/{BlockingIO,Watcher,Actions}.swift` (blocking calls move to dedicated threads) and `apps/menubar/Tests/MenubarCoreTests/CoreTests.swift` (one regression test: more watchers and actions than cores). No other source or test changes |
+
 ### 2026-11-14 — Step 22.3 Files amendment: tap update script (Claude)
 | # | Finding | Decision |
 |---|---|---|

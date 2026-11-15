@@ -24,32 +24,34 @@ public enum MenubarActions {
         return "could not open TUI" + (error.isEmpty ? "" : ": " + error)
     }
 
-    /// Drain both pipes concurrently, away from the UI actor.
+    /// Drain both pipes concurrently, away from the UI actor. The blocking reads and the wait for exit each run on
+    /// their own thread (BlockingIO), never on the cooperative pool.
     public static func run(binary: String, arguments: [String]) async throws -> CommandOutput {
-        try await Task.detached {
-            let process = Process()
-            let output = Pipe()
-            let error = Pipe()
-            process.executableURL = URL(fileURLWithPath: binary)
-            process.arguments = arguments
-            process.standardInput = FileHandle.nullDevice
-            process.standardOutput = output
-            process.standardError = error
-            try process.run()
-            try? output.fileHandleForWriting.close()
-            try? error.fileHandleForWriting.close()
-            async let stdout = drain(output.fileHandleForReading)
-            async let stderr = drain(error.fileHandleForReading)
+        let process = Process()
+        let output = Pipe()
+        let error = Pipe()
+        process.executableURL = URL(fileURLWithPath: binary)
+        process.arguments = arguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = output
+        process.standardError = error
+        try process.run()
+        try? output.fileHandleForWriting.close()
+        try? error.fileHandleForWriting.close()
+        async let stdout = drain(output.fileHandleForReading)
+        async let stderr = drain(error.fileHandleForReading)
+        let status = await BlockingIO.run {
             process.waitUntilExit()
-            return await CommandOutput(status: process.terminationStatus, stdout: stdout, stderr: stderr)
-        }.value
+            return process.terminationStatus
+        }
+        return await CommandOutput(status: status, stdout: stdout, stderr: stderr)
     }
 
     private static func drain(_ handle: FileHandle) async -> String {
-        await Task.detached {
+        await BlockingIO.run {
             defer { try? handle.close() }
             return String(decoding: handle.readDataToEndOfFile(), as: UTF8.self)
-        }.value
+        }
     }
 }
 

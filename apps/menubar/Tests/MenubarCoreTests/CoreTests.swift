@@ -299,6 +299,47 @@ actor Updates {
     await watcher.quit()
 }
 
+/// Step 22.5 regression: blocking pipe reads on the cooperative pool (one thread per core) deadlocked CI's 3-core
+/// runner. More quiet children than cores (2 readers each) must still all report and quit. The old code stalls here
+/// until the children's `sleep 30` ends (or hangs outright on a small pool), so the 15 s bound fails it. The old
+/// actions deadlock for good (CI's 10-minute step timeout then names this test).
+@Test func moreWatchersThanCoresAllReportAndQuit() async throws {
+    let started = ContinuousClock.now
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let binary = dir.appendingPathComponent("quiet")
+    try script(at: binary, body: """
+    echo '\(emptyReport)'
+    exec sleep 30
+    """)
+    // Each action writes 256 KiB to stdout and stderr, more than a pipe holds: it exits only once both are drained.
+    let loud = dir.appendingPathComponent("loud")
+    try script(at: loud, body: """
+    dd if=/dev/zero bs=65536 count=4 2>/dev/null
+    dd if=/dev/zero bs=65536 count=4 >&2 2>/dev/null
+    """)
+    let count = ProcessInfo.processInfo.activeProcessorCount + 2
+    var watchers: [(Watcher, Updates)] = []
+    for _ in 0..<count {
+        let updates = Updates()
+        let watcher = Watcher(binary: binary.path, permission: Permission()) { await updates.add($0) }
+        await watcher.start()
+        watchers.append((watcher, updates))
+    }
+    for (_, updates) in watchers { try await eventually { await updates.statuses().contains(.watching) } }
+    let actions = try await withThrowingTaskGroup(of: CommandOutput.self) { group in
+        for _ in 0..<count { group.addTask { try await MenubarActions.run(binary: loud.path, arguments: []) } }
+        return try await group.reduce(into: []) { $0.append($1) }
+    }
+    #expect(actions.count == count)
+    #expect(actions.allSatisfy { $0.status == 0 && $0.stdout.utf8.count == 262144 && $0.stderr.utf8.count == 262144 })
+    for (watcher, updates) in watchers {
+        await watcher.quit()
+        #expect(await updates.statuses().last == .quit)
+    }
+    #expect(ContinuousClock.now - started < .seconds(15))
+}
+
 @Test func watcherLaunchFailurePublishesStoppedAndCanQuit() async throws {
     let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
