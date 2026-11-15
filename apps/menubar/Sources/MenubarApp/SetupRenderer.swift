@@ -4,7 +4,9 @@ import SwiftUI
 import UserNotifications
 
 /// Entirely fake dependencies: render mode never constructs the app delegate or controller.
-@MainActor private final class RenderSetupSources: SetupRunning, SetupNotificationSource, LoginItemService, SetupDefaults {
+@MainActor private final class RenderSetupSources: SetupRunning, SetupNotificationSource, LoginItemService, SetupDefaults, TerminalLinkProbe {
+    var terminalStates: [String: TerminalLinkState] = [:]
+    func state(at path: String, bundledCLI: String) -> TerminalLinkState { terminalStates[path] ?? .absent }
     var hooks = "ok"
     var authorization: UNAuthorizationStatus = .authorized
     var status: LoginItemStatus = .enabled
@@ -34,10 +36,17 @@ private enum RenderFailure: LocalizedError {
     let dir = URL(fileURLWithPath: directory, isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let states = ["all-green", "all-green-login-off", "first-launch", "hooks-fixable", "hooks-attention", "hooks-unreadable",
-                  "notifications-denied", "apply-error", "translocated-gate", "popover-requiresApproval", "popover-error"]
+                  "notifications-denied", "apply-error", "translocated-gate", "popover-requiresApproval", "popover-error",
+                  "terminal-absent", "terminal-linked", "terminal-other", "terminal-broken", "terminal-mixed"]
     for state in states {
         let sources = RenderSetupSources()
         switch state {
+        case "terminal-linked": sources.terminalStates = ["/usr/local/bin/multi-link": .linked]
+        case "terminal-other": sources.terminalStates = ["/usr/local/bin/multi-link": .other(detail: "/another/bin/multi-link")]
+        case "terminal-broken": sources.terminalStates = ["/usr/local/bin/multi-link": .broken(target: "/old/multi-link.app/Contents/MacOS/multi-link")]
+        case "terminal-mixed":
+            sources.terminalStates = ["/usr/local/bin/multi-link": .broken(target: "/old/multi-link.app/Contents/MacOS/multi-link"),
+                                      "/opt/homebrew/bin/multi-link": .other(detail: "/another/bin/multi-link")]
         case "all-green-login-off": sources.status = .notRegistered
         case "first-launch": sources.hooks = "fixable"; sources.authorization = .notDetermined; sources.status = .notRegistered
         case "hooks-fixable", "apply-error": sources.hooks = "fixable"
@@ -49,7 +58,8 @@ private enum RenderFailure: LocalizedError {
         default: break
         }
         let model = SetupModel(runner: sources, notifications: sources, login: sources, defaults: sources,
-                               bundlePath: state == "translocated-gate" ? "/Volumes/multi-link/multi-link.app" : "/Applications/multi-link.app")
+                               bundlePath: state == "translocated-gate" ? "/Volumes/multi-link/multi-link.app" : "/Applications/multi-link.app",
+                               terminalProbe: sources)
         await model.refresh()
         if state == "apply-error" { sources.fail = true; await model.turnOnHooks() }
         if state == "popover-error" { sources.fail = true; await model.setLoginEnabled(false) }

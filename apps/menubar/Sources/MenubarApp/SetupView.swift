@@ -90,6 +90,7 @@ struct SetupView: View {
                         }
                     }
                 }.padding(.horizontal, 18)
+                terminalLine
                 if let error = model.actionError { errorText(error) }
                 if let error = model.loginError { errorText(error) }
                 if model.loginStatus == .requiresApproval {
@@ -119,6 +120,34 @@ struct SetupView: View {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 await model.pollTick()
             }
+        }
+    }
+    @ViewBuilder private var terminalLine: some View {
+        if !model.terminalLinks.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Use in Terminal").fontWeight(.semibold)
+                    .foregroundStyle(boardColor(palette.foreground))
+                ForEach(model.terminalLinks.filter { $0.state != .absent }, id: \.path) { link in
+                    Text(link.message).textSelection(.enabled)
+                }
+                if let command = model.terminalCommand {
+                    Text("Not on your PATH yet. To use multi-link in Terminal, paste this there (it asks for your password):")
+                    Text(command).font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(boardColor(palette.foreground))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .background(boardColor(palette.selection), in: RoundedRectangle(cornerRadius: 6))
+                    Button("Copy command") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }.buttonStyle(SetupButtonStyle())
+                }
+                (Text("Check with ") + Text("command -v multi-link").monospaced()
+                    + Text(" in Terminal: an earlier PATH entry wins."))
+            }
+            .font(.system(size: 12)).foregroundStyle(dim)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 18).padding(.vertical, 12)
         }
     }
     private func errorText(_ text: String) -> some View {

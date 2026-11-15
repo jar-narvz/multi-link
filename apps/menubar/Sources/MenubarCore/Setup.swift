@@ -57,8 +57,11 @@ private struct SetupReport: Decodable {
     public private(set) var hooksChanged = false
     public private(set) var hooksFixableAtLaunch = false
     public private(set) var busy = false
+    public private(set) var terminalLinks: [TerminalLink] = []
     public let isTemporary: Bool
     public let bundlePath: String
+    private let terminalProbe: any TerminalLinkProbe
+    private let terminalPlaces: [String]
     private let runner: any SetupRunning
     private let notifications: any SetupNotificationSource
     private let login: any LoginItemService
@@ -67,10 +70,20 @@ private struct SetupReport: Decodable {
     public var onPermissionChange: (@MainActor () async -> Void)?
 
     public init(runner: any SetupRunning, notifications: any SetupNotificationSource,
-                login: any LoginItemService, defaults: any SetupDefaults, bundlePath: String) {
+                login: any LoginItemService, defaults: any SetupDefaults, bundlePath: String,
+                terminalProbe: any TerminalLinkProbe = FileSystemTerminalLinkProbe(),
+                terminalPlaces: [String] = ["/usr/local/bin/multi-link", "/opt/homebrew/bin/multi-link"]) {
         self.runner = runner; self.notifications = notifications; self.login = login; self.defaults = defaults
+        self.terminalProbe = terminalProbe; self.terminalPlaces = terminalPlaces
         self.bundlePath = bundlePath
         isTemporary = bundlePath.hasPrefix("/Volumes/") || bundlePath.contains("/AppTranslocation/")
+    }
+    public var terminalCommand: String? {
+        guard !isTemporary, terminalLinks.count == 2,
+              terminalLinks.allSatisfy({ $0.state == .absent }) else { return nil }
+        let cli = bundlePath + "/Contents/MacOS/multi-link"
+        let quoted = "'" + cli.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return "sudo mkdir -p /usr/local/bin && sudo ln -s \(quoted) /usr/local/bin/multi-link"
     }
     public var hooksGreen: Bool { hooks?.state == .ok || hooks?.state == .attention }
     public var notificationsGreen: Bool { notification.green }
@@ -94,6 +107,9 @@ private struct SetupReport: Decodable {
     }
     public func refresh() async {
         guard !isTemporary else { return }
+        terminalLinks = terminalPlaces.map {
+            TerminalLink(path: $0, state: terminalProbe.state(at: $0, bundledCLI: bundlePath + "/Contents/MacOS/multi-link"))
+        }
         do {
             let output = try await runner.run(["setup", "--json"])
             guard output.status == 0 || output.status == 1 else {

@@ -3,8 +3,16 @@ import Testing
 import UserNotifications
 @testable import MenubarCore
 
-@MainActor private final class SetupFakes: SetupRunning, SetupNotificationSource, LoginItemService, SetupDefaults {
+@MainActor private final class SetupFakes: SetupRunning, SetupNotificationSource, LoginItemService, SetupDefaults, TerminalLinkProbe {
     var calls: [String] = []
+    var terminalStates: [String: TerminalLinkState] = [:]
+    var terminalReads: [String] = []
+    var terminalCLIs: [String] = []
+    func state(at path: String, bundledCLI: String) -> TerminalLinkState {
+        terminalReads.append(path)
+        terminalCLIs.append(bundledCLI)
+        return terminalStates[path] ?? .absent
+    }
     var hooks = "fixable"
     var badJSON = false
     var commandError = false
@@ -29,7 +37,7 @@ import UserNotifications
     func hasShownSetup() -> Bool { shown }
     func markSetupShown() { shown = true }
     func model(path: String = "/Applications/multi-link.app") -> SetupModel {
-        SetupModel(runner: self, notifications: self, login: self, defaults: self, bundlePath: path)
+        SetupModel(runner: self, notifications: self, login: self, defaults: self, bundlePath: path, terminalProbe: self)
     }
 }
 private enum FakeError: LocalizedError { case refused; var errorDescription: String? { "Operation not permitted" } }
@@ -91,9 +99,14 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     for path in ["/Volumes/test/multi-link.app", "/private/test/AppTranslocation/random/multi-link.app"] {
         let fake = SetupFakes(); let model = fake.model(path: path)
         #expect(model.isTemporary)
+        #expect(model.terminalLinks.isEmpty)
+        #expect(model.terminalCommand == nil)
         await model.refresh(); await model.turnOnEverything(); await model.turnOnHooks()
         await model.turnOnNotifications(); await model.removeHooks(); await model.setLoginEnabled(true)
         #expect(fake.calls.isEmpty)
+        #expect(fake.terminalReads.isEmpty)
+        #expect(model.terminalLinks.isEmpty)
+        #expect(model.terminalCommand == nil)
         #expect(model.launchAction() == .gate)
         #expect(!fake.shown)
         #expect(fake.model(path: path).launchAction() == .gate)
@@ -163,4 +176,70 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
         await model.refresh()
         #expect(!model.hooksFixableAtLaunch) // Launch attention does not reappear later.
     }
+}
+
+@Test @MainActor func terminalCommandQuotesSpaceAndSingleQuote() async {
+    for (path, expected) in [
+        ("/Applications/My App.app", "sudo mkdir -p /usr/local/bin && sudo ln -s '/Applications/My App.app/Contents/MacOS/multi-link' /usr/local/bin/multi-link"),
+        ("/Applications/Jared's App.app", "sudo mkdir -p /usr/local/bin && sudo ln -s '/Applications/Jared'\\''s App.app/Contents/MacOS/multi-link' /usr/local/bin/multi-link")
+    ] {
+        let fake = SetupFakes(); let model = fake.model(path: path)
+        #expect(model.terminalCommand == nil) // No offer until both paths have been checked.
+        await model.refresh()
+        #expect(model.terminalCommand == expected)
+    }
+}
+
+@Test @MainActor func terminalPlacesRefreshIndependentlyAndNeverCountAsSetup() async {
+    let fake = SetupFakes()
+    let model = SetupModel(runner: fake, notifications: fake, login: fake, defaults: fake,
+                           bundlePath: "/Applications/multi-link.app", terminalProbe: fake,
+                           terminalPlaces: ["/test/local", "/test/brew"])
+    for (state, message) in [
+        (TerminalLinkState.linked, "multi-link is linked at /test/local."),
+        (.other(detail: "/another/cli"), "/test/local is something else (/another/cli), so it's left as is."),
+        (.broken(target: "missing"), "/test/local is a broken link to missing, so it's left as is."),
+        (.absent, "")
+    ] {
+        fake.terminalStates = ["/test/local": state]
+        await model.refresh()
+        #expect(model.terminalLinks == [TerminalLink(path: "/test/local", state: state), TerminalLink(path: "/test/brew", state: .absent)])
+        #expect(model.terminalLinks.map(\.message) == [message, ""])
+        #expect((model.terminalCommand != nil) == (state == .absent))
+        #expect(model.remaining == 2)
+    }
+    fake.terminalStates = ["/test/local": .broken(target: "missing"), "/test/brew": .other(detail: "/other")]
+    await model.refresh()
+    #expect(model.terminalCommand == nil)
+    #expect(model.terminalLinks.map(\.message) == ["/test/local is a broken link to missing, so it's left as is.", "/test/brew is something else (/other), so it's left as is."])
+    fake.calls = []
+    await model.turnOnEverything()
+    #expect(fake.calls == ["hook apply", "request", "register", "setup --json", "settings"])
+    #expect(model.remaining == 2)
+    #expect(model.terminalLinks.map(\.state) == [.broken(target: "missing"), .other(detail: "/other")])
+    fake.hooks = "ok"
+    fake.notification = SetupNotificationStatus(authorization: .authorized, alerts: .enabled)
+    await model.refresh()
+    #expect(model.remaining == 0)
+    #expect(model.terminalCommand == nil)
+    #expect(fake.terminalReads == Array(repeating: ["/test/local", "/test/brew"], count: 7).flatMap { $0 })
+}
+
+@Test @MainActor func terminalOfferRequiresBothPlacesAbsent() async {
+    let states: [TerminalLinkState] = [.absent, .linked, .other(detail: "/other/cli"), .broken(target: "missing")]
+    let fake = SetupFakes(); let model = fake.model()
+    for local in states {
+        for brew in states {
+            fake.terminalStates = ["/usr/local/bin/multi-link": local, "/opt/homebrew/bin/multi-link": brew]
+            await model.refresh()
+            #expect(model.terminalLinks.map(\.state) == [local, brew])
+            #expect((model.terminalCommand != nil) == (local == .absent && brew == .absent))
+            #expect(model.remaining == 2)
+        }
+    }
+    #expect(fake.terminalCLIs.count == 32)
+    #expect(fake.terminalCLIs.allSatisfy { $0 == "/Applications/multi-link.app/Contents/MacOS/multi-link" })
+    fake.terminalStates = ["/usr/local/bin/multi-link": .linked]
+    await model.refresh()
+    #expect(model.terminalLinks.first?.message == "multi-link is linked at /usr/local/bin/multi-link.")
 }

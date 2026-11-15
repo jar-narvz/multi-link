@@ -1,6 +1,20 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.4 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.5–22.6 need:
+- **"Use in Terminal" (R5):** `apps/menubar/Sources/MenubarCore/TerminalLink.swift` (`FileSystemTerminalLinkProbe`,
+  read-only lstat/realpath) and `SetupModel.terminalLinks` / `terminalCommand`; view `terminalLine` in `SetupView.swift`.
+  Linked → "multi-link is linked at <path>."; other / broken → path + detail, "left as is"; both absent → the
+  `sudo mkdir -p /usr/local/bin && sudo ln -s '<bundled CLI>' /usr/local/bin/multi-link` command (single-quoted, no
+  `-f`) with Copy command; always the `command -v multi-link` hint. Not counted in "N left", untouched by Turn on
+  everything, not probed on the gate. The app never runs `sudo` or writes the link.
+- **22.6 README:** "Use in Terminal" can quote the window's sentence; Uninstall gets `sudo rm /usr/local/bin/multi-link`.
+  The real link has never been created on this Mac (only temp-dir symlinks in tests); the owner check in 22.6 is
+  the first real run of the copied command.
+- `--render-setup <dir>` now writes 32 PNGs (adds `terminal-{absent,linked,other,broken,mixed}`).
+- Codex's sandbox `./build.sh` fails at `iconutil` (Invalid Iconset); outside the sandbox it builds and verifies.
+- Leftovers: `apps/menubar/build/step22-4-*setup/` renders and a rebuilt `build/multi-link.app` (git-ignored).
+
 **Phase 22: Step 22.3 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.4–22.6 need:
 - **Cask (R3):** template `packaging/homebrew/multi-link.rb`; `sh tools/render-cask.sh <version> <sha256> [--url
   <url>]` prints it (`--url` only https:// or http://127.0.0.1, may hold a literal `#{version}`, which `brew audit`
@@ -984,6 +998,91 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 22.4: "Use in Terminal" in the setup window — Codex
+- Did: Implemented R5 plus the owner's additions in Codex loop mode (codex-quota CODEX: OK, 22% / 24%).
+  Added a read-only filesystem probe, per-place states/messages and a copy-command string in MenubarCore;
+  kept NSPasteboard in MenubarApp. Terminal information is 12pt BoardPalette dim text below the two rows,
+  with selectable paths/monospaced command and the earlier-PATH-entry warning. No status circle or setup count.
+  Refresh probes both places, actions never install links, and the temporary gate neither probes nor offers a command.
+  Tests cover real temp-directory symlinks (direct, relative chain, resolved bundled alias, dangling and loop),
+  regular files/directories, all 16 two-place combinations, refresh, action/count isolation, and space/quote escaping.
+  All setup tests and renders inject fake probes rather than inspecting system install paths.
+- Fix round 1 (Claude review): Updated the heading foreground, omitted absent-place rows, and replaced terse
+  link diagnostics with the requested linked/other/broken sentences. Both absent shows the single PATH/password
+  instruction followed by the selectable 12pt monospaced foreground command in a selection-background box
+  (8pt padding, 6pt corners), then Copy command. The PATH-check hint uses monospaced command text, no backticks.
+  Updated exact message assertions for all four states and mixed places.
+- Verify (round 1): `swift test --disable-sandbox` in `apps/menubar` → exit 0; actual final output:
+  ```text
+✔ Test run with 40 tests in 0 suites passed after 11.773 seconds.
+  ```
+  `.build/debug/multi-link-menubar --render-setup build/step22-4-round1-setup` → exit 0; regenerated 32 PNGs.
+  Actual Terminal-state output:
+  ```text
+terminal-absent-light.png
+terminal-absent-dark.png
+terminal-linked-light.png
+terminal-linked-dark.png
+terminal-other-light.png
+terminal-other-dark.png
+terminal-broken-light.png
+terminal-broken-dark.png
+terminal-mixed-light.png
+terminal-mixed-dark.png
+  ```
+  Visually inspected absent/light and mixed/dark: heading readable, command box above button, no absent rows,
+  separate wrapped non-absent messages, monospaced PATH-check command. `git diff --check` → exit 0, no output.
+- Changed: `apps/menubar/Sources/MenubarCore/TerminalLink.swift` (new),
+  `apps/menubar/Sources/MenubarCore/Setup.swift`, `apps/menubar/Sources/MenubarApp/SetupView.swift`,
+  `apps/menubar/Sources/MenubarApp/SetupRenderer.swift`, `apps/menubar/Tests/MenubarCoreTests/SetupTests.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/TerminalLinkTests.swift` (new), `PROGRESS.md`.
+- Verify: `swift test --disable-sandbox` in `apps/menubar` → exit 0; actual final output:
+  ```text
+✔ Test run with 40 tests in 0 suites passed after 11.082 seconds.
+  ```
+  `./build.sh` in `apps/menubar` → exit 1; actual final output (excerpt):
+  ```text
+[6/7] Linking multi-link-menubar
+Build complete! (7.20s)
+Resources/AppIcon.iconset:Invalid Iconset.
+Resources/AppIcon.iconset:Invalid Iconset.
+  ```
+  `.build/debug/multi-link-menubar --render-setup build/step22-4-setup` in `apps/menubar` → exit 0;
+  32 PNGs generated. Actual output for the new states and gate (excerpt):
+  ```text
+translocated-gate-light.png
+translocated-gate-dark.png
+terminal-absent-light.png
+terminal-absent-dark.png
+terminal-linked-light.png
+terminal-linked-dark.png
+terminal-other-light.png
+terminal-other-dark.png
+terminal-broken-light.png
+terminal-broken-dark.png
+terminal-mixed-light.png
+terminal-mixed-dark.png
+  ```
+  Visually inspected those 12 PNGs: readable light/dark dim text, no circle, command only for both absent,
+  targets visible and wrapping in other/broken/mixed, no Terminal content on either gate.
+  `git diff --check` → exit 0, no output.
+- Review: Claude, 2026-11-14. Mode: Codex loop (`tools/codex-quota.py` → CODEX: OK, 22% / 24%). Round 1 (logic
+  accepted; copy and look): dim heading → foreground; two "<path> is absent" lines → one PATH/password sentence;
+  "<path> → <detail>" → "is something else (…), so it's left as is"; command in a selection-colour box; monospaced
+  `command -v multi-link`. All fixed. Re-ran outside the sandbox after round 1: `swift test --disable-sandbox` →
+  "Test run with 40 tests in 0 suites passed"; `./build.sh` → "Built and verified build/multi-link.app (bundled CLI,
+  app, icon)"; `build/multi-link.app/Contents/MacOS/multi-link-menubar --render-setup <scratch>` → 32 PNGs. Compared
+  terminal-absent (light, dark), terminal-mixed, terminal-linked, first-launch ("2 things need you" unchanged) and
+  translocated-gate (no Terminal line) with board 21's row style: readable in both themes, palette colours. Clean; no
+  round 2. Nothing touched in /usr/local/bin, /opt/homebrew/bin, /Applications or defaults.
+- Gotchas: SwiftPM printed inaccessible-cache/read-only manifest-cache warnings but tests passed. Renderer printed
+  LaunchServices/XPC connection diagnostics but returned 0 and produced all images. The first feature-test build
+  failed on missing APIs, then compilation caught actor isolation, then a real-probe assertion exposed Foundation's
+  `/var` versus POSIX `/private/var` path spelling; the fixture now uses canonical `/private/tmp`.
+  A preliminary test command at repo root reported no Package.swift; all reported Verify results above are from
+  `apps/menubar`. No edits to PLAN.md, Resources, system bin paths, /Applications, defaults or agent data;
+  no staging, commits or push. Render images and local build output remain ignored.
 
 ### 2026-11-14 — Step 22.3: Homebrew cask and tap update — Codex
 - Did: Implemented R3/R4's cask template, validated renderer, thin published-release workflow and tested tap
