@@ -1,6 +1,29 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.3 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.4–22.6 need:
+- **Cask (R3):** template `packaging/homebrew/multi-link.rb`; `sh tools/render-cask.sh <version> <sha256> [--url
+  <url>]` prints it (`--url` only https:// or http://127.0.0.1, may hold a literal `#{version}`, which `brew audit`
+  requires: a URL without it fails "unversioned"). Expected 1.18 render: `tools/tests/cask-1.18.rb`.
+- **Tap update (R4):** `.github/workflows/cask.yml` on `release: published` → `tools/update-tap.sh clone` (public
+  tap, no token) → `prepare` (refuses prereleases, bad tags, older versions; same version = no-op exit 0 before any
+  gh/token; checks exactly the DMG + `.sha256` and `shasum -c`; renders and commits as github-actions[bot]) → `push`
+  (`TAP_TOKEN` only here, through a temporary askpass; empty → fails, nothing pushed; pushes `HEAD:refs/heads/main`).
+  Tests: `sh tools/tests/cask.sh` (also a CI step). An empty tap repo works (first publish creates `Casks/multi-link.rb`
+  and `main`). Never run on GitHub yet.
+- **Owner items for 22.5 (one time; copy-paste, the token is made in the browser):**
+  1. `gh repo create jar-narvz/homebrew-tap --public --description "Homebrew tap for multi-link"`
+  2. Browser: github.com/settings/personal-access-tokens/new → fine-grained, resource owner jar-narvz, "Only select
+     repositories" = `jar-narvz/homebrew-tap`, Repository permissions → Contents: Read and write (nothing else),
+     expiry your choice → Generate, copy it.
+  3. `gh secret set TAP_TOKEN --repo jar-narvz/multi-link` (paste the token at the prompt; it is not echoed or stored in
+     shell history).
+- **Owner items for 22.6:** after Open Anyway on the brew-installed app, `multi-link setup` from Terminal (the CLI is
+  SIGKILLed, exit 137, until then; 22.3 confirmed the link lands on `PATH`). Users run `brew trust --cask
+  jar-narvz/tap/multi-link` before `brew install --cask jar-narvz/tap/multi-link`.
+- **22.4 (R5):** no new facts.
+- Leftovers: none from the brew check; Codex's `target/step22-3-*` logs (git-ignored).
+
 **Phase 22: Step 22.2 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.3–22.4 need:
 - **Release (R2):** `.github/workflows/release.yml` on tags `v[0-9]+.[0-9]+` / `v[0-9]+.[0-9]+.[0-9]+`. Jobs:
   `check` (full-history checkout, `tools/release-check.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"`) → `ci`
@@ -961,6 +984,221 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 22.3: Homebrew cask and tap update — Codex
+- Did: Implemented R3/R4's cask template, validated renderer, thin published-release workflow and tested tap
+  clone/prepare/push script. Mode: **Codex loop**. User-provided quota check: **CODEX: OK, primary 16%, secondary 23%**;
+  no quota command was run here. CI has exactly one added cask-test step.
+- Fix round 1 (Claude review, 2026-11-14): Claude reported brew style and install/link/uninstall passed,
+  but audit rejected an unversioned URL because the override escaped `#{version}`. Renderer now preserves only
+  literal `#{version}` interpolation and rejects double quotes, backslashes, whitespace and every other `#{`
+  sequence before emitting output. Added the local audit URL usage example
+  `--url 'http://127.0.0.1:<port>/<name>-#{version}.dmg'` and regression tests. Other implementation unchanged.
+  Test-first `sh tools/tests/cask.sh` failed with `FAIL: version interpolation was escaped` (exit 1).
+  Final `sh tools/tests/cask.sh` → exit 0, actual output:
+  ```text
+  Syntax OK
+  PASS: rendered 1.18 cask equals expected fixture
+  Syntax OK
+  PASS: render input validation and local URL override
+  Syntax OK
+  PASS: local URL preserves literal version interpolation
+  PASS: unsafe URL forms rejected with stderr only
+  PASS: public tap clone without token
+  PASS: prerelease rejected
+  PASS: bad tag rejected
+  PASS: missing asset rejected
+  PASS: extra asset rejected
+  PASS: checksum mismatch rejected
+  PASS: first publish prepares a commit
+  PASS: missing TAP_TOKEN rejected
+  PASS: first publish pushes to local bare tap
+  PASS: same-version rerun prepares no-op without gh
+  PASS: same-version rerun needs no token
+  PASS: older version rejected
+  PASS: numeric older version rejected
+  PASS: newer patch release prepares a commit
+  PASS: newer release pushes to local bare tap
+  PASS: pushed cask matches the verified release
+  PASS: numeric newer release prepares a commit
+  PASS: numeric newer release pushes to local bare tap
+  PASS: version ordering compares numeric components
+  PASS: workflow triggers, pins, default branch, event and token boundaries
+  ```
+  `actionlint .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/cask.yml` → no output, exit 0.
+  `sh -n tools/render-cask.sh tools/tests/cask.sh` → no output, exit 0.
+  `shellcheck tools/render-cask.sh tools/tests/cask.sh` → no output, exit 0.
+  `git diff --check` → no output, exit 0. Brew audit rerun and review remain Claude's; the original Review/Verify
+  lines below are unchanged. No staging or project commit.
+- Changed: `packaging/homebrew/multi-link.rb`, `tools/render-cask.sh`, `tools/update-tap.sh`,
+  `tools/tests/cask.sh`, `tools/tests/cask-1.18.rb`, `.github/workflows/cask.yml`, `.github/workflows/ci.yml`, `PROGRESS.md`.
+- Verify: Test-first run: `sh tools/tests/cask.sh` → exit 1, actual output `FAIL: cask renderer is missing`.
+  Final commands and actual outputs:
+
+  `sh tools/tests/cask.sh` → exit 0:
+  ```text
+  Syntax OK
+  PASS: rendered 1.18 cask equals expected fixture
+  Syntax OK
+  PASS: render input validation and local URL override
+  PASS: public tap clone without token
+  PASS: prerelease rejected
+  PASS: bad tag rejected
+  PASS: missing asset rejected
+  PASS: extra asset rejected
+  PASS: checksum mismatch rejected
+  PASS: first publish prepares a commit
+  PASS: missing TAP_TOKEN rejected
+  PASS: first publish pushes to local bare tap
+  PASS: same-version rerun prepares no-op without gh
+  PASS: same-version rerun needs no token
+  PASS: older version rejected
+  PASS: numeric older version rejected
+  PASS: newer patch release prepares a commit
+  PASS: newer release pushes to local bare tap
+  PASS: pushed cask matches the verified release
+  PASS: numeric newer release prepares a commit
+  PASS: numeric newer release pushes to local bare tap
+  PASS: version ordering compares numeric components
+  PASS: workflow triggers, pins, default branch, event and token boundaries
+  ```
+
+  `actionlint .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/cask.yml` → no output, exit 0.
+
+  `sh -n tools/render-cask.sh tools/update-tap.sh tools/tests/cask.sh` → no output, exit 0.
+
+  `shellcheck tools/render-cask.sh tools/update-tap.sh tools/tests/cask.sh` → no output, exit 0.
+
+  `sh tools/tests/release.sh` → exit 0:
+  ```text
+  PASS: matching annotated tag on main
+  PASS: mismatched version
+  PASS: invalid tag v1.19-rc1
+  PASS: invalid tag 1.19
+  PASS: invalid tag v1.19.0.1
+  PASS: version read at requested commit
+  PASS: tag points at another commit
+  PASS: commit only on another branch
+  PASS: patch tag and committed plist from nested directory
+  PASS: all workflow uses pinned or local CI
+  PASS: draft release receives exact tag, flags, DMG and checksum
+  ```
+
+  `export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"; TZ=UTC cargo test --workspace --locked
+  > target/step22-3-cargo-test.log 2>&1` → exit 0. Actual result lines (`rg '^test result:' target/step22-3-cargo-test.log`):
+  ```text
+  test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+  test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.40s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.10s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+  test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+  test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+  test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+  test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+  test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+  test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  The ignored test is `real_counts` (actual output: `test real_counts ... ignored`).
+
+  In `apps/menubar`, `swift test --disable-sandbox > ../../target/step22-3-swift-test.log 2>&1` → exit 0; actual final line:
+  ```text
+  ✔ Test run with 36 tests in 0 suites passed after 11.216 seconds.
+  ```
+
+  `git diff --check` → no output, exit 0.
+- Review (Claude, 2026-11-14): Codex loop, quota `CODEX: OK` (16% / 23% at hand-off, 20% / 24% before the fix round).
+  Diff read against Step 22.3 (R3, R4, the 22.0 amendments): files match the amended Files list; cask has `depends_on
+  macos: :sequoia`, the `#{appdir}` `binary` form, no `login_item`, zap of the one plist, caveats per 22.0 (Open Anyway
+  once after a fresh install, upgrades keep it, Open at login + `hook remove` before uninstall); cask.yml passes event
+  values by env, checks out the default branch with no credentials, `TAP_TOKEN` only on the push step. **Fix round 1
+  (1 finding):** Claude's brew run showed `brew audit --cask` failing on the `--url` render ("Use `sha256 :no_check`
+  when URL is unversioned"): Homebrew's `Cask::URL#unversioned?` wants a literal `#{version}` in the url line, and
+  `render-cask.sh` escaped it. Codex now keeps only `#{version}` and rejects quotes, backslashes, whitespace and other
+  `#{…}`; tests added. No other findings. **Claude's re-run:** `sh tools/tests/cask.sh` → exit 0, every line PASS
+  (22 checks); `sh tools/tests/release.sh` → exit 0; `actionlint .github/workflows/*.yml` → exit 0. **Brew part
+  (Claude, owner OK "Yes, both"):** check build of the 1.18 app with id `dev.multi-link.check23`, app `multi-link
+  check23.app`, DMG served by `python3 -I -m http.server 8767 --bind 127.0.0.1`; `render-cask.sh 1.18 <sha> --url
+  'http://127.0.0.1:8767/multi-link-check23-#{version}.dmg'` → `ruby -c` "Syntax OK"; test cask = that render with 5
+  lines swapped (token, `app`, `binary` + `target: "multi-link-check23"`, `quit`, `zap`); `brew tap-new --no-git
+  multilinkcheck/check23`, `brew trust --cask …` → `brew style --cask` "1 file inspected, no offenses detected" (exit
+  0), `brew audit --cask` exit 0, `brew install --cask` exit 0 ("Moving App", "Linking Binary 'multi-link' to
+  '/opt/homebrew/bin/multi-link-check23'", caveats printed), `command -v multi-link-check23` →
+  `/opt/homebrew/bin/multi-link-check23` → the bundled CLI; quarantine `0381;…`, `spctl` rejected,
+  `multi-link-check23 setup --help` → **exit 137** (SIGKILL before Open Anyway, the expected result per 22.0; the app
+  was not opened); `brew uninstall --cask` exit 0, app and link gone. Cleanup: untrust, untap, server stopped, check
+  build, Caskroom and brew caches for the cask and `~/.homebrew/` (only a lock file) removed; `defaults read
+  dev.multi-link.check23` → "does not exist". The owner's `/Applications/multi-link.app` was never touched. The CLI
+  run after Open Anyway is an owner item for 22.6.
+- Gotchas: **Brew style, audit, install, CLI on PATH and uninstall Verify skipped: Claude runs them** using the
+  isolated token/app/bundle-id/link-name substitution required by the plan; the real app was not touched.
+  No network calls in tests: GitHub reads use a stub; commits/pushes happen only in temporary local tap repos.
+  Test-only `TAP_URL` requires `UPDATE_TAP_TESTING=1` and an absolute local path. Production push uses the fixed
+  HTTPS tap URL and an ephemeral askpass helper; the token is never put in the URL, argv, config or helper file.
+  Same-version reruns need neither gh access nor a token. Version ordering compares integer components (missing
+  patch = zero). Checksum content is restricted to one lowercase digest and the expected DMG basename before
+  `shasum -a 256 -c`. The cask's `--url` override is Ruby-escaped. First-publish clone supports an empty tap.
+  Actionlint initially rejected runner.temp at job-env scope; final paths use github.workspace instead.
+
 
 ### 2026-11-14 — Step 22.2: Release workflow — Codex
 - Did: Implemented R2's tag gate, reusable CI dependency and draft release workflow; added basename checksum

@@ -40,6 +40,8 @@ jobs:
           printf '%s\n' "$rust_version"
           [[ "$rust_version" == 'rustc 1.99.1 '* ]]
           cargo --version
+      - name: Cask automation tests
+        run: sh tools/tests/cask.sh
       - name: Rust tests
         run: TZ=UTC cargo test --workspace --locked
       - name: Clippy

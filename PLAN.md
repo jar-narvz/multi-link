@@ -3484,8 +3484,11 @@ the `setup --json` contract.
 
 ### Step 22.3 — Homebrew cask and tap update (Codex; skipped on a no-go)
 - Depends on: 22.2 and 22.0's go. R3, R4. Files: `packaging/homebrew/multi-link.rb`, `tools/render-cask.sh`,
-  `tools/tests/**`, `.github/workflows/cask.yml`, `.github/workflows/ci.yml` (one step: render with test values and
-  check), `PROGRESS.md`
+  `tools/update-tap.sh` (cask.yml's logic; amended 2026-11-14, Review log), `tools/tests/**`,
+  `.github/workflows/cask.yml`, `.github/workflows/ci.yml` (one step: render with test values and check), `PROGRESS.md`.
+  The brew part of Verify (style, audit, install, uninstall) is Claude's: Codex's sandbox can't write Homebrew's folders
+  or `/Applications`. Its test cask is the rendered one with only the token, app name, bundle id and `binary` target
+  swapped for a never-seen check id (22.0 style), so the owner's `/Applications/multi-link.app` is never touched.
 - Verify: the rendered cask for 1.18 equals a committed expected file and `ruby -c` accepts it; bad input (empty,
   non-hex sha, bad version, newer-than check failing) → non-zero; in a fresh 22.0-style local test tap (owner OK,
   isolated id), the rendered cask with `--url http://127.0.0.1…` passes `brew style` and `brew audit --cask`,
@@ -3526,6 +3529,12 @@ the `setup --json` contract.
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-14 — Step 22.3 Files amendment: tap update script (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | Verify says "cask.yml's logic lives in a script tested with stub `gh` / `git`", but Files name no such script; `render-cask.sh` should stay a pure renderer | Accepted. Files gain `tools/update-tap.sh`. Why: the workflow stays a thin caller (env values in, script runs), and the release checks, version order and push are testable on this Mac with stubs |
+| 2 | Brew style / audit / install need writes to Homebrew's folders and `/Applications`, outside Codex's sandbox; the real cask's `multi-link.app` and link would collide with the owner's app | Accepted. Claude runs the brew part with the rendered cask, swapping only token, app name, bundle id and link name for a never-seen id; owner OK 2026-11-14 ("Yes, both") |
 
 ### 2026-11-14 — Step 22.1 Files amendment: Phase 9 fixture logs (Claude)
 | # | Finding | Decision |
