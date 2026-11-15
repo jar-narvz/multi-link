@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check release tag
+        run: tools/release-check.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+  ci:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: [check, ci]
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select and verify toolchains
+        run: |
+          set -euo pipefail
+          architecture=$(uname -m)
+          printf '%s\n' "$architecture"
+          test "$architecture" = arm64
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcode_version=$(xcodebuild -version)
+          printf '%s\n' "$xcode_version"
+          test "$(printf '%s\n' "$xcode_version" | head -n 1)" = 'Xcode 26.3'
+          swift_version=$(swift --version)
+          printf '%s\n' "$swift_version"
+          [[ "$swift_version" == *'Swift version 6.2.'* ]]
+          rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+          rustup default 1.99.1
+          rust_version=$(rustc --version)
+          printf '%s\n' "$rust_version"
+          [[ "$rust_version" == 'rustc 1.99.1 '* ]]
+          cargo --version
+      - name: Build release
+        id: build
+        run: |
+          apps/menubar/release.sh
+          printf 'dmg=apps/menubar/build/multi-link-%s-arm64.dmg\n' "${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG: ${{ steps.build.outputs.dmg }}
+        run: gh release create "$TAG" --draft --verify-tag --title "multi-link ${TAG#v}" --notes 'Draft built by the release workflow. Check the two files, then publish.' "$DMG" "$DMG.sha256"

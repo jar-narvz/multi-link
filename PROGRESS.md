@@ -1,6 +1,25 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.2 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.3–22.4 need:
+- **Release (R2):** `.github/workflows/release.yml` on tags `v[0-9]+.[0-9]+` / `v[0-9]+.[0-9]+.[0-9]+`. Jobs:
+  `check` (full-history checkout, `tools/release-check.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"`) → `ci`
+  (`uses: ./.github/workflows/ci.yml`) → `release` (`contents: write` here only; Xcode 26.3 / Rust 1.99.1 pins as in
+  ci.yml; `apps/menubar/release.sh`; `gh release create "$TAG" --draft --verify-tag --title "multi-link <ver>"
+  --notes '…' <dmg> <dmg>.sha256`). Concurrency `release-${{ github.ref }}`, no cancel. Not yet run on GitHub (22.5/22.6).
+- **Assets 22.3's cask.yml checks:** exactly `multi-link-<ver>-arm64.dmg` and `multi-link-<ver>-arm64.dmg.sha256`;
+  the `.sha256` is one `shasum -a 256` line `<hex>  <dmg basename>` (made in the DMG's folder), so
+  `shasum -a 256 -c` works in a download folder. The workflow reads the DMG path as
+  `apps/menubar/build/multi-link-${TAG#v}-arm64.dmg` (equal to release.sh's name because `check` proved tag = plist).
+- **Tests:** `sh tools/tests/release.sh` (scratch bare-origin repos for release-check.sh; stub `gh` run on the
+  extracted workflow step with Ruby YAML; every `uses:` SHA-pinned or local). 22.3 can add its stub-`gh`/`git` cask
+  tests under `tools/tests/` the same way. `release-check.sh` needs `/usr/libexec/PlistBuddy` (macOS only) and never fetches.
+- A rerun after a draft already exists fails at `gh release create` (tag taken); delete the draft first. Publishing
+  stays the owner's (it triggers 22.3's `release: published`).
+- **22.4 (R5):** no new facts.
+- Leftovers: `apps/menubar/build/multi-link-1.18-arm64.dmg{,.sha256}` and a rebuilt `build/multi-link.app` from
+  Claude's Verify run (git-ignored; the real app runs from `/Applications`).
+
 **Phase 22: Step 22.1 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.2–22.4 need:
 - **CI (R1):** `.github/workflows/ci.yml` runs on push to `main`, `pull_request` and `workflow_call`, one `macos-15`
   job (`timeout-minutes: 60`), concurrency group `ci-${{ github.workflow }}-…` with cancel-in-progress. Not yet run on
@@ -942,6 +961,60 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 22.2: Release workflow — Codex
+- Did: Implemented R2's tag gate, reusable CI dependency and draft release workflow; added basename checksum
+  generation and scratch-repository / extracted-workflow tests. Codex mode; user-provided quota check:
+  **CODEX: OK (13% of 5h, 23% weekly)**. No quota command was run for this step.
+- Fix round 1: added explicit `--title` / fixed `--notes`, updated exact stub-gh argv (still exactly DMG and
+  checksum), and set check job `timeout-minutes: 10`. User-provided quota check: **CODEX: OK**.
+- Changed: `.github/workflows/release.yml`, `tools/release-check.sh`, `tools/tests/release.sh`,
+  `apps/menubar/release.sh`, `PROGRESS.md`.
+- Verify: Test-first run failed before implementation (`FAIL: matching annotated tag on main`, missing
+  `tools/release-check.sh`); final commands and actual outputs:
+
+  Fix round 1 rerun outputs (all four requested checks):
+
+  `actionlint .github/workflows/release.yml` → no output, exit 0.
+
+  `ruby -ryaml -e 'YAML.load_file(ARGV.fetch(0)); puts "release.yml: YAML parse OK"' .github/workflows/release.yml` → exit 0:
+  ```text
+  release.yml: YAML parse OK
+  ```
+
+  `sh tools/tests/release.sh` → exit 0:
+  ```text
+  PASS: matching annotated tag on main
+  PASS: mismatched version
+  PASS: invalid tag v1.19-rc1
+  PASS: invalid tag 1.19
+  PASS: invalid tag v1.19.0.1
+  PASS: version read at requested commit
+  PASS: tag points at another commit
+  PASS: commit only on another branch
+  PASS: patch tag and committed plist from nested directory
+  PASS: all workflow uses pinned or local CI
+  PASS: draft release receives exact tag, flags, DMG and checksum
+  ```
+
+  `sh -n tools/release-check.sh tools/tests/release.sh apps/menubar/release.sh` → no output, exit 0.
+
+  `shellcheck tools/release-check.sh tools/tests/release.sh apps/menubar/release.sh` → no output, exit 0.
+  Initial ShellCheck SC1007 warning on the empty CDPATH assignment was fixed before this final run.
+
+  `git diff --check` → no output, exit 0.
+- Review: Claude, 2026-11-14. Round 1 findings (fixed by Codex): `gh release create` relied on gh's non-interactive
+  default title/notes (now explicit `--title` / `--notes`); `check` job had no `timeout-minutes` (now 10). No scope
+  creep (only the step's files). Claude re-ran: `actionlint` (release.yml + ci.yml) exit 0; Ruby YAML OK;
+  `sh tools/tests/release.sh` 11 PASS, exit 0; `shellcheck` exit 0; `apps/menubar/release.sh` (outside the sandbox)
+  exit 0, last line `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.18-arm64.dmg` (2,900,624 bytes),
+  `.sha256` (92 bytes) = `08ba3bf4…53b6  multi-link-1.18-arm64.dmg`; in that folder `shasum -a 256 -c
+  multi-link-1.18-arm64.dmg.sha256` → `multi-link-1.18-arm64.dmg: OK`. Matches Codex's pasted outputs. Not checked
+  here: the workflow on GitHub (22.5/22.6).
+- Gotchas: Per the user's instruction, did not execute `apps/menubar/release.sh` in the sandbox. Real DMG plus
+  `shasum -a 256 -c` verification remains for Claude after review. GitHub execution remains for 22.5.
+  The check script never fetches; the workflow's full-history checkout supplies `origin/main`. Tests use
+  local bare origin / clone repos and a stub gh; no release or network request occurs.
 
 ### 2026-11-14 — Step 22.1: Canonical CLI path and CI workflow — Codex
 - Did: Mode: Codex loop. User-supplied preflight: `python3 -I tools/codex-quota.py` printed `CODEX: OK`.

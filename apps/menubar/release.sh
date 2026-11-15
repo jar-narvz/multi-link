@@ -41,7 +41,7 @@ trap 'exit 143' TERM
 mkdir "$work_dir/stage" "$mount_dir"
 ditto "$app" "$work_dir/stage/multi-link.app"
 ln -s /Applications "$work_dir/stage/Applications"
-rm -f "$dmg"
+rm -f "$dmg" "$dmg.sha256"
 hdiutil create -srcfolder "$work_dir/stage" -format UDZO -volname "multi-link $version" "$dmg"
 hdiutil verify "$dmg"
 # Set this before attach so the trap also tries to detach after a partial mount.
@@ -65,4 +65,8 @@ if [ ! -L "$mount_dir/Applications" ] || [ "$(readlink "$mount_dir/Applications"
 fi
 hdiutil detach "$mount_dir"
 mounted=0
+(
+    cd "$(dirname "$dmg")"
+    shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256"
+)
 printf '%s\n' "$dmg"
