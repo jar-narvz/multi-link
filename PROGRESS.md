@@ -1,8 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 22: Step 22.5 fix round 1 is committed (Claude edits, Codex reviewed, 2026-11-15); the step stays open
-until the owner pushes and the CI run on that commit is green.** What the rest of 22.5 and 22.6 need:
+**Phase 22: Step 22.5 is done (Claude edits, Codex reviewed, 2026-11-15): the CI run on the pushed `main` commit
+`74993ca` is green (run 43771809152). Next: Step 22.6.** What 22.6 needs:
+- **Green run 43771809152:** Image macos-15-arm64, `arm64`, `Xcode 26.3`, `Apple Swift version 6.2.4`, `rustc 1.99.1`;
+  every step success, 22:53:48–22:58:19Z. Swift step streamed per-test lines and ended "✔ Test run with 41 tests in
+  0 suites passed after 10.512 seconds."; Build app "Built and verified build/multi-link.app". The README CI badge
+  in 22.6 can point at `ci.yml` on `main`.
 - **First run (43678448297 on `6b0a20a`):** toolchain, cask tests, Rust tests, clippy, fmt passed in ~1.5 min;
   `swift test` hung silently 28 min (owner cancelled). Cause: blocking pipe reads / `waitUntilExit` inside
   `Task.detached` ran on Swift's cooperative pool (1 thread per core, 3 on macos-15), so parallel watcher tests
@@ -10,9 +14,6 @@ until the owner pushes and the CI run on that commit is green.** What the rest o
   regression test `moreWatchersThanCoresAllReportAndQuit`. Local repro: `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`.
 - **CI now:** Swift step has `timeout-minutes: 10` and runs under `script -q /dev/null` (a pty), because piped test
   output is block-buffered and showed nothing. A future hang shows the last "◇ Test … started" lines.
-- **Next run, check:** the Swift step prints test lines as it goes and ends "Test run with 41 tests … passed" in
-  well under a minute; then "Build app" passes; the run is green with arm64, Xcode 26.3, Swift 6.2, Rust 1.99.1.
-  If red: `gh run view <id> --log-failed`, fix in a new 22.5 round.
 
 **Phase 22: Step 22.4 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.5–22.6 need:
 - **"Use in Terminal" (R5):** `apps/menubar/Sources/MenubarCore/TerminalLink.swift` (`FileSystemTerminalLinkProbe`,
@@ -1013,6 +1014,13 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 ## Log (newest first)
 
 ### 2026-11-15 — Step 22.5: first remote run, fix round 1 (Swift test hang) — Claude (Codex review)
+- Remote Verify (2026-11-15, after the owner pushed `74993ca`): `gh run view 43771809152` → conclusion success,
+  headSha 74993ca2…, all steps success (toolchains, cask tests, Rust tests, clippy, fmt, Swift tests, Build app).
+  Log: "Image: macos-15-arm64", "arm64", "Xcode 26.3", "Apple Swift version 6.2.4 (swiftlang-6.2.4.1.4
+  clang-1700.6.4.2)", "rustc 1.99.1 (58cf8f9c3 2026-10-13)", "◇ Test run started." at 22:56:37Z, "✔ Test run with
+  41 tests in 0 suites passed after 10.512 seconds." at 22:56:47Z (lines now stream), "Built and verified
+  build/multi-link.app (bundled CLI, app, icon)". Matches the step's Verify: green, arm64, Swift 6.2, the five
+  commands. Step 22.5 done.
 - Did: Read run 43678448297 (steps 1–7 green; `swift test` built in 17.9 s then printed nothing for 28 min;
   cleanup killed 3 `bash`, 1 `sleep`, `swiftpm-testing`, i.e. watcher fake scripts still looping). Found two causes:
   (1) `Watcher` (stdout + stderr reader per child) and `MenubarActions.run` (2 drains + `waitUntilExit`) blocked
