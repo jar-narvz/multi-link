@@ -98,7 +98,7 @@ Each item is one command (copy and run it in Terminal) or one click. Nothing ask
 11. **One real hand-off with the new icon** (a new Claude session loads the new hooks). Look for, within a minute: a
     banner `codex finished (…)` credited to multi-link with icon C.
     ```bash
-    cd ~/multi-link-sandbox/repo-p17 && claude -p --allowedTools Bash "Run this exact command and report its output: codex exec -s read-only 'Reply with just ok (Step 21.5 check)' < /dev/null"
+    cd ~/multi-link-sandbox/repo-p17 && claude -p "Run this exact command and report its output: codex exec -s read-only 'Reply with just ok (Step 21.5 check)' < /dev/null" --allowedTools=Bash < /dev/null
     ```
 12. **Upgrade over it**: click `ml` → **Quit**, then download v2 in Safari:
     ```
@@ -140,4 +140,29 @@ remove the test entry "multi-link" for `dev.multi-link.check21` in System Settin
 
 ## Owner answer
 
-Pending.
+In progress (owner with Claude, 2026-11-14, 18:14–18:23 local).
+- 1: skipped at first; Claude quit the dev app (`osascript … quit`) before Open Anyway.
+- 2: server started by Claude; log shows `GET /v1/multi-link-1.18-arm64.dmg` 200 (18:14:47) and
+  `GET /v2/multi-link-1.18.1-arm64.dmg` 200 (18:22:12).
+- 3–4: downloaded with **Chrome**, not Safari: `0281;6af91597;Chrome;DF99A9C4-…`. Real quarantine either way.
+- 5–7: pass. "Not Opened", then Open Anyway; the setup window showed icon C and two amber rows; icon C in the Dock.
+- 8: pass. Both rows green, "Everything is on", "Login Item Added". **Bug:** under the green Notifications row an
+  orange "Notifications are not allowed for this application" stayed (the transient denial right after the prompt,
+  spike (d)); the window does not clear the error once the status is authorized. Gone after a relaunch (item 13).
+- 9: pass. Backups show apply (…139, from `~/.cargo/bin`), remove (…179), apply (…182).
+- 10: pass (run by Claude): `cli: ok (/Applications/multi-link.app/…)`, `hooks: ok`, `app: installed`, `exit 0`.
+- 11: pass. Owner saw the `codex finished` banner from multi-link with icon C; the popover linked
+  `claude · step 21.5` → `codex · exact`. **Checklist bug:** the command as first written failed (`--allowedTools Bash
+  "…"` swallowed the prompt: "Input must be provided…"); fixed above.
+- 12–13: pass. 1.18.1 installed with Chrome quarantine, "Not Opened" again, Open Anyway, no notification prompt, both
+  rows green, Open at login still ticked.
+- 14: pass after a real log out. A first `pgrep` showed the same PID 16692 (started 18:22:35, no log out yet). After
+  the log out: `last` shows a console login at 18:25, `loginwindow` started 18:24:56, Dock 18:25:05, and
+  `19601 /Applications/multi-link.app/Contents/MacOS/multi-link-menubar` started 18:25:30 with nobody opening it.
+- 15: pass. Real app installed: `dev.multi-link.menubar` 1.18, no quarantine (built here), PID 21199; `setup` →
+  `cli: ok`, `hooks: ok`, `app: installed`, `exit 0`; window "Everything is on" with both rows green, popover
+  **Open at login** ticked (owner screenshot, 18:27).
+- 16: owner confirmed item by item in chat, 2026-11-14. **Phase 21 closed.** 17 (push, `gh release create v1.18`)
+  stays with the owner.
+- Found: (1) a stale "Notifications are not allowed for this application" line under a green Notifications row
+  until relaunch; (2) the checklist's item 11 command (fixed). Both are small; (1) goes to the backlog.

@@ -1,7 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 21: Step 21.5 is done; the owner check is pending (Claude, 2026-11-14).** Release 1.18: the menu-bar app is
+**Phase 21 is closed (owner check done with Claude, 2026-11-14).** Items 1–15 of the checklist passed (Chrome
+download with real quarantine, Open Anyway, both setup rows, a hand-off banner with icon C, the 1.18.1 upgrade keeping
+permissions, a real login launch, then the real 1.18 app in `/Applications`). Publishing (push, `gh release create
+v1.18`) is the owner's. One small bug to the backlog: a stale Notifications error line until relaunch.
+The real app now runs from `/Applications/multi-link.app` (`dev.multi-link.menubar` 1.18) and the hooks call its
+bundled CLI; Open at login is on.
+
+**Phase 21: Step 21.5 is done (Claude, 2026-11-14).** Release 1.18: the menu-bar app is
 one DMG (`apps/menubar/build/multi-link-1.18-arm64.dmg`, 2,900,741 bytes, git-ignored) with the CLI inside, a
 two-row setup window, "Open at login" and icon C. README Install is "download, drag, Open Anyway, Setup", with the
 source build, Uninstall and the download limits.
@@ -888,6 +895,23 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 21.5: Owner real check, Phase 21 closed — Claude (with the owner)
+- Did: walked the owner through the `docs/phase21-check.md` checklist; Claude ran the server, quit the dev app,
+  ran item 10's `setup` and item 11's hand-off, and read process / login times; the owner did the downloads, Open
+  Anyway, the setup clicks, the log out and the switch to the real app. Results recorded in "Owner answer".
+- Changed: `docs/phase21-check.md` (Owner answer; item 11 command fixed), `PLAN.md` (21.5 status, backlog item),
+  `PROGRESS.md`
+- Verify: items 1–15 pass (details and commands in the check file): quarantine `…;Chrome;…`; `setup` exit 0 with
+  `/Applications` paths (test app, then real 1.18); banner seen by the owner and the popover linked `step 21.5` →
+  `codex · exact`; upgrade 1.18.1 kept permissions and Open at login; after a real log out (console login 18:25) the
+  app started at 18:25:30 as a new PID 19601 with nobody opening it.
+- Review: owner confirmed each item in chat (screenshots). Not checked: a download through Safari itself (Chrome
+  used; both set the same quarantine attribute).
+- Gotchas: item 11's command as first written failed (`--allowedTools Bash "<prompt>"` takes the prompt as a tool
+  name); fixed to `--allowedTools=Bash` after the prompt. The setup window kept the transient "not allowed" error
+  under a green Notifications row until relaunch (backlog). A first `pgrep` after "log out" showed the old PID: check
+  the PID changes, not just that the app runs.
 
 ### 2026-11-14 — Step 21.5: Docs, first-run real check, owner confirm — Claude
 - Did: README Install rewritten as "download, drag, Open Anyway, Setup", with the source build below and a new
