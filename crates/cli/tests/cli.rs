@@ -691,6 +691,8 @@ fn setup_quotes_binary_paths_with_spaces_and_apostrophes() {
     fs::copy(env!("CARGO_BIN_EXE_multi-link"), &binary).unwrap();
     let output = Command::new(&binary)
         .env("HOME", home.path())
+        .env("CLAUDE_CONFIG_DIR", home.path().join("config"))
+        .env("MULTI_LINK_HOME", home.path().join("state"))
         .args(["hook", "install"])
         .output()
         .unwrap();
@@ -703,13 +705,19 @@ fn setup_quotes_binary_paths_with_spaces_and_apostrophes() {
         command,
         format!(
             "'{}' hook record",
-            binary.to_str().unwrap().replace('\'', "'\\''")
+            binary
+                .canonicalize()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\'', "'\\''")
         )
     );
     let child = Command::new("sh")
         .args(["-c", command])
         .env("HOME", home.path())
-        .env_remove("MULTI_LINK_HOME")
+        .env("CLAUDE_CONFIG_DIR", home.path().join("config"))
+        .env("MULTI_LINK_HOME", home.path().join("state"))
         .env_remove("MULTI_LINK_HOOK_TEST")
         .output()
         .unwrap();

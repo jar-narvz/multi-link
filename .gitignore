@@ -12,6 +12,7 @@ target/
 
 # Logs
 *.log
+!fixtures/sessions-phase9/**/*.log
 
 # Swift menu-bar app
 apps/menubar/.build/

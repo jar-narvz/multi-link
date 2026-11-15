@@ -158,7 +158,7 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
     };
     let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
     let target = settings_target(scope)?;
-    let exe = std::env::current_exe()?;
+    let exe = super::canonical_executable()?;
     let snippet = settings::snippet(exe.to_str().ok_or("binary path is not UTF-8")?);
     let mut stderr = io::stderr().lock();
     if uninstall {
@@ -269,7 +269,7 @@ fn check_settings(
     let source = read_settings(scope, explicit)?;
     let target = &source.path;
     let mode = source.mode;
-    let exe = std::env::current_exe()?;
+    let exe = super::canonical_executable()?;
     let result = inspect(&source, &exe)?;
     if merged {
         super::json(&mut io::stdout().lock(), &result.merged)?;
@@ -357,7 +357,7 @@ fn change_settings(
             false
         }
     } else {
-        apply(&source, &std::env::current_exe()?, &backup)?
+        apply(&source, &super::canonical_executable()?, &backup)?
     };
     if !changed {
         println!("no change: {}", source.path.display());

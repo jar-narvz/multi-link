@@ -3465,7 +3465,8 @@ the `setup --json` contract.
 
 ### Step 22.1 — Canonical CLI path and CI workflow (Codex)
 - Depends on: 22.0. R1, R6. Files: `crates/cli/src/**`, `crates/cli/tests/**`, `.github/workflows/ci.yml`,
-  `PROGRESS.md`
+  `.gitignore` (one exception line for the Phase 9 fixture logs), the 13 untracked `fixtures/sessions-phase9/**/*.log`
+  fixtures, `PROGRESS.md` (amended 2026-11-14, Review log)
 - Verify: `TZ=UTC cargo test --workspace --locked`, clippy as in R1, `cargo fmt --check`; tests: `hook apply` /
   `hook check` / `setup` invoked through a symlink write and report the canonical target. Workflow: parses
   (`ruby -ryaml`), every action pinned to a 40-character SHA, `permissions`, `persist-credentials` and the version
@@ -3525,6 +3526,11 @@ the `setup --json` contract.
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-14 — Step 22.1 Files amendment: Phase 9 fixture logs (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | Codex's fresh-clone run of `cargo test` fails (`menubar_matches_claudes_five_keys_byte_for_byte`): `.gitignore`'s `*.log` kept 13 synthetic Phase 9 redirect logs (`fixtures/sessions-phase9/**/*.log`, 41–336 bytes, "synthetic banner", `/home/dev/…` paths, no personal data) out of git since Step 9.x, so tests passed only on the owner's Mac | Accepted. Step 22.1 Files gain `.gitignore` (one line `!fixtures/sessions-phase9/**/*.log`) and those 13 files. Why: R1 must pass from a fresh clone; the fixtures are already scrubbed synthetic data, so committing them is the fix, not skipping the test. `fixtures/raw/` stays ignored |
 
 ### 2026-11-14 — Phase 22 amendments from the Step 22.0 spikes (Claude)
 | # | Finding | Decision |

@@ -1,6 +1,26 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.1 is done (Codex, reviewed by Claude, 2026-11-14).** What Steps 22.2–22.4 need:
+- **CI (R1):** `.github/workflows/ci.yml` runs on push to `main`, `pull_request` and `workflow_call`, one `macos-15`
+  job (`timeout-minutes: 60`), concurrency group `ci-${{ github.workflow }}-…` with cancel-in-progress. Not yet run on
+  GitHub (first remote run is 22.5): the `sudo xcode-select` and `rustup` pin lines were never executed, only the rest.
+- **22.2 (R2):** call it with `uses: ./.github/workflows/ci.yml` (no `secrets: inherit` needed). Inside a called
+  workflow `github.workflow` is the caller's name, hence the `ci-` prefix; give release.yml its own group that does
+  not start with `ci-`, and don't cancel in progress for releases. Checks to reuse for each workflow: `actionlint`
+  (1.7.12, installed), Ruby YAML, SHA-pinned `uses:`.
+- **Fresh-clone runs:** clone outside system temp (e.g. `~/multi-link-sandbox/` or `target/`):
+  `crates/hook/tests/hook.rs` `redirect_polling_refuses_fifo_home_escape_and_oversized_logs` assumes the checkout is
+  not under `/tmp` / `/private/tmp` and fails there. GitHub's checkout (`/Users/runner/work/…`) is fine.
+  `fixtures/sessions-phase9/**/*.log` (13 synthetic logs) are now tracked via a `.gitignore` exception; before this
+  step the menubar and core tests passed only on the owner's Mac.
+- **R6 done:** `canonical_executable()` in `crates/cli/src/main.rs`; through any symlink (named `multi-link` or not),
+  `hook apply` / `check` / `install` / `uninstall` and `setup` use the bundled target. 22.3's cask `binary` link and
+  22.4's `/usr/local/bin` link therefore write the app's path into hooks.
+- **22.4 (R5):** no new facts.
+- Leftovers: `~/multi-link-sandbox/ci-clone-22-1/` (Claude's fresh clone) and Codex's
+  `target/step22-1-*` clones (git-ignored); safe to delete.
+
 **Phase 22: Step 22.0 is done (Claude, 2026-11-14); go for the cask.** Spikes and pins are in design "Phase 22
 decisions". What Steps 22.1–22.4 need:
 - **22.1 CI (R1):** `macos-15` arm64 image defaults to Xcode 16.4 (Swift 6.1, too old). Select
@@ -922,6 +942,111 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 22.1: Canonical CLI path and CI workflow — Codex
+- Did: Mode: Codex loop. User-supplied preflight: `python3 -I tools/codex-quota.py` printed `CODEX: OK`.
+  Added one `canonical_executable()` helper and used it for hook check/apply/install/uninstall and setup.
+  Added a real-symlink integration test for `multi-link` and `multi-link-other`, starting with each name:
+  canonical hook commands and setup paths, current checks through both links, unchanged second apply
+  bytes and no backup/extra entries; install/uninstall snippets also use the canonical target. Every new
+  subprocess sets temporary HOME, CLAUDE_CONFIG_DIR and MULTI_LINK_HOME. Updated the existing copied-binary
+  quoting test to expect a canonical target and give both its subprocesses all three temporary env paths.
+  Added CI for main pushes, PRs and workflow_call, read-only contents, canceling concurrency, pinned checkout
+  without persisted credentials, exact runner/toolchain pins and asserts, and the five R1 verification commands.
+  Fix round 1: added exactly one ignore exception after `*.log` for the 13 synthetic Phase 9 logs;
+  prefixed concurrency with `ci-` (PR number, otherwise ref), and added `timeout-minutes: 60`.
+- Changed: `crates/cli/src/{main,hook,setup}.rs`, `crates/cli/tests/{canonical_path,cli}.rs`,
+  `.github/workflows/ci.yml`, `.gitignore`, the 13 `fixtures/sessions-phase9/**/*.log` fixtures, `PROGRESS.md`.
+- Verify: Red/green: new regression first had an incorrect expected event count (7 instead of 5), corrected
+  after reading the five-event snippet. It then failed on the intended bug: written command used the symlink
+  rather than the canonical binary. After the helper change, `cargo test -p multi-link --test canonical_path --locked`:
+  ```text
+  test symlink_names_share_canonical_hooks_and_setup_path ... ok
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+  ```
+  First workspace run found the old quoting test expected `/var/...` instead of canonical `/private/var/...`;
+  corrected that expectation. Final `TZ=UTC cargo test --workspace --locked` → exit 0. Actual final output:
+  ```text
+     Doc-tests multi_link_tui
+
+  running 0 tests
+
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  ```
+  Summary counted from the final run's `test result` lines (Python over the captured log):
+  ```text
+  Completed targets: 70; passed: 748; failed: 0; ignored: 1
+  ```
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0, actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.52s
+  ```
+  `cargo fmt --check`, `actionlint .github/workflows/ci.yml`,
+  `ruby -ryaml -e 'YAML.load_file(ARGV[0])' .github/workflows/ci.yml` → each no output, exit 0.
+  `git diff --check` → no output, exit 0.
+- Verify (fix round 1): Fresh HEAD clone via `git clone --local --no-hardlinks`, in a temporary directory
+  under ignored `target/` (outside system temp); copied this step's 21 changed/new files including `.gitignore`,
+  CI, CLI source/tests, PROGRESS.md and all 13 logs. `fixtures/raw/` absent in clone. Rust PATH per AGENTS.md.
+  Ran in order: `TZ=UTC cargo test --workspace --locked` → exit 0. Actual final result and summary computed
+  from all captured `test result` lines:
+  ```text
+  test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+  Completed targets: 70; passed: 748; failed: 0; ignored: 1
+  ```
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0, actual final line:
+  ```text
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.83s
+  ```
+  `cargo fmt --check`, `actionlint .github/workflows/ci.yml`,
+  `ruby -ryaml -e 'YAML.load_file(ARGV[0])' .github/workflows/ci.yml` → each no output, exit 0.
+  Checked action SHA pin, permissions, persisted-credentials setting, toolchain assertions, concurrency and timeout.
+  `git status --short --untracked-files=all fixtures/sessions-phase9` → exactly these 13 untracked files:
+  ```text
+?? fixtures/sessions-phase9/home/dev/elsewhere/r4.log
+?? fixtures/sessions-phase9/home/dev/repo-r6/out.log
+?? fixtures/sessions-phase9/home/dev/repo-r6/sub/out.log
+?? fixtures/sessions-phase9/home/dev/repo-r8/logs/r8.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r1.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r10.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r13.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r14.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r2.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r3.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r7a.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r7b.log
+?? fixtures/sessions-phase9/tmp/dev/p9/r9.log
+  ```
+  `git check-ignore fixtures/raw/x.jsonl` → `fixtures/raw/x.jsonl`; `git status --short --untracked-files=all
+  fixtures/raw` and `git ls-files fixtures/raw` → no output. `git diff --check` → no output, exit 0.
+  Logs: `target/step22-1-fix1-m7mk2u3z/{test,clippy,fmt,actionlint,yaml}.log`; copied-file manifest beside them.
+  Swift tests and `./build.sh` were not run, per user instruction; toolchain selection/asserts also not executed
+  locally (would change global Xcode/Rust selection). Claude runs the remaining workflow checks.
+- Review: Claude, 2 rounds. Round 1 (on the first hand-off): (1) fresh-clone `cargo test` failed on 13 git-ignored
+  synthetic Phase 9 logs, a pre-existing gap Codex found and stopped on; Claude amended Step 22.1 Files (PLAN.md Review
+  log 2026-11-14) and Codex added `!fixtures/sessions-phase9/**/*.log` (13 files, no personal paths, checked with grep);
+  (2) the concurrency group could equal a `workflow_call` caller's group (`github.workflow` is the caller's) and
+  deadlock in 22.2 → `ci-` prefix; (3) no job timeout → `timeout-minutes: 60`. Round 2: clean. R6 helper
+  `canonical_executable()` (`crates/cli/src/main.rs`) is used by `hook check` / `apply` / `install` / `uninstall` and
+  `setup`; `hook remove` writes no path. The symlink test runs both link names in both orders with HOME,
+  CLAUDE_CONFIG_DIR and MULTI_LINK_HOME in temp dirs; the owner's `~/.claude/settings.json` was not modified
+  (mtime 18:19, before the step; still only the bundled app's hook command). Scope: only the step's files (plus the
+  amended `.gitignore` and fixtures). Claude's Verify: in a fresh `git clone` of HEAD at
+  `~/multi-link-sandbox/ci-clone-22-1` with the step's files copied in (`fixtures/raw/` absent), each of ci.yml's six
+  `run:` steps, extracted with Ruby YAML and run in order with `bash -eo pipefail`, exits 0: toolchains (`arm64`,
+  `Xcode 26.3`, `Apple Swift version 6.2.4`, `rustc 1.99.1`, `cargo 1.99.1`; the `sudo xcode-select` and `rustup
+  toolchain install` / `default` lines were skipped locally because they change this Mac's global selection, which
+  already is Xcode 26.3 / Rust 1.99.1, so 22.5's remote run is their real check); `TZ=UTC cargo test --workspace
+  --locked` → 70 `test result: ok` lines, 748 passed, 0 failed, 1 ignored; clippy → `Finished`; `cargo fmt --check` →
+  no output; `swift test --disable-sandbox` → `Test run with 36 tests in 0 suites passed after 10.937 seconds.`;
+  `./build.sh` → `Built and verified build/multi-link.app (bundled CLI, app, icon)`. `actionlint .github/workflows/ci.yml`
+  (1.7.12) → exit 0; Ruby YAML → exit 0; every `uses:` pinned to a 40-character SHA; `permissions`,
+  `persist-credentials: false` and the four version asserts present. Codex's pasted numbers match.
+- Gotchas: Original fresh-clone menubar failure came from 13 synthetic Phase 9 logs ignored since Phase 9;
+  Claude amended Files on 2026-11-14 to authorize the narrow exception and fixtures. Resolved in fix round 1.
+  Two initial fix-round runs under system temp failed `redirect_polling_refuses_fifo_home_escape_and_oversized_logs`
+  at `crates/hook/tests/hook.rs:522` (`left: 2`, `right: 1`): that test explicitly assumes the checkout is outside
+  system temp, so its synthetic home escapes the allowed temp root. A new fresh clone under ignored `target/`
+  satisfies that assumption and passes without code changes. Existing untracked `.claude/` content left untouched.
 
 ### 2026-11-14 — Step 22.0: Spikes and pins — Claude
 - Did: (a) read the `macos-15-arm64` runner README at `ff52b3e8…` and pinned Xcode 26.3, Rust 1.99.1 via rustup and

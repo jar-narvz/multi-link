@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select and verify toolchains
+        run: |
+          set -euo pipefail
+          architecture=$(uname -m)
+          printf '%s\n' "$architecture"
+          test "$architecture" = arm64
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcode_version=$(xcodebuild -version)
+          printf '%s\n' "$xcode_version"
+          test "$(printf '%s\n' "$xcode_version" | head -n 1)" = 'Xcode 26.3'
+          swift_version=$(swift --version)
+          printf '%s\n' "$swift_version"
+          [[ "$swift_version" == *'Swift version 6.2.'* ]]
+          rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+          rustup default 1.99.1
+          rust_version=$(rustc --version)
+          printf '%s\n' "$rust_version"
+          [[ "$rust_version" == 'rustc 1.99.1 '* ]]
+          cargo --version
+      - name: Rust tests
+        run: TZ=UTC cargo test --workspace --locked
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Rust formatting
+        run: cargo fmt --check
+      - name: Swift tests
+        working-directory: apps/menubar
+        run: swift test --disable-sandbox
+      - name: Build app
+        working-directory: apps/menubar
+        run: ./build.sh

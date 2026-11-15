@@ -104,7 +104,7 @@ fn inspect(binary: &Path) -> Result<Inspection, Error> {
 }
 
 pub fn run(args: SetupArgs) -> Result<i32, Error> {
-    let binary = std::env::current_exe()?.canonicalize()?;
+    let binary = super::canonical_executable()?;
     hook::path_text(&binary)?;
     let home = PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?);
     // current_exe is canonical; compare ~/Applications in the same namespace.

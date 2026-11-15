@@ -23,6 +23,11 @@ use multi_link_model::{
 };
 use serde::Serialize;
 
+/// Resolve the running CLI once into the path stored and compared in settings.
+fn canonical_executable() -> io::Result<PathBuf> {
+    std::env::current_exe()?.canonicalize()
+}
+
 #[derive(Parser)]
 #[command(name = "multi-link", about = "Inspect local Claude and Codex sessions")]
 struct Cli {
