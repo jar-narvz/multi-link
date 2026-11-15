@@ -1,6 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22 is planned (Claude, 2026-11-14); nothing is built yet.** Release pipeline: CI on every push, a release
+workflow that makes a draft on a `v*` tag, an own Homebrew tap whose cask puts the CLI on `PATH` (only if Step 22.0's
+spike shows Homebrew 7 still installs an unsigned cask from a tap), "Use in Terminal" in the setup window, and one
+canonical CLI path for hooks. Plan and Codex critique (10 points, all accepted, some in part) in PLAN.md. Next: Step
+22.0 (Claude) spikes; its Homebrew spike needs the owner's OK to install through brew.
+
 **Phase 21 is closed (owner check done with Claude, 2026-11-14).** Items 1–15 of the checklist passed (Chrome
 download with real quarantine, Open Anyway, both setup rows, a hand-off banner with icon C, the 1.18.1 upgrade keeping
 permissions, a real login launch, then the real 1.18 app in `/Applications`). Published by the owner 2026-11-14: pushed to

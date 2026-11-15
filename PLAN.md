@@ -3367,10 +3367,174 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
 - Status (2026-11-14): done. Owner ran the checklist with Claude (items 1–15 pass; downloads via Chrome, real
   quarantine), recorded in `docs/phase21-check.md` "Owner answer". Phase 21 closed; publishing (item 17) is the owner's.
 
+### Phase 22 — Release pipeline: CI, a Homebrew tap, multi-link in Terminal (Release 1.19)
+Need (owner, 2026-11-14): after Phase 21's non-goals review, "CLI on PATH from the app, homebrew cask, and CI release
+builds", skipping notarization, auto-update and Intel Macs. Today: no CI (`.github/` does not exist), so tests run only
+on the owner's Mac and a release is `release.sh` plus a hand-run `gh release create`; a DMG user has no `multi-link`
+command in Terminal (TUI, `open`, `hook check`) unless they also build with cargo; there is no `brew install`.
+Desired state (needs): every push is tested on a clean machine; a release is "push a tag, check the draft, publish";
+a developer installs with one familiar command and upgrades the same way; a DMG user can get `multi-link` in Terminal
+in one copied command; the README states exactly what an unsigned app still costs (Open Anyway per version).
+Comparables (web search, 2026-11-14, secondary sources): Stats and Rectangle (open-source menu-bar apps: GitHub Actions
+builds a DMG on a tag, and a Homebrew cask points at the release asset; both are notarized); small unsigned apps in
+their own taps add a Gatekeeper caveat to each cask (e.g. a `moonfruit/homebrew-tap` PR). Homebrew removed
+`--no-quarantine` and, from 2026-09-01, ends official-tap support for casks that fail Gatekeeper (Homebrew 5 notes,
+`Homebrew/brew#20755`, several tap PRs); the owner's Mac runs Homebrew 7.0.13 with no quarantine flag in
+`brew install --help`. Whether Homebrew 7 still installs an unsigned cask from a third-party tap is **unconfirmed**
+until 22.0's spike passes; nothing relies on it before then.
+
+Decisions (amended after the Codex critique, Review log 2026-11-14):
+- **R1 CI on every push.** `.github/workflows/ci.yml` on `push` to `main`, `pull_request` and `workflow_call`: one
+  `macos-15` (arm64) job that prints and asserts `uname -m` = `arm64`, the selected Xcode and `swift --version` (6.2,
+  chosen with `xcode-select`; the image defaults to Xcode 16.4) and the Rust toolchain, then runs exactly:
+  `TZ=UTC cargo test --workspace --locked`, `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+  `cargo fmt --check`, `swift test --disable-sandbox` in `apps/menubar`, `./build.sh`. Why one macOS job: the app is
+  macOS-only, public repos get macOS minutes free, and `release.sh` refuses non-arm64 hosts. Every action (GitHub's
+  own included) pinned to a commit SHA; `permissions: contents: read`; `persist-credentials: false`; `concurrency`
+  cancels superseded runs. Must pass from a fresh clone: `fixtures/raw/` is not in git.
+- **R2 Release on a tag, published by the owner.** `.github/workflows/release.yml` on a tag matching
+  `v[0-9]+.[0-9]+(.[0-9]+)?` (no prerelease tags): `tools/release-check.sh` fails unless the tag equals `v` +
+  `CFBundleShortVersionString` and the tagged commit is reachable from `origin/main`; then the full R1 job runs on that
+  exact commit (`workflow_call`); then `release.sh` builds the DMG and `<dmg>.sha256` holding the DMG's **basename**
+  (made in its folder); then a **draft** release with exactly those two files (`gh release create --draft
+  --verify-tag`; `contents: write` on that job only, event values passed through quoted env vars). Why draft:
+  publishing stays the owner's action (CLAUDE.md), and a release the owner publishes by hand is what triggers R4 (an
+  event caused by `GITHUB_TOKEN` would not). Same ad hoc signing as today.
+- **R3 Own tap, cask with the CLI on `PATH`.** (Only if 22.0 says go.) A cask template in this repo
+  (`packaging/homebrew/multi-link.rb`) rendered by `tools/render-cask.sh <version> <sha256> [--url <url>]` (`--url`
+  only for the local test tap): the release-asset URL, `depends_on arch: :arm64`, `depends_on macos: ">= :sequoia"`,
+  `app "multi-link.app"`, `binary "#{appdir}/multi-link.app/Contents/MacOS/multi-link"` (Homebrew's documented form
+  for a bundled CLI), `uninstall quit: "dev.multi-link.menubar"`, `zap` only multi-link's own preferences, and
+  `caveats`: Open Anyway after every install and upgrade, "untick Open at login and run `multi-link hook remove`
+  before uninstalling". No `login_item` stanza: the app registers with `SMAppService.mainApp`, which that stanza does
+  not manage; the app's own checkbox does. How brew meets an existing DMG install in `/Applications` is found in 22.0
+  and written in the caveats and README, never forced silently. It lives in `jar-narvz/homebrew-tap`
+  (`brew install --cask jar-narvz/tap/multi-link`). Why a tap: the official tap refuses un-notarized casks.
+- **R4 The tap follows releases.** `.github/workflows/cask.yml` on `release: published`, serialized (`concurrency`,
+  no cancel): refuses prereleases, tags not matching R2's pattern, and versions not newer than the tap's current
+  cask; checks the release has exactly the DMG and its `.sha256` and that they match; renders the cask from the
+  default branch's template (never code from the tag); pushes to the tap with `TAP_TOKEN` (fine-grained, contents
+  read/write on the tap repo only), exposed only to the final push step. A rerun with the same version is a no-op.
+  With no token it fails with a clear message and changes nothing. The owner creates the tap repo and token once.
+- **R5 "Use in Terminal" for DMG users.** A line under the two setup rows (not a third row; it never counts in "N
+  left", and Turn on everything never touches it). It checks two places, each reported on its own:
+  `/usr/local/bin/multi-link` and `/opt/homebrew/bin/multi-link`, each `linked` (resolves to this app's bundled CLI),
+  `other` (a file or link to something else: shown with its path, no command offered over it), `broken` (a dangling
+  link), or absent. Any `linked` → "multi-link is linked at <path>". All absent → a **Copy command** button for
+  `sudo mkdir -p /usr/local/bin && sudo ln -s <bundled CLI, shell-quoted> /usr/local/bin/multi-link` (no `-f`: `ln`
+  refuses an occupied path, so a file created after the check is never overwritten). Also shown: "check with
+  `command -v multi-link`", since the app cannot read a shell's `PATH` and an earlier entry (e.g. `~/.cargo/bin`) wins.
+  The app never runs `sudo` or writes outside its own files. Why `/usr/local/bin`: it is in macOS's default
+  `/etc/paths` (checked on this Mac). Why copy, not do: Phase 21 deferred the admin link for its edge cases; a visible
+  command keeps the password prompt in Terminal (Ollama's surprise prompt was the comparable's weak spot). Hidden on
+  the "Move to Applications" gate. README Uninstall gets the matching `sudo rm /usr/local/bin/multi-link`.
+- **R6 One canonical CLI path.** `hook check` / `hook apply` / `hook remove` use `current_exe()` without resolving
+  links (`crates/cli/src/hook.rs`), unlike `setup` (`canonicalize`); run through the brew or `/usr/local/bin` link
+  they would write the link's path into the hooks. Fix: canonicalize in one helper used by both, tested through a real
+  symlink against a scratch settings file. Hooks stay on the app's bundled path however the CLI is called.
+- **R7 Release 1.19** is the first CI-built release: Info.plist `1.19`, tag `v1.19`, cask `1.19`. No throwaway dry-run
+  tag (R2 refuses tags off `main`): CI's first remote run (22.5) is on `main` before any tag, and the release
+  workflow's first run is the real `v1.19`, whose draft is not published until the owner has checked it.
+
+Non-goals: notarization / Developer ID (owner, 2026-11-14); auto-update; Intel / universal builds; submitting to the
+official `homebrew/cask` (needs notarization); a source-built CLI formula (it would avoid Gatekeeper for the CLI, but
+needs Rust at install time and leaves out the app, which is the product; backlog if the cask is a no-go); Linux or
+Windows CI; publishing crates; the app running `sudo`, editing shell profiles or cleaning hooks on uninstall; changing
+the `setup --json` contract.
+
+### Step 22.0 — Spikes and pins (Claude)
+- (a) Runner: from the `actions/runner-images` macos-15-arm64 README, the Xcode path that ships Swift 6.2 and whether
+  `rustup` / cargo are preinstalled; pin the `xcode-select` line, the toolchain setup and each action's commit SHA.
+- (b) Homebrew 7 and an unsigned cask (owner OK needed: it installs through brew). Isolated from the owner's app: a
+  build with a never-seen bundle id and app name (`dev.multi-link.check22`, `multi-link check22.app`, CLI link name
+  `multi-link-check22`), v1 and v2 DMGs served from `127.0.0.1` over HTTP (so brew downloads them, not `file://`), a
+  local test tap. Record: does `brew install --cask` install it; is it quarantined; does first launch need Open
+  Anyway; does the `binary` link run before and after Open Anyway; does `brew upgrade` to v2 work and need Open Anyway
+  again; what brew does when an app of that name already sits in `/Applications` (copied there first, as a DMG user
+  would); does `brew uninstall` remove app and link; do `brew style` / `brew audit --cask` pass. Then uninstall,
+  untap, delete the builds and the test id's defaults. A fresh macOS account or VM stays the owner's call.
+- (c) Through a real symlink to the bundled CLI: what `setup`, `hook check` and `hook apply --settings <scratch>`
+  report and write (confirms R6).
+- Go/no-go for (b): if Homebrew refuses or breaks the unsigned cask, R3/R4 and Step 22.3 are dropped (the source-built
+  formula goes to the backlog), the README says why, and R5 is the only `PATH` route; not a stop.
+- Files: `docs/design.md` ("Phase 22 decisions"), `PROGRESS.md`
+- Verify: each spike's command and observed result recorded; the pins and the go/no-go written down.
+
+### Step 22.1 — Canonical CLI path and CI workflow (Codex)
+- Depends on: 22.0. R1, R6. Files: `crates/cli/src/**`, `crates/cli/tests/**`, `.github/workflows/ci.yml`,
+  `PROGRESS.md`
+- Verify: `TZ=UTC cargo test --workspace --locked`, clippy as in R1, `cargo fmt --check`; tests: `hook apply` /
+  `hook check` / `setup` invoked through a symlink write and report the canonical target. Workflow: parses
+  (`ruby -ryaml`), every action pinned to a 40-character SHA, `permissions`, `persist-credentials` and the version
+  asserts present; `actionlint` passes if the owner OKs installing it (else noted, and the remote run in 22.5 is the
+  check); in a fresh clone of HEAD with this step's files copied in (`git diff --name-only` plus new files), each
+  `run:` step, run in order on this Mac, exits 0.
+
+### Step 22.2 — Release workflow (Codex)
+- Depends on: 22.1. R2. Files: `.github/workflows/release.yml`, `tools/release-check.sh`, `tools/tests/**`,
+  `apps/menubar/release.sh` (only to write `<dmg>.sha256` with the basename), `PROGRESS.md`
+- Verify: workflow checks as in 22.1; `tools/release-check.sh` tests with a scratch git repo: matching tag on a main
+  commit → 0; mismatched version, prerelease-shaped tag, commit not on main → non-zero with a message;
+  `release.sh` → DMG plus a `.sha256` that `shasum -a 256 -c` accepts from inside the DMG's folder; the `gh` call
+  (checked with a stub `gh` on `PATH`) gets `--draft --verify-tag` and exactly two files.
+
+### Step 22.3 — Homebrew cask and tap update (Codex; skipped on a no-go)
+- Depends on: 22.2 and 22.0's go. R3, R4. Files: `packaging/homebrew/multi-link.rb`, `tools/render-cask.sh`,
+  `tools/tests/**`, `.github/workflows/cask.yml`, `.github/workflows/ci.yml` (one step: render with test values and
+  check), `PROGRESS.md`
+- Verify: the rendered cask for 1.18 equals a committed expected file and `ruby -c` accepts it; bad input (empty,
+  non-hex sha, bad version, newer-than check failing) → non-zero; in a fresh 22.0-style local test tap (owner OK,
+  isolated id), the rendered cask with `--url http://127.0.0.1…` passes `brew style` and `brew audit --cask`,
+  installs, its CLI runs from `PATH`, uninstall removes app and link; `cask.yml`'s logic lives in a script tested with
+  stub `gh` / `git`: rejects prereleases, older versions, a missing or mismatched sha, no `TAP_TOKEN`; same-version
+  rerun is a no-op.
+
+### Step 22.4 — "Use in Terminal" in the setup window (Codex)
+- Depends on: 22.0. R5. Files: `apps/menubar/Sources/**`, `apps/menubar/Tests/**`, `PROGRESS.md`
+- Verify: `swift test --disable-sandbox` → 0 failures (each place linked / other / broken / absent, mixed cases, a
+  directory at the path, symlink chains, the copied command shell-quotes the path and has no `-f`, nothing shown on
+  the gate, Turn on everything and "N left" unchanged); `./build.sh` built and verified; screenshots of the window in
+  light and dark with each state, matching board 21's row style.
+
+### Step 22.5 — First remote run (owner push, Claude checks)
+- Depends on: 22.1–22.4. Owner pushes `main` (copy-paste command). Claude reads the run with `gh run list` /
+  `gh run view --log-failed` (read-only) and fixes failures in this step, with Codex reviewing Claude's edits; then
+  the owner pushes again. No tag yet. Owner-only, one time: create `jar-narvz/homebrew-tap` and the `TAP_TOKEN`
+  secret (copy-paste commands; the token is made in the browser), skipped on a no-go.
+- Files: `.github/workflows/**`, `tools/**`, `docs/phase22-check.md`, `PROGRESS.md`
+- Verify: the CI run on the pushed `main` commit is green, its log shows arm64, Swift 6.2 and the five commands.
+
+### Step 22.6 — Docs, Release 1.19, owner check (Claude)
+- Depends on: 22.5. README: Install gets `brew install --cask jar-narvz/tap/multi-link` first (on a go), the DMG second,
+  "Use in Terminal", a CI badge, a short Releasing section (bump Info.plist, tag, check and publish the draft), Uninstall
+  (`/usr/local/bin` link, brew uninstall, hooks), and limits (Open Anyway per version for brew too; an earlier `PATH`
+  entry wins; an existing DMG install and brew). Info.plist `1.19`. Owner, from `docs/phase22-check.md`: push, push
+  tag `v1.19`, check the draft (two files, sizes), publish it, see the cask land in the tap at 1.19, install with brew
+  (over the current app as 22.0 found), Open Anyway, `multi-link setup` from Terminal shows the bundled path, one
+  hand-off banner. Release workflow failures found here are fixed in this step (`.github/workflows/**`, `tools/**`).
+- Files: `README.md`, `apps/menubar/Info.plist`, `.github/workflows/**`, `tools/**`, `docs/phase22-check.md`,
+  `PROGRESS.md`
+- Verify (whole phase): the local commands above; `gh run list` showing CI, release and cask runs green; the published
+  release and the tap's cask at `1.19`; the owner's answer recorded.
+
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-14 — Phase 22 plan critique (Codex, read-only)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | The brew spike with a `file://` URL and the already-approved 1.18 app proves nothing about a fresh install and can collide with the owner's app | Accepted in part. Never-seen bundle id, app name and link name; v1/v2 served over HTTP so brew downloads them; first launch, CLI before/after Open Anyway, upgrade, existing-app case. A VM or fresh account stays the owner's call (as in 21.0). Unsigned-tap support stays unconfirmed until it passes |
+| 2 | `sudo ln -sf` can overwrite a file made after the check; quoting; no uninstall step | Accepted. No `-f`, shell-quoted path, tests for occupied / directory / dangling paths, README Uninstall line |
+| 3 | A matching tag doesn't prove the tagged commit passed CI; checksum file with an absolute runner path | Accepted. Tag commit must be on `main`; the full R1 job runs on it (`workflow_call`) before the draft; `.sha256` holds the basename |
+| 4 | Tap token trust boundary | Accepted. Strict tag pattern, env-passed event values, exactly two expected assets, template from the default branch only, `persist-credentials: false`, token only on the push step, every action SHA-pinned |
+| 5 | Pin the `binary` stanza; `hook.rs` uses `current_exe()` without canonicalizing | Accepted. `#{appdir}` form pinned; new R6 and Rust work in 22.1, tested through a real symlink |
+| 6 | `login_item` doesn't manage `SMAppService`; adopting a DMG install, links surviving uninstall | Accepted. No `login_item` stanza; caveats and README cover Open at login, hooks and the link; existing-app behaviour found in 22.0; no automatic hook cleanup |
+| 7 | Mixed or broken link states; a cargo copy isn't in those two folders | Accepted. Per-place states including `broken`; `command -v` hint; the wrong cargo example removed |
+| 8 | Verify gaps: clean clone lacks the step's files; YAML parsing misses workflow semantics; no test URL override | Accepted. Step files copied into the clone; `actionlint` if the owner OKs installing it; `--url` for the test tap; release and tap logic in scripts tested with stub `gh` / `git` |
+| 9 | Image defaults to Xcode 16.4; pin and assert toolchains; exact clippy; `--locked` | Accepted (R1) |
+| 10 | 22.5 mixed first remote run, release and repair with no files for fixes; no-go branch; prereleases, ordering, reruns | Accepted. Split: 22.5 first remote run on `main` (fix files listed), 22.6 docs and release; 22.3 skipped on a no-go; cask workflow serialized, refuses prereleases and older versions, rerun no-op; owner publishes by hand so the `release` event fires |
 
 ### 2026-11-14 — Step 21.5 Files amendment: release version (Claude)
 | # | Finding | Decision |
