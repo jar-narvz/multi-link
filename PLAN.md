@@ -3402,13 +3402,15 @@ Decisions (amended after the Codex critique, Review log 2026-11-14):
   event caused by `GITHUB_TOKEN` would not). Same ad hoc signing as today.
 - **R3 Own tap, cask with the CLI on `PATH`.** (Only if 22.0 says go.) A cask template in this repo
   (`packaging/homebrew/multi-link.rb`) rendered by `tools/render-cask.sh <version> <sha256> [--url <url>]` (`--url`
-  only for the local test tap): the release-asset URL, `depends_on arch: :arm64`, `depends_on macos: ">= :sequoia"`,
-  `app "multi-link.app"`, `binary "#{appdir}/multi-link.app/Contents/MacOS/multi-link"` (Homebrew's documented form
+  only for the local test tap): the release-asset URL, `depends_on arch: :arm64`, `depends_on macos: :sequoia`
+  (the `">= :sequoia"` form fails `brew style`, 22.0), `app "multi-link.app"`, `binary "#{appdir}/multi-link.app/Contents/MacOS/multi-link"` (Homebrew's documented form
   for a bundled CLI), `uninstall quit: "dev.multi-link.menubar"`, `zap` only multi-link's own preferences, and
-  `caveats`: Open Anyway after every install and upgrade, "untick Open at login and run `multi-link hook remove`
-  before uninstalling". No `login_item` stanza: the app registers with `SMAppService.mainApp`, which that stanza does
-  not manage; the app's own checkbox does. How brew meets an existing DMG install in `/Applications` is found in 22.0
-  and written in the caveats and README, never forced silently. It lives in `jar-narvz/homebrew-tap`
+  `caveats`: Open Anyway once after a fresh install (22.0: an upgrade keeps the approval when the designated
+  requirement matches), "untick Open at login and run `multi-link hook remove` before uninstalling". No `login_item` stanza: the app registers with `SMAppService.mainApp`, which that stanza does
+  not manage; the app's own checkbox does. An existing DMG install in `/Applications`: brew
+  refuses (22.0); README says to quit and delete the DMG copy first (or `--adopt` at the same version); `--force` is
+  never suggested (it deletes without a backup). Homebrew 7 refuses casks from an untrusted tap, so Install is
+  `brew trust --cask jar-narvz/tap/multi-link` then `brew install --cask jar-narvz/tap/multi-link`. It lives in `jar-narvz/homebrew-tap`
   (`brew install --cask jar-narvz/tap/multi-link`). Why a tap: the official tap refuses un-notarized casks.
 - **R4 The tap follows releases.** `.github/workflows/cask.yml` on `release: published`, serialized (`concurrency`,
   no cancel): refuses prereleases, tags not matching R2's pattern, and versions not newer than the tap's current
@@ -3431,7 +3433,8 @@ Decisions (amended after the Codex critique, Review log 2026-11-14):
 - **R6 One canonical CLI path.** `hook check` / `hook apply` / `hook remove` use `current_exe()` without resolving
   links (`crates/cli/src/hook.rs`), unlike `setup` (`canonicalize`); run through the brew or `/usr/local/bin` link
   they would write the link's path into the hooks. Fix: canonicalize in one helper used by both, tested through a real
-  symlink against a scratch settings file. Hooks stay on the app's bundled path however the CLI is called.
+  symlink against a scratch settings file, with the link named `multi-link` and with another name (22.0: another
+  name is not recognized and every apply appends a copy). Hooks stay on the app's bundled path however the CLI is called.
 - **R7 Release 1.19** is the first CI-built release: Info.plist `1.19`, tag `v1.19`, cask `1.19`. No throwaway dry-run
   tag (R2 refuses tags off `main`): CI's first remote run (22.5) is on `main` before any tag, and the release
   workflow's first run is the real `v1.19`, whose draft is not published until the owner has checked it.
@@ -3505,7 +3508,8 @@ the `setup --json` contract.
 - Verify: the CI run on the pushed `main` commit is green, its log shows arm64, Swift 6.2 and the five commands.
 
 ### Step 22.6 — Docs, Release 1.19, owner check (Claude)
-- Depends on: 22.5. README: Install gets `brew install --cask jar-narvz/tap/multi-link` first (on a go), the DMG second,
+- Depends on: 22.5. README: Install gets `brew trust --cask jar-narvz/tap/multi-link` + `brew install --cask jar-narvz/tap/multi-link`
+  first (on a go), the DMG second,
   "Use in Terminal", a CI badge, a short Releasing section (bump Info.plist, tag, check and publish the draft), Uninstall
   (`/usr/local/bin` link, brew uninstall, hooks), and limits (Open Anyway per version for brew too; an earlier `PATH`
   entry wins; an existing DMG install and brew). Info.plist `1.19`. Owner, from `docs/phase22-check.md`: push, push
@@ -3521,6 +3525,15 @@ the `setup --json` contract.
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-14 — Phase 22 amendments from the Step 22.0 spikes (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | Homebrew 7 refuses casks from an untrusted tap | Accepted. `brew trust --cask` before install in R3, the README (22.6) and test taps |
+| 2 | `depends_on macos: ">= :sequoia"` fails `brew style` | Accepted. `:sequoia` |
+| 3 | Upgrades keep the Gatekeeper approval when the designated requirement matches | Accepted. Caveats: Open Anyway once after a fresh install, not after every upgrade |
+| 4 | Brew refuses an existing app in `/Applications`; `--adopt` only at the same version; `--force` deletes without a backup | Accepted. README: delete the DMG copy first or `--adopt`; never suggest `--force` |
+| 5 | Through a link with another name, hook entries aren't recognized and apply appends copies | Accepted. R6 tests both link names |
 
 ### 2026-11-14 — Phase 22 plan critique (Codex, read-only)
 | # | Finding | Decision |
