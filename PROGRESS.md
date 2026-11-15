@@ -3,8 +3,8 @@
 ## Current state
 **Phase 21 is closed (owner check done with Claude, 2026-11-14).** Items 1–15 of the checklist passed (Chrome
 download with real quarantine, Open Anyway, both setup rows, a hand-off banner with icon C, the 1.18.1 upgrade keeping
-permissions, a real login launch, then the real 1.18 app in `/Applications`). Publishing (push, `gh release create
-v1.18`) is the owner's. One small bug to the backlog: a stale Notifications error line until relaunch.
+permissions, a real login launch, then the real 1.18 app in `/Applications`). Published by the owner 2026-11-14: pushed to
+`93cf9e6` and GitHub release `v1.18` with `multi-link-1.18-arm64.dmg` (2,900,741 bytes). One small bug to the backlog: a stale Notifications error line until relaunch.
 The real app now runs from `/Applications/multi-link.app` (`dev.multi-link.menubar` 1.18) and the hooks call its
 bundled CLI; Open at login is on.
 
