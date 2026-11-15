@@ -1481,3 +1481,128 @@ nothing. With `cli: temporary` it refuses every fix ("move multi-link to Applica
 | Notifications row | `UNUserNotificationCenter` only, Phase 20 rule `.authorized && alertSetting == .enabled`; denied → Open Settings. The request moves from app start to this row's button. |
 | Open at login (menu) | `SMAppService.mainApp` only. |
 | Re-check | Every 2 s while the window is open, never prompting. |
+
+## Phase 22 decisions
+
+Step 22.0, 2026-11-14 (Claude). Spikes and pins for PLAN.md Phase 22 R1–R7, on the owner's Mac (macOS 15.7.3 arm64,
+Darwin 24.6.0, Xcode 26.3 / Swift 6.2.4, Rust 1.99.1, Homebrew 7.0.13). Owner OKs (2026-11-14, "Yes, both"): the
+isolated Homebrew spike and `brew install actionlint` (installed: 1.7.12, stays for 22.1–22.3).
+
+### (a) Runner and pins (R1)
+
+Source: `actions/runner-images` `images/macos/macos-15-arm64-Readme.md` at commit
+`ff52b3e8ed76ae30b051cccb6c6899f5cbb88391` (2026-11-09; image `20261104.0514.1`, macOS 15.8.2, read with
+`gh api repos/actions/runner-images/contents/images/macos/macos-15-arm64-Readme.md`).
+
+- **Xcode.** Default is 16.4 (`/Applications/Xcode.app` → `Xcode_16.4.app`, Swift 6.1), which cannot build
+  `swift-tools-version: 6.2`. Installed: 26.0.1, 26.1.1, 26.2, 26.3 (all Swift 6.2.x). Pin **Xcode 26.3** (build 17C529,
+  same as the owner's Mac): `sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer`, then assert
+  `swift --version` contains `Swift version 6.2` and `xcodebuild -version` starts `Xcode 26.3`. Why the exact path, not
+  `Xcode.app`: that link is the 16.4 default.
+- **Rust.** Preinstalled on the image: Rustup 1.29.3, Rust/Cargo 1.99.1, Clippy 0.1.99, Rustfmt 1.10.0 (same Rust as
+  the owner's Mac). Pin with rustup only, no toolchain action: `rustup toolchain install 1.99.1 --profile minimal
+  --component clippy,rustfmt` and `rustup default 1.99.1`, then print `rustc --version` / `cargo --version` and assert
+  `rustc 1.99.1`. Why: one less third-party action to trust; the repo has no `rust-toolchain` file, so the workflow is
+  where the version lives. A newer image Rust can't change results unnoticed.
+- **Also on the image:** GitHub CLI 2.103.3 (release workflow uses `gh`, no upload action), Git 2.56.0, Ruby 3.3.13,
+  Homebrew 7.0.12.
+- **Action SHAs** (`gh api repos/<repo>/releases/latest`, then `gh api repos/<repo>/commits/<tag> --jq .sha`; the commit
+  a tag points at, never the tag object):
+
+| Action | Release | Commit SHA |
+| --- | --- | --- |
+| `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+| `actions/cache` (optional, cargo cache) | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` |
+| `Swatinem/rust-cache` (not recommended; annotated tag `2201cc58…` → commit) | v2.9.3 | `d1527c8f67ef9af357290475d4af4b0fab8f12e0` |
+
+  Only `actions/checkout` is required (`persist-credentials: false`). Use `actions/cache` only if CI time demands it;
+  write it as `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`.
+
+### (b) Homebrew 7 and an unsigned cask (R3)
+
+Isolated build, never the owner's app: the 1.18 bundle (`apps/menubar/build/multi-link.app`) copied with
+`CFBundleIdentifier dev.multi-link.check22`, name `multi-link check22`, versions `1.0` and `2.0`, re-signed inside out ad hoc
+(CLI `dev.multi-link.cli`, app DR `identifier "dev.multi-link.check22"`), packed as UDZO DMGs with an `Applications` link
+(`~/multi-link-sandbox/check22/make.sh`, since deleted). Served by `python3 -I -m http.server 8766 --bind 127.0.0.1`.
+Local tap `brew tap-new --no-git multilinkcheck/check22`; cask `multi-link-check22` with the R3 shape: `url
+"http://127.0.0.1:8766/multi-link-check22-#{version}.dmg"`, `depends_on arch: :arm64`, `depends_on macos: :sequoia`,
+`app "multi-link check22.app"`, `binary "#{appdir}/multi-link check22.app/Contents/MacOS/multi-link", target:
+"multi-link-check22"`, `uninstall quit: "dev.multi-link.check22"`, `zap trash:
+"~/Library/Preferences/dev.multi-link.check22.plist"`, an Open Anyway caveat. `HOMEBREW_NO_AUTO_UPDATE=1` throughout.
+
+| Check | Command | Observed |
+| --- | --- | --- |
+| Tap trust | `brew audit --cask multilinkcheck/check22/multi-link-check22` | **Refused:** "Refusing to load cask … from untrusted tap … Run `brew trust --cask …` or `brew trust …`". Homebrew 7 loads nothing from a non-official tap until trusted. `brew trust --cask <tap>/<cask>` writes `~/.homebrew/trust.json`; it also works **before** the tap exists (tried with a made-up name, then `brew untrust`). |
+| Style | `brew style --cask …` | First run installed Homebrew's own dev gems into its vendor bundle. `depends_on macos: ">= :sequoia"` → `Homebrew/OSDependsOn: Use depends_on macos: :sequoia` (correctable). With `:sequoia`: "no offenses detected". |
+| Audit | `brew audit --cask …` | Pass (exit 0). |
+| Audit online | `brew audit --cask --online …` | Only "Version '1.0' differs from '1.18' retrieved by livecheck" (livecheck reads the homepage's GitHub releases; a spike-version artefact, a real `1.19` cask matches its tag). |
+| Audit new | `brew audit --cask --new …` | Fails: "Signature verification failed … not signed by a distributor that meets the system Gatekeeper requirements", "GitHub repository not notable enough", plus livecheck. This is the official-tap bar; the own tap doesn't need `--new`. |
+| Install v1 | `brew install --cask multilinkcheck/check22/multi-link-check22` | **Installs** (exit 0): downloads over HTTP, "Moving App … to /Applications", "Linking Binary 'multi-link' to '/opt/homebrew/bin/multi-link-check22'", prints the caveat. |
+| Quarantine | `xattr -l` on the app and the bundled CLI | Both `com.apple.quarantine: 0381;…` (quarantined, not approved). `brew` has no flag to skip it. |
+| Gatekeeper | `spctl --assess -vv --type execute` on app and CLI | Both `rejected`. `codesign --verify --strict --deep` passes. |
+| CLI link before Open Anyway | `/opt/homebrew/bin/multi-link-check22 setup --help` | **Killed, exit 137** (SIGKILL), no output. The CLI is unusable from Terminal until the app is approved. |
+| First launch | `open "/Applications/multi-link check22.app"` | `open` exit 0, **no process starts**: Gatekeeper blocks (macOS shows its "Not Opened" dialog, as in Phase 21 (a)). Open Anyway not clicked (owner-only). |
+| Upgrade v1 → v2, v1 never approved | edit cask to 2.0, `brew upgrade --cask …` | Works: "Backing up App", "Removing App", "Unlinking Binary", "Moving App", "Linking Binary", "1.0 -> 2.0". New quarantine `0381;…` with a new event id; `spctl` rejected; CLI link exit 137. |
+| Uninstall | `brew uninstall --cask …` | Removes `/Applications/multi-link check22.app` and the `/opt/homebrew/bin` link; Caskroom entry gone. |
+| App already in `/Applications` (copied from the v1 DMG, like a DMG user), cask 2.0 | `brew install --cask …` | **Refuses**, exit 1: "It seems there is already an App at '/Applications/multi-link check22.app'". Existing app untouched, no link made. |
+| … same, with `--adopt` | `brew install --cask --adopt …` | Refuses, exit 1: "The bundle short version … is 2.0 but is 1.0 …", "the existing App is different". Untouched. |
+| … same version (cask 1.0), `--adopt` | `brew install --cask --adopt …` | **Adopts** (exit 0): "Adopting existing App", links the binary. The app keeps its attributes (here no quarantine); the CLI link runs (exit 0). |
+| Upgrade the adopted, unquarantined 1.0 → 2.0 | `brew upgrade --cask …` | Works. New app quarantined **`03c1`** (user-approved bit 0x40 set by brew); CLI link exit 0; `open` **launches** the app with no prompt. See "approval carries over" below. |
+| … existing 1.0, cask 2.0, `--force` | `brew install --cask --force …` | "already an App …; overwriting", **deletes** the existing app (no backup, not to Trash), installs 2.0 quarantined `0381`; CLI link exit 137. |
+| Zap and cleanup | `brew uninstall --cask --zap …`, `brew untrust --cask …`, `brew untap multilinkcheck/check22` | Zap moved `~/Library/Preferences/dev.multi-link.check22.plist` to the Trash. Untap removed the tap. |
+
+**Approval carries over on upgrade (Homebrew 7 source, `Library/Homebrew/cask/upgrade.rb`
+`quarantine_release_decision` and `cask/quarantine.rb` `inherit_user_approval!`).** Before an upgrade brew records
+whether the old app was user-approved (quarantine flag `0x40`) or not quarantined at all, and its designated
+requirement. If either holds and the new app satisfies the old DR, brew keeps the new app's quarantine but sets the
+approved bit on every file in it, so macOS does not ask again; otherwise it warns "signer changed" or leaves it. Our DR is
+`identifier "dev.multi-link.menubar"` on every build, so it matches across versions. Observed above for the
+unquarantined path. For the Open Anyway path, Phase 21 (b) saw the approved app's files carry `03c1` after Open Anyway,
+which is exactly what `user_approved?` reads; the real Open Anyway → `brew upgrade` round trip is left to the 22.6 owner
+check. The owner's real `/Applications/multi-link.app` (1.18) has **no** quarantine attribute (read with `xattr -p`).
+
+The upgraded check22 app hit the single-instance guard (`~/.multi-link/menubar.lock`, held by the owner's real app) and
+waited on its "multi-link is already running" alert, starting no watcher; it ignored an AppleScript quit while modal
+and was ended with `pkill`.
+
+**Go.** Homebrew 7.0.13 installs, upgrades and uninstalls an ad hoc signed cask from an own tap, and the `binary` link
+works once the app is approved. Costs the README and caveats must state:
+1. Install is two commands: `brew trust --cask jar-narvz/tap/multi-link` then `brew install --cask
+   jar-narvz/tap/multi-link` (trust works before the tap exists; the auto-tap from a real GitHub tap is checked in 22.6).
+2. After a fresh install, open the app once and click Open Anyway; until then `multi-link` in Terminal is killed with
+   no message (exit 137).
+3. Upgrades through brew normally need no new Open Anyway (approval carries over while the DR stays the same); a
+   download of the DMG still needs Open Anyway per version (Phase 21).
+4. An app already in `/Applications` (DMG install): brew refuses. Same version → `brew install --cask --adopt …`
+   keeps that copy and its approval; different version → quit the app, untick Open at login, move it to the Trash, then
+   install (brew's `--force` deletes it without a backup, so the docs don't suggest it).
+
+R3 changes for 22.3: `depends_on macos: :sequoia` (not `">= :sequoia"`); caveats as items 2–4 (not "after every
+upgrade"); check with `brew style` and `brew audit --cask` (not `--online`/`--new`) after `brew trust`.
+
+### (c) The CLI through a symlink (R6)
+
+The check22 v1 bundle's CLI, `CLAUDE_CONFIG_DIR` and `MULTI_LINK_HOME` set to scratch folders whose `settings.json`
+started as `{}`; nothing read or wrote `~/.claude`.
+
+| Through | Command | Observed |
+| --- | --- | --- |
+| link named `multi-link` | `setup --json` | `binary` = the canonical bundled path (setup already canonicalizes); `cli: ok`, `hooks: fixable`, `app: elsewhere`. |
+| link named `multi-link` | `hook apply --settings <scratch>` | Wrote all five events with `command` = **the link's path** (`'<scratch>/bin/multi-link' hook record`). |
+| link named `multi-link` | `hook check --settings <scratch>` | All five `ok` ("current"), exit 0: check also compares with the link path. |
+| canonical path | `hook check` / `setup --json` on the same file | All five **`outdated`** (`binary: <link> -> <bundled path>`), `hooks: fixable`, exit 1. |
+| link named `multi-link-check22` | `hook apply` twice, `hook check` | Apply wrote `'…/multi-link-check22' hook record`; check reported every event **`missing`** (entries are recognized only when the command's last path part is `multi-link`, `crates/hook/src/settings.rs`); a second apply appended a second copy (5 → 10 entries). |
+
+R6 confirmed, and it matters more than "outdated": apply through a link not named `multi-link` (e.g. the cask's
+`target:`) writes entries `hook check` can't recognize and duplicates them on every run. Canonicalizing
+`current_exe()` in `hook check` / `apply` / `remove` fixes both, since the bundled CLI is always named `multi-link`. The
+real cask uses no `target:`, so its link is `…/bin/multi-link`; 22.1's test should also cover a link with another name.
+
+### Cleanup and leftovers
+
+Removed: the cask (zap), the tap, its trust entry, `~/.homebrew/` (did not exist before; brew left only an empty lock
+file), brew's download caches for the cask, the HTTP server, `~/multi-link-sandbox/check22/` and the scratch settings.
+`defaults read dev.multi-link.check22` → "Domain … does not exist". Left: the zapped preferences plist in the Trash;
+Homebrew's vendored dev gems from `brew style`; `actionlint` (kept on purpose). Owner items: dismiss any "Not Opened"
+dialog the blocked launch left on screen; the Open Anyway round trip (fresh install → Open Anyway → CLI link runs →
+`brew upgrade` without a prompt) is in the 22.6 owner check.

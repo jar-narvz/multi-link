@@ -1,11 +1,32 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 22 is planned (Claude, 2026-11-14); nothing is built yet.** Release pipeline: CI on every push, a release
-workflow that makes a draft on a `v*` tag, an own Homebrew tap whose cask puts the CLI on `PATH` (only if Step 22.0's
-spike shows Homebrew 7 still installs an unsigned cask from a tap), "Use in Terminal" in the setup window, and one
-canonical CLI path for hooks. Plan and Codex critique (10 points, all accepted, some in part) in PLAN.md. Next: Step
-22.0 (Claude) spikes; its Homebrew spike needs the owner's OK to install through brew.
+**Phase 22: Step 22.0 is done (Claude, 2026-11-14); go for the cask.** Spikes and pins are in design "Phase 22
+decisions". What Steps 22.1–22.4 need:
+- **22.1 CI (R1):** `macos-15` arm64 image defaults to Xcode 16.4 (Swift 6.1, too old). Select
+  `sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer`; assert `Xcode 26.3` and `Swift version 6.2`.
+  Rust 1.99.1 is preinstalled; pin it with `rustup toolchain install 1.99.1 --profile minimal --component
+  clippy,rustfmt` + `rustup default 1.99.1` (no toolchain action), assert `rustc 1.99.1`. Only action needed:
+  `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` (optional `actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0`).
+  `gh` 2.103.3 is on the image. `actionlint` 1.7.12 is installed on the owner's Mac (owner OK).
+- **22.1 R6:** confirmed. Through a link, `hook apply` writes the link path; the canonical CLI then reports
+  `outdated`. Through a link with another name (e.g. `multi-link-check22`) entries are not recognized at all
+  (`missing`, `crates/hook/src/settings.rs` matches the last path part `multi-link`) and every apply appends a new
+  copy. Test both link names.
+- **22.3 cask (R3, go):** Homebrew 7 refuses casks from an untrusted tap: users run `brew trust --cask
+  jar-narvz/tap/multi-link` first (works before tapping); local test taps need `brew trust` too. Use
+  `depends_on macos: :sequoia` (`">= :sequoia"` fails `brew style`). Check with `brew style --cask` and
+  `brew audit --cask` (pass); `--online` adds livecheck, `--new` fails on the signature (official-tap bar, not ours).
+  Brew quarantines the app (`0381`); the CLI link is SIGKILLed (exit 137) until Open Anyway. Upgrades carry the
+  approval forward when the old app was approved or unquarantined and the DR (`identifier "dev.multi-link.menubar"`)
+  matches, so caveats say Open Anyway after a fresh install, not after every upgrade. Existing app in `/Applications`:
+  brew refuses; `--adopt` only at the same version; `--force` deletes it without a backup (don't suggest it).
+  The spike's build and cask helpers are in the coordinator's notes folder (`step-22-0/`), outside the repo.
+- **22.4 (R5):** no new facts; unchanged.
+- **PLAN.md wording to amend (Claude, before 22.3):** R3 caveats ("after every install and upgrade") and
+  `depends_on macos: ">= :sequoia"`, plus `brew trust` in R3 and 22.6's README Install line.
+- **Owner items:** dismiss any "Not Opened" dialog from the blocked check22 launch; the Open Anyway → CLI link →
+  `brew upgrade` round trip goes in the 22.6 owner check.
 
 **Phase 21 is closed (owner check done with Claude, 2026-11-14).** Items 1–15 of the checklist passed (Chrome
 download with real quarantine, Open Anyway, both setup rows, a hand-off banner with icon C, the 1.18.1 upgrade keeping
@@ -901,6 +922,28 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-14 — Step 22.0: Spikes and pins — Claude
+- Did: (a) read the `macos-15-arm64` runner README at `ff52b3e8…` and pinned Xcode 26.3, Rust 1.99.1 via rustup and
+  action SHAs from `gh api`; (b) built isolated `dev.multi-link.check22` DMGs (1.0, 2.0), served them from
+  `127.0.0.1:8766`, and ran a local tap through trust, style, audit, install, upgrade, uninstall, the existing-app cases
+  (`plain`, `--adopt`, `--force`) and zap; read Homebrew 7's upgrade quarantine code; (c) ran `setup` / `hook check` /
+  `hook apply` through symlinks against scratch settings. Go/no-go: **go**. Cleaned up the cask, tap, trust file,
+  caches, server, builds and scratch settings. Owner OK for brew and `brew install actionlint` given in this session
+  ("Yes, both"), after auto mode blocked the first `brew install` because the OK was in the coordinator's chat.
+- Changed: `docs/design.md` ("Phase 22 decisions"), `PROGRESS.md`
+- Verify: each spike's command and observed result are in design "Phase 22 decisions" (tables (b) and (c)); pins:
+  `xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer`, rustup 1.99.1, `actions/checkout`
+  `3d3c42e5aac5ba805825da76410c181273ba90b1` (v7.0.1); go written down with its four README costs. Key outputs:
+  `brew install --cask` → "multi-link-check22 was successfully installed!"; `xattr` → `0381;…`; `spctl` → `rejected`;
+  link run → exit 137; upgrade → "1.0 -> 2.0"; uninstall removes app and link; existing app → "It seems there is
+  already an App at …"; `brew audit --cask` exit 0; `brew style` "no offenses detected".
+- Review: Claude step (no Codex hand-off). Not checked: Open Anyway itself and the CLI link after it (owner-only,
+  22.6); auto-tap from a real GitHub tap (22.6); a fresh macOS account.
+- Gotchas: Homebrew 7 needs `brew trust` for any non-official tap. `brew audit --online` livecheck reads the homepage's
+  GitHub releases, so a test cask's version must match a real tag or it fails. The check22 app launched after the
+  adopt-upgrade sat on the "already running" alert (real app holds `~/.multi-link/menubar.lock`) and ignored an
+  AppleScript quit while modal; `pkill` ended it. `brew style`'s first run installs Homebrew's dev gems.
 
 ### 2026-11-14 — Step 21.5: Owner real check, Phase 21 closed — Claude (with the owner)
 - Did: walked the owner through the `docs/phase21-check.md` checklist; Claude ran the server, quit the dev app,
