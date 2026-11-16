@@ -1,6 +1,28 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 22: Step 22.6 is done on Claude's side (2026-11-16); owner check pending.** README (brew Install first, DMG
+second, Use in Terminal, CI badge, Releasing, Uninstall, Homebrew limits), `apps/menubar/Info.plist` → `1.19`, and
+`docs/phase22-check.md` (Claude's checks + the 10-item owner checklist). Phase 22 closes when the owner's answer is in
+`docs/phase22-check.md` → "Owner answer" and here. What Claude checks after each owner item (read-only):
+- 1–2 push + CI: `gh run list --workflow ci.yml --limit 3` → the run on the pushed HEAD `success`
+  (`gh run view <id> --log-failed` on a failure; fix it in this step, `.github/workflows/**` / `tools/**`).
+- 3 tag: `gh run list --workflow release.yml --limit 1` → `success`, jobs `check`, `ci`, `release`.
+- 4–5 draft and publish: `gh release view v1.19 --repo jar-narvz/multi-link --json isDraft,assets,tagName --jq
+  '{isDraft, tag: .tagName, assets: [.assets[] | {name, size}]}'` → exactly `multi-link-1.19-arm64.dmg` and its
+  `.sha256` (CI's sizes; the local build was 2,929,088 / 92 bytes, not the asset), `isDraft` true before item 5 and
+  false after. Record the real asset bytes in the check doc and README only from this output.
+- 6 tap: `gh run list --workflow cask.yml --limit 1` → `success`; `gh api
+  repos/jar-narvz/homebrew-tap/contents/Casks/multi-link.rb --jq .content | base64 -d` → `version "1.19"` and the
+  sha256 equal to the release's `.sha256` file. The tap was empty before (no default branch); this run creates `main`.
+- 7–9 real app: `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok (/Applications/multi-link.app/…)`,
+  `hooks: ok`, `app: installed`; `xattr -p com.apple.quarantine /Applications/multi-link.app` (after Open Anyway the
+  flag should carry the approved bit, `03c1`-style, per design (b)); `brew list --cask` shows multi-link. On this Mac
+  a bare `multi-link` resolves to `~/.cargo/bin/multi-link` first (earlier `PATH` entry), hence the full path.
+- Not covered: a real `brew upgrade` (needs a release after 1.19); README says so.
+- Leftovers: `apps/menubar/build/multi-link-1.19-arm64.dmg{,.sha256}` and a rebuilt `build/multi-link.app`
+  (git-ignored).
+
 **Phase 22: Step 22.5 is done (Claude edits, Codex reviewed, 2026-11-15): the CI run on the pushed `main` commit
 `74993ca` is green (run 43771809152). Next: Step 22.6.** What 22.6 needs:
 - **Green run 43771809152:** Image macos-15-arm64, `arm64`, `Xcode 26.3`, `Apple Swift version 6.2.4`, `rustc 1.99.1`;
@@ -1012,6 +1034,31 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-16 — Step 22.6: docs, Release 1.19, owner check (Claude side) — Claude
+- Did: README: CI badge (`ci.yml` on `main`), Release 1.19 sentence, Install with `brew trust --cask
+  jar-narvz/tap/multi-link` + `brew install --cask jar-narvz/tap/multi-link` first (Open Anyway once after a fresh
+  install; upgrades normally keep it; existing DMG install: untick Open at login, quit, Trash, then brew; never
+  `--force`), DMG second (now 1.19), new "Use in Terminal" (the window's copied `sudo ln -s` command, no `-f`,
+  `command -v`), Uninstall per install type (brew uninstall, `sudo rm /usr/local/bin/multi-link`, hooks and Open at
+  login first), new "Releasing" (plist, push, tag, draft, publish, cask), Homebrew and release limits. Info.plist
+  both keys `1.19`. `docs/phase22-check.md`: remote CI runs (43678448297 hang, 43771809152 green) and the fix,
+  pre-check state via `gh` (tap empty, `TAP_TOKEN` set, only v1.18), local Verify, 10-item owner checklist.
+  Found: on this Mac `~/.cargo/bin` precedes `/opt/homebrew/bin`, so item 8 calls `/opt/homebrew/bin/multi-link`.
+  Mode: Claude step (docs); review by Codex (`python3 -I tools/codex-quota.py` → primary 0%, secondary 26%, CODEX: OK).
+- Changed: `README.md`, `apps/menubar/Info.plist`, `docs/phase22-check.md`, `PROGRESS.md`
+- Verify (local, 2026-11-16): `TZ=UTC cargo test --workspace --locked` → exit 0, 748 passed / 0 failed / 1 ignored;
+  `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0; `cargo fmt --check` → exit 0;
+  `swift test --disable-sandbox` → "✔ Test run with 41 tests in 0 suites passed after 11.208 seconds."; `actionlint`
+  → exit 0, no output; `sh tools/tests/cask.sh` → 24 PASS / 0 FAIL; `sh tools/tests/release.sh` → 11 PASS / 0 FAIL;
+  `apps/menubar/release.sh` → exit 0, "checksum … is VALID", `multi-link-1.19-arm64.dmg` 2,929,088 bytes, `.sha256`
+  92 bytes, `shasum -a 256 -c` → OK, app version 1.19. Remote part of Verify (CI, release and cask runs green,
+  published release and tap cask at 1.19, owner's answer) pending the owner checklist.
+- Review: Codex read-only review, 5 findings, all accepted and fixed: release watcher filtered by the tag's commit;
+  cask run checked before reading the tap; no estimated DMG size; README unticks Open at login before quitting;
+  real `brew upgrade` recorded as not covered (needs a newer release).
+- Gotchas: `gh run list --limit 1` right after a push can return the previous run; the checklist filters by
+  `--commit` / `--event`. No other `.github/` or `tools/` change was needed.
 
 ### 2026-11-15 — Step 22.5: first remote run, fix round 1 (Swift test hang) — Claude (Codex review)
 - Remote Verify (2026-11-15, after the owner pushed `74993ca`): `gh run view 43771809152` → conclusion success,

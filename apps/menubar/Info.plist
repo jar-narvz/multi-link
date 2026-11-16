@@ -8,8 +8,8 @@
     <key>CFBundleName</key><string>multi-link</string>
     <key>CFBundleDisplayName</key><string>multi-link</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleVersion</key><string>1.18</string>
-    <key>CFBundleShortVersionString</key><string>1.18</string>
+    <key>CFBundleVersion</key><string>1.19</string>
+    <key>CFBundleShortVersionString</key><string>1.19</string>
     <key>LSUIElement</key><true/>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>NSAppleEventsUsageDescription</key><string>multi-link opens the TUI and focuses your agent's terminal tab.</string>

@@ -1,5 +1,7 @@
 # multi-link
 
+[![CI](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml)
+
 A local terminal dashboard for Claude Code and Codex sessions across your repos.
 Release 1 is complete (see [check results](docs/phase3-check.md)). Release 1.1 (home screen
 cleanup) did not meet the need ([owner verdict](docs/phase4-check.md#owner-check-stop-and-ask)), and
@@ -15,7 +17,9 @@ confirmed it on real data ([real check](docs/phase9-check.md)). Release 1.7 repl
 Release 1.11 adds the [live grid](#live-grid): what every working, waiting or stale agent is doing now, on one screen.
 Release 1.12 makes the first load fast (the first home frame came up in 1.82–1.99 s on real data, down from about 9 s)
 and shows a [loading screen](#loading-screen) while it runs. Release 1.18 makes the [menu-bar app](#menu-bar-app-macos)
-one download with a setup window and an icon ([install](#install)).
+one download with a setup window and an icon ([install](#install)). Release 1.19 adds a release pipeline: every push
+to `main` is tested on GitHub's macOS runner, a tag builds a draft release, and publishing it updates a Homebrew tap, so
+the app installs with `brew` and the CLI can be used from Terminal ([install](#install), [releasing](#releasing)).
 
 - Groups sessions by repo, with needs-you sorting, states and PLAN.md / PROGRESS.md status.
 - Links Claude hand-offs to Codex sessions, marking exact, heuristic and ambiguous matches.
@@ -312,11 +316,41 @@ corresponding external program; hook recording writes multi-link's own state dir
 
 ## Install
 
-### Download the Mac app (recommended)
+For Apple silicon Macs (arm64) on macOS 15 or later. No Rust or Xcode needed.
 
-For Apple silicon Macs (arm64) on macOS 15 or later. No Rust, Xcode or terminal needed.
+### Homebrew (recommended)
 
-1. Download `multi-link-1.18-arm64.dmg` from the [releases page](https://github.com/jar-narvz/multi-link/releases).
+```bash
+brew trust --cask jar-narvz/tap/multi-link
+```
+
+```bash
+brew install --cask jar-narvz/tap/multi-link
+```
+
+The first command tells Homebrew to load casks from multi-link's own tap (Homebrew 7 refuses casks from a tap you
+have not trusted); the second downloads the release, moves `multi-link.app` to `/Applications` and links its bundled
+CLI as `multi-link` in Homebrew's `bin` folder (`/opt/homebrew/bin`). Then:
+
+1. Open multi-link from Applications once. macOS blocks it, because the app is not notarized ([limits](#limitations-and-validation)):
+   click **Done**, then open System Settings → Privacy & Security, scroll to "multi-link was blocked…", click **Open
+   Anyway** and enter your Mac's password. Until you do, `multi-link` in Terminal is stopped with no message.
+2. The setup window opens: click **Turn on everything** (step 4 below).
+
+Upgrade with `brew upgrade --cask multi-link`. An upgrade normally keeps the Open Anyway approval, because every
+version is signed with the same identifier (seen in Homebrew's source and an isolated test, [design](docs/design.md)
+"Phase 22 decisions"). Not yet seen on a real install: the first real `brew upgrade` comes with the next release.
+
+**Already installed from the DMG?** Homebrew refuses to install over an app it did not put there. Untick **Open at
+login** in the popover, quit multi-link, move `/Applications/multi-link.app` to the Trash, then run the two commands above. The hooks
+keep working, because Homebrew puts the app at the same path. Don't use `--force` for this: it deletes the existing app
+without a backup.
+
+### Download the Mac app
+
+No terminal needed.
+
+1. Download `multi-link-1.19-arm64.dmg` from the [releases page](https://github.com/jar-narvz/multi-link/releases).
 2. Open it and drag **multi-link** onto **Applications** (`~/Applications` works too) before opening it. A copy
    opened inside the download is blocked the same way (step 3) and then shows only "Move multi-link to Applications
    first", starting nothing.
@@ -329,9 +363,23 @@ For Apple silicon Macs (arm64) on macOS 15 or later. No Rust, Xcode or terminal 
    Start a new Claude session so it loads the hooks.
 
 The menu-bar item `ml` is the app; `Setup…` in its popover reopens the window. The app carries its own copy of the
-command-line tool, so it needs nothing else installed. Terminal users get the same checks with
-`/Applications/multi-link.app/Contents/MacOS/multi-link setup` (it asks before each change; it is not put on your
-`PATH`).
+command-line tool, so it needs nothing else installed.
+
+### Use in Terminal
+
+A Homebrew install already puts `multi-link` on your `PATH`. A DMG install does not: the setup window's **Use in
+Terminal** line shows whether `/usr/local/bin/multi-link` or `/opt/homebrew/bin/multi-link` points at this app's CLI.
+If neither exists, it shows one command and a **Copy command** button; paste it into Terminal (it asks for your
+password):
+
+```bash
+sudo mkdir -p /usr/local/bin && sudo ln -s '/Applications/multi-link.app/Contents/MacOS/multi-link' /usr/local/bin/multi-link
+```
+
+(The window fills in the app's real path.) `ln` has no `-f`, so it never replaces a file already at that path, and the
+app never runs `sudo` itself. If a path holds something else, the window shows it and offers nothing over it. Check
+with `command -v multi-link`: an earlier `PATH` entry wins (for example `~/.cargo/bin` from a source build). Through
+any of these links, `multi-link setup` and `hook apply` still write the app's own path into the hooks.
 
 ### Build from source
 
@@ -353,9 +401,15 @@ fixes the hooks from there. The app and the DMG are built with `apps/menubar/bui
    `/Applications/multi-link.app/Contents/MacOS/multi-link hook remove`; `multi-link hook remove` for a cargo install). Only
    multi-link's entries leave the settings file; a backup is saved beside it first.
 2. Uncheck **Open at login** in the popover.
-3. Quit the app and move it to the Trash. A cargo install is removed with `cargo uninstall multi-link`.
+3. Remove the app:
+   - Homebrew: `brew uninstall --cask multi-link` (quits the app, removes it and the `/opt/homebrew/bin` link;
+     `--zap` also removes its preferences).
+   - DMG: quit the app and move it to the Trash. If you made the Terminal link, remove it with
+     `sudo rm /usr/local/bin/multi-link`.
+   - Source build: `cargo uninstall multi-link`.
 
-multi-link's own state (`~/.multi-link`) stays until you delete it.
+Neither Homebrew nor the app removes the hooks or the login item for you, so do steps 1 and 2 first. multi-link's own
+state (`~/.multi-link`) stays until you delete it.
 
 ### Hook setup
 
@@ -422,6 +476,23 @@ to `tui` or the report commands. `--root` enables fixture mode and disables real
 Hooks are set up with `hook check` ([above](#hook-setup)). See the [design](docs/design.md) for hook behavior and
 state rules.
 
+## Releasing
+
+For the maintainer. Releases are built by GitHub Actions, never by hand.
+
+1. Set the new version in `apps/menubar/Info.plist` (both `CFBundleShortVersionString` and `CFBundleVersion`), commit,
+   push `main` and wait for the [CI workflow](.github/workflows/ci.yml) to pass.
+2. Tag that commit and push the tag: `git tag v1.19 && git push origin v1.19` (with the new version). The
+   [release workflow](.github/workflows/release.yml) refuses a tag that doesn't equal `v` + the plist version or whose
+   commit is not on `main`, runs the CI job on it, builds the DMG with `apps/menubar/release.sh`, and opens a **draft**
+   release with exactly two files: `multi-link-<version>-arm64.dmg` and its `.sha256`.
+3. Check the draft on the releases page (the two files and their sizes), then click **Publish release**.
+4. Publishing runs the [cask workflow](.github/workflows/cask.yml), which checks the two files and their checksum and
+   pushes `Casks/multi-link.rb` at the new version to [`jar-narvz/homebrew-tap`](https://github.com/jar-narvz/homebrew-tap)
+   (it needs the `TAP_TOKEN` repository secret; it refuses prereleases and versions not newer than the tap's).
+
+To rebuild a draft, delete it first: the release workflow fails if the tag already has a release.
+
 ## Limitations and validation
 
 - The menu-bar app (Releases 1.16–1.17) was checked on this Mac (`docs/phase19-check.md`, `docs/phase20-check.md`):
@@ -475,9 +546,17 @@ state rules.
   (`hdiutil -mountpoint`) is not caught, and setup would point the hooks at it (seen once in the
   [Phase 21 check](docs/phase21-check.md)). The hooks call the app's bundled CLI by its full path: **if the app is
   deleted or moved without Remove hooks first**, every hook call fails until you run `multi-link hook remove` (or
-  re-open the app from its new place and click Turn on). The CLI is not put on your `PATH`. The real first-run check
-  (Safari download, Open Anyway, the setup rows on real clicks, an upgrade, a login launch, a hand-off banner with
-  the new icon) is pending the owner ([checklist](docs/phase21-check.md#owner-checklist)).
+  re-open the app from its new place and click Turn on). The real first-run check (Safari download, Open Anyway, the
+  setup rows on real clicks, an upgrade, a login launch, a hand-off banner with the new icon) passed with the owner
+  ([Phase 21 check](docs/phase21-check.md)).
+- Homebrew and release limits (Release 1.19). The cask is in multi-link's own tap, not Homebrew's official one, which
+  takes only notarized apps. Homebrew quarantines the app like a download, so **Open Anyway is needed once after a
+  fresh Homebrew install** too; until then the `multi-link` command is killed with no message (exit 137, seen in an
+  isolated test). Homebrew refuses to install over a DMG copy in `/Applications` (move it to the Trash first; never
+  `--force`). The **Use in Terminal** link only works if no earlier `PATH` entry has a `multi-link` (`command -v
+  multi-link` shows which one runs). CI runs on one macOS arm64 runner only; the first release built by it, and the
+  switch from a DMG install to Homebrew on a real Mac, are checked in [docs/phase22-check.md](docs/phase22-check.md)
+  (owner check pending).
 - Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
   (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
   duplicate key or with a number serde_json would not write back as the same text: beyond 64-bit integers, and also
