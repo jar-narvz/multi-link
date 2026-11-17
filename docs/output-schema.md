@@ -1398,9 +1398,9 @@ claim or deliver notifications.
 
 ## Setup
 
-`multi-link setup --json` is strictly read-only. `--json --yes` is a usage error (exit 2).
-The binding decisions are in `docs/design.md` → Phase 21 decisions →
-`multi-link setup --json` contract (E3). One object is printed on stdout:
+`multi-link setup --json` is strictly read-only. `--json --yes` or `--json --take-over` is a usage error (exit 2).
+The binding decisions are in `docs/design.md` → `multi-link setup --json` contract (E3), amended by
+Phase 24 hook ownership (D2). One object is printed on stdout:
 
 ```json
 {
@@ -1408,7 +1408,7 @@ The binding decisions are in `docs/design.md` → Phase 21 decisions →
   "binary": "/Applications/multi-link.app/Contents/MacOS/multi-link",
   "items": [
     { "id": "cli", "state": "ok" },
-    { "id": "hooks", "state": "fixable", "file": "/home/dev/.claude/settings.json", "exists": true,
+    { "id": "hooks", "state": "fixable", "file": "/home/dev/.claude/settings.json", "exists": true, "owners": [],
       "events": [ { "event": "Stop", "status": "missing", "details": [] } ] },
     { "id": "app", "state": "installed", "path": "/Applications/multi-link.app" }
   ]
@@ -1427,6 +1427,12 @@ Unknown future fields are ignored by readers; changing `v` is a breaking change.
   `state` is `unreadable` if the file cannot be read or parsed (`events: []`); otherwise `fixable`
   if any event is `missing`, `outdated`, or `duplicate` (including an absent file with `exists: false`);
   otherwise `attention` if any event is `customized` or `unknown event`; otherwise `ok`.
+  `owners` is always present on the hooks item: sorted unique canonical binary paths of `other copy` events,
+  including duplicates with multiple owners. It is `[]` when none, including `unreadable`. `other copy` alone
+  leaves `state: "ok"`; `owners` also accompanies `fixable` and `attention` without changing their precedence.
+  Each `other copy` finding has `owned by <path>` in `details`, plus any `async` / `timeout` drift.
+  Customized events take precedence over ownership: they stay `customized` (hook check exit 1), keep their usual
+  hand-edit detail plus any `owned by <path>`, and never contribute paths to `owners`, even with `--take-over`.
   The existing `disableAllHooks` finding is included unchanged.
 - `app.state`: for a binary at `<X>.app/Contents/MacOS/multi-link`, `installed` if `<X>.app`
   is directly in `/Applications` or `~/Applications`, otherwise `elsewhere`. Both have `path`
@@ -1438,7 +1444,10 @@ Exit 2: setup itself failed (message on stderr, no JSON).
 
 `multi-link setup` prints one line per item. For `hooks: fixable`, it names the settings file
 and backup (or says a new file needs no backup), asks `[y/N]`, and runs hook apply after yes.
-`--yes` answers yes. Without a TTY and without `--yes`, it asks nothing and changes nothing.
+`--yes` answers yes. `--take-over` also offers to move hooks owned by another copy, using the same prompt
+and backup; with the flag it says the owners will be moved if applied before the prompt, instead of suggesting
+the takeover command again. `--take-over --yes` applies without asking. Plain `--yes` preserves other owners.
+Without a TTY and without `--yes`, it asks nothing and changes nothing.
 With `cli: temporary`, it refuses every fix, says "move multi-link to Applications first", and
 exits 1. Exit codes otherwise follow the JSON rules, re-reading after fixes. After applying hooks,
 start a new Claude session to load them.
@@ -1450,7 +1459,13 @@ in place; their resolved target is written. Dangling symlinks and non-regular se
 
 Apply reuses the checker's merge: missing/outdated/duplicate events are fixed, customized events
 and unrelated data are kept. Its bytes are exactly `hook check --merged` output (pretty JSON
-plus newline). A current file is untouched, with no backup. Remove uses the checker's recognition
+plus newline). An `other copy` event is preserved in full, including option drift and duplicates;
+other events can still be repaired. `hook apply --take-over` and `hook check --merged --take-over` use the same
+merge with ownership transfer enabled, writing the canonical running binary path. Missing, dangling,
+non-executable, non-regular, `/Volumes/` and AppTranslocation targets remain `outdated`; aliases resolving to the
+running binary count as the same copy. Only absolute stored binary paths are probed; bare and home-relative
+paths stay `outdated` without resolving against the working directory. Probing never executes another binary.
+A current file (all `ok` / `other copy`) is untouched, with no backup. Remove uses the checker's recognition
 for multi-link entries at any binary path, including customized entries and unknown events;
 it leaves other entries, events, and keys. A removal with no recognized entries is also untouched.
 

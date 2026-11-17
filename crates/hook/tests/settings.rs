@@ -200,3 +200,233 @@ fn bare_home_relative_binary_is_outdated_rather_than_missing() {
     assert_eq!(event.status, "outdated");
     assert!(event.details[0].contains("~/.cargo/bin/multi-link"));
 }
+
+#[test]
+fn other_copy_drift_and_duplicates_preserve_the_entire_event() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let dir = tempfile::tempdir().unwrap();
+    let owner = dir.path().join("multi-link");
+    fs::write(&owner, "never executed").unwrap();
+    fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+    for duplicate in [false, true] {
+        let mut source = snippet(owner.to_str().unwrap());
+        source["hooks"]["PostToolUse"][0]["hooks"][0]["async"] = json!(false);
+        source["hooks"]["PostToolUse"][0]["hooks"][0]["timeout"] = json!(5);
+        if duplicate {
+            source["hooks"]["PostToolUse"]
+                .as_array_mut()
+                .unwrap()
+                .push(snippet(BIN)["hooks"]["PostToolUse"][0].clone());
+        }
+        let result = inspect(&source);
+        let finding = result
+            .findings
+            .iter()
+            .find(|f| f.event == "PostToolUse")
+            .unwrap();
+        assert_eq!(finding.status, "other copy");
+        assert!(finding.details.iter().any(|s| s.starts_with("owned by ")));
+        assert!(finding.details.iter().any(|s| s.starts_with("async:")));
+        assert!(finding.details.iter().any(|s| s.starts_with("timeout:")));
+        assert_eq!(
+            serde_json::to_vec(&result.merged).unwrap(),
+            serde_json::to_vec(&source).unwrap()
+        );
+        assert!(!result.needs_fix);
+        assert!(result.current());
+        source["hooks"]
+            .as_object_mut()
+            .unwrap()
+            .remove("SessionEnd");
+        let result = inspect(&source);
+        assert!(result.needs_fix);
+        assert_eq!(
+            serde_json::to_vec(&result.merged["hooks"]["PostToolUse"]).unwrap(),
+            serde_json::to_vec(&source["hooks"]["PostToolUse"]).unwrap()
+        );
+        assert_eq!(
+            result.merged["hooks"]["SessionEnd"],
+            snippet(BIN)["hooks"]["SessionEnd"]
+        );
+    }
+}
+
+#[test]
+fn injectable_probe_excludes_temporary_stored_and_resolved_paths() {
+    use multi_link_hook::settings::{BinaryProbe, check_with_probe};
+    use std::path::{Path, PathBuf};
+    struct Probe;
+    impl BinaryProbe for Probe {
+        fn executable(&self, path: &Path) -> Option<PathBuf> {
+            Some(match path.to_str().unwrap() {
+                "/alias/multi-link" => PathBuf::from(BIN),
+                "/link-to-volume/multi-link" => PathBuf::from("/Volumes/App/multi-link"),
+                "/link-to-translocated/multi-link" => {
+                    PathBuf::from("/tmp/AppTranslocation/id/multi-link")
+                }
+                _ => path.to_owned(),
+            })
+        }
+    }
+    for path in [
+        "/Volumes/App/multi-link",
+        "/tmp/AppTranslocation/id/multi-link",
+        "/link-to-volume/multi-link",
+        "/link-to-translocated/multi-link",
+    ] {
+        let result = check_with_probe(&snippet(path).to_string(), BIN, false, &Probe).unwrap();
+        assert!(
+            result.findings.iter().all(|f| f.status == "outdated"),
+            "{path}"
+        );
+        assert!(result.owners.is_empty());
+        assert_eq!(result.merged, snippet(BIN));
+    }
+    let result = check_with_probe(
+        &snippet("/alias/multi-link").to_string(),
+        BIN,
+        false,
+        &Probe,
+    )
+    .unwrap();
+    assert!(result.current());
+    assert!(!result.needs_fix);
+    assert_eq!(result.merged, snippet("/alias/multi-link"));
+    let result =
+        check_with_probe(&snippet("/owner/multi-link").to_string(), BIN, true, &Probe).unwrap();
+    assert!(result.needs_fix);
+    assert_eq!(result.merged, snippet(BIN));
+}
+
+#[test]
+fn unhealthy_files_are_outdated_and_real_alias_is_ok() {
+    use std::{
+        fs,
+        os::unix::fs::{PermissionsExt, symlink},
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let running = dir.path().join("running/multi-link");
+    fs::create_dir(running.parent().unwrap()).unwrap();
+    fs::write(&running, "never execute").unwrap();
+    fs::set_permissions(&running, fs::Permissions::from_mode(0o700)).unwrap();
+    let missing = dir.path().join("missing/multi-link");
+    let dangling = dir.path().join("dangling/multi-link");
+    fs::create_dir(dangling.parent().unwrap()).unwrap();
+    symlink(&missing, &dangling).unwrap();
+    let nonexec = dir.path().join("nonexec/multi-link");
+    fs::create_dir(nonexec.parent().unwrap()).unwrap();
+    fs::write(&nonexec, "never execute").unwrap();
+    fs::set_permissions(&nonexec, fs::Permissions::from_mode(0o600)).unwrap();
+    let directory = dir.path().join("directory/multi-link");
+    fs::create_dir_all(&directory).unwrap();
+    let fifo = dir.path().join("fifo/multi-link");
+    fs::create_dir(fifo.parent().unwrap()).unwrap();
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    for path in [&missing, &dangling, &nonexec, &directory, &fifo] {
+        let result = check(
+            &snippet(path.to_str().unwrap()).to_string(),
+            running.to_str().unwrap(),
+        )
+        .unwrap();
+        assert!(
+            result.findings.iter().all(|f| f.status == "outdated"),
+            "{path:?}"
+        );
+        assert!(result.needs_fix);
+        assert!(result.owners.is_empty());
+        assert_eq!(
+            result.merged,
+            snippet(fs::canonicalize(&running).unwrap().to_str().unwrap())
+        );
+    }
+    let alias = dir.path().join("multi-link");
+    symlink(&running, &alias).unwrap();
+    let source = snippet(alias.to_str().unwrap());
+    let result = check(&source.to_string(), running.to_str().unwrap()).unwrap();
+    assert!(result.findings.iter().all(|f| f.status == "ok"));
+    assert!(!result.needs_fix);
+    assert_eq!(result.merged, source);
+}
+
+#[test]
+fn customized_other_copy_keeps_details_without_actionable_owners() {
+    use multi_link_hook::settings::{BinaryProbe, check_with_probe};
+    use std::path::{Path, PathBuf};
+    struct Probe;
+    impl BinaryProbe for Probe {
+        fn executable(&self, path: &Path) -> Option<PathBuf> {
+            Some(path.to_owned())
+        }
+    }
+    for take_over in [false, true] {
+        for custom_matcher in [false, true] {
+            let mut source = snippet(BIN);
+            source["hooks"]["PostToolUse"] =
+                snippet("/owner/multi-link")["hooks"]["PostToolUse"].clone();
+            if custom_matcher {
+                source["hooks"]["PostToolUse"][0]["matcher"] = json!("Bash|Edit");
+            } else {
+                source["hooks"]["PostToolUse"][0]["hooks"][0]["if"] = json!("intent");
+            }
+            let result = check_with_probe(&source.to_string(), BIN, take_over, &Probe).unwrap();
+            let finding = result
+                .findings
+                .iter()
+                .find(|f| f.event == "PostToolUse")
+                .unwrap();
+            assert_eq!(finding.status, "customized");
+            assert!(
+                finding
+                    .details
+                    .iter()
+                    .any(|d| d == "owned by /owner/multi-link")
+            );
+            assert!(
+                finding
+                    .details
+                    .iter()
+                    .any(|d| d.starts_with("edit multi-link entries and matcher by hand;"))
+            );
+            assert!(result.owners.is_empty());
+            assert!(!result.needs_fix);
+            assert!(!result.current());
+            assert_eq!(
+                serde_json::to_vec(&result.merged).unwrap(),
+                serde_json::to_vec(&source).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
+fn non_absolute_stored_paths_are_never_probed_and_stay_outdated() {
+    use multi_link_hook::settings::{BinaryProbe, check_with_probe};
+    use std::path::{Path, PathBuf};
+    struct Probe;
+    impl BinaryProbe for Probe {
+        fn executable(&self, path: &Path) -> Option<PathBuf> {
+            assert!(
+                path.is_absolute(),
+                "relative stored path was probed: {path:?}"
+            );
+            Some(path.to_owned())
+        }
+    }
+    for path in [
+        "multi-link",
+        "~/.cargo/bin/multi-link",
+        "relative/multi-link",
+    ] {
+        let result = check_with_probe(&snippet(path).to_string(), BIN, false, &Probe).unwrap();
+        assert!(result.findings.iter().all(|f| f.status == "outdated"));
+        assert!(result.owners.is_empty());
+        assert!(result.needs_fix);
+        assert_eq!(result.merged, snippet(BIN));
+    }
+}

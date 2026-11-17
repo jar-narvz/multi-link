@@ -14,11 +14,14 @@ type Error = Box<dyn std::error::Error>;
 #[derive(Args)]
 pub struct SetupArgs {
     /// Print a read-only versioned report.
-    #[arg(long, conflicts_with = "yes")]
+    #[arg(long, conflicts_with_all = ["yes", "take_over"])]
     json: bool,
     /// Apply safe hook fixes without asking.
     #[arg(long)]
     yes: bool,
+    /// Explicitly move hooks from another copy to this binary (still asks unless --yes).
+    #[arg(long)]
+    take_over: bool,
 }
 
 fn cli_state(binary: &Path) -> &'static str {
@@ -51,7 +54,9 @@ fn hooks_item(
     check: Option<&multi_link_hook::settings::Check>,
 ) -> Value {
     match check {
-        None => json!({"id":"hooks","state":"unreadable","file":file,"exists":exists,"events":[]}),
+        None => {
+            json!({"id":"hooks","state":"unreadable","file":file,"exists":exists,"events":[],"owners":[]})
+        }
         Some(check) => {
             let state = if check.needs_fix {
                 "fixable"
@@ -64,7 +69,7 @@ fn hooks_item(
             } else {
                 "ok"
             };
-            json!({"id":"hooks","state":state,"file":file,"exists":exists,"events":check.findings})
+            json!({"id":"hooks","state":state,"file":file,"exists":exists,"events":check.findings,"owners":check.owners})
         }
     }
 }
@@ -121,7 +126,11 @@ pub fn run(args: SetupArgs) -> Result<i32, Error> {
         binary.display()
     );
     let hooks = &initial["items"][1];
-    let fixable = hooks["state"] == "fixable";
+    let fixable = hooks["state"] == "fixable"
+        || (args.take_over
+            && hooks["owners"]
+                .as_array()
+                .is_some_and(|owners| !owners.is_empty()));
     let temporary = cli_state(&binary) == "temporary";
     let backup = if fixable && !temporary {
         Some(settings_write::backup_path(
@@ -150,6 +159,20 @@ pub fn run(args: SetupArgs) -> Result<i32, Error> {
         hooks["file"].as_str().unwrap(),
         backup_text
     );
+    if let Some(owners) = hooks["owners"].as_array().filter(|o| !o.is_empty()) {
+        let owners = owners
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+        if args.take_over {
+            println!("Hooks owned by {owners} will be moved to this copy if you apply.");
+        } else {
+            println!(
+                "Hooks owned by {owners}; to move them to this copy, explicitly run multi-link setup --take-over"
+            );
+        }
+    }
     let app = &initial["items"][2];
     println!(
         "app: {}{}",
@@ -176,7 +199,12 @@ pub fn run(args: SetupArgs) -> Result<i32, Error> {
             false
         };
         if accepted {
-            hook::apply(inspection.source.as_ref().unwrap(), &binary, &backup)?;
+            hook::apply(
+                inspection.source.as_ref().unwrap(),
+                &binary,
+                &backup,
+                args.take_over,
+            )?;
             println!("start a new Claude session to load them");
             return Ok(exit_code(&report(&binary, &home, inspect(&binary)?.hooks)));
         }
@@ -247,6 +275,7 @@ mod tests {
                         details: vec![],
                     })
                     .collect(),
+                owners: vec![],
                 merged: json!({}),
                 needs_fix: statuses
                     .iter()

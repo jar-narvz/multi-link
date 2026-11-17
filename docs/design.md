@@ -1442,7 +1442,7 @@ opening from the DMG runs a temporary copy.
 
 ### `multi-link setup --json` contract (E3)
 
-Strictly read-only. `--json` with `--yes` is a usage error (exit 2). One JSON object on stdout:
+Strictly read-only. `--json` with `--yes` or `--take-over` is a usage error (exit 2). One JSON object on stdout:
 
 ```json
 {
@@ -1450,7 +1450,7 @@ Strictly read-only. `--json` with `--yes` is a usage error (exit 2). One JSON ob
   "binary": "/Applications/multi-link.app/Contents/MacOS/multi-link",
   "items": [
     { "id": "cli",   "state": "ok" },
-    { "id": "hooks", "state": "fixable", "file": "/Users/u/.claude/settings.json", "exists": true,
+    { "id": "hooks", "state": "fixable", "file": "/Users/u/.claude/settings.json", "exists": true, "owners": [],
       "events": [ { "event": "Stop", "status": "missing", "details": [] } ] },
     { "id": "app",   "state": "installed", "path": "/Applications/multi-link.app" }
   ]
@@ -1460,7 +1460,7 @@ Strictly read-only. `--json` with `--yes` is a usage error (exit 2). One JSON ob
 | Item | States | Rule |
 | --- | --- | --- |
 | `cli` | `ok`, `temporary` | `temporary` when `binary` (canonical `current_exe`) is under `/Volumes/` or contains `/AppTranslocation/`. |
-| `hooks` | `ok`, `fixable`, `attention`, `unreadable` | `events` is today's `hook check` findings for `binary`. `unreadable`: the file can't be read or parsed (`events` empty). `fixable`: any event `missing` / `outdated` / `duplicate` (an absent file is `fixable`, `exists: false`). `attention`: none fixable, but some `customized` / `unknown event`. Else `ok`. `file` is the resolved target, symlinks followed as `hook check` does. |
+| `hooks` | `ok`, `fixable`, `attention`, `unreadable` | `events` is today's `hook check` findings for `binary`. `unreadable`: the file can't be read or parsed (`events` empty). `fixable`: any event `missing` / `outdated` / `duplicate` (an absent file is `fixable`, `exists: false`). `attention`: none fixable, but some `customized` / `unknown event`. Else `ok`. `file` is the resolved target, symlinks followed as `hook check` does. `owners` is always a sorted unique array of canonical paths of `other copy` events (`[]` for none or unreadable); ownership alone leaves `ok`. See Phase 24 D2 below. |
 | `app` | `installed`, `elsewhere`, `none` | `binary` is `<X>.app/Contents/MacOS/multi-link`: `installed` if `<X>.app` is directly in `/Applications` or `~/Applications` (with `path`), else `elsewhere`; `none` if not inside an app (a cargo install). |
 
 Exit codes: `0` every item `ok` / `attention` / `installed` / `elsewhere` / `none`; `1` any `temporary`, `fixable` or
@@ -1606,3 +1606,43 @@ file), brew's download caches for the cask, the HTTP server, `~/multi-link-sandb
 Homebrew's vendored dev gems from `brew style`; `actionlint` (kept on purpose). Owner items: dismiss any "Not Opened"
 dialog the blocked launch left on screen; the Open Anyway round trip (fresh install → Open Anyway → CLI link runs →
 `brew upgrade` without a prompt) is in the 22.6 owner check.
+
+
+### Phase 24: hook ownership (D2, amended after critique; binding contract)
+
+Ownership is independent of hook health. Only absolute stored binary paths are probed; bare `multi-link`,
+`~/.cargo/bin/multi-link` and other relative paths stay `outdated` without resolving against the working directory.
+A recognized entry is eligible for `other copy` when its stored binary path
+resolves to an existing executable regular file whose canonical path differs from the running binary's canonical
+path. Neither the stored path nor its resolved path may be under `/Volumes/` or contain an `AppTranslocation`
+component. A stored alias resolving to the running binary counts as the same copy (`ok` with the expected options).
+Missing, dangling, non-executable, non-regular and temporary paths stay `outdated` and are repaired as before.
+Filesystem canonicalization and executable/regular checks use an injectable probe. The tool never runs the other
+binary, including to check its version or health.
+
+Customization takes precedence over ownership: any custom matcher or entry field makes the event `customized`,
+with its usual hand-edit detail plus `owned by <canonical path>` when applicable. It is never changed, including
+with `--take-over`, and contributes nothing to `owners`; `hook check` still exits 1 for it. A non-customized event
+containing any other owner is `other copy`, with `owned by <canonical path>` and any `async` / `timeout` drift in its
+details. Without `--take-over`, the merger leaves the entire event unchanged, including duplicates,
+matchers and entry/key order; it does not set `needs_fix` for that event. Serialized event values
+remain byte-identical under the same serializer; the existing H4 pretty-printing rule still permits surrounding
+source whitespace to change when another event is repaired. With only `ok` / `other copy`, `hook check` exits 0,
+names owners and suggests the optional `multi-link hook apply --take-over`; it prints no repair shell command.
+Plain apply and setup (including `--yes`) preserve these events, repairing other events normally. A no-op keeps
+original file bytes and creates no backup.
+
+`hook apply --take-over`, `hook check --merged --take-over` (read-only preview), and `setup --take-over` enable
+ownership transfer: generated entries use the canonical running binary path and the usual backup/write mechanism.
+Customization and unknown-event protections still apply. Text setup suggests `setup --take-over` only when the
+flag is absent; with the flag it says the owners will be moved if applied, before the prompt. It still asks `[y/N]`
+unless `--yes`; without a TTY it changes nothing unless `--yes`. `setup --json --take-over` is a clap usage conflict (exit 2), just like
+`--json --yes`, before reading or writing settings.
+
+The version-1 setup JSON hooks item always has `owners`: sorted unique canonical paths of `other copy` events,
+possibly multiple owners within a duplicate event. Customized events never contribute paths to this array, even
+when their details name another copy. It is `[]` for no `other copy` events and for unreadable settings.
+Only ownership leaves `hooks.state: "ok"`; otherwise the existing precedence is `fixable` (missing/outdated/
+duplicate without another owner), then `attention` (customized/unknown event), then `ok`. Owners accompany every
+state without changing setup exit codes. For Step 24.3, consumers must inspect both `state` and `owners`: a
+non-empty array is not done for the app, and its explicit Turn on actions will pass `hook apply --take-over`.

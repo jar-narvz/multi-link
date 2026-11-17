@@ -1,11 +1,36 @@
-//! Pure settings inspection and merging. This module performs no I/O.
-use std::fmt;
+//! Settings inspection and merging with an injectable, read-only binary probe.
+use std::os::unix::fs::PermissionsExt;
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use serde::{
     Deserialize, Deserializer,
     de::{self, MapAccess, SeqAccess, Visitor},
 };
 use serde_json::{Map, Value, json};
+
+/// Resolve an existing executable regular file without ever executing it.
+pub trait BinaryProbe {
+    fn executable(&self, path: &Path) -> Option<PathBuf>;
+}
+
+pub struct FileSystemProbe;
+impl BinaryProbe for FileSystemProbe {
+    fn executable(&self, path: &Path) -> Option<PathBuf> {
+        let canonical = std::fs::canonicalize(path).ok()?;
+        let metadata = std::fs::metadata(&canonical).ok()?;
+        (metadata.is_file() && metadata.permissions().mode() & 0o111 != 0).then_some(canonical)
+    }
+}
+
+fn temporary(path: &Path) -> bool {
+    path.starts_with("/Volumes")
+        || path
+            .components()
+            .any(|c| c.as_os_str() == "AppTranslocation")
+}
 
 /// Quote one literal argument for a POSIX shell.
 pub fn quote(text: &str) -> String {
@@ -36,10 +61,14 @@ pub struct Check {
     pub findings: Vec<Finding>,
     pub merged: Value,
     pub needs_fix: bool,
+    /// Sorted, unique canonical paths owning `other copy` events.
+    pub owners: Vec<String>,
 }
 impl Check {
     pub fn current(&self) -> bool {
-        self.findings.iter().all(|f| f.status == "ok")
+        self.findings
+            .iter()
+            .all(|f| ["ok", "other copy"].contains(&f.status.as_str()))
     }
 }
 
@@ -188,16 +217,40 @@ fn validate(value: &Value) -> Result<(), String> {
 
 /// Refuse lossy source text, then inspect and merge without mutating the input.
 pub fn check(text: &str, binary_path: &str) -> Result<Check, String> {
-    check_value(&parse(text)?, binary_path)
+    check_with_probe(text, binary_path, false, &FileSystemProbe)
 }
 
 /// Check a previously parsed value. Source-text refusals belong to `check`.
 pub fn check_value(value: &Value, binary_path: &str) -> Result<Check, String> {
+    check_value_with_probe(value, binary_path, false, &FileSystemProbe)
+}
+
+/// Inspect with an explicit ownership policy and filesystem probe.
+pub fn check_with_probe(
+    text: &str,
+    binary_path: &str,
+    take_over: bool,
+    probe: &dyn BinaryProbe,
+) -> Result<Check, String> {
+    check_value_with_probe(&parse(text)?, binary_path, take_over, probe)
+}
+
+fn check_value_with_probe(
+    value: &Value,
+    binary_path: &str,
+    take_over: bool,
+    probe: &dyn BinaryProbe,
+) -> Result<Check, String> {
     validate(value)?;
+    let running = probe
+        .executable(Path::new(binary_path))
+        .unwrap_or_else(|| PathBuf::from(binary_path));
+    let binary_path = running.to_str().ok_or("binary path is not UTF-8")?;
     let expected = snippet(binary_path);
     let mut merged = value.clone();
     let mut findings = Vec::new();
     let mut needs_fix = false;
+    let mut owners = std::collections::BTreeSet::new();
     for (event, template) in expected["hooks"].as_object().unwrap() {
         let groups = value
             .get("hooks")
@@ -227,20 +280,23 @@ pub fn check_value(value: &Value, binary_path: &str) -> Result<Check, String> {
                     .any(|key| !["type", "command", "async", "timeout"].contains(&key.as_str()))
         });
         let mut details = Vec::new();
-        let status = if customized {
-            details.push(
-                "edit multi-link entries and matcher by hand; custom fields or matcher are kept"
-                    .into(),
-            );
-            "customized"
-        } else if entries.is_empty() {
-            "missing"
-        } else if entries.len() > 1 {
-            "duplicate"
-        } else {
-            let (_, entry, path) = &entries[0];
-            if path != binary_path {
-                details.push(format!("binary: {} -> {}", path, binary_path));
+        let mut event_owners = std::collections::BTreeSet::new();
+        for (_, entry, path) in &entries {
+            let stored = Path::new(path);
+            let resolved = stored
+                .is_absolute()
+                .then(|| probe.executable(stored))
+                .flatten();
+            if path != binary_path && resolved.as_deref() != Some(running.as_path()) {
+                if let Some(owner) =
+                    resolved.filter(|p| !temporary(Path::new(path)) && !temporary(p))
+                {
+                    let owner = owner.to_str().ok_or("owner path is not UTF-8")?.to_owned();
+                    details.push(format!("owned by {owner}"));
+                    event_owners.insert(owner);
+                } else {
+                    details.push(format!("binary: {} -> {}", path, binary_path));
+                }
             }
             for key in ["async", "timeout"] {
                 if entry.get(key) != template[0]["hooks"][0].get(key) {
@@ -250,7 +306,27 @@ pub fn check_value(value: &Value, binary_path: &str) -> Result<Check, String> {
                     ));
                 }
             }
-            if details.is_empty() { "ok" } else { "outdated" }
+        }
+        let status = if customized {
+            details.push(
+                "edit multi-link entries and matcher by hand; custom fields or matcher are kept"
+                    .into(),
+            );
+            "customized"
+        } else if !event_owners.is_empty() && !take_over {
+            owners.extend(event_owners);
+            if entries.len() > 1 {
+                details.push("duplicate entries kept".into());
+            }
+            "other copy"
+        } else if entries.is_empty() {
+            "missing"
+        } else if entries.len() > 1 {
+            "duplicate"
+        } else if details.is_empty() {
+            "ok"
+        } else {
+            "outdated"
         };
         if ["missing", "outdated", "duplicate"].contains(&status) {
             needs_fix = true;
@@ -309,6 +385,7 @@ pub fn check_value(value: &Value, binary_path: &str) -> Result<Check, String> {
         findings,
         merged,
         needs_fix,
+        owners: owners.into_iter().collect(),
     })
 }
 

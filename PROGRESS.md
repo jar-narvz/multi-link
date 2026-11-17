@@ -1,15 +1,36 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 24: Step 24.1 is done (Codex, reviewed by Claude, 2026-11-17): the setup window's stale Notifications error
-is fixed. Next: Step 24.2.** What 24.2 / 24.3 need:
-- `SetupModel.notificationError` (shown inside the Notifications row in `SetupView.swift`) holds notification request
-  failures; cleared at the start of each request and by any `refresh()` reading `notification.green`. `actionError` is
-  now hook-only: notification actions never touch it; `turnOnEverything()` clears it only in its hook-apply branch.
-  24.3 will change that branch's arguments to `["hook","apply","--take-over"]` and its `.fixable` guard for `owners`.
-- `SetupTests.swift` fake: `SetupFakes.notificationError` makes `request()` throw "Operation not permitted".
-- Swift suite: 44 tests. Codex's sandbox `./build.sh` still fails at `iconutil`; outside it builds and verifies.
-- 24.2 is pure Rust (`crates/hook`, `crates/cli`) plus docs; nothing from 24.1 touches it.
+**Phase 24: Step 24.2 is done (Codex, reviewed by Claude, 2026-11-17): `other copy` hook status, `--take-over`
+and `setup --json` `owners`. Next: Step 24.3.** The exact contract 24.3 consumes:
+- Example hooks item (only other copies left): `{"id":"hooks","state":"ok","file":"<settings>","exists":true,
+  "events":[{"event":"Stop","status":"other copy","details":["owned by /Users/u/.cargo/bin/multi-link"]},…],
+  "owners":["/Users/u/.cargo/bin/multi-link"]}`. After `hook apply --take-over` the same file reads `owners: []`.
+- `setup --json` remains version 1 with `items` ordered `cli`, `hooks`, `app`. The **hooks item** always contains
+  `owners: [string, ...]`: sorted unique canonical binary paths of `other copy` events, including multiple owners
+  within duplicates. `owners: []` when none, including missing/absent or unreadable settings. Each event still has
+  `event`, `status`, `details`; `other copy` details include `owned by <canonical path>` plus async/timeout drift.
+  Customized events take precedence over ownership: status stays `customized`, with the usual hand-edit detail plus
+  any owner path, but contributes nothing to `owners` (including with takeover). Hook check exits 1 for them; setup
+  reports `attention` when no other event needs a fix, with its existing exit-0 policy.
+- Ownership alone means hooks `state: "ok"` (setup exit 0 unless another item fails). Owners also accompany `fixable`
+  (missing/outdated/duplicate without an owner) and `attention` (customized/unknown event); existing state precedence
+  and exit codes are unchanged. Step 24.3 must decode `owners` in both `SetupReport.Item` and `HooksSetup` and treat
+  a non-empty array as not done in every row/count/launch-dot/guard/action predicate, even with `state: "ok"`.
+- Hook apply defaults to preserving entire other-copy events, including duplicate entries and async/timeout drift.
+  `hook apply --take-over`, `hook check --merged --take-over`, and `setup --take-over` use the canonical running
+  binary path. Setup still asks unless `--yes`; `setup --json --take-over` is a clap conflict (exit 2, no JSON/write),
+  like `--json --yes`. Text setup suggests the takeover command only without the flag; with it, it says the owners
+  will be moved if applied, before the prompt. The app's explicit Turn on actions in 24.3 must use `["hook","apply","--take-over"]` for every
+  applicable state; Remove remains `["hook","remove"]`. No Swift code changed in 24.2.
+- `BinaryProbe` / `FileSystemProbe` in `crates/hook/src/settings.rs` resolve executable regular files using read-only
+  filesystem calls; injected probes cover `/Volumes/` and AppTranslocation without touching a real installed app.
+  Only absolute stored paths are probed; bare, home-relative and other relative paths remain `outdated` without
+  resolving against CWD. Stored aliases of this binary are `ok`; missing/dangling/non-executable/non-regular/temporary
+  owners are outdated.
+- From 24.1: `SetupModel.notificationError` belongs only to Notifications, clears at request start or a green refresh;
+  `actionError` is hook-only. `turnOnEverything()` currently has a `.fixable` guard and flag-free apply arguments;
+  24.3 must handle owners there. Swift suite: 44 tests at 24.1; sandbox app build fails at `iconutil` (outside builds).
 
 **Phase 23: Step 23.1 is done (Claude wrote, Codex reviewed, 2026-11-17): the README is rewritten for the big picture.**
 What a later step needs to know:
@@ -1046,6 +1067,52 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 24.2: Other-copy hook ownership and explicit takeover — Codex
+- Did: Implemented amended D2 with an injectable read-only filesystem probe, canonical paths, protected other-copy
+  events (including async/timeout drift and duplicates), explicit takeover with the usual backup, and always-present
+  sorted unique hooks `owners`. Updated the binding design, install/schema docs, and Step 24.3 handoff above.
+- Fix round 1: Customized events now take precedence, retain usual hand-edit and owner details, remain unchanged with
+  takeover, and never enter `owners`; hook check exits 1. Only absolute stored paths are probed; bare/home-relative
+  paths stay outdated. Setup suggests takeover only without the flag; with it, describes the transfer before asking.
+  Added four regressions, observed all four fail before the fixes, then pass. Shortened this Verify block as requested.
+- Changed: `crates/hook/src/settings.rs`, `crates/hook/tests/settings.rs`, `crates/cli/src/hook.rs`,
+  `crates/cli/src/setup.rs`, `crates/cli/tests/setup.rs`, `docs/design.md`, `docs/install.md`,
+  `docs/output-schema.md`, `PROGRESS.md`.
+- Verify: Rust PATH set per AGENTS.md. `TZ=UTC cargo test --workspace --locked` → exit 0.
+  Summed all binaries' actual `test result:` lines from the final run: **757 passed, 0 failed, 1 ignored**.
+  Actual new-test output (initial implementation and fix round 1):
+  ```text
+test customized_other_copy_check_exits_one_without_actionable_owners ... ok
+test setup_take_over_message_describes_requested_transfer ... ok
+test other_copy_is_read_only_until_explicit_take_over ... ok
+test setup_owners_are_sorted_unique_with_fixable_attention_and_unreadable ... ok
+test tty_setup_answered_no_keeps_original_without_backup ... ok
+test customized_other_copy_keeps_details_without_actionable_owners ... ok
+test injectable_probe_excludes_temporary_stored_and_resolved_paths ... ok
+test non_absolute_stored_paths_are_never_probed_and_stay_outdated ... ok
+test other_copy_drift_and_duplicates_preserve_the_entire_event ... ok
+test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
+  ```
+- Verify: `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0; actual completion output:
+  ```text
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.55s
+  ```
+  `cargo fmt --check` → exit 0, no output. `git diff --check` → exit 0, no output.
+- Review: Claude, 2 rounds. Round 1 (4 findings, all fixed): customized + other copy was reported `other copy` and
+  put in `owners`, but take-over never moves customized entries, so 24.3's app would stay amber forever (now
+  `customized` wins, owner in details only); non-absolute stored paths were probed relative to the CWD (now only
+  absolute paths); setup suggested `--take-over` even when given; Verify paste too long. Round 2: clean. Checked:
+  `other copy` events byte-identical without `--take-over` (drift, duplicates, next to a repaired `missing` event);
+  missing / dangling / non-executable / non-regular / `/Volumes/` / AppTranslocation paths still `outdated` and
+  repaired; `setup --json --take-over` → clap exit 2, no write; `owners` present in every hooks state incl.
+  `unreadable`; the other binary is never run (marker test). Claude re-ran Verify: `TZ=UTC cargo test --workspace
+  --locked` → exit 0, 757 passed, 0 failed, 1 ignored (summed `test result:` lines); clippy exit 0; fmt exit 0.
+  Matches Codex. `crates/cli/src/main.rs` was named but needed no change. Mode: Codex loop (`codex-quota.py` →
+  `CODEX: OK`, 10% / 28%).
+- Gotchas: Settings writes use temp files / temp CLAUDE_CONFIG_DIR only; no real installed app or real Claude settings
+  changed. A no-op retains original file bytes and creates no backup; H4 pretty printing applies during mixed repairs.
+  Existing untracked `.claude/` left untouched; nothing staged or committed.
 
 ### 2026-11-17 — Step 24.1: Setup window: clear the stale Notifications error — Codex
 - Mode: Codex loop. Owner-supplied preflight: `python3 -I tools/codex-quota.py` → `CODEX: OK`, primary 7%,

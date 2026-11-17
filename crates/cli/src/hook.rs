@@ -23,6 +23,9 @@ pub enum HookCommand {
         settings: Option<PathBuf>,
         #[arg(long)]
         merged: bool,
+        /// Repoint hooks owned by another copy (preview only).
+        #[arg(long, requires = "merged")]
+        take_over: bool,
     },
     /// Back up and atomically merge generated hooks into one settings file.
     Apply {
@@ -30,6 +33,9 @@ pub enum HookCommand {
         scope: Scope,
         #[arg(long)]
         settings: Option<PathBuf>,
+        /// Explicitly move hooks from another copy to this binary.
+        #[arg(long)]
+        take_over: bool,
     },
     /// Back up and remove only recognized multi-link hook entries.
     Remove {
@@ -135,8 +141,9 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
             scope,
             settings,
             merged,
+            take_over,
         } => {
-            let code = match check_settings(scope, settings, merged) {
+            let code = match check_settings(scope, settings, merged, take_over) {
                 Ok(code) => code,
                 Err(error) => {
                     eprintln!("multi-link: {error}");
@@ -145,12 +152,16 @@ pub fn run(command: HookCommand) -> Result<(), Box<dyn std::error::Error>> {
             };
             std::process::exit(code);
         }
-        HookCommand::Apply { scope, settings } => {
-            change_settings(scope, settings, false)?;
+        HookCommand::Apply {
+            scope,
+            settings,
+            take_over,
+        } => {
+            change_settings(scope, settings, false, take_over)?;
             return Ok(());
         }
         HookCommand::Remove { scope, settings } => {
-            change_settings(scope, settings, true)?;
+            change_settings(scope, settings, true, false)?;
             return Ok(());
         }
         HookCommand::Install { scope } => (scope, false),
@@ -265,12 +276,13 @@ fn check_settings(
     scope: Scope,
     explicit: Option<PathBuf>,
     merged: bool,
+    take_over: bool,
 ) -> Result<i32, Box<dyn std::error::Error>> {
     let source = read_settings(scope, explicit)?;
     let target = &source.path;
     let mode = source.mode;
     let exe = super::canonical_executable()?;
-    let result = inspect(&source, &exe)?;
+    let result = inspect_with_policy(&source, &exe, take_over)?;
     if merged {
         super::json(&mut io::stdout().lock(), &result.merged)?;
         return Ok(0);
@@ -285,7 +297,14 @@ fn check_settings(
         println!("{}: {}{}", finding.event, finding.status, details);
     }
     if result.current() {
-        println!("multi-link hooks in {} are current", target.display());
+        if result.owners.is_empty() {
+            println!("multi-link hooks in {} are current", target.display());
+        } else {
+            println!(
+                "Hooks owned by {}; to move them to this copy, explicitly run multi-link hook apply --take-over",
+                result.owners.join(", ")
+            );
+        }
         Ok(0)
     } else {
         if result.needs_fix {
@@ -317,15 +336,28 @@ pub(crate) fn inspect(
     source: &super::settings_write::Snapshot,
     exe: &Path,
 ) -> Result<settings::Check, Box<dyn std::error::Error>> {
-    settings::check(source.text()?, path_text(exe)?)
-        .map_err(|e| format!("{}: {e}", source.path.display()).into())
+    inspect_with_policy(source, exe, false)
+}
+fn inspect_with_policy(
+    source: &super::settings_write::Snapshot,
+    exe: &Path,
+    take_over: bool,
+) -> Result<settings::Check, Box<dyn std::error::Error>> {
+    settings::check_with_probe(
+        source.text()?,
+        path_text(exe)?,
+        take_over,
+        &settings::FileSystemProbe,
+    )
+    .map_err(|e| format!("{}: {e}", source.path.display()).into())
 }
 pub(crate) fn apply(
     source: &super::settings_write::Snapshot,
     exe: &Path,
     backup: &Path,
+    take_over: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let result = inspect(source, exe)?;
+    let result = inspect_with_policy(source, exe, take_over)?;
     if result.needs_fix {
         write_settings(source, &result.merged, backup)?;
     }
@@ -346,6 +378,7 @@ fn change_settings(
     scope: Scope,
     explicit: Option<PathBuf>,
     remove: bool,
+    take_over: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source = read_settings(scope, explicit)?;
     let backup = super::settings_write::backup_path(&source.path)?;
@@ -357,7 +390,7 @@ fn change_settings(
             false
         }
     } else {
-        apply(&source, &super::canonical_executable()?, &backup)?
+        apply(&source, &super::canonical_executable()?, &backup, take_over)?
     };
     if !changed {
         println!("no change: {}", source.path.display());

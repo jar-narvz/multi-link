@@ -434,21 +434,30 @@ fn apply_and_remove_use_same_user_and_local_selection_as_check() {
 #[test]
 fn tty_setup_answered_no_keeps_original_without_backup() {
     // A PTY exercises the real is_terminal/prompt boundary using Python's stdlib.
-    let dir = tempfile::tempdir().unwrap();
-    let config = dir.path().join("config");
-    fs::create_dir(&config).unwrap();
-    let file = config.join("settings.json");
-    fs::write(&file, "{}").unwrap();
-    let output = Command::new("python3")
-        .env("HOME", dir.path())
-        .env("CLAUDE_CONFIG_DIR", &config)
-        .args([
-            "-c",
-            r#"
+    for take_over in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        fs::create_dir(&config).unwrap();
+        let file = config.join("settings.json");
+        let owner = dir.path().join("multi-link");
+        fs::write(&owner, "never execute").unwrap();
+        fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+        let original = if take_over {
+            multi_link_hook::settings::snippet(owner.to_str().unwrap()).to_string()
+        } else {
+            "{}".into()
+        };
+        fs::write(&file, &original).unwrap();
+        let output = Command::new("python3")
+            .env("HOME", dir.path())
+            .env("CLAUDE_CONFIG_DIR", &config)
+            .args([
+                "-c",
+                r#"
 import os, pty, select, sys, time
 pid, fd = pty.fork()
 if pid == 0:
-    os.execv(sys.argv[1], [sys.argv[1], 'setup'])
+    os.execv(sys.argv[1], [sys.argv[1], 'setup', *sys.argv[2:]])
 output = b''
 answered = False
 deadline = time.monotonic() + 15
@@ -472,14 +481,20 @@ _, status = os.waitpid(pid, 0)
 sys.stdout.buffer.write(output)
 sys.exit(os.waitstatus_to_exitcode(status))
 "#,
-            BIN,
-        ])
-        .output()
-        .unwrap();
-    assert_eq!(output.status.code(), Some(1), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("[y/N]"));
-    assert_eq!(fs::read(&file).unwrap(), b"{}");
-    assert_eq!(names(&config), [file]);
+                BIN,
+            ])
+            .args(take_over.then_some("--take-over"))
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(if take_over { 0 } else { 1 }),
+            "{output:?}"
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("[y/N]"));
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
+        assert_eq!(names(&config), [file]);
+    }
 }
 
 #[test]
@@ -565,5 +580,244 @@ fn removal_preserves_preexisting_empty_groups_events_and_hooks_object() {
             assert_eq!(actual, bytes.as_bytes());
             assert_eq!(names(dir.path()), [file]);
         }
+    }
+}
+
+#[test]
+fn other_copy_is_read_only_until_explicit_take_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = dir.path().join("multi-link");
+    let marker = dir.path().join("executed");
+    fs::write(
+        &owner,
+        format!("#!/bin/sh\ntouch '{}'\nexit 99\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+    let config = dir.path().join("config");
+    fs::create_dir(&config).unwrap();
+    let file = config.join("settings.json");
+    let mut value = multi_link_hook::settings::snippet(owner.to_str().unwrap());
+    value["hooks"]["PostToolUse"][0]["hooks"][0]["async"] = json!(false);
+    value["hooks"]["PostToolUse"][0]["hooks"][0]["timeout"] = json!(5);
+    value["hooks"]["PostToolUse"].as_array_mut().unwrap().push(
+        multi_link_hook::settings::snippet(fs::canonicalize(BIN).unwrap().to_str().unwrap())["hooks"]["PostToolUse"][0].clone()
+    );
+    let original = value.to_string();
+    fs::write(&file, &original).unwrap();
+    let checked = hook(dir.path(), "check", &file);
+    assert_eq!(checked.status.code(), Some(0), "{checked:?}");
+    let text = String::from_utf8(checked.stdout).unwrap();
+    assert!(text.contains("other copy"));
+    assert!(text.contains("multi-link hook apply --take-over"));
+    assert!(!text.contains("Run this command to back up"));
+    let applied = hook(dir.path(), "apply", &file);
+    assert!(String::from_utf8_lossy(&applied.stdout).starts_with("no change:"));
+    let report = command(dir.path())
+        .args(["setup", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(report.status.code(), Some(0));
+    let report: Value = serde_json::from_slice(&report.stdout).unwrap();
+    assert_eq!(report["items"][1]["state"], "ok");
+    assert_eq!(
+        report["items"][1]["owners"],
+        json!([fs::canonicalize(&owner).unwrap()])
+    );
+    for args in [
+        vec!["setup", "--yes"],
+        vec!["setup", "--take-over"],
+        vec!["setup", "--json", "--take-over"],
+    ] {
+        let output = command(dir.path()).args(&args).output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(if args.contains(&"--json") { 2 } else { 0 })
+        );
+        if args.contains(&"--json") {
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(error.contains("cannot be used with"), "{error}");
+            assert!(
+                error.contains("--json") && error.contains("--take-over"),
+                "{error}"
+            );
+            assert!(output.stdout.is_empty());
+        }
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
+        assert_eq!(names(&config), std::slice::from_ref(&file));
+    }
+    let preview = command(dir.path())
+        .args(["hook", "check", "--merged", "--take-over", "--settings"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(preview.status.success(), "{preview:?}");
+    let output = command(dir.path())
+        .args(["hook", "apply", "--take-over", "--settings"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fs::read(&file).unwrap(), preview.stdout);
+    let saved: Value = serde_json::from_slice(&preview.stdout).unwrap();
+    assert_eq!(
+        saved,
+        multi_link_hook::settings::snippet(fs::canonicalize(BIN).unwrap().to_str().unwrap())
+    );
+    let backup = names(&config).into_iter().find(|p| p != &file).unwrap();
+    assert_eq!(fs::read_to_string(backup).unwrap(), original);
+    assert!(!marker.exists());
+}
+
+#[test]
+fn setup_owners_are_sorted_unique_with_fixable_attention_and_unreadable() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config");
+    fs::create_dir(&config).unwrap();
+    let file = config.join("settings.json");
+    let mut owners = vec![];
+    for name in ["z", "a"] {
+        let owner = dir.path().join(name).join("multi-link");
+        fs::create_dir(owner.parent().unwrap()).unwrap();
+        fs::write(&owner, "never execute").unwrap();
+        fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+        owners.push(fs::canonicalize(owner).unwrap());
+    }
+    let mut source = multi_link_hook::settings::snippet(owners[0].to_str().unwrap());
+    source["hooks"]["SessionEnd"] = multi_link_hook::settings::snippet(owners[1].to_str().unwrap())
+        ["hooks"]["SessionEnd"]
+        .clone();
+    let inspect = |source: &str| {
+        fs::write(&file, source).unwrap();
+        let output = command(dir.path())
+            .args(["setup", "--json"])
+            .output()
+            .unwrap();
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), source);
+        (output.status.code(), value["items"][1].clone())
+    };
+    owners.sort();
+    let (code, hooks) = inspect(&source.to_string());
+    assert_eq!(code, Some(0));
+    assert_eq!(hooks["owners"], json!(owners));
+    source["hooks"]
+        .as_object_mut()
+        .unwrap()
+        .remove("PermissionRequest");
+    let (code, hooks) = inspect(&source.to_string());
+    assert_eq!(code, Some(1));
+    assert_eq!(hooks["state"], "fixable");
+    assert_eq!(hooks["owners"], json!(owners));
+    let protected = source["hooks"]["PostToolUse"].clone();
+    assert!(hook(dir.path(), "apply", &file).status.success());
+    let saved: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&saved["hooks"]["PostToolUse"]).unwrap(),
+        serde_json::to_vec(&protected).unwrap()
+    );
+    source = saved;
+    source["hooks"]["Future"] =
+        json!([{"hooks":[{"type":"command","command":"multi-link hook record"}]}]);
+    let (code, hooks) = inspect(&source.to_string());
+    assert_eq!(code, Some(0));
+    assert_eq!(hooks["state"], "attention");
+    assert_eq!(hooks["owners"], json!(owners));
+    let (code, hooks) = inspect("{");
+    assert_eq!(code, Some(1));
+    assert_eq!(hooks["state"], "unreadable");
+    assert_eq!(hooks["owners"], json!([]));
+    let (_, hooks) = inspect("{}");
+    assert_eq!(hooks["owners"], json!([]));
+    fs::write(
+        &file,
+        multi_link_hook::settings::snippet(owners[0].to_str().unwrap()).to_string(),
+    )
+    .unwrap();
+    assert!(
+        command(dir.path())
+            .args(["setup", "--take-over", "--yes"])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let saved: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert_eq!(
+        saved,
+        multi_link_hook::settings::snippet(fs::canonicalize(BIN).unwrap().to_str().unwrap())
+    );
+}
+
+#[test]
+fn customized_other_copy_check_exits_one_without_actionable_owners() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config");
+    fs::create_dir(&config).unwrap();
+    let file = config.join("settings.json");
+    let owner = dir.path().join("multi-link");
+    fs::write(&owner, "never execute").unwrap();
+    fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+    let mut source =
+        multi_link_hook::settings::snippet(fs::canonicalize(BIN).unwrap().to_str().unwrap());
+    source["hooks"]["PostToolUse"] =
+        multi_link_hook::settings::snippet(owner.to_str().unwrap())["hooks"]["PostToolUse"].clone();
+    source["hooks"]["PostToolUse"][0]["hooks"][0]["if"] = json!("intent");
+    let original = source.to_string();
+    fs::write(&file, &original).unwrap();
+    let checked = hook(dir.path(), "check", &file);
+    assert_eq!(checked.status.code(), Some(1));
+    let text = String::from_utf8(checked.stdout).unwrap();
+    assert!(text.contains("PostToolUse: customized"));
+    assert!(text.contains("owned by "));
+    assert!(!text.contains("--take-over"));
+    let report = command(dir.path())
+        .args(["setup", "--json"])
+        .output()
+        .unwrap();
+    let report: Value = serde_json::from_slice(&report.stdout).unwrap();
+    assert_eq!(report["items"][1]["state"], "attention");
+    assert_eq!(report["items"][1]["owners"], json!([]));
+    let preview = command(dir.path())
+        .args(["hook", "check", "--merged", "--settings"])
+        .arg(&file)
+        .output()
+        .unwrap();
+    let preview: Value = serde_json::from_slice(&preview.stdout).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&preview).unwrap(),
+        serde_json::to_vec(&source).unwrap()
+    );
+    assert!(hook(dir.path(), "apply", &file).status.success());
+    assert_eq!(fs::read_to_string(&file).unwrap(), original);
+    assert_eq!(names(&config), [file]);
+}
+
+#[test]
+fn setup_take_over_message_describes_requested_transfer() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config");
+    fs::create_dir(&config).unwrap();
+    let file = config.join("settings.json");
+    let owner = dir.path().join("multi-link");
+    fs::write(&owner, "never execute").unwrap();
+    fs::set_permissions(&owner, fs::Permissions::from_mode(0o700)).unwrap();
+    let original = multi_link_hook::settings::snippet(owner.to_str().unwrap()).to_string();
+    fs::write(&file, &original).unwrap();
+    for take_over in [false, true] {
+        let output = command(dir.path())
+            .arg("setup")
+            .args(take_over.then_some("--take-over"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert_eq!(
+            text.contains("explicitly run multi-link setup --take-over"),
+            !take_over
+        );
+        assert_eq!(text.contains("will be moved to this copy"), take_over);
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
+        assert_eq!(names(&config), std::slice::from_ref(&file));
     }
 }

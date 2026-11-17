@@ -137,10 +137,17 @@ one line per hook event and, when something can be fixed, one command:
 
 - `ok`: exactly one multi-link entry, equal to what this binary would generate. All `ok` → `multi-link hooks in
   <file> are current`, exit 0.
-- `missing`, `outdated` (another binary path, `async` or `timeout`; both paths are shown) or `duplicate`: fixed by the
-  printed command. Exit 1.
+- `other copy`: a non-customized event using an existing executable regular file owned by another copy, with
+  `owned by <canonical path>` and any `async` / `timeout` drift shown. The entire event is kept, including duplicates. All events `ok` / `other copy`
+  → exit 0, owner names and an optional `multi-link hook apply --take-over` instruction; no repair command.
+- `missing`, `outdated` (a missing, dangling, non-executable, non-regular, `/Volumes/` or AppTranslocation binary
+  path, or this copy's `async` / `timeout` drift) or `duplicate` without another owner: fixed by the printed command.
+  Exit 1. Only absolute stored binary paths are probed; bare or home-relative paths stay `outdated`.
+  A stored symlink resolving to this binary counts as the same copy.
 - `customized` (a multi-link entry you changed, such as an `if` key or a narrower matcher), `unknown event`, or
-  `disableAllHooks: true`: reported for you to edit by hand, never changed. Exit 1.
+  `disableAllHooks: true`: reported for you to edit by hand, never changed. Exit 1. Customization takes precedence
+  over another owner: its path is shown in details, but the event stays `customized`, including with `--take-over`,
+  and is excluded from `owners`.
 - A file it cannot safely read or merge (invalid JSON, wrong types, a directory, a dangling symlink, values that would
   not survive a rewrite, below): the reason, no command, exit 2.
 
@@ -148,13 +155,21 @@ Copy the printed command and run it. It is plain `sh`: it copies an existing fil
 (`settings.json.multi-link-backup-<UTC time>-XXXXXX`; an absent file is created instead), writes `multi-link hook check --merged` to a private temp file
 in the same folder, gives it the file's mode and moves it into place in one step, so the file is never half-written;
 if any part fails it removes the temp file and the original stays as it was. Only multi-link's own entries for
-`missing`, `outdated` and `duplicate` events change; your other hooks, keys and their order stay. Run
+`missing`, `outdated` and `duplicate` events without another owner change; your other hooks, keys and their order stay. Run
 `multi-link hook check` again to see exit 0, then start a new Claude session so it loads the hooks.
 
 `multi-link hook apply` does the same in one step (same `--scope` / `--settings`), and also re-reads the file just
 before the final rename, refusing if it changed since it was read. It prints `updated <file> (backup: <path>)`,
 `created <file>` or `no change: <file>`. `multi-link hook remove` takes multi-link's entries out the same way, with a
 backup.
+
+To move hooks from another copy, use `multi-link hook apply --take-over` (or preview with
+`multi-link hook check --merged --take-over`). It writes the canonical running binary path and saves the usual
+backup. `multi-link setup --take-over` says the owners will be moved if applied, then asks first; add `--yes`
+to answer yes. Without the flag, setup suggests the optional takeover command. Plain `setup --yes` leaves other
+owners alone. `setup --json` always stays read-only and rejects `--take-over` and `--yes`; its hooks item includes
+`owners`, a sorted unique array of canonical paths from `other copy` events only, empty when none. The other binary
+is never executed.
 
 Run the check with the binary you want the hooks to call (normally the installed one): the hooks are compared with
 that binary's path. `hook install` still prints the bare snippet, and `hook uninstall` prints what to remove.
