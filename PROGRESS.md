@@ -1,27 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 22: Step 22.6 is done on Claude's side (2026-11-16); owner check pending.** README (brew Install first, DMG
-second, Use in Terminal, CI badge, Releasing, Uninstall, Homebrew limits), `apps/menubar/Info.plist` → `1.19`, and
-`docs/phase22-check.md` (Claude's checks + the 10-item owner checklist). Phase 22 closes when the owner's answer is in
-`docs/phase22-check.md` → "Owner answer" and here. What Claude checks after each owner item (read-only):
-- 1–2 push + CI: `gh run list --workflow ci.yml --limit 3` → the run on the pushed HEAD `success`
-  (`gh run view <id> --log-failed` on a failure; fix it in this step, `.github/workflows/**` / `tools/**`).
-- 3 tag: `gh run list --workflow release.yml --limit 1` → `success`, jobs `check`, `ci`, `release`.
-- 4–5 draft and publish: `gh release view v1.19 --repo jar-narvz/multi-link --json isDraft,assets,tagName --jq
-  '{isDraft, tag: .tagName, assets: [.assets[] | {name, size}]}'` → exactly `multi-link-1.19-arm64.dmg` and its
-  `.sha256` (CI's sizes; the local build was 2,929,088 / 92 bytes, not the asset), `isDraft` true before item 5 and
-  false after. Record the real asset bytes in the check doc and README only from this output.
-- 6 tap: `gh run list --workflow cask.yml --limit 1` → `success`; `gh api
-  repos/jar-narvz/homebrew-tap/contents/Casks/multi-link.rb --jq .content | base64 -d` → `version "1.19"` and the
-  sha256 equal to the release's `.sha256` file. The tap was empty before (no default branch); this run creates `main`.
-- 7–9 real app: `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok (/Applications/multi-link.app/…)`,
-  `hooks: ok`, `app: installed`; `xattr -p com.apple.quarantine /Applications/multi-link.app` (after Open Anyway the
-  flag should carry the approved bit, `03c1`-style, per design (b)); `brew list --cask` shows multi-link. On this Mac
-  a bare `multi-link` resolves to `~/.cargo/bin/multi-link` first (earlier `PATH` entry), hence the full path.
-- Not covered: a real `brew upgrade` (needs a release after 1.19); README says so.
-- Leftovers: `apps/menubar/build/multi-link-1.19-arm64.dmg{,.sha256}` and a rebuilt `build/multi-link.app`
-  (git-ignored).
+**Phase 22 is closed (2026-11-17): Release 1.19 is published and installable with Homebrew.** Owner check all pass
+(`docs/phase22-check.md` → "Owner answer"). What the next phase needs to know:
+- Release flow works end to end: bump both `apps/menubar/Info.plist` keys, push `main`, wait for CI, push tag `vX.Y`,
+  check the draft (2 files), publish it in the browser (a publish by `GITHUB_TOKEN` would not start `cask.yml`), and
+  `cask.yml` writes the tap's `Casks/multi-link.rb` in about 15 s.
+- The owner's real app is now the brew install (`/Applications/multi-link.app`, CLI link
+  `/opt/homebrew/bin/multi-link`, Open Anyway approved, hooks point at the bundled binary). Tests still never touch it.
+- Not covered yet: a real `brew upgrade` keeping the Open Anyway approval. Check it on the next release.
+- Backlog (PLAN.md) is next; nothing is planned yet. The owner picks the next phase.
+- macOS gotcha: a Terminal `mv` into `~/.Trash` fails with "Operation not permitted"; use Finder (`open -R`).
 
 **Phase 22: Step 22.5 is done (Claude edits, Codex reviewed, 2026-11-15): the CI run on the pushed `main` commit
 `74993ca` is green (run 43771809152). Next: Step 22.6.** What 22.6 needs:
@@ -1034,6 +1023,20 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 22.6: owner check, Phase 22 closed — Claude
+- Did: walked the owner through `docs/phase22-check.md` items 1–9 and checked each read-only with `gh` / `brew` /
+  `xattr`; recorded the answer; fixed checklist item 7.3 (`mv` into `~/.Trash` → Finder via `open -R`).
+- Changed: `docs/phase22-check.md` (Owner answer, item 7.3), `PLAN.md` (22.6 status), `PROGRESS.md`
+- Verify (remote, 2026-11-17): CI run 43952924468 on `620a0bc` → `success`; release run 43956976978 → `check`,
+  `ci / test`, `release` all `success`; `gh release view v1.19` → `isDraft` false, assets `multi-link-1.19-arm64.dmg`
+  2,929,184 bytes and `.sha256` 92 bytes; `cask.yml` run 44193075230 (event `release`) → ✓; tap cask → `version "1.19"`,
+  sha256 `30a20284…82b1c734` = the release `.sha256`; `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok
+  (/Applications/multi-link.app/Contents/MacOS/multi-link)`, `hooks: ok`, `app: installed`, `exit 0`; quarantine
+  `03c1;…`; owner saw the `codex finished` banner.
+- Review: docs-only record of owner results; no code changed.
+- Gotchas: my `gh run watch` exited 1 on a network reset while the run was still going; re-read with `gh run view`.
+  A draft release's URL reads `untagged-…` until it is published.
 
 ### 2026-11-16 — Step 22.6: docs, Release 1.19, owner check (Claude side) — Claude
 - Did: README: CI badge (`ci.yml` on `main`), Release 1.19 sentence, Install with `brew trust --cask

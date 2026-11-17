@@ -101,9 +101,10 @@ JSON. Stop and tell Claude at the first item that doesn't look as described. Cla
 7. **Switch the real app to brew.** Do these in order.
    1. Click `ml` in the menu bar and untick **Open at login**.
    2. Click `ml` → **Quit**.
-   3. Move the DMG copy to the Trash (recoverable from the Trash):
+   3. Move the DMG copy to the Trash (recoverable from the Trash). This opens Finder with it selected; press ⌘⌫
+      (a Terminal `mv` into `~/.Trash` fails with "Operation not permitted" without extra privacy permissions):
       ```bash
-      mv /Applications/multi-link.app ~/.Trash/
+      open -R /Applications/multi-link.app
       ```
    4. Trust the tap:
       ```bash
@@ -148,4 +149,17 @@ JSON. Stop and tell Claude at the first item that doesn't look as described. Cla
 
 ## Owner answer
 
-Pending.
+2026-11-17: **all pass.** The owner ran items 1–9 with Claude; Claude checked each item read-only with `gh`.
+
+| Item | Result |
+|---|---|
+| 1–2 push + CI | `main` at `620a0bc` pushed; CI run 43952924468 `success` (every step green) |
+| 3 tag | `v1.19` pushed; release run 43956976978 `success`: `check`, `ci / test`, `release` all `success` |
+| 4 draft | `gh release view v1.19` → name `multi-link 1.19`, `isDraft` true, exactly `multi-link-1.19-arm64.dmg` 2,929,184 bytes and `multi-link-1.19-arm64.dmg.sha256` 92 bytes (CI's build; the local one was 2,929,088) |
+| 5 publish | owner published; `isDraft` false, `publishedAt` 2026-11-17T22:45:07Z, URL `…/releases/tag/v1.19` (a draft's URL reads `untagged-…` until published) |
+| 6 tap | `cask.yml` run 44193075230 triggered by `release`, job `cask` ✓ in 12s; tap `Casks/multi-link.rb` → `version "1.19"`, `sha256 "30a20284…82b1c734"`, equal to the release's `.sha256` file |
+| 7 brew switch | Terminal `mv … ~/.Trash/` failed: "Operation not permitted" (macOS privacy protection), so the owner trashed it in Finder (step 3 now says so). `brew install --cask jar-narvz/tap/multi-link` downloaded 2.9 MB, moved the app to `/Applications`, linked `/opt/homebrew/bin/multi-link`, printed the caveats. `/opt/homebrew/bin/multi-link` → `/Applications/multi-link.app/Contents/MacOS/multi-link`; quarantine `03c1;…` (approved via Open Anyway); `brew list --cask` shows `multi-link` |
+| 8 CLI via brew link | `cli: ok (/Applications/multi-link.app/Contents/MacOS/multi-link)`, `hooks: ok (~/.claude/settings.json)`, `app: installed (/Applications/multi-link.app)`, `exit 0`: the canonical path (R6), not the brew link |
+| 9 banner | owner saw the `codex finished (…)` banner from multi-link for the sandbox hand-off |
+
+Still not covered: a real `brew upgrade` (see above), deferred to the next release.
