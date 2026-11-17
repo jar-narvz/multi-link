@@ -3528,6 +3528,66 @@ the `setup --json` contract.
   v1.19 published, tap cask at 1.19, brew install, CLI via the brew link reports the bundled path, banner), recorded in
   `docs/phase22-check.md` "Owner answer". Phase 22 closed; a real `brew upgrade` waits for the next release.
 
+### Phase 23 — A README a newcomer understands in a minute (docs only)
+Need (owner, 2026-11-17): someone landing on the repo (a recruiter, or a developer who runs Claude Code and Codex)
+understands within a minute what problem multi-link solves, what it does and who it is for, and can install it without
+reading internals. Current state (audit 2026-11-17, `README.md` 601 lines): the opening is a release-by-release
+changelog (1.1 … 1.19) instead of the problem; feature sections (home, repo view, step graph, live grid, loading
+screen, retired pane) come before Install; Install mixes Homebrew, DMG, Terminal link, source build, uninstall and
+hook-merge internals; the menu-bar section hard-codes `/Users/jarednarvaez/...` paths; "States and links", hook
+exit codes and a ~100-line Limitations list sit inline. Nothing is wrong, it is in the wrong order and depth.
+Non-goals: no code, test, workflow or behaviour change; no new screenshots or measurements (only existing images in
+`docs/img/`, only numbers already in the repo with their source); no change to `docs/phase*-check.md`, `PLAN.md`
+history or `docs/design.md`; no notarization, website or GIF.
+
+### Step 23.1 — Rewrite README.md for the big picture; move the depth to docs/ (Claude)
+- Before writing, look at about three well-regarded developer-tool READMEs (e.g. a CLI/TUI tool and a macOS
+  menu-bar app distributed through a Homebrew tap): note what they put first, how short their install is, and what
+  feels awkward. Record the 3 names and one line each in the PROGRESS entry.
+- New `README.md` order, plain words, short sentences:
+  1. Title, CI badge, one-sentence description.
+  2. **Why**: the problem in 2–4 sentences (several Claude Code and Codex sessions across repos; you lose track of
+     which one needs you, which Claude session handed work to which Codex run, and where each repo is in its plan).
+  3. One existing screenshot (e.g. `docs/img/home-real.png` or the phase 6 fixture) with a one-line caption.
+  4. **What it does**: 5–7 bullets in user terms (menu-bar app with waiting count and Codex-finished notifications,
+     terminal dashboard with home / repo timeline / step graph / live grid, Claude → Codex links marked exact or
+     guessed, open or jump to a session, JSON CLI). Each bullet may link to its detail section.
+  5. **Who it's for / what you'd use it for**: 2–4 concrete use cases.
+  6. **Install** (Quick start): requirements in one line (Apple silicon, macOS 15+); Homebrew as numbered steps
+     (`brew trust --cask jar-narvz/tap/multi-link`, `brew install --cask jar-narvz/tap/multi-link`, open the app and
+     Open Anyway once — why in one clause, Turn on everything, start a new Claude session); then "Or download the
+     DMG" in ≤ 5 steps; then **Check it works** (`multi-link setup < /dev/null` → three `ok`/`installed` lines, and
+     the `ml` icon). Uninstall, Use in Terminal for DMG users, switching from DMG to brew, build from source go to
+     `docs/install.md` with one link line.
+  7. **Using it**: menu bar in 3–4 lines; `multi-link tui` with the main keys as a small table; the JSON commands.
+  8. **How it works** in ≤ 6 lines: reads Claude Code and Codex transcript files on your Mac, an optional Claude hook
+     for exact links, nothing leaves your machine (project code makes no network calls), formats are undocumented.
+  9. **Limitations**: the 5–8 that matter most to a user (macOS arm64 only, not notarized → Open Anyway, undocumented
+     transcript formats, time-matched links can be wrong, Codex waiting unsupported, iTerm2 untested, brew upgrade
+     not yet seen on a real install) and a link to the full list.
+  10. **More**: links to the detail doc(s), design, PLAN/PROGRESS, releasing.
+- Move, don't delete: every section of the current README that leaves `README.md` goes, reworded only where needed,
+  to `docs/install.md` (install, Use in Terminal, DMG → brew switch, build from source, uninstall, hook setup and
+  `hook check` details) or `docs/reference.md` (screens: home, repo view, step graph, live grid, loading screen;
+  states and links; full Limitations and validation; Releasing). The retired Claude Code pane may shrink to one line
+  in `docs/reference.md`. Replace `/Users/jarednarvaez/multi-link/` paths with repo-relative ones.
+- Honesty: every number left in any of the three files keeps its existing source link; no new claims. Commands must
+  match the cask and `docs/phase22-check.md` exactly.
+- Files: `README.md`, `docs/install.md` (new), `docs/reference.md` (new), `PROGRESS.md`
+- Verify (inline commands in the PROGRESS entry):
+  - `grep -c '/Users/' README.md docs/install.md docs/reference.md` → `0` for each.
+  - `awk '/^## /{n++} END{print n}' README.md` ≤ 10 and `wc -l < README.md` ≤ 200.
+  - A one-off link check (python3 -I, in the scratchpad, not committed): every relative link and `#anchor` in the
+    three files resolves to an existing file / GitHub-style heading slug → prints `0 broken`.
+  - Coverage: every `##`/`###` heading of `git show HEAD:README.md` appears (same or recorded new name) in one of the
+    three files, except the retired-pane section, listed → prints `0 missing`.
+  - `grep -n 'brew trust --cask jar-narvz/tap/multi-link\|brew install --cask jar-narvz/tap/multi-link' README.md`
+    → both present, and they match `docs/phase22-check.md` item 7.
+  - No code changed: `git diff --stat` lists only the four files.
+- Review: an adversarial reader who did not write it reads only the new README as a newcomer and reports (a) what
+  multi-link is in one sentence, (b) anything confusing, (c) any install step that would fail; plus Codex (or the
+  Claude-only reviewer) on the diff for lost content and claims without a source.
+
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
