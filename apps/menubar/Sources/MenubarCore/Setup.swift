@@ -34,6 +34,19 @@ public struct HooksSetup: Decodable {
     public let state: State
     public let file: String
     public let events: [Event]
+    public let owners: [String]
+
+    init(state: State, file: String, events: [Event], owners: [String]) {
+        self.state = state; self.file = file; self.events = events; self.owners = owners
+    }
+    private enum CodingKeys: String, CodingKey { case state, file, events, owners }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        state = try values.decode(State.self, forKey: .state)
+        file = try values.decode(String.self, forKey: .file)
+        events = try values.decode([Event].self, forKey: .events)
+        owners = try values.decodeIfPresent([String].self, forKey: .owners) ?? []
+    }
 }
 private struct SetupReport: Decodable {
     let v: Int
@@ -43,6 +56,17 @@ private struct SetupReport: Decodable {
         let state: String
         let file: String?
         let events: [HooksSetup.Event]?
+        let owners: [String]
+
+        private enum CodingKeys: String, CodingKey { case id, state, file, events, owners }
+        init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            id = try values.decode(String.self, forKey: .id)
+            state = try values.decode(String.self, forKey: .state)
+            file = try values.decodeIfPresent(String.self, forKey: .file)
+            events = try values.decodeIfPresent([HooksSetup.Event].self, forKey: .events)
+            owners = try values.decodeIfPresent([String].self, forKey: .owners) ?? []
+        }
     }
 }
 
@@ -86,12 +110,17 @@ private struct SetupReport: Decodable {
         let quoted = "'" + cli.replacingOccurrences(of: "'", with: "'\\''") + "'"
         return "sudo mkdir -p /usr/local/bin && sudo ln -s \(quoted) /usr/local/bin/multi-link"
     }
-    public var hooksGreen: Bool { hooks?.state == .ok || hooks?.state == .attention }
+    public var hooksHaveOtherOwners: Bool { !(hooks?.owners.isEmpty ?? true) }
+    public var canTurnOnHooks: Bool { hooks?.state == .fixable || hooksHaveOtherOwners }
+    public var hooksGreen: Bool { !hooksHaveOtherOwners && (hooks?.state == .ok || hooks?.state == .attention) }
     public var notificationsGreen: Bool { notification.green }
     public var loginEnabled: Bool { loginStatus == .enabled }
     public var remaining: Int { (hooksGreen ? 0 : 1) + (notificationsGreen ? 0 : 1) }
     public var hooksMessage: String {
-        switch hooks?.state {
+        if let owners = hooks?.owners, let first = owners.first {
+            return "Hooks use another copy: \(first)" + (owners.count > 1 ? " +\(owners.count - 1) more" : "")
+        }
+        return switch hooks?.state {
         case .ok: "On. Exact hand-off links and \"waiting on you\"."
         case .attention:
             "On, except \(hooks!.events.filter { $0.status == "customized" || $0.status == "unknown event" || $0.status == "unknown_event" }.map(\.event).joined(separator: ", ")): you changed that one, so it's left as is."
@@ -121,9 +150,9 @@ private struct SetupReport: Decodable {
                   let state = HooksSetup.State(rawValue: item.state), let file = item.file, let events = item.events else {
                 throw SetupFailure.message("Unsupported setup response.")
             }
-            hooks = HooksSetup(state: state, file: file, events: events); readError = nil
+            hooks = HooksSetup(state: state, file: file, events: events, owners: item.owners); readError = nil
         } catch { hooks = nil; readError = error.localizedDescription }
-        if !readAtLaunch { hooksFixableAtLaunch = hooks?.state == .fixable; readAtLaunch = true }
+        if !readAtLaunch { hooksFixableAtLaunch = canTurnOnHooks; readAtLaunch = true }
         if hooksGreen { hooksFixableAtLaunch = false }
         let previous = notification.green
         notification = await notifications.settings()
@@ -134,13 +163,13 @@ private struct SetupReport: Decodable {
     public func pollTick() async { guard !busy else { return }; await refresh() }
     private func changeHooks(_ verb: String) async {
         do {
-            let output = try await runner.run(["hook", verb])
+            let output = try await runner.run(verb == "apply" ? ["hook", "apply", "--take-over"] : ["hook", verb])
             if output.status != 0 { throw SetupFailure.message(output.stderr.isEmpty ? "Hook \(verb) failed." : output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
             hooksChanged = true
         } catch { actionError = error.localizedDescription }
     }
     public func turnOnHooks() async {
-        guard !isTemporary, !busy, hooks?.state == .fixable else { return }
+        guard !isTemporary, !busy, canTurnOnHooks else { return }
         busy = true; actionError = nil; await changeHooks("apply"); await refresh(); busy = false
     }
     public func removeHooks() async {
@@ -170,7 +199,7 @@ private struct SetupReport: Decodable {
     public func turnOnEverything() async {
         guard !isTemporary, !busy else { return }
         busy = true
-        if hooks?.state == .fixable { actionError = nil; await changeHooks("apply") }
+        if canTurnOnHooks { actionError = nil; await changeHooks("apply") }
         await requestNotifications()
         changeLogin(true)
         await refresh(); await onPermissionChange?(); busy = false

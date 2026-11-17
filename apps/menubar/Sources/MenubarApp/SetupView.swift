@@ -52,7 +52,9 @@ struct SetupView: View {
                                     .foregroundStyle(boardColor(palette.ok))
                                     .overlay(Capsule().stroke(boardColor(palette.ok)))
                             }
-                            Text(model.hooksMessage).font(.system(size: 12)).foregroundStyle(dim)
+                            Text(model.hooksMessage).font(.system(size: 12))
+                                .foregroundStyle(model.hooksHaveOtherOwners ? boardColor(palette.warn) : dim)
+                                .fixedSize(horizontal: false, vertical: true)
                             DisclosureGroup("What this does") {
                                 Text("Adds multi-link's entries to \(model.hooks?.file ?? "~/.claude/settings.json"). A copy of the file is saved beside it first (\(model.hooks?.file ?? "~/.claude/settings.json").multi-link-backup-…). Your other hooks stay as they are. multi-link works without them; links are then matched by time more often. Remove them any time from this window.")
                                     .font(.system(size: 12)).foregroundStyle(dim).fixedSize(horizontal: false, vertical: true)
@@ -62,7 +64,7 @@ struct SetupView: View {
                             }
                         }
                     } action: {
-                        if model.hooks?.state == .fixable {
+                        if model.canTurnOnHooks {
                             Button("Turn on") { Task { await model.turnOnHooks() } }
                         } else if let file = model.hooks?.file {
                             Button("Show file") { reveal(file) }

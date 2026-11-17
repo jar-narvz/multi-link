@@ -1,8 +1,23 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 24: Step 24.3 is done (Codex, reviewed by Claude, 2026-11-17): the app takes over hooks on Turn on.
+Next: Step 24.4 (Release 1.20, Claude).** What 24.4 needs:
+- `SetupModel` decodes `owners` in `SetupReport.Item` and `HooksSetup` (missing key → `[]`, so an older CLI still
+  works). New predicates `hooksHaveOtherOwners` and `canTurnOnHooks` (`fixable` or owners) drive the row colour,
+  "N left", the launch dot (`hooksFixableAtLaunch`), the Turn on button and both apply guards. Non-empty owners show
+  amber (`palette.warn`) "Hooks use another copy: <first>" plus " +N more"; that line replaces the usual hooks text.
+- Turn on and Turn on everything run `hook apply --take-over`; Remove runs `hook remove`. Swift suite: 48 tests.
+- Real run (Claude, built app's bundled CLI `build/multi-link.app/Contents/MacOS/multi-link`, temp
+  `CLAUDE_CONFIG_DIR`, hooks pointed at a temp executable named `multi-link`): `setup --json` → hooks `ok`, owners
+  [temp path], all events `other copy`; `hook apply --take-over` → exit 0, backup made; `setup --json` → `ok`, `[]`.
+- `./build.sh` passes outside Codex's sandbox (its sandbox fails at `iconutil`). `SetupRenderer.swift` has no
+  owners screen; add one in 24.4 only if `docs/phase24-check.md` needs a picture (it is not in 24.4's Files).
+- 24.4's owner check can expect: after `brew upgrade`, the app's setup window shows hooks green (the brew app owns
+  its own hooks); if a `~/.cargo/bin/multi-link` once took them, the window shows the amber line and Turn on fixes it.
+
 **Phase 24: Step 24.2 is done (Codex, reviewed by Claude, 2026-11-17): `other copy` hook status, `--take-over`
-and `setup --json` `owners`. Next: Step 24.3.** The exact contract 24.3 consumes:
+and `setup --json` `owners`.** The exact contract 24.3 consumes:
 - Example hooks item (only other copies left): `{"id":"hooks","state":"ok","file":"<settings>","exists":true,
   "events":[{"event":"Stop","status":"other copy","details":["owned by /Users/u/.cargo/bin/multi-link"]},…],
   "owners":["/Users/u/.cargo/bin/multi-link"]}`. After `hook apply --take-over` the same file reads `owners: []`.
@@ -1067,6 +1082,47 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 24.3: The app takes over hooks on Turn on — Codex
+- Mode: Codex loop (codex-quota: CODEX: OK, primary 23%, secondary 30%)
+- Did: Decoded owners in both `SetupReport.Item` and `HooksSetup`, with missing keys defaulting to empty.
+  Added shared ownership/action predicates for row colour, remaining count, launch dot, Turn on visibility and
+  guard, and Turn on everything. Show amber `Hooks use another copy: <first path>` plus ` +N more`.
+  Both apply actions always pass `--take-over`; Remove is unchanged. Added four regression tests covering
+  both decoding paths, old CLI responses, all applicable states, exact argv, and refresh to green.
+- Changed: `apps/menubar/Sources/MenubarCore/Setup.swift`, `apps/menubar/Sources/MenubarApp/SetupView.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/SetupTests.swift`, `PROGRESS.md`.
+- Verify: Initial regression run failed before implementation (46 tests, 48 issues), including ownership
+  completion/message/action failures and flag-free apply arguments. Final `(cd apps/menubar && swift test
+  --disable-sandbox)` → exit 0; actual final output and new-test lines:
+  ```text
+✔ Test otherCopyHooksNeedAttentionAndExplicitTakeover() passed after 0.050 seconds.
+✔ Test multipleHookOwnersShowFirstAndCount() passed after 0.006 seconds.
+✔ Test hooksSetupDecodesOwnersAndOlderCLI() passed after 0.006 seconds.
+✔ Test ownerFreeHooksOnlyApplyWhenFixable() passed after 0.016 seconds.
+✔ Test run with 48 tests in 0 suites passed after 10.772 seconds.
+  ```
+  `(cd apps/menubar && ./build.sh)` → exit 1, release Rust and Swift compilation succeeded; actual output:
+  ```text
+    Finished `release` profile [optimized] target(s) in 4.18s
+Build complete! (6.96s)
+Resources/AppIcon.iconset:Invalid Iconset.
+Resources/AppIcon.iconset:Invalid Iconset.
+  ```
+  `git diff --check` → exit 0, no output.
+- Review (Claude, 2026-11-17): clean, 0 fix rounds. Every `ok`-as-done predicate goes through `hooksGreen` /
+  `canTurnOnHooks` (row, `remaining`, launch dot, `turnOnHooks()` guard, Turn on visibility, `turnOnEverything()`);
+  apply argv is `["hook","apply","--take-over"]` for both actions; Remove unchanged; only the step's files changed.
+  Minor, accepted: with owners the amber line replaces the `attention` / `fixable` text (D3 names only the amber line).
+  Not covered: no rendered screenshot of the amber state. Claude re-ran: `swift test --disable-sandbox` → "✔ Test run
+  with 48 tests in 0 suites passed after 11.623 seconds."; `./build.sh` (outside the sandbox) → exit 0, "Built and
+  verified build/multi-link.app (bundled CLI, app, icon)". Real run with the bundled CLI, temp `CLAUDE_CONFIG_DIR`
+  and a temp executable `other/multi-link` → before: `ok ['<tmp>/realrun/other/multi-link'] ['other copy']`;
+  `hook apply --take-over` → exit 0, `updated … (backup: …)`; after: `ok [] ['ok']`. Never touched
+  `~/.claude/settings.json` or `/Applications`.
+- Gotchas: Sandbox `iconutil` failure prevents completing app packaging/signing here. Real-run Verify explicitly
+  skipped for Claude. No `~/.claude`, `/Applications`, real settings, `PLAN.md`, staging, or commits touched.
+  Build artifacts are git-ignored under `apps/menubar/build/` and the normal build directories.
 
 ### 2026-11-17 — Step 24.2: Other-copy hook ownership and explicit takeover — Codex
 - Did: Implemented amended D2 with an injectable read-only filesystem probe, canonical paths, protected other-copy

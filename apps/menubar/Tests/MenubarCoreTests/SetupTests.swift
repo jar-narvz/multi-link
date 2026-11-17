@@ -14,6 +14,9 @@ import UserNotifications
         return terminalStates[path] ?? .absent
     }
     var hooks = "fixable"
+    var owners: [String]? = nil
+    var takeOverClearsOwners = false
+    var arguments: [[String]] = []
     var badJSON = false
     var commandError = false
     var notificationError = false
@@ -22,11 +25,16 @@ import UserNotifications
     var loginError = false
     var shown = false
     func run(_ arguments: [String]) async throws -> CommandOutput {
+        self.arguments.append(arguments)
         calls.append(arguments.joined(separator: " "))
         if arguments == ["setup", "--json"] {
+            let ownersField = try owners.map { ",\"owners\":" + String(decoding: try JSONEncoder().encode($0), as: UTF8.self) } ?? ""
             return CommandOutput(status: 1, stdout: badJSON ? "bad" : """
-            {"v":1,"items":[{"id":"hooks","state":"\(hooks)","file":"/fake/settings.json","exists":true,"events":[{"event":"PreToolUse","status":"customized","details":[]}]}]}
+            {"v":1,"items":[{"id":"hooks","state":"\(hooks)","file":"/fake/settings.json","exists":true\(ownersField),"events":[{"event":"PreToolUse","status":"customized","details":[]}]}]}
             """, stderr: "")
+        }
+        if arguments == ["hook", "apply", "--take-over"], takeOverClearsOwners, !commandError {
+            owners = []; hooks = "ok"
         }
         return CommandOutput(status: commandError ? 1 : 0, stdout: "", stderr: commandError ? "apply refused" : "")
     }
@@ -51,6 +59,8 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     for state in ["ok", "attention", "fixable", "unreadable"] {
         fake.hooks = state; await model.refresh()
         #expect(model.hooks?.state.rawValue == state)
+        #expect(model.hooks?.owners == [])
+        #expect(model.canTurnOnHooks == (state == "fixable"))
         #expect(model.hooksGreen == ["ok", "attention"].contains(state))
         #expect(model.remaining == (model.hooksGreen ? 1 : 2))
     }
@@ -76,7 +86,7 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
 @Test @MainActor func everythingOrderAndReread() async {
     let fake = SetupFakes(); let model = fake.model(); await model.refresh(); fake.calls = []
     await model.turnOnEverything()
-    #expect(fake.calls == ["hook apply", "request", "register", "setup --json", "settings"])
+    #expect(fake.calls == ["hook apply --take-over", "request", "register", "setup --json", "settings"])
     #expect(model.hooksChanged)
     for state in ["ok", "attention", "unreadable"] {
         fake.hooks = state; await model.refresh(); fake.calls = []; await model.turnOnEverything()
@@ -144,7 +154,7 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     await model.turnOnHooks()
     #expect(model.actionError == "apply refused")
     #expect(!model.hooksChanged)
-    #expect(fake.calls == ["hook apply", "setup --json", "settings"])
+    #expect(fake.calls == ["hook apply --take-over", "setup --json", "settings"])
     fake.commandError = false; fake.hooks = "ok"
     await model.removeHooks()
     #expect(model.actionError == nil)
@@ -292,7 +302,7 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     #expect(model.terminalLinks.map(\.message) == ["/test/local is a broken link to missing, so it's left as is.", "/test/brew is something else (/other), so it's left as is."])
     fake.calls = []
     await model.turnOnEverything()
-    #expect(fake.calls == ["hook apply", "request", "register", "setup --json", "settings"])
+    #expect(fake.calls == ["hook apply --take-over", "request", "register", "setup --json", "settings"])
     #expect(model.remaining == 2)
     #expect(model.terminalLinks.map(\.state) == [.broken(target: "missing"), .other(detail: "/other")])
     fake.hooks = "ok"
@@ -320,4 +330,84 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     fake.terminalStates = ["/usr/local/bin/multi-link": .linked]
     await model.refresh()
     #expect(model.terminalLinks.first?.message == "multi-link is linked at /usr/local/bin/multi-link.")
+}
+
+@Test @MainActor func otherCopyHooksNeedAttentionAndExplicitTakeover() async {
+    for state in ["ok", "fixable", "attention"] {
+        for everything in [false, true] {
+            let fake = SetupFakes(); let model = fake.model()
+            fake.hooks = state
+            fake.owners = ["/other/bin/multi-link"]
+            fake.notification = SetupNotificationStatus(authorization: .authorized, alerts: .enabled)
+            await model.refresh()
+            #expect(!model.hooksGreen)
+            #expect(model.hooksHaveOtherOwners)
+            #expect(model.canTurnOnHooks) // SetupView uses this for Turn on visibility.
+            #expect(model.hooks?.owners == ["/other/bin/multi-link"])
+            #expect(model.remaining == 1)
+            #expect(model.hooksFixableAtLaunch)
+            #expect(model.hooksMessage == "Hooks use another copy: /other/bin/multi-link")
+            await model.pollTick()
+            #expect(model.hooksFixableAtLaunch)
+            fake.calls = []; fake.arguments = []
+            fake.takeOverClearsOwners = true
+            if everything { await model.turnOnEverything() } else { await model.turnOnHooks() }
+            #expect(fake.arguments.first == ["hook", "apply", "--take-over"])
+            #expect(fake.calls == (everything
+                ? ["hook apply --take-over", "request", "register", "setup --json", "settings"]
+                : ["hook apply --take-over", "setup --json", "settings"]))
+            #expect(model.hooksGreen)
+            #expect(model.hooks?.owners == [])
+            #expect(!model.hooksHaveOtherOwners)
+            #expect(!model.canTurnOnHooks)
+            #expect(model.remaining == 0)
+            #expect(!model.hooksFixableAtLaunch)
+            #expect(model.hooksChanged)
+            fake.arguments = []
+            await model.removeHooks()
+            #expect(fake.arguments.first == ["hook", "remove"])
+        }
+    }
+}
+
+@Test @MainActor func multipleHookOwnersShowFirstAndCount() async {
+    let fake = SetupFakes(); let model = fake.model()
+    fake.hooks = "ok"
+    fake.owners = ["/a/multi-link", "/b/multi-link", "/c/multi-link"]
+    await model.refresh()
+    #expect(model.hooksMessage == "Hooks use another copy: /a/multi-link +2 more")
+}
+
+@Test func hooksSetupDecodesOwnersAndOlderCLI() throws {
+    for (field, expected) in [
+        ("", [String]()),
+        (",\"owners\":[]", []),
+        (",\"owners\":[\"/other/bin/multi-link\"]", ["/other/bin/multi-link"])
+    ] {
+        let json = """
+        {"state":"ok","file":"/fake/settings.json","events":[]\(field)}
+        """
+        let hooks = try JSONDecoder().decode(HooksSetup.self, from: Data(json.utf8))
+        #expect(hooks.owners == expected)
+        #expect(hooks.state == .ok)
+        #expect(hooks.file == "/fake/settings.json")
+        #expect(hooks.events.isEmpty)
+    }
+}
+
+@Test @MainActor func ownerFreeHooksOnlyApplyWhenFixable() async {
+    for owners: [String]? in [nil, []] {
+        for state in ["ok", "attention", "fixable", "unreadable"] {
+            let fake = SetupFakes(); let model = fake.model()
+            fake.hooks = state; fake.owners = owners
+            await model.refresh()
+            #expect(model.hooks?.owners == [])
+            #expect(!model.hooksHaveOtherOwners)
+            #expect(model.canTurnOnHooks == (state == "fixable"))
+            fake.arguments = []
+            await model.turnOnHooks()
+            #expect(fake.arguments == (state == "fixable"
+                ? [["hook", "apply", "--take-over"], ["setup", "--json"]] : []))
+        }
+    }
 }
