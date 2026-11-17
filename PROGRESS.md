@@ -1,6 +1,19 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 23: Step 23.1 is done (Claude wrote, Codex reviewed, 2026-11-17): the README is rewritten for the big picture.**
+What a later step needs to know:
+- `README.md` (167 lines, 8 `##` sections): Why → screenshot → What it does → Who it's for → Install (Homebrew steps,
+  DMG, Check it works) → Using it → How it works → Limitations → More. It has no release changelog.
+- Depth moved, not deleted: `docs/install.md` (all install paths, Use in Terminal, DMG → brew, build from source,
+  uninstall, hook setup) and `docs/reference.md` (release history, every screen, menu-bar app, states and links, all
+  keys, full limitations, releasing). Old headings kept their names there, so old `README.md#…` anchors now live in one
+  of the two docs.
+- A future README edit should keep: every number with its source link, the brew commands equal to the cask and
+  `docs/phase22-check.md` item 7, and no `/Users/` paths. The one-off link and coverage checks are pasted in the 23.1
+  log entry.
+- Next release: update the "brew upgrade not seen yet" limit in README and `docs/reference.md` once it is checked.
+
 **Phase 22 is closed (2026-11-17): Release 1.19 is published and installable with Homebrew.** Owner check all pass
 (`docs/phase22-check.md` → "Owner answer"). What the next phase needs to know:
 - Release flow works end to end: bump both `apps/menubar/Info.plist` keys, push `main`, wait for CI, push tag `vX.Y`,
@@ -1023,6 +1036,61 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 23.1: README rewrite for the big picture — Claude (Codex review)
+- Mode: `python3 -I tools/codex-quota.py` → `primary: 0% of 300 min window`, `secondary: 26% of 10080 min window`,
+  `CODEX: OK`, exit 0 → Codex loop (the step is Claude's; Codex reviewed the diff).
+- Comparable READMEs read (raw files on GitHub, 2026-11-17):
+  - lazygit (TUI): sponsor banner and a rant come before the features; ~30 install subsections, Homebrew third. Lesson:
+    product first, one platform's install up front, the rest in a link.
+  - exelban/stats (menu-bar app): icon, screenshots, one-line tagline, then install (DMG first, then a one-line
+    `brew install`). Lesson: a picture and one sentence up top work; a long FAQ in the README does not.
+  - jordanbaird/Ice (menu-bar app, brew cask): short and clear, but install stops at the download and never says what
+    to do after (launch, permissions). Lesson: add the after-install steps and a "check it works".
+- Did: new `README.md` in the step's order (Why, screenshot, What it does, Who it's for, Install with Homebrew steps,
+  DMG and Check it works, Using it with a keys table and the JSON commands, How it works, top 8 limitations, More).
+  Moved every old section to `docs/install.md` (Install … Hook setup, plus the menu-bar build commands, now
+  repo-relative) or `docs/reference.md` (the release changelog as "Release history", Home screen … Loading screen, the
+  retired pane as one paragraph, Menu-bar app, States and links, Run, Limitations and validation, Releasing), with
+  link paths fixed for `docs/` and cross-file anchors repointed. Content kept word for word except: the retired pane
+  shortened to one paragraph; the Phase 22 limit "(owner check pending)" → "(owner check passed 2026-11-17; a real
+  `brew upgrade` is not covered yet)" (source: `docs/phase22-check.md` Owner answer); "(below)/(above)" pointers made
+  into links. No new numbers: the README's only numbers are the 120-character prompt cap
+  (`docs/output-schema.md`), the 2 h default window and macOS 15.
+- Changed: `README.md`, `docs/install.md` (new), `docs/reference.md` (new), `PROGRESS.md`
+- Verify:
+  - `grep -c '/Users/' README.md docs/install.md docs/reference.md` → `README.md:0`, `docs/install.md:0`,
+    `docs/reference.md:0`.
+  - `awk '/^## /{n++} END{print n}' README.md` → `8`; `wc -l < README.md` → `167`.
+  - Link check (`python3 -I <scratchpad>/linkcheck.py README.md docs/install.md docs/reference.md`: every relative link
+    must exist and every `#anchor` must match a GitHub-style heading slug in its target, code blocks skipped) →
+    `0 broken`.
+  - Coverage (`python3 -I <scratchpad>/coverage.py`: every `##`/`###` heading of `git show HEAD:README.md` must be a
+    heading in one of the three files; recorded rename `Docs` → `More`; retired pane listed as excluded, though its
+    heading still exists in `docs/reference.md`) → `excluded (listed): Claude Code pane (retired)`, `0 missing`.
+  - `grep -n 'brew trust --cask jar-narvz/tap/multi-link\|brew install --cask jar-narvz/tap/multi-link' README.md` →
+    `56:   brew trust --cask jar-narvz/tap/multi-link`, `62:   brew install --cask jar-narvz/tap/multi-link`; equal to
+    `docs/phase22-check.md` lines 111 and 115 (item 7).
+  - `git status --short` → ` M README.md`, `?? docs/install.md`, `?? docs/reference.md` (plus this file, and the
+    pre-existing untracked `.claude/`, not touched). No code, test or workflow changed.
+- Review: two rounds.
+  - Newcomer reader (fresh Claude subagent, README only): read it as "a macOS menu-bar app and terminal dashboard that
+    reads local Claude Code and Codex transcripts and shows every session in one place: which are waiting on you, and
+    which Codex run each Claude session started". Accepted: explain why `setup < /dev/null` is safe (checked:
+    `crates/cli/src/setup.rs` applies only with `--yes` or a terminal on stdin), say brew puts `multi-link` on `PATH`,
+    one name for Use in Terminal, define hand-off, say how PLAN.md steps are found and that the rest works without
+    them, name `~/.claude/settings.json`, explain fork, one link word (`confirmed`), `<step-id>` in the graph example, a
+    "Built with" line, Codex waits not counted, notification fires on the turn ending, Claude desktop app optional.
+    Rejected: "the Gatekeeper dialog may differ / `brew trust` before tapping may fail" (both ran for real in
+    `docs/phase22-check.md` item 7); "list tested Claude Code / Codex versions" (no recorded source, so it would be a
+    new claim).
+  - Codex round 1 (diff, lost content, unsourced claims): lost content none; install commands match item 7 and the
+    cask. 3 findings, all accepted and fixed: JSON prompt text is per field (`asked`, `last_asked`, graph `said`), not
+    per session; Turn on everything only asks for notifications (added the Open Settings recovery); keys table made
+    view-specific (`t` only on home, `l` from home or a timeline, `←→` in the step graph). Round 2 → "No findings. All
+    three round-1 findings are fixed."
+- Gotchas: an old heading kept its exact name in the docs so the coverage check stays a plain name match. The README
+  screenshot is the phase6 synthetic fixture; `docs/img/home-real.png` was not used.
 
 ### 2026-11-17 — Step 22.6: owner check, Phase 22 closed — Claude
 - Did: walked the owner through `docs/phase22-check.md` items 1–9 and checked each read-only with `gh` / `brew` /
