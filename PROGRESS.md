@@ -1,6 +1,26 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 24: Step 24.4's Claude part is done (Claude, Codex review, 2026-11-17): Info.plist at 1.20, docs updated,
+`docs/phase24-check.md` written, all local Verify green. Next: the owner runs the checklist in `docs/phase24-check.md`
+(11 items) with the coordinator; the owner check is pending.** What the coordinator needs:
+- Local `main` is **ahead 5, behind 1** of `origin/main`: the owner's GitHub edit `b8ded8f` "Update README.md" removed
+  "Who it's for". `git merge-tree` says the merge is clean; item 1 runs `git pull --no-rebase --no-edit origin main`
+  (merge commit, no history rewrite) before `git push origin main`. Tag `v1.20` goes on that merge commit.
+- What Claude checks after each item (all read-only), as written in the checklist: 1 `git status -sb` even, HEAD's
+  plist `1.20`; 2 CI `success` on HEAD, 48 Swift tests; 3 release run `check`/`ci`/`release` success, tag = CI commit;
+  4 `gh release view v1.20` draft with exactly the DMG + `.sha256` and their bytes; 5 `isDraft` false; 6 cask run for
+  v1.20's commit green, tap `version "1.20"`, cask sha256 = release `.sha256`; 7 `brew list --cask --versions
+  multi-link` → 1.20, installed plist 1.20, quarantine flag still present, `/opt/homebrew/bin/multi-link` link,
+  and the owner saw **no** Open Anyway prompt (the first real `brew upgrade`); 8 owner's word (rows green, no amber
+  or stale line); 9 `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok`, `hooks: ok`, `app: installed`,
+  exit 0; 10 the banner and the sandbox hand-off.
+- Item 7 quits the app first: `open` on a still-running 1.19 would only bring the old process forward.
+- After the answer: fill "Owner answer" in `docs/phase24-check.md`, then update the "brew upgrade not seen yet" limit
+  in `README.md`, `docs/install.md` and `docs/reference.md` from it (currently "not yet seen", pointing at the
+  Phase 24 check), and close Phase 24 in PLAN.md.
+- The cask watcher now filters `--event release --commit <tag commit>`; checked against 1.19 (returns run 44193075230).
+
 **Phase 24: Step 24.3 is done (Codex, reviewed by Claude, 2026-11-17): the app takes over hooks on Turn on.
 Next: Step 24.4 (Release 1.20, Claude).** What 24.4 needs:
 - `SetupModel` decodes `owners` in `SetupReport.Item` and `HooksSetup` (missing key → `[]`, so an older CLI still
@@ -1082,6 +1102,40 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 24.4: Release 1.20, docs and owner checklist (Claude side) — Claude (Codex review)
+- Did: Info.plist both keys `1.20`. `docs/install.md`: DMG file name 1.20, the setup window's amber "Hooks use another
+  copy" row and Turn on / Turn on everything running `hook apply --take-over` (Remove flag-free), brew-upgrade limit
+  still "not yet seen" pointing at the Phase 24 check. `README.md`: one sentence on the amber row in Install step 4;
+  the brew-upgrade limit points at the 1.20 check. `docs/reference.md`: Release 1.20 sentence, setup-window bullet,
+  brew-upgrade limit, Releasing example `v1.20`. New `docs/phase24-check.md`: local Verify, the real settings read
+  read-only, pre-check git state, 11-item owner checklist with Claude's check per item, Not covered.
+  Real settings, read-only: `target/debug/multi-link hook check < /dev/null` → all 5 events `other copy (owned by
+  /Applications/multi-link.app/Contents/MacOS/multi-link)`, closing line naming the owner and the optional
+  `multi-link hook apply --take-over`, no repair command, exit 0, `~/.claude/settings.json` sha256 unchanged
+  (`cb012d65…`); same as the coordinator's earlier run.
+  Mode: Claude step; review by Codex (`python3 -I tools/codex-quota.py` → primary 28%, secondary 30%, `CODEX: OK`;
+  30% / 31% right before the review).
+- Changed: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/phase24-check.md`,
+  `PROGRESS.md`
+- Verify (local, 2026-11-17): `TZ=UTC cargo test --workspace --locked` → exit 0, 757 passed / 0 failed / 1 ignored
+  (71 `test result` lines); `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0; `cargo fmt
+  --check` → exit 0; `(cd apps/menubar && swift test --disable-sandbox)` → "✔ Test run with 48 tests in 0 suites passed
+  after 10.385 seconds."; `(cd apps/menubar && ./build.sh)` → "Built and verified build/multi-link.app (bundled CLI,
+  app, icon)"; `actionlint` → exit 0, no output; `sh tools/tests/cask.sh` → 24 PASS / 0 FAIL; `sh
+  tools/tests/release.sh` → 11 PASS / 0 FAIL; `apps/menubar/release.sh` → exit 0, "checksum … is VALID",
+  `multi-link-1.20-arm64.dmg` 2,942,622 bytes, `.sha256` 92 bytes (`8ac36913…23e5caad10`), `shasum -a 256 -c` → OK,
+  built app 1.20 / 1.20. Remote part (CI, release and cask runs, published release, tap at 1.20, brew upgrade, owner's
+  answer) pending the owner checklist.
+- Review: Codex read-only review, 2 findings, both accepted and fixed: the cask watcher now filters by v1.20's commit
+  (checked: the same filter for v1.19 returns run 44193075230); the recorded real-settings command shows
+  `target/debug/multi-link` rather than a bare `multi-link` (PATH finds the older cargo copy). Codex found the
+  versions, takeover wording, upgrade procedure and Not covered otherwise correct. One round.
+  Claude's own addition after drafting: item 7 quits the app before `brew upgrade` (a running 1.19 would otherwise be
+  what `open` brings forward).
+- Gotchas: `origin/main` has the owner's GitHub README edit `b8ded8f`; local `main` is behind 1, so a bare push would
+  be rejected. `~/.cargo/bin/multi-link` is from 2026-11-14 (pre-24.2) and would still say `outdated`; use the repo's
+  build for read-only checks.
 
 ### 2026-11-17 — Step 24.3: The app takes over hooks on Turn on — Codex
 - Mode: Codex loop (codex-quota: CODEX: OK, primary 23%, secondary 30%)

@@ -70,7 +70,9 @@ Needs an Apple silicon Mac (arm64) with macOS 15 or later. No Rust or Xcode need
 4. In the setup window, click **Turn on everything**. This adds multi-link's Claude Code hooks to
    `~/.claude/settings.json` (after saving a backup beside it) and turns on Open at login. The
    hooks let multi-link record hand-offs as they happen. It also asks macOS to allow notifications: the rows turn
-   green once each part is on, and if notifications are off, **Open Settings** goes straight there.
+   green once each part is on, and if notifications are off, **Open Settings** goes straight there. If your hooks
+   already call another copy of multi-link (such as a source build), the row says "Hooks use another copy" and the
+   click moves them to this app.
 5. Start a new Claude session, so it loads the hooks.
 
 ### Or download the DMG
@@ -150,8 +152,8 @@ multi-link open <session-id-prefix> --dry-run
 - **Links matched by time can be wrong.** Only `confirmed` links are certain.
 - **Codex "waiting on you" is not detected**, and Codex "done" only means its last turn completed.
 - **The terminal jump works in Terminal.app**; iTerm2 is untested, and tmux and other terminals are not supported.
-- **A real `brew upgrade` has not been seen yet.** It should keep the Open Anyway approval; the next release will
-  check it.
+- **A real `brew upgrade` has not been seen yet.** It should keep the Open Anyway approval; the owner's check of
+  Release 1.20 ([docs/phase24-check.md](docs/phase24-check.md)) is the first real one.
 - **JSON output includes prompt text** (prompts of up to 120 characters each, and the graph's last messages). Check
   before you share it.
 

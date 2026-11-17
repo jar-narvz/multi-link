@@ -38,6 +38,10 @@ and shows a [loading screen](#loading-screen) while it runs. Release 1.18 makes 
 one download with a setup window and an icon ([install](install.md)). Release 1.19 adds a release pipeline: every push
 to `main` is tested on GitHub's macOS runner, a tag builds a draft release, and publishing it updates a Homebrew tap, so
 the app installs with `brew` and the CLI can be used from Terminal ([install](install.md), [releasing](#releasing)).
+Release 1.20 fixes two setup bugs: the setup window no longer keeps a stale "Notifications are not allowed" line under
+a green row, and hooks owned by another copy of multi-link are reported as `other copy` (exit 0, no fix command)
+instead of `outdated`; only `--take-over` or the app's **Turn on** moves them ([hook setup](install.md#hook-setup),
+[check](phase24-check.md)).
 
 What the releases add up to:
 
@@ -242,7 +246,8 @@ Release 1.18 ships it as one download with the CLI inside and a setup window ([i
   version. Only if that is missing does it look in `~/.cargo/bin`, `/opt/homebrew/bin` and `/usr/local/bin`, or a
   path saved with `defaults write dev.multi-link.menubar multiLinkBinary <path>`.
 - The setup window (first launch, or `Setup…` in the popover) turns on the Claude hooks and asks for notifications;
-  **Open at login** in the popover starts it at login. macOS asks once to let it control Terminal, on the first jump.
+  if the hooks call another copy of multi-link, the Hooks row is amber ("Hooks use another copy: <path>") and Turn on
+  moves them to this app (`hook apply --take-over`, Release 1.20). **Open at login** in the popover starts it at login. macOS asks once to let it control Terminal, on the first jump.
 - `apps/menubar/release.sh` builds the app and packs it into `apps/menubar/build/multi-link-<version>-arm64.dmg`.
 - The app is signed ad hoc, never notarized. Its signature names the bundle id, so a new version keeps the
   notification permission (Gatekeeper still asks for Open Anyway once per version).
@@ -413,7 +418,8 @@ state rules.
   `--force`). The **Use in Terminal** link only works if no earlier `PATH` entry has a `multi-link` (`command -v
   multi-link` shows which one runs). CI runs on one macOS arm64 runner only; the first release built by it, and the
   switch from a DMG install to Homebrew on a real Mac, are checked in [docs/phase22-check.md](phase22-check.md)
-  (owner check passed 2026-11-17; a real `brew upgrade` is not covered yet).
+  (owner check passed 2026-11-17). A real `brew upgrade` has not been seen yet; the first one (1.19 → 1.20) is in the
+  [Phase 24 check](phase24-check.md).
 - Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
   (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
   duplicate key or with a number serde_json would not write back as the same text: beyond 64-bit integers, and also
@@ -458,7 +464,7 @@ For the maintainer. Releases are built by GitHub Actions, never by hand.
 
 1. Set the new version in `apps/menubar/Info.plist` (both `CFBundleShortVersionString` and `CFBundleVersion`), commit,
    push `main` and wait for the [CI workflow](../.github/workflows/ci.yml) to pass.
-2. Tag that commit and push the tag: `git tag v1.19 && git push origin v1.19` (with the new version). The
+2. Tag that commit and push the tag: `git tag v1.20 && git push origin v1.20` (with the new version). The
    [release workflow](../.github/workflows/release.yml) refuses a tag that doesn't equal `v` + the plist version or whose
    commit is not on `main`, runs the CI job on it, builds the DMG with `apps/menubar/release.sh`, and opens a **draft**
    release with exactly two files: `multi-link-<version>-arm64.dmg` and its `.sha256`.

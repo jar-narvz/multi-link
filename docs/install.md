@@ -38,7 +38,8 @@ CLI as `multi-link` in Homebrew's `bin` folder (`/opt/homebrew/bin`). Then:
 
 Upgrade with `brew upgrade --cask multi-link`. An upgrade normally keeps the Open Anyway approval, because every
 version is signed with the same identifier (seen in Homebrew's source and an isolated test, [design](design.md)
-"Phase 22 decisions"). Not yet seen on a real install: the first real `brew upgrade` comes with the next release.
+"Phase 22 decisions"). Not yet seen on a real install: the first real `brew upgrade` (1.19 → 1.20) is part of the
+[Phase 24 check](phase24-check.md).
 
 **Already installed from the DMG?** Homebrew refuses to install over an app it did not put there. Untick **Open at
 login** in the popover, quit multi-link, move `/Applications/multi-link.app` to the Trash, then run the two commands above. The hooks
@@ -49,7 +50,7 @@ without a backup.
 
 No terminal needed.
 
-1. Download `multi-link-1.19-arm64.dmg` from the [releases page](https://github.com/jar-narvz/multi-link/releases).
+1. Download `multi-link-1.20-arm64.dmg` from the [releases page](https://github.com/jar-narvz/multi-link/releases).
 2. Open it and drag **multi-link** onto **Applications** (`~/Applications` works too) before opening it. A copy
    opened inside the download is blocked the same way (step 3) and then shows only "Move multi-link to Applications
    first", starting nothing.
@@ -59,7 +60,10 @@ No terminal needed.
 4. The setup window opens. Click **Turn on everything**: it adds multi-link's Claude hooks (after saving a backup of
    your settings file beside it), asks macOS to allow notifications, and turns on **Open at login**. Rows turn green
    on their own once each part is on; if macOS says notifications are off, **Open Settings** goes straight there.
-   Start a new Claude session so it loads the hooks.
+   Start a new Claude session so it loads the hooks. If your hooks already call another copy of multi-link (for
+   example a `~/.cargo/bin/multi-link` source build), the Hooks row is amber with "Hooks use another copy: <path>";
+   **Turn on** (or **Turn on everything**) moves them to this app, with the usual backup
+   ([hook setup](#hook-setup)).
 
 The menu-bar item `ml` is the app; `Setup…` in its popover reopens the window. The app carries its own copy of the
 command-line tool, so it needs nothing else installed.
@@ -169,7 +173,9 @@ backup. `multi-link setup --take-over` says the owners will be moved if applied,
 to answer yes. Without the flag, setup suggests the optional takeover command. Plain `setup --yes` leaves other
 owners alone. `setup --json` always stays read-only and rejects `--take-over` and `--yes`; its hooks item includes
 `owners`, a sorted unique array of canonical paths from `other copy` events only, empty when none. The other binary
-is never executed.
+is never executed. In the setup window an `other copy` owner shows as an amber "Hooks use another copy: <path>"
+(the first path, then "+N more") and counts as not done; **Turn on** and **Turn on everything** run
+`multi-link hook apply --take-over`, because the click is your choice. **Remove** does not take a flag.
 
 Run the check with the binary you want the hooks to call (normally the installed one): the hooks are compared with
 that binary's path. `hook install` still prints the bare snippet, and `hook uninstall` prints what to remove.
