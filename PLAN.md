@@ -3590,10 +3590,119 @@ history or `docs/design.md`; no notarization, website or GIF.
 - Status (2026-11-17): done (`ca45ce0`, pushed by the owner). README 167 lines, 8 sections; depth moved to
   `docs/install.md` and `docs/reference.md`; Verify passed; Codex review round 2 clean. Phase 23 closed.
 
+### Phase 24 — Two setup bugs fixed, shipped as Release 1.20 with the first real brew upgrade
+Need (owner, 2026-11-17): a user is never shown an error when nothing is wrong, and never handed a "fix" command that
+would point their hooks away from the app they installed; and a Homebrew user can upgrade without losing anything.
+Current state: (1) the setup window keeps the orange "Notifications are not allowed for this application" line under a
+green Notifications row until relaunch (Phase 21 check item 8): `Setup.swift` stores the transient denial from
+`notifications.request()` in the shared `actionError`, which only a later button press clears. (2) `hook check` /
+`setup` run from another copy of the CLI (e.g. `~/.cargo/bin/multi-link`) compare the hooks' binary path with their
+own, call hooks owned by the installed app `outdated` / `fixable` and print a command (and `setup --yes` / `hook
+apply` act on it) that repoints them to that copy (`crates/hook/src/settings.rs` status logic; found 2026-11-14).
+(3) A real `brew upgrade` has never run: Phase 22's "not covered".
+Non-goals: notarization; changing hook events, templates or the settings-write mechanism; other harnesses; any UI
+redesign of the setup window beyond the two lines named; auto-update.
+
+Decisions (critique below may amend):
+- D1 Notification errors get their own field (`notificationError`), cleared on every refresh that reads the status as
+  authorized with alerts enabled; `actionError` stays for hook actions only. Why: the error belongs to one row, and the
+  row's own status is the truth once it is green.
+- D2 A new per-event hook status **`other copy`** (amended after critique): a multi-link entry whose stored binary
+  path, canonicalized when it exists, is not the running binary's canonical path, and is an existing, executable
+  regular file outside `/Volumes/` and `AppTranslocation`. Ownership is separate from health: the tool never changes
+  an `other copy` event's entry (even if `async` / `timeout` differ, which are reported in its details) and never
+  repairs a duplicate containing one, unless `--take-over` is given; other events are repaired as today. Not a failure
+  (exit 0 when every event is `ok` / `other copy`); no fix command. A stored alias that resolves to the running binary
+  counts as the same path. A missing, dangling, non-executable or temporary path stays `outdated` (fixable), so a
+  deleted app's hooks are still repaired. The tool never runs the other binary. Why: the hooks work as they are; only
+  the user can say which copy should own them, so the tool reports owners and needs an explicit flag to move them.
+- D3 The app owns its hooks (a new policy, not something R6 gives): `setup --json` adds `owners` (sorted unique paths
+  of `other copy` events; empty otherwise). The setup window shows non-empty `owners` as amber "Hooks use another
+  copy: <path>" (first path, "+N more"), counts it as not done, and its Turn on / Turn on everything always run
+  `hook apply --take-over` (an explicit click); Remove stays flag-free. Why: a click is the user's choice, and the app
+  should not show green while its own CLI isn't the one being called.
+- D4 Release 1.20 goes through the Phase 22 pipeline unchanged; the owner's check includes `brew upgrade --cask
+  multi-link` with no Gatekeeper prompt, which closes Phase 22's "not covered".
+
+### Step 24.1 — Setup window: clear the stale Notifications error (Codex)
+- Per D1. Add `notificationError` to `SetupModel`; `requestNotifications()` writes it instead of `actionError`;
+  `refresh()` clears it when `NotificationStatus.green`; the view shows it under the Notifications row only.
+- Files: `apps/menubar/Sources/MenubarCore/Setup.swift`, `apps/menubar/Sources/MenubarApp/SetupView.swift`,
+  `apps/menubar/Tests/**` (the setup tests file), `PROGRESS.md`
+- Notification actions stop clearing `actionError` (a hook error survives them).
+- Verify: `(cd apps/menubar && swift test --disable-sandbox)` → all pass, including new tests reproducing item 8: a
+  fake notifier whose `request()` throws, whose status reads denied on the next refresh (error kept) and authorized
+  with alerts enabled on a later `pollTick()` → `notificationError == nil`; one that stays denied → error kept; a hook
+  `actionError` set before a notification request and recovery → still set. `(cd apps/menubar && ./build.sh)` → exit 0.
+
+### Step 24.2 — `other copy` hook status and `--take-over` in the CLI (Codex)
+- Per D2. `crates/hook/src/settings.rs`: the new status per event with detail `owned by <path>` (plus any
+  `async`/`timeout` drift); filesystem checks (exists, regular, executable, canonicalize) behind an injectable probe;
+  `needs_fix` and the merged JSON leave `other copy` events byte-identical unless take-over is set. `crates/cli`:
+  `hook check` prints them and, when nothing else needs fixing, a closing line naming the owner(s) and
+  `multi-link hook apply --take-over`; exit 0. `hook apply --take-over`, `hook check --merged --take-over` and
+  `setup --take-over` repoint them to the canonical running binary with the usual backup; bare `setup --take-over`
+  still asks unless `--yes`. `setup --json` stays read-only and rejects `--take-over` (clap conflict, like `--yes`);
+  it reports hooks `ok` and a new `owners` array when only `other copy` remains, `owners` alongside `fixable` /
+  `attention` otherwise (always present, possibly empty).
+- Files: `crates/hook/src/settings.rs`, `crates/hook/tests/**`, `crates/cli/src/hook.rs`, `crates/cli/src/setup.rs`,
+  `crates/cli/src/main.rs`, `crates/cli/tests/**`, `docs/install.md` (hook states list), `docs/output-schema.md`
+  (`owners`), `docs/design.md` (D2 contract, the binding one), `PROGRESS.md`
+- Verify (from the repo root): `TZ=UTC cargo test --workspace --locked` → 0 failed, with new tests using a controlled
+  second executable named `multi-link` in a temp dir: other copy → `other copy`, exit 0, no fix command, `apply` →
+  `no change`, settings bytes unchanged, no backup; same plus `async` drift → still `other copy`, unchanged;
+  `--take-over` → repointed to the canonical binary, backup made; missing / non-executable / `/Volumes/` path →
+  `outdated` and repaired as before; alias symlink to the running binary → `ok`; two events with two different owners
+  → `owners` has both; an `other copy` event next to a `missing` event → `apply` adds the missing one and leaves the
+  other byte-identical; `setup --json --take-over` → usage error, no write. `cargo clippy --workspace --all-targets
+  --locked -- -D warnings` and `cargo fmt --check` → exit 0. Never touches `~/.claude/settings.json`.
+
+### Step 24.3 — The app takes over hooks on Turn on (Codex)
+- Per D3. Decode `owners` in both layers (`SetupReport.Item` and `HooksSetup`); every predicate that treats hooks
+  `ok` as done (row colour, remaining count, attention dot at launch, `turnOnHooks()` guard, Turn on visibility, Turn
+  on everything) treats non-empty `owners` as not done. Arguments: Turn on / Turn on everything →
+  `["hook","apply","--take-over"]` for every hooks state they act on; Remove → `["hook","remove"]` unchanged.
+- Files: `apps/menubar/Sources/MenubarCore/Setup.swift`, `apps/menubar/Sources/MenubarApp/SetupView.swift`,
+  `apps/menubar/Tests/**`, `PROGRESS.md`
+- Verify: `(cd apps/menubar && swift test --disable-sandbox)` → all pass, with new tests: `ok` + owners → amber text,
+  not counted done, Turn on visible, runner gets `["hook","apply","--take-over"]`; `fixable` + owners and `attention` +
+  owners behave per the mapping; owners empty after the apply's refresh → green; Remove arguments unchanged.
+  `(cd apps/menubar && ./build.sh)` → exit 0. A real run from the repo root: the built app's CLI
+  `setup --json` with `CLAUDE_CONFIG_DIR` set to a temp dir whose hooks point at a temp executable named `multi-link`
+  → `owners` lists it; `hook apply --take-over` there → `owners` empty.
+
+### Step 24.4 — Release 1.20 and owner check (Claude)
+- `apps/menubar/Info.plist` both keys `1.20`; README/`docs/install.md` version mentions and the brew-upgrade limitation
+  (left as "not yet seen" until the owner's answer); `docs/phase24-check.md` with Claude's checks (all local Verify
+  commands, a read-only `~/.cargo/bin/multi-link hook check` on the real settings showing `other copy` if that copy
+  exists) and the owner checklist: push, CI green, tag `v1.20`, draft with 2 files, publish, tap cask at 1.20,
+  `brew upgrade --cask multi-link` → no Open Anyway prompt, app opens at 1.20, setup window rows green with no stale
+  line, `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok`, `hooks: ok`, `app: installed`, quarantine flag,
+  one hand-off banner. The brew upgrade is persistence evidence only (notifications are already authorized there);
+  the stale-error fix rests on 24.1's tests, recorded as such. Then README/install limitation updated from the answer.
+- Files: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/phase24-check.md`,
+  `PROGRESS.md`
+- Verify (whole phase): all Rust and Swift commands above; `apps/menubar/release.sh` → DMG 1.20; the owner's answer
+  recorded.
+
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · setup window: clear the Notifications error once the status reads authorized (Phase 21 check, item 8) · `hook check` / `setup` from another copy of the CLI (e.g. `~/.cargo/bin`) call hooks owned by the installed app `outdated` / `fixable`, and `--yes` would repoint them (found 2026-11-14) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-17 — Phase 24 plan critique (Codex, read-only)
+| # | Point | Decision |
+|---|---|---|
+| 1 | "Existing executable" conflates ownership with health; temporary/odd paths undefined | Accepted. D2 now names the tests (exists, regular, executable, canonical, outside `/Volumes/` / AppTranslocation), treats temporary/missing/non-executable as `outdated`, probe injectable, never runs the binary |
+| 2 | An `other copy` with `async` drift would still be repointed by plain apply via the merger | Accepted. Ownership is independent of drift: `other copy` events stay byte-identical without `--take-over`; tests for drift, duplicate and a mixed missing event |
+| 3 | R6 does not establish app ownership; stored strings are compared literally | Accepted. D3 calls app ownership a new policy; alias resolving to the running binary counts as the same path; take-over writes the canonical path; tests for alias / different / dangling |
+| 4 | One `owner` cannot describe five events | Accepted. `owners` array (sorted unique), always present |
+| 5 | `--json` with `--take-over` and bare `setup --take-over` undefined; `docs/design.md` is the binding contract | Accepted. `--json` rejects `--take-over`; bare setup still asks unless `--yes`; `docs/design.md` added to 24.2 Files |
+| 6 | Step 24.3 misses every `ok` predicate and the two decoding layers | Accepted. Named all predicates and both layers |
+| 7 | Arguments mapping for fixable hooks ambiguous | Accepted. App apply always passes `--take-over`; Remove unchanged |
+| 8 | Notification test must reproduce the delayed transition; hook errors must survive | Accepted. Test via denied refresh then `pollTick()`; notification actions stop clearing `actionError` |
+| 9 | Verify commands lack working dirs; generic executable unrecognized; brew upgrade can't prove the regression | Accepted. Subshell `cd`s, a temp executable named `multi-link`, brew upgrade recorded as persistence evidence only |
+
 
 ### 2026-11-15 — Step 22.5 Files amendment: cooperative-pool deadlock (Claude)
 | # | Finding | Decision |
