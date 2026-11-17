@@ -1,6 +1,16 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 24: Step 24.1 is done (Codex, reviewed by Claude, 2026-11-17): the setup window's stale Notifications error
+is fixed. Next: Step 24.2.** What 24.2 / 24.3 need:
+- `SetupModel.notificationError` (shown inside the Notifications row in `SetupView.swift`) holds notification request
+  failures; cleared at the start of each request and by any `refresh()` reading `notification.green`. `actionError` is
+  now hook-only: notification actions never touch it; `turnOnEverything()` clears it only in its hook-apply branch.
+  24.3 will change that branch's arguments to `["hook","apply","--take-over"]` and its `.fixable` guard for `owners`.
+- `SetupTests.swift` fake: `SetupFakes.notificationError` makes `request()` throw "Operation not permitted".
+- Swift suite: 44 tests. Codex's sandbox `./build.sh` still fails at `iconutil`; outside it builds and verifies.
+- 24.2 is pure Rust (`crates/hook`, `crates/cli`) plus docs; nothing from 24.1 touches it.
+
 **Phase 23: Step 23.1 is done (Claude wrote, Codex reviewed, 2026-11-17): the README is rewritten for the big picture.**
 What a later step needs to know:
 - `README.md` (167 lines, 8 `##` sections): Why → screenshot → What it does → Who it's for → Install (Homebrew steps,
@@ -1036,6 +1046,62 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 24.1: Setup window: clear the stale Notifications error — Codex
+- Mode: Codex loop. Owner-supplied preflight: `python3 -I tools/codex-quota.py` → `CODEX: OK`, primary 7%,
+  secondary 27%. Read-only rerun here (exit 0), actual output:
+  ```text
+  primary: 8% of 300 min window, resets Tue 20:00
+  secondary: 27% of 10080 min window, resets Thu 00:54
+  CODEX: OK
+  ```
+- Did: Split notification failures into `notificationError`, clear it at the start of each request and on any
+  refresh reading authorized with alerts enabled. Keep it through denied, disabled-alert and provisional polls.
+  Notifications never clear or overwrite hook `actionError`; Turn on everything clears the hook error only inside
+  its hook-apply branch. Show notification error text inside the Notifications row, beneath its status text.
+  Added three fake-only regression tests for recovery/persistent denial, retry through either notification action,
+  and hook-error preservation through requests, recovery and Turn on everything without a hook apply.
+- Changed: `apps/menubar/Sources/MenubarCore/Setup.swift`, `apps/menubar/Sources/MenubarApp/SetupView.swift`,
+  `apps/menubar/Tests/MenubarCoreTests/SetupTests.swift`, `PROGRESS.md`.
+- Verify: Before the behavior fix, `(cd apps/menubar && swift test --disable-sandbox --filter notificationActionsPreserveHookErrors)`
+  → exit 1, actual excerpt:
+  ```text
+  ✘ Test notificationActionsPreserveHookErrors() recorded an issue at SetupTests.swift:180:5: Expectation failed: (model.actionError → "Operation not permitted") == "apply refused"
+  ✘ Test run with 1 test in 0 suites failed after 0.002 seconds with 5 issues.
+  ```
+  The other two notification tests also ran before the behavior fix (after adding the field declaration), exit 1:
+  ```text
+  ✘ Test run with 2 tests in 0 suites failed after 0.002 seconds with 10 issues.
+  ```
+- Verify: `(cd apps/menubar && swift test --disable-sandbox)` → exit 0, actual excerpts:
+  ```text
+  Build complete! (3.99s)
+  ✔ Test notificationActionsPreserveHookErrors() passed after 0.007 seconds.
+  ✔ Test notificationRetryClearsPreviousErrorEvenWhenStillDenied() passed after 0.007 seconds.
+  ✔ Test notificationErrorClearsOnlyWhenPollingReadsGreen() passed after 0.024 seconds.
+  ✔ Test run with 44 tests in 0 suites passed after 10.671 seconds.
+  ```
+- Verify: `(cd apps/menubar && ./build.sh)` → exit 1, actual excerpts:
+  ```text
+      Finished `release` profile [optimized] target(s) in 0.24s
+  [5/7] Compiling MenubarApp App.swift
+  [5/7] Write Objects.LinkFileList
+  [6/7] Linking multi-link-menubar
+  Build complete! (7.54s)
+  Resources/AppIcon.iconset:Invalid Iconset.
+  Resources/AppIcon.iconset:Invalid Iconset.
+  ```
+  Failed only at `iconutil` inside the sandbox, after both release targets compiled. Claude will rerun outside the
+  sandbox; signing/verification was not reached. SwiftPM also warned that user-level caches were inaccessible and
+  its manifest cache database was readonly; these did not prevent compilation or tests.
+- Verify: `git diff --check` → no output, exit 0.
+- Review (Claude, 2026-11-17): clean, 0 findings, no fix rounds. Diff matches D1 and the step; only the step's files
+  changed. Claude re-ran Verify outside the sandbox: `(cd apps/menubar && swift test --disable-sandbox)` → exit 0,
+  "✔ Test run with 44 tests in 0 suites passed after 11.317 seconds." (the three new tests pass), matching Codex's;
+  `(cd apps/menubar && ./build.sh)` → exit 0, "Built and verified build/multi-link.app (bundled CLI, app, icon)".
+- Gotchas: Setup tests inject fakes for commands, notification reads/requests, login items, defaults and terminal
+  probes. No real app launched, permission request sent, login item/default changed, or agent data written.
+  Existing untracked `.claude/` left untouched. Ignored build outputs were regenerated by the required commands.
 
 ### 2026-11-17 — Step 23.1: README rewrite for the big picture — Claude (Codex review)
 - Mode: `python3 -I tools/codex-quota.py` → `primary: 0% of 300 min window`, `secondary: 26% of 10080 min window`,

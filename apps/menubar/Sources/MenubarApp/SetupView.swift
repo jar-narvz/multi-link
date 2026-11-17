@@ -78,6 +78,10 @@ struct SetupView: View {
                                     model.notification.authorization == .notDetermined ? "A banner when a Codex hand-off finishes." :
                                     "Turned off in System Settings. Turn on Allow Notifications for multi-link.")
                                 .font(.system(size: 12)).foregroundStyle(dim)
+                            if let error = model.notificationError {
+                                Text(error).font(.system(size: 12)).foregroundStyle(boardColor(palette.warn))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     } action: {
                         if model.notificationsGreen {

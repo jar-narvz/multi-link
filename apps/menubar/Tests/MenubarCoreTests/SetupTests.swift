@@ -16,6 +16,7 @@ import UserNotifications
     var hooks = "fixable"
     var badJSON = false
     var commandError = false
+    var notificationError = false
     var notification = SetupNotificationStatus(authorization: .notDetermined, alerts: .disabled)
     var status: LoginItemStatus = .notRegistered
     var loginError = false
@@ -30,7 +31,10 @@ import UserNotifications
         return CommandOutput(status: commandError ? 1 : 0, stdout: "", stderr: commandError ? "apply refused" : "")
     }
     func settings() async -> SetupNotificationStatus { calls.append("settings"); return notification }
-    func request() async throws { calls.append("request") }
+    func request() async throws {
+        calls.append("request")
+        if notificationError { throw FakeError.refused }
+    }
     func register() throws { calls.append("register"); if loginError { throw FakeError.refused } }
     func unregister() throws { calls.append("unregister"); if loginError { throw FakeError.refused } }
     func openSettings() { calls.append("login settings") }
@@ -161,6 +165,80 @@ private enum FakeError: LocalizedError { case refused; var errorDescription: Str
     #expect(!model.notificationsGreen)
     #expect(refreshes == 3) // permission transition plus explicit post-request refresh
     #expect(fake.calls.suffix(3) == ["request", "setup --json", "settings"])
+}
+
+@Test @MainActor func notificationActionsPreserveHookErrors() async {
+    let fake = SetupFakes(); let model = fake.model()
+    await model.refresh()
+    fake.commandError = true
+    await model.turnOnHooks()
+    #expect(model.actionError == "apply refused")
+
+    fake.notificationError = true
+    fake.notification = SetupNotificationStatus(authorization: .denied, alerts: .disabled)
+    await model.turnOnNotifications()
+    #expect(model.actionError == "apply refused")
+    fake.notification = SetupNotificationStatus(authorization: .authorized, alerts: .enabled)
+    await model.pollTick()
+    #expect(model.actionError == "apply refused")
+    fake.notificationError = false
+    await model.turnOnNotifications()
+    #expect(model.actionError == "apply refused")
+
+    for state in ["ok", "attention", "unreadable"] {
+        fake.hooks = state
+        await model.refresh()
+        await model.turnOnEverything()
+        #expect(model.actionError == "apply refused")
+    }
+    fake.hooks = "fixable"
+    fake.commandError = false
+    fake.notificationError = false
+    await model.refresh()
+    await model.turnOnEverything()
+    #expect(model.actionError == nil) // A new hook apply clears its previous error.
+}
+
+@Test @MainActor func notificationErrorClearsOnlyWhenPollingReadsGreen() async {
+    let fake = SetupFakes(); let model = fake.model()
+    fake.notificationError = true
+    fake.notification = SetupNotificationStatus(authorization: .denied, alerts: .disabled)
+    await model.turnOnNotifications()
+    #expect(model.notificationError == "Operation not permitted")
+    #expect(model.actionError == nil)
+
+    await model.pollTick()
+    #expect(model.notificationError == "Operation not permitted")
+    #expect(!model.notificationsGreen)
+    for status in [
+        SetupNotificationStatus(authorization: .authorized, alerts: .disabled),
+        SetupNotificationStatus(authorization: .denied, alerts: .enabled),
+        SetupNotificationStatus(authorization: .provisional, alerts: .enabled)
+    ] {
+        fake.notification = status
+        await model.pollTick()
+        #expect(model.notificationError == "Operation not permitted")
+    }
+    fake.notification = SetupNotificationStatus(authorization: .authorized, alerts: .enabled)
+    await model.pollTick()
+    #expect(model.notificationError == nil)
+    #expect(model.notificationsGreen)
+}
+
+@Test @MainActor func notificationRetryClearsPreviousErrorEvenWhenStillDenied() async {
+    for everything in [false, true] {
+        let fake = SetupFakes(); let model = fake.model()
+        fake.hooks = "ok"
+        fake.notification = SetupNotificationStatus(authorization: .denied, alerts: .disabled)
+        fake.notificationError = true
+        if everything { await model.turnOnEverything() } else { await model.turnOnNotifications() }
+        #expect(model.notificationError == "Operation not permitted")
+        #expect(model.actionError == nil)
+        fake.notificationError = false
+        if everything { await model.turnOnEverything() } else { await model.turnOnNotifications() }
+        #expect(model.notificationError == nil)
+        #expect(!model.notificationsGreen)
+    }
 }
 
 @Test @MainActor func hooksAttentionDotClearsWhenRefreshReadsGreen() async {

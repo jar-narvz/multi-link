@@ -51,6 +51,7 @@ private struct SetupReport: Decodable {
     public private(set) var hooks: HooksSetup?
     public private(set) var readError: String?
     public private(set) var actionError: String?
+    public private(set) var notificationError: String?
     public private(set) var loginError: String?
     public private(set) var notification = SetupNotificationStatus(authorization: .notDetermined, alerts: .disabled)
     public private(set) var loginStatus: LoginItemStatus = .notRegistered
@@ -126,6 +127,7 @@ private struct SetupReport: Decodable {
         if hooksGreen { hooksFixableAtLaunch = false }
         let previous = notification.green
         notification = await notifications.settings()
+        if notification.green { notificationError = nil }
         loginStatus = login.status
         if previous != notification.green { await onPermissionChange?() }
     }
@@ -146,11 +148,12 @@ private struct SetupReport: Decodable {
         busy = true; actionError = nil; await changeHooks("remove"); await refresh(); busy = false
     }
     private func requestNotifications() async {
-        do { try await notifications.request() } catch { actionError = error.localizedDescription }
+        notificationError = nil
+        do { try await notifications.request() } catch { notificationError = error.localizedDescription }
     }
     public func turnOnNotifications() async {
         guard !isTemporary, !busy else { return }
-        busy = true; actionError = nil; await requestNotifications(); await refresh()
+        busy = true; await requestNotifications(); await refresh()
         await onPermissionChange?(); busy = false
     }
     private func changeLogin(_ enabled: Bool) {
@@ -166,8 +169,8 @@ private struct SetupReport: Decodable {
     public func openLoginSettings() { guard !isTemporary else { return }; login.openSettings() }
     public func turnOnEverything() async {
         guard !isTemporary, !busy else { return }
-        busy = true; actionError = nil
-        if hooks?.state == .fixable { await changeHooks("apply") }
+        busy = true
+        if hooks?.state == .fixable { actionError = nil; await changeHooks("apply") }
         await requestNotifications()
         changeLogin(true)
         await refresh(); await onPermissionChange?(); busy = false
