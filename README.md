@@ -1,5 +1,7 @@
 # multi-link
 
+![multi-link's terminal loading screen: Claude (orange) and Codex (blue) arrows swimming across the screen, the multi·link wordmark and a progress bar](docs/img/loading-phase15-fixture.png)
+
 [![CI](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml)
 
 See every Claude Code and Codex session on your Mac in one place: which ones need you, and which Claude session
