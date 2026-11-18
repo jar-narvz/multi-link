@@ -38,8 +38,8 @@ CLI as `multi-link` in Homebrew's `bin` folder (`/opt/homebrew/bin`). Then:
 
 Upgrade with `brew upgrade --cask multi-link`. An upgrade normally keeps the Open Anyway approval, because every
 version is signed with the same identifier (seen in Homebrew's source and an isolated test, [design](design.md)
-"Phase 22 decisions"). Not yet seen on a real install: the first real `brew upgrade` (1.19 → 1.20) is part of the
-[Phase 24 check](phase24-check.md).
+"Phase 22 decisions"). Seen on a real install: `brew upgrade` from 1.19 to 1.20 opened with no Open Anyway prompt
+([Phase 24 check](phase24-check.md)).
 
 **Already installed from the DMG?** Homebrew refuses to install over an app it did not put there. Untick **Open at
 login** in the popover, quit multi-link, move `/Applications/multi-link.app` to the Trash, then run the two commands above. The hooks

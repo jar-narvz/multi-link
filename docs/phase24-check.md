@@ -167,4 +167,20 @@ After each item Claude checks it read-only (the "Claude checks" line).
 
 ## Owner answer
 
-Pending.
+2026-11-17: **all pass.** The owner ran items 1–10 with Claude; Claude checked each read-only.
+
+| Item | Result |
+|---|---|
+| 1 push | owner pulled the GitHub README edit (`b8ded8f`, removed "Who it's for"; merged cleanly as `ce6ab77`) and pushed; `main...origin/main`, Info.plist `1.20` |
+| 2 CI | run 44204971252 on `ce6ab77` → `success`, every step green |
+| 3 tag | `v1.20` → `ce6ab77`; release run 44205997651 → `check`, `ci / test`, `release` all `success` |
+| 4 draft | `multi-link 1.20`, `isDraft` true, exactly `multi-link-1.20-arm64.dmg` 2,942,615 bytes and `.sha256` 92 bytes |
+| 5 publish | `isDraft` false, `publishedAt` 2026-11-18T00:24:04Z, `…/releases/tag/v1.20` |
+| 6 tap | `cask.yml` run 44207505046 (event `release`) → `success` (queued a while for a macOS runner); tap cask `version "1.20"`, `sha256 "4f8e8785…bcd1"` = the release `.sha256` |
+| 7 brew upgrade | owner quit the app, ran `brew update && brew upgrade --cask multi-link`, opened it: **no Not Opened dialog, no Open Anyway**. `brew list --cask --versions` → `multi-link 1.20`; app `CFBundleShortVersionString` `1.20`; quarantine `03c1;6afcf43a;;…` (approved bit kept on the new copy); `/opt/homebrew/bin/multi-link` → the bundled CLI; `multi-link-menubar` running |
+| 8 setup window | owner screenshot: "Everything is on", Claude hooks and Notifications green, no amber "another copy" line, no orange notification line; Use in Terminal linked at `/opt/homebrew/bin/multi-link` |
+| 9 CLI | `cli: ok (/Applications/multi-link.app/Contents/MacOS/multi-link)`, `hooks: ok`, `app: installed`, `exit 0`; Claude: the repo's cargo build `hook check` → `other copy` owned by the upgraded app, exit 0 |
+| 10 banner | sandbox hand-off: Codex replied `ok`; owner saw the `codex finished (…)` banner from multi-link |
+
+Phase 22's "not covered" real `brew upgrade` is now covered (one upgrade, one Mac). Still not covered live: the stale
+Notifications line (notifications were already authorized), which rests on Step 24.1's tests.

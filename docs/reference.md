@@ -418,8 +418,9 @@ state rules.
   `--force`). The **Use in Terminal** link only works if no earlier `PATH` entry has a `multi-link` (`command -v
   multi-link` shows which one runs). CI runs on one macOS arm64 runner only; the first release built by it, and the
   switch from a DMG install to Homebrew on a real Mac, are checked in [docs/phase22-check.md](phase22-check.md)
-  (owner check passed 2026-11-17). A real `brew upgrade` has not been seen yet; the first one (1.19 → 1.20) is in the
-  [Phase 24 check](phase24-check.md).
+  (owner check passed 2026-11-17). The first real `brew upgrade` (1.19 → 1.20, 2026-11-17) kept the Open Anyway
+  approval: no prompt, quarantine `03c1;…` on the new copy ([Phase 24 check](phase24-check.md)). One upgrade on one
+  Mac only.
 - Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
   (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
   duplicate key or with a number serde_json would not write back as the same text: beyond 64-bit integers, and also

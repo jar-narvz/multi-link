@@ -1,25 +1,14 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 24: Step 24.4's Claude part is done (Claude, Codex review, 2026-11-17): Info.plist at 1.20, docs updated,
-`docs/phase24-check.md` written, all local Verify green. Next: the owner runs the checklist in `docs/phase24-check.md`
-(11 items) with the coordinator; the owner check is pending.** What the coordinator needs:
-- Local `main` is **ahead 5, behind 1** of `origin/main`: the owner's GitHub edit `b8ded8f` "Update README.md" removed
-  "Who it's for". `git merge-tree` says the merge is clean; item 1 runs `git pull --no-rebase --no-edit origin main`
-  (merge commit, no history rewrite) before `git push origin main`. Tag `v1.20` goes on that merge commit.
-- What Claude checks after each item (all read-only), as written in the checklist: 1 `git status -sb` even, HEAD's
-  plist `1.20`; 2 CI `success` on HEAD, 48 Swift tests; 3 release run `check`/`ci`/`release` success, tag = CI commit;
-  4 `gh release view v1.20` draft with exactly the DMG + `.sha256` and their bytes; 5 `isDraft` false; 6 cask run for
-  v1.20's commit green, tap `version "1.20"`, cask sha256 = release `.sha256`; 7 `brew list --cask --versions
-  multi-link` → 1.20, installed plist 1.20, quarantine flag still present, `/opt/homebrew/bin/multi-link` link,
-  and the owner saw **no** Open Anyway prompt (the first real `brew upgrade`); 8 owner's word (rows green, no amber
-  or stale line); 9 `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok`, `hooks: ok`, `app: installed`,
-  exit 0; 10 the banner and the sandbox hand-off.
-- Item 7 quits the app first: `open` on a still-running 1.19 would only bring the old process forward.
-- After the answer: fill "Owner answer" in `docs/phase24-check.md`, then update the "brew upgrade not seen yet" limit
-  in `README.md`, `docs/install.md` and `docs/reference.md` from it (currently "not yet seen", pointing at the
-  Phase 24 check), and close Phase 24 in PLAN.md.
-- The cask watcher now filters `--event release --commit <tag commit>`; checked against 1.19 (returns run 44193075230).
+**Phase 24 is closed (2026-11-17): Release 1.20 is published; owner check all pass** (`docs/phase24-check.md` →
+"Owner answer"). The owner now runs 1.20 from Homebrew. What the next phase needs to know:
+- The first real `brew upgrade` (1.19 → 1.20) kept the Open Anyway approval: no prompt, quarantine `03c1;…`.
+- Hooks owned by another existing copy read `other copy` (exit 0, no fix); `--take-over` moves them; the app's Turn on
+  always takes over. On this Mac the repo's cargo build reads the real hooks as `other copy` owned by the app.
+- The owner edits README on GitHub sometimes: `git fetch` / pull before committing docs.
+- Backlog (PLAN.md) is next: notarized download (if the owner enrolls), web browser app, tmux / Herdr panes. Nothing
+  is planned; the owner picks.
 
 **Phase 24: Step 24.3 is done (Codex, reviewed by Claude, 2026-11-17): the app takes over hooks on Turn on.
 Next: Step 24.4 (Release 1.20, Claude).** What 24.4 needs:
@@ -1102,6 +1091,18 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-17 — Step 24.4: owner check, Phase 24 closed — Claude
+- Did: walked the owner through `docs/phase24-check.md` items 1–10, checked each read-only (`gh`, `brew`, `xattr`,
+  `defaults read`, the repo build's `hook check`); recorded the answer; removed the "brew upgrade not seen" limitation
+  from README and updated `docs/install.md` / `docs/reference.md`.
+- Changed: `docs/phase24-check.md`, `README.md`, `docs/install.md`, `docs/reference.md`, `PLAN.md`, `PROGRESS.md`
+- Verify (remote, 2026-11-17): CI 44204971252 on `ce6ab77` → `success`; release 44205997651 → 3 jobs `success`;
+  v1.20 published, assets 2,942,615 / 92 bytes; cask run 44207505046 → `success`, tap `version "1.20"`, sha256 =
+  release file; `brew list --cask --versions multi-link` → `multi-link 1.20`, quarantine `03c1;…`, no Open Anyway;
+  `/opt/homebrew/bin/multi-link setup < /dev/null` → ok/ok/installed, exit 0; owner saw the banner.
+- Review: docs-only record of owner results; no code changed.
+- Gotchas: the cask run sat queued for a macOS runner after publish; `gh run watch` on it then said "already completed".
 
 ### 2026-11-17 — Step 24.4: Release 1.20, docs and owner checklist (Claude side) — Claude (Codex review)
 - Did: Info.plist both keys `1.20`. `docs/install.md`: DMG file name 1.20, the setup window's amber "Hooks use another

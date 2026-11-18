@@ -144,8 +144,6 @@ multi-link open <session-id-prefix> --dry-run
 - **Links matched by time can be wrong.** Only `confirmed` links are certain.
 - **Codex "waiting on you" is not detected**, and Codex "done" only means its last turn completed.
 - **The terminal jump works in Terminal.app**; iTerm2 is untested, and tmux and other terminals are not supported.
-- **A real `brew upgrade` has not been seen yet.** It should keep the Open Anyway approval; the owner's check of
-  Release 1.20 ([docs/phase24-check.md](docs/phase24-check.md)) is the first real one.
 - **JSON output includes prompt text** (prompts of up to 120 characters each, and the graph's last messages). Check
   before you share it.
 
