@@ -36,14 +36,6 @@ because they show your prompts.*
   sessions are grouped by step. Without them everything else still works; the step graph just has nothing to show.
 - **JSON CLI.** Every view is also a command with `--json` output, for scripts.
 
-## Who it's for
-
-Developers who run Claude Code and Codex side by side, for example:
-
-- Claude plans and reviews while Codex implements, and you want to see each hand-off and whether Codex is done.
-- You have sessions open in several repos and want to know which one is waiting on you without checking each tab.
-- You want to look back at how one plan step went: who did what, and how many fix rounds it took.
-
 ## Install
 
 Needs an Apple silicon Mac (arm64) with macOS 15 or later. No Rust or Xcode needed.
