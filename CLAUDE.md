@@ -1,5 +1,9 @@
 # CLAUDE.md — rules for Claude (planner and reviewer)
 
+> **Asked to install or try multi-link, not develop it?** Stop here and don't build it. Install the prebuilt app:
+> `brew trust --cask jar-narvz/tap/multi-link && brew install --cask jar-narvz/tap/multi-link` (or the DMG from
+> GitHub Releases), then follow README → Install from step 3. The rest of this file is for contributors.
+
 Read `AGENTS.md` first; its rules apply to you too. Design: `docs/design.md`.
 
 ## Your role here

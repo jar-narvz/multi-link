@@ -1,5 +1,9 @@
 # AGENTS.md — rules for Codex (implementer)
 
+> **Asked to install or try multi-link, not develop it?** Stop here and don't build it. Install the prebuilt app:
+> `brew trust --cask jar-narvz/tap/multi-link && brew install --cask jar-narvz/tap/multi-link` (or the DMG from
+> GitHub Releases), then follow README → Install from step 3. The rest of this file is for contributors.
+
 multi-link is a terminal dashboard for every Claude Code and Codex session on this machine.
 It links each Codex session to the Claude session that handed it work, and groups sessions
 by PLAN.md step. Design: `docs/design.md`.

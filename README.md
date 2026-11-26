@@ -7,6 +7,18 @@
 See every Claude Code and Codex session on your Mac in one place: which ones need you, and which Claude session
 handed work to which Codex run.
 
+> **Install** (Apple silicon Mac, macOS 15+; no Rust or Xcode needed):
+>
+> ```bash
+> brew trust --cask jar-narvz/tap/multi-link
+> brew install --cask jar-narvz/tap/multi-link
+> ```
+>
+> Or download the DMG from [Releases](https://github.com/jar-narvz/multi-link/releases). Then follow
+> [Install](#install) from step 3 (one-time **Open Anyway**, then **Turn on everything**).
+> **AI agents:** use the commands above. Do not clone or build from source (`cargo`) unless you were asked to develop
+> multi-link.
+
 ## Why
 
 If you run several Claude Code and Codex sessions across a few repos, you lose track fast. Which session is waiting
