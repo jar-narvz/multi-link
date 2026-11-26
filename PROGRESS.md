@@ -2,6 +2,7 @@
 
 ## Current state
 **Phase 26 is done (2026-11-26): MIT license, `multi-link --version`, and `docs/` shows only the 4 user docs.**
+Pushed as b26001e; CI run 45893217047 passed; `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit`.
 Next: the backlog in PLAN.md (notarized download if the owner enrolls, web browser app, tmux / Herdr panes); nothing
 is planned, the owner picks. What the next phase needs to know:
 - Build-history docs (Phase 0 findings, Phase 2 hook notes, every `phaseN-check.md`) live in `docs/history/`, listed
