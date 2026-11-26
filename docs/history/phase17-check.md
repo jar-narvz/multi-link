@@ -5,7 +5,7 @@
 Step 17.4, 2026-11-11. Phase 17 adds a step strip, row actions and a macOS notification when a Codex hand-off
 finishes to the Claude Code pane (`mod/multi-link-pane/`), from new `multi-link pane` fields and watcher lines
 (`crates/cli/src/pane.rs`). The target look is board 17 (`docs/boards/board17-pane-strip.html`), options S1 Chain,
-A1 Expand in place and N2 What it said, picked by the owner; see [design](design.md) → "Phase 17 decisions".
+A1 Expand in place and N2 What it said, picked by the owner; see [design](../design.md) → "Phase 17 decisions".
 
 ## How the real check was run
 

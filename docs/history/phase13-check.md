@@ -2,8 +2,8 @@
 
 Step 13.3, 2026-11-10. Phase 13 reads a literal `cd` before a launch as the run's folder (C1–C2), reads explicit
 resume ids that come after options (C3), and reads keys with crossterm `use-dev-tty` (D1); see
-[design](design.md#phase-13-decisions-known-folders-and-a-key-that-is-never-lost-step-130). The fixture keys are in `fixtures/expected/phase13/` and the amended Phase 12
-key; their results are in [output-schema](output-schema.md#phase-13-fixture-results-step-130).
+[design](../design.md#phase-13-decisions-known-folders-and-a-key-that-is-never-lost-step-130). The fixture keys are in `fixtures/expected/phase13/` and the amended Phase 12
+key; their results are in [output-schema](../output-schema.md#phase-13-fixture-results-step-130).
 
 ## How the real check was run
 

@@ -21,16 +21,16 @@ uninstall and hook setup are in [install.md](install.md).
 
 ## Release history
 
-Release 1 is complete (see [check results](phase3-check.md)). Release 1.1 (home screen
-cleanup) did not meet the need ([owner verdict](phase4-check.md#owner-check-stop-and-ask)), and
-neither did Release 1.2's bars ([owner verdict](phase5-check.md#owner-check-stop-and-ask--answered-2026-11-01)).
+Release 1 is complete (see [check results](history/phase3-check.md)). Release 1.1 (home screen
+cleanup) did not meet the need ([owner verdict](history/phase4-check.md#owner-check-stop-and-ask)), and
+neither did Release 1.2's bars ([owner verdict](history/phase5-check.md#owner-check-stop-and-ask--answered-2026-11-01)).
 Release 1.3 rebuilt home in plain words and the repo view as swimlanes, to two approved mockups; the
-owner approved the real screen ([visual check](phase6-check.md)). Release 1.4 polishes those screens
+owner approved the real screen ([visual check](history/phase6-check.md)). Release 1.4 polishes those screens
 on real data (prompts after a system reminder, window words, clock times, axis labels); the owner approved it
-([real check](phase7-check.md)). Release 1.5 adds the step graph: one PLAN.md step's Claude and Codex parts
-along time; the owner approved it ([real check](phase8-check.md)). Release 1.6 makes states and links truthful:
+([real check](history/phase7-check.md)). Release 1.5 adds the step graph: one PLAN.md step's Claude and Codex parts
+along time; the owner approved it ([real check](history/phase8-check.md)). Release 1.6 makes states and links truthful:
 ended Claude sessions say `finished`, compressed Codex rollouts are read, and more hand-offs find their run; the owner
-confirmed it on real data ([real check](phase9-check.md)). Release 1.7 replaces hand-merging hook JSON with
+confirmed it on real data ([real check](history/phase9-check.md)). Release 1.7 replaces hand-merging hook JSON with
 `multi-link hook check`, which reports your hooks and prints one command that updates them ([hook setup](install.md#hook-setup)).
 Release 1.11 adds the [live grid](#live-grid): what every working, waiting or stale agent is doing now, on one screen.
 Release 1.12 makes the first load fast (the first home frame came up in 1.82–1.99 s on real data, down from about 9 s)
@@ -41,7 +41,7 @@ the app installs with `brew` and the CLI can be used from Terminal ([install](in
 Release 1.20 fixes two setup bugs: the setup window no longer keeps a stale "Notifications are not allowed" line under
 a green row, and hooks owned by another copy of multi-link are reported as `other copy` (exit 0, no fix command)
 instead of `outdated`; only `--take-over` or the app's **Turn on** moves them ([hook setup](install.md#hook-setup),
-[check](phase24-check.md)).
+[check](history/phase24-check.md)).
 
 What the releases add up to:
 
@@ -64,7 +64,7 @@ Times use a 12-hour clock with lowercase `am`/`pm`, no leading zero or space (`9
 
 *HTML render of the home buffer on the synthetic fixture `fixtures/sessions-phase6` at 120×40
 (`crates/tui/examples/home_html.rs`; method, the approved mockup in words and real-data differences in
-[docs/phase6-check.md](phase6-check.md)). Real renders are not committed because they show prompts.
+[docs/history/phase6-check.md](history/phase6-check.md)). Real renders are not committed because they show prompts.
 The real terminal uses your own font.*
 
 - **Top line:** working, stale, idle and done-or-unknown counts, repos and hand-offs, and on the right
@@ -122,17 +122,17 @@ The real terminal uses your own font.*
 ![Step graph on the phase8 fixture](img/step-phase8-fixture.png)
 
 *HTML render of the step graph on the synthetic fixture `fixtures/sessions-phase8`, step 1.1, at 120×40 (method,
-the approved board 9 in words and real-data differences in [docs/phase8-check.md](phase8-check.md)).*
+the approved board 9 in words and real-data differences in [docs/history/phase8-check.md](history/phase8-check.md)).*
 
 ![Step graph with two resumed fix rounds on the phase9 fixture](img/step-phase9-fixture.png)
 
 *Synthetic fixture `fixtures/sessions-phase9`, step 2.1: one Codex run resumed twice with `codex exec resume --last`
 shows as implement, fix round 1 and fix round 2, with a Claude review between them
-([docs/phase9-check.md](phase9-check.md)).*
+([docs/history/phase9-check.md](history/phase9-check.md)).*
 
 ![Step graph with a live fix round on the phase8 fixture](img/step-live-fixture.png)
 
-*Synthetic fixture, step 1.5, while its fix round is still running ([docs/phase11-check.md](phase11-check.md)).*
+*Synthetic fixture, step 1.5, while its fix round is still running ([docs/history/phase11-check.md](history/phase11-check.md)).*
 
 - **Live parts:** the part working now gets a heavy border in its colour and a magenta `● now` badge; while
   something is live, finished parts' borders and dots recede (their text keeps its colour). A Codex part is live
@@ -166,7 +166,7 @@ shows as implement, fix round 1 and fix round 2, with a Claude review between th
 - **Missing Codex runs:** an unlinked hand-off shows a dim `no codex run found` box, no return arrow, and `(the
   rollout may be gone)` in the panel. That wording is still wrong for some: Phase 9's rules (compressed rollouts,
   redirect logs, `resume --last`, below) cut real unlinked hand-offs from 124 of 222 to 47 of 221 on 2026-11-08, but
-  at least 3 of the 47 (`cd` then `resume --last`) have their run on disk ([counts](phase9-check.md#links)).
+  at least 3 of the 47 (`cd` then `resume --last`) have their run on disk ([counts](history/phase9-check.md#links)).
   While a run is unlinked, the Claude part around it usually covers the time Codex worked, unless an earlier Codex run
   is still open (step 6.6).
 
@@ -175,7 +175,7 @@ shows as implement, fix round 1 and fix round 2, with a Claude review between th
 ![Live grid on the phase14 fixture](img/live-phase14-fixture.png)
 
 *HTML render of the live grid on the synthetic fixture report `fixtures/expected/phase14/live.json` at 120×40
-(`home_html --live-grid`; real check in [docs/phase14-check.md](phase14-check.md)). Real renders are not committed
+(`home_html --live-grid`; real check in [docs/history/phase14-check.md](history/phase14-check.md)). Real renders are not committed
 because they show prompts.*
 
 What is each agent doing right now, without switching terminal tabs? Press **`l`** on home or in a repo view, or start
@@ -205,7 +205,7 @@ with `multi-link tui --live`.
 ![Loading screen on the fixture frame](img/loading-phase15-fixture.png)
 
 *HTML render of the loading screen at 76×22 with the fixture counter (`home_html --loading 4.0`; real check in
-[docs/phase15-check.md](phase15-check.md)).*
+[docs/history/phase15-check.md](history/phase15-check.md)).*
 
 The first load reads every transcript once; later refreshes reuse what is cached. Release 1.12 parses those files on
 every core, so the cold `multi-link overview --json` went from 7.99 s to 1.16 s (median of 3 runs on the owner's
@@ -226,7 +226,7 @@ machine, 1069 files), and the TUI's first home frame came up in 1.82–1.99 s (3
 
 ## Claude Code pane (retired)
 
-Releases 1.13–1.15 shipped a Claude Code mod that showed a repo's sessions in a pane beside the chat; Release 1.17 removed it and the `multi-link pane` command, because the [menu-bar app](#menu-bar-app-macos) shows the same rows for every repo and sends the Codex-done notifications itself (old checks: `docs/phase16-check.md` to `docs/phase18-check.md`).
+Releases 1.13–1.15 shipped a Claude Code mod that showed a repo's sessions in a pane beside the chat; Release 1.17 removed it and the `multi-link pane` command, because the [menu-bar app](#menu-bar-app-macos) shows the same rows for every repo and sends the Codex-done notifications itself (old checks: `docs/history/phase16-check.md` to `docs/history/phase18-check.md`).
 
 ## Menu-bar app (macOS)
 
@@ -259,7 +259,7 @@ Release 1.18 ships it as one download with the CLI inside and a setup window ([i
 Each rule below reads a format that Claude Code or Codex does not document; only the `SessionEnd` hook event is
 documented. Each is designed so that a missing marker falls back to `unknown` or unlinked; a format that changes in
 another way (say, `cost-state` written mid-session) could still give wrong results. Real counts before and after are
-in [docs/phase9-check.md](phase9-check.md).
+in [docs/history/phase9-check.md](history/phase9-check.md).
 
 - **`finished` and its evidence.** A Claude session is `finished` only on positive evidence, checked in this order:
   its live session record (`~/.claude/sessions/<pid>.json`) means it is running and wins; `process_exit` (the record
@@ -316,10 +316,10 @@ in [docs/phase9-check.md](phase9-check.md).
   folder. It is read only when it is certain: `$VAR`, `~`, plain names, `pushd`/`popd`, a `cd` joined with `||`, `|`
   or `&`, a wrapper (`builtin cd`), or `eval`/`source`/`exec` after the `cd` leave the folder unknown, and the hand-off
   stays unlinked. A `cd` joined with `;` is assumed to succeed. On 2026-11-10 the Phase 13 rules linked 34 real launch
-  and 3 resume hand-offs that were unlinked ([details](phase13-check.md)).
+  and 3 resume hand-offs that were unlinked ([details](history/phase13-check.md)).
 - **Nearest run.** A launch hand-off with several Codex runs in its window gets the nearest one when the evidence is
   clear (rules above under Limitations); the link says `matched by time · nearest run`. On 2026-11-10 this settled 8
-  of the 9 ambiguous real hand-offs ([details](phase12-check.md)).
+  of the 9 ambiguous real hand-offs ([details](history/phase12-check.md)).
 - **Session folder (R8).** The first folder a Claude session's own records name is its home folder (records inherited
   from a resumed session do not set it). After that, a record's folder counts only if it is the home folder or inside
   it, so a shell `cd` elsewhere (Claude Code stamps later records with it) is ignored and the session stays in its
@@ -359,7 +359,7 @@ state rules.
 
 ## Limitations and validation
 
-- The menu-bar app (Releases 1.16–1.17) was checked on this Mac (`docs/phase19-check.md`, `docs/phase20-check.md`):
+- The menu-bar app (Releases 1.16–1.17) was checked on this Mac (`docs/history/phase19-check.md`, `docs/history/phase20-check.md`):
   the popover matches board 19, and a real Codex hand-off showed a banner credited to multi-link. It did so only after
   System Settings → Notifications → multi-link → **Allow Notifications** was turned on; before that, macOS dropped two
   banners without an error and the app still counted them as announced, so those hand-offs were never shown. Pressing
@@ -368,7 +368,7 @@ state rules.
   the first few seconds after the app starts notifying is not announced either.
 
 - The terminal jump (Release 1.15) is macOS only and was checked live with Terminal.app from the CLI and the TUI
-  (`docs/phase18-check.md`). **iTerm2 is untested** (not installed; covered by tests only), and so are tmux, other
+  (`docs/history/phase18-check.md`). **iTerm2 is untested** (not installed; covered by tests only), and so are tmux, other
   terminals, a real tab-gone process and a denied Automation prompt (fixtures and fake-runner tests). A session never
   sent a prompt has no transcript yet, so no list shows it. It relies on the session record's `pid`/`procStart`
   (undocumented). A running terminal session adds one `ps` per refresh (226 ms per refresh tick in the check).
@@ -388,7 +388,7 @@ state rules.
   provisional: on 2026-11-10, 30 hand-offs with an observed child gave 0 wrong answers with the id hidden, but few of
   them had rival runs. It assumes Codex starts a run within seconds of its launch, so a run that starts late can be
   given to a later hand-off. On 2026-11-10 no real hand-off stays ambiguous: the last one was settled once a `cd`
-  linked its rival run to another hand-off ([details](phase12-check.md), [Phase 13](phase13-check.md)).
+  linked its rival run to another hand-off ([details](history/phase12-check.md), [Phase 13](history/phase13-check.md)).
 - `cd` resolution has no hidden-id test: only 1 real hand-off with an observed child used a `cd`, and its child started
   before the hand-off, so it stays unlinked with the id hidden. Each folder resolved on real data had exactly one run
   in the window.
@@ -398,7 +398,7 @@ state rules.
 - Some sessions still show `no prompt`. On 2026-11-02 (PST): 11 of 185 Claude sessions (in the Phase 7
   plan's count these were other wrappers such as `local-command-caveat`, `bash-input`, `scheduled-task`, a
   reminder with nothing after it, or no eligible record) and 3 older non-imported Codex runs
-  ([counts](phase7-check.md#real-prompt-count-p1)).
+  ([counts](history/phase7-check.md#real-prompt-count-p1)).
 - JSON output now includes prompt text: `sessions` and `overview` carry each session's first prompt
   (`asked`, up to 120 characters). Check before sharing JSON.
 - macOS only for now.
@@ -408,20 +408,20 @@ state rules.
   around Gatekeeper. The DMG is **Apple silicon (arm64) only**, macOS 15 or later. The app counts itself as "running
   from the download" only under `/Volumes/` or an `AppTranslocation` folder; a DMG mounted by hand elsewhere
   (`hdiutil -mountpoint`) is not caught, and setup would point the hooks at it (seen once in the
-  [Phase 21 check](phase21-check.md)). The hooks call the app's bundled CLI by its full path: **if the app is
+  [Phase 21 check](history/phase21-check.md)). The hooks call the app's bundled CLI by its full path: **if the app is
   deleted or moved without Remove hooks first**, every hook call fails until you run `multi-link hook remove` (or
   re-open the app from its new place and click Turn on). The real first-run check (Safari download, Open Anyway, the
   setup rows on real clicks, an upgrade, a login launch, a hand-off banner with the new icon) passed with the owner
-  ([Phase 21 check](phase21-check.md)).
+  ([Phase 21 check](history/phase21-check.md)).
 - Homebrew and release limits (Release 1.19). The cask is in multi-link's own tap, not Homebrew's official one, which
   takes only notarized apps. Homebrew quarantines the app like a download, so **Open Anyway is needed once after a
   fresh Homebrew install** too; until then the `multi-link` command is killed with no message (exit 137, seen in an
   isolated test). Homebrew refuses to install over a DMG copy in `/Applications` (move it to the Trash first; never
   `--force`). The **Use in Terminal** link only works if no earlier `PATH` entry has a `multi-link` (`command -v
   multi-link` shows which one runs). CI runs on one macOS arm64 runner only; the first release built by it, and the
-  switch from a DMG install to Homebrew on a real Mac, are checked in [docs/phase22-check.md](phase22-check.md)
+  switch from a DMG install to Homebrew on a real Mac, are checked in [docs/history/phase22-check.md](history/phase22-check.md)
   (owner check passed 2026-11-17). The first real `brew upgrade` (1.19 → 1.20, 2026-11-17) kept the Open Anyway
-  approval: no prompt, quarantine `03c1;…` on the new copy ([Phase 24 check](phase24-check.md)). One upgrade on one
+  approval: no prompt, quarantine `03c1;…` on the new copy ([Phase 24 check](history/phase24-check.md)). One upgrade on one
   Mac only.
 - Hook setup limits. The merged file is rewritten as 2-space JSON, so its whitespace and indentation may change
   (values, key order and your entries do not). To keep values exact, the check refuses (exit 2) a file with a
@@ -446,20 +446,20 @@ state rules.
   are never `waiting` (Codex waiting is unsupported, above). On 2026-11-10 the real check saw only 1–2 working Claude
   cards, no Codex card and nothing waiting or stale, so pairing, waiting and stale cards are tested on the fixture
   only. With the grid open, later refreshes took 187–248 ms on real data; the first refresh after start took 9.2 s,
-  of which the grid was 102 ms and the rest the overview's first full parse ([timing](phase14-check.md)).
-  Release 1.12 cut that first refresh to 1.58–1.63 s with the grid ([timing](phase15-check.md)).
+  of which the grid was 102 ms and the rest the overview's first full parse ([timing](history/phase14-check.md)).
+  Release 1.12 cut that first refresh to 1.58–1.63 s with the grid ([timing](history/phase15-check.md)).
 - Loading screen limits. Its 256-colour and `NO_COLOR` forms and the fade's colour steps are tested against
   answer keys only; the real check ran in a truecolor PTY and read text, not colours. The first-load times above are
   from one machine (14 cores) with other sessions running; on a busy machine one `--live` first report took 2.2 s,
-  over the 2 s target ([timing](phase15-check.md)).
+  over the 2 s target ([timing](history/phase15-check.md)).
 
 Workspace tests and clippy passed in the Step 3.8, 4.6, 5.5, 6.5, 7.4, 8.6 and 9.7 runs. Real-home
-timing output, terminal evidence and validation limits are in [docs/phase3-check.md](phase3-check.md);
-the Phase 4 home check is in [docs/phase4-check.md](phase4-check.md), the Phase 5 visual check in
-[docs/phase5-check.md](phase5-check.md), the Phase 6 visual check in
-[docs/phase6-check.md](phase6-check.md), the Phase 7 real check in
-[docs/phase7-check.md](phase7-check.md), the Phase 8 real check in
-[docs/phase8-check.md](phase8-check.md) and the Phase 9 real check in [docs/phase9-check.md](phase9-check.md).
+timing output, terminal evidence and validation limits are in [docs/history/phase3-check.md](history/phase3-check.md);
+the Phase 4 home check is in [docs/history/phase4-check.md](history/phase4-check.md), the Phase 5 visual check in
+[docs/history/phase5-check.md](history/phase5-check.md), the Phase 6 visual check in
+[docs/history/phase6-check.md](history/phase6-check.md), the Phase 7 real check in
+[docs/history/phase7-check.md](history/phase7-check.md), the Phase 8 real check in
+[docs/history/phase8-check.md](history/phase8-check.md) and the Phase 9 real check in [docs/history/phase9-check.md](history/phase9-check.md).
 
 ## Releasing
 

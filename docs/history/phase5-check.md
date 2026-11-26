@@ -52,15 +52,15 @@ thing to look at on the real screen.
 
 **Board 7 (target)**
 
-![Board 7 target](img/board7-target.png)
+![Board 7 target](../img/board7-target.png)
 
 **Real `~`, 2026-10-30 17:08 PDT, default `last 2h`**
 
-![Home on real data](img/home-real.png)
+![Home on real data](../img/home-real.png)
 
 **Fixture `fixtures/sessions-phase5` (shaped like board 7, plus a waiting row)**
 
-![Home on the phase5 fixture](img/home-phase5-fixture.png)
+![Home on the phase5 fixture](../img/home-phase5-fixture.png)
 
 ## Differences from board 7
 

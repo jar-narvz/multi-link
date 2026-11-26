@@ -2,7 +2,7 @@
 
 Step 14.4, 2026-11-10. Phase 14 adds `multi-link live` and the live grid screen (`l`, `tui --live`): one card per
 working, waiting or stale session, a Claude card paired with the Codex runs it started, under a feed of hand-offs;
-see [design](design.md#phase-14-decisions-live-grid-what-is-each-agent-doing-now-step-140). The fixture key is
+see [design](../design.md#phase-14-decisions-live-grid-what-is-each-agent-doing-now-step-140). The fixture key is
 `fixtures/expected/phase14/live.json`; the hand-drawn render goldens are `fixtures/expected/tui/live-phase14*`.
 
 ## How the real check was run

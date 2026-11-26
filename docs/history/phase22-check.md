@@ -3,7 +3,7 @@
 Step 22.6, 2026-11-16. Phase 22 makes Release 1.19 the first release built by GitHub Actions: CI on every push to
 `main` (`.github/workflows/ci.yml`), a draft release on a `v*` tag (`release.yml`), a cask pushed to
 `jar-narvz/homebrew-tap` when the owner publishes (`cask.yml`), and "Use in Terminal" in the setup window. See
-[design](design.md) → "Phase 22 decisions" and PLAN.md Phase 22 (R1–R7). This file has two parts: what Claude checked
+[design](../design.md) → "Phase 22 decisions" and PLAN.md Phase 22 (R1–R7). This file has two parts: what Claude checked
 without the owner, and the owner checklist for the push, the tag, publishing and the switch of the real app to brew.
 
 ## Checked by Claude

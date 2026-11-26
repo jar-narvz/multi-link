@@ -7,7 +7,7 @@ Oct 29, 2026 · Status: draft
 > convention matches the owner's real format; `hook install` prints a snippet instead of writing
 > `~/.claude/settings.json`. See `PLAN.md` → Review log. The architecture diagram was not exported.
 >
-> Revised in Step 0.6 (2026-10-29) with the Phase 0 results (`docs/phase0.md`): see "Phase 0 results
+> Revised in Step 0.6 (2026-10-29) with the Phase 0 results (`docs/history/phase0.md`): see "Phase 0 results
 > and decisions" under Solution design. Sections changed: Glossary, Major decisions (Reuse), Linking
 > algorithm, Repo and step assignment, Session state, Edge cases, Proposed plan, Open questions.
 >
@@ -145,7 +145,7 @@ Transcripts, PLAN.md / PROGRESS.md and optional hook records flow into the core;
 
 ### Phase 0 results and decisions
 
-Evidence: `docs/phase0.md` (10 generated hand-offs with recorded ground truth, plus organic samples).
+Evidence: `docs/history/phase0.md` (10 generated hand-offs with recorded ground truth, plus organic samples).
 Field names are observed on real data, not documented, and may change with a harness update.
 
 | # | Result | Decision | Why |
@@ -877,7 +877,7 @@ step, title, ids, times, prompts and file names differ throughout; the regions b
 **Release 1** (the portfolio release) is the core, the `multi-link` CLI, the TUI home screen and the repo timeline. Everything after is an ordered but uncommitted backlog. Each phase ends only when its Verify gives the expected result. Step-level detail lives in `PLAN.md`.
 
 1. **Phase 0: Spike with go / no-go.** On real data, answer: (a) for each invocation form (exec, resume, plugin, background), where is the child Codex id observable? (b) which signals give busy / waiting / idle for each harness? (c) is zoetrope's core a usable library crate? (d) does agtrace already link Claude → Codex? Collect scrubbed fixtures, including negative cases (`codex` mentioned but not launched; a manual Codex run in the same folder), an ambiguous case (two hand-offs seconds apart in one checkout), a resume, a background launch, a stale session and a malformed line. Hand-label the expected outputs.
-   - Verify: `docs/phase0.md` answers (a)–(d), each marked go or no-go, and `fixtures/expected/{sessions,links,steps}.json` exist. A no-go on (a) means links are heuristic-only, and this doc is revised before Phase 1.
+   - Verify: `docs/history/phase0.md` answers (a)–(d), each marked go or no-go, and `fixtures/expected/{sessions,links,steps}.json` exist. A no-go on (a) means links are heuristic-only, and this doc is revised before Phase 1.
    - **Done 2026-10-29:** (a) go, (b) no-go for waiting only, (c) no-go, (d) go. See Phase 0 results and decisions.
 2. **Phase 1: MVP, core + CLI.** Parsers, repo mapper, state machine, step parser, linker; `multi-link sessions`, `multi-link links`, `multi-link steps`. A Cargo workspace with one crate per parser (Claude, Codex, PLAN/PROGRESS) plus shared model, core and CLI crates: a format change touches one crate (swappable parsers), and parallel steps can't break each other's build.
    - Verify: `cargo test` passes, and each of the three commands run with `--root fixtures/sessions --now <fixed time> --json` equals its expected file (exact commands in `docs/output-schema.md`). Negative fixtures produce no link; the ambiguous variant produces `ambiguous`.
@@ -887,7 +887,7 @@ step, title, ids, times, prompts and file names differ throughout; the regions b
    - Verify: snapshot tests of both screens on fixtures pass; home refresh on my real `~` is 2 s or less; opening a running fixture session never calls resume.
 5. **Phase 4: Home screen cleanup (Release 1.1).** `codex ×N`, collapsed quiet repos, header counts, mini time bars (U1–U5). Built, but the owner judged the real screen still hard to read, so it closed as not meeting the need.
 6. **Phase 5: Home redesign to the approved target (Release 1.2).** Board 7 as the acceptance picture: step-named rows, combined lanes, tested colour, mockup-like bars, plain words, local time (V0–V10).
-   - Verify: the board-7 fixture's styled render equals the hand-drawn target golden cell for cell; a real-`~` render sits next to board 7 in `docs/phase5-check.md`; the owner confirms.
+   - Verify: the board-7 fixture's styled render equals the hand-drawn target golden cell for cell; a real-`~` render sits next to board 7 in `docs/history/phase5-check.md`; the owner confirms.
 7. **Phases 6 and 7:** home in words, repo swimlanes (W0–W10), then polish (P1–P5). See their decisions above.
 8. **Phase 8: Step graph (Release 1.5).** Board 9 as the acceptance picture (G0–G11).
    - Verify: the fixture render equals the Step 8.1 golden cell for cell; a real step's render is compared with board 9 region by region; the owner confirms.
@@ -898,7 +898,7 @@ step, title, ids, times, prompts and file names differ throughout; the regions b
 ### Open questions
 
 - [x] Can a terminal program open a running desktop-app session? Yes: `open "claude://code/continue?session=local_<id>"` switched the app to a live route-impact session (tested 2026-10-29). Format found in repo-sessions' code; undocumented.
-- [x] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap. Answered in `docs/phase0.md`; decisions P1–P12 above.
+- [x] Phase 0 (a)–(d): child-id observability, state signals, zoetrope crate, agtrace overlap. Answered in `docs/history/phase0.md`; decisions P1–P12 above.
 - [x] May step ids carry a letter suffix (`0.2a`)? Yes, one lowercase letter (P11).
 - [ ] Do `PermissionRequest` / `Notification` fire for every permission prompt and question, so they can drive "waiting"? Planned answer: Step 2.1 (h).
 - [x] How to find the `local_` app id of a finished desktop-app session. Phase 9 (R3): the app record whose `cliSessionId` is the transcript id (Step 8.4c reader); used only when exactly one record maps it.

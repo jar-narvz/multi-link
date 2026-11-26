@@ -40,12 +40,12 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   one background launch, one manual Codex run in the same folder, one stale session, and one
   ambiguous case: two hand-offs seconds apart in the same checkout. Cases not found in existing
   data are created on purpose; list any that couldn't be made.
-- Record in `docs/phase0.md`:
+- Record in `docs/history/phase0.md`:
   - (a) for each invocation form (exec, resume, plugin, background): where the child Codex id is
     observable, with field names. Go / no-go for exact links.
   - (b) which fields give busy / waiting / idle / finished for each harness, and a proposed freshness limit.
-- Files: `docs/phase0.md` only (plus ignored `fixtures/raw/`).
-- Verify: `docs/phase0.md` has sections (a) and (b), each ending in `Decision: go` or `Decision: no-go`,
+- Files: `docs/history/phase0.md` only (plus ignored `fixtures/raw/`).
+- Verify: `docs/history/phase0.md` has sections (a) and (b), each ending in `Decision: go` or `Decision: no-go`,
   with field names only (no conversation content).
 
 ### Step 0.3 — Phase 0 spike: dependencies (questions c, d) — can run in parallel with 0.2
@@ -54,7 +54,7 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   sandbox sessions only (copied into a throwaway `HOME`), checked against `fixtures/raw/ground-truth.md`.
   Read its source first; don't run it if it writes into `~/.claude` / `~/.codex` or makes network calls.
 - Third-party sources are cloned / built outside this repo (`~/multi-link-sandbox/deps/`).
-- Files: `docs/phase0-deps.md` (separate from 0.2's `docs/phase0.md` so both can run at once;
+- Files: `docs/history/phase0-deps.md` (separate from 0.2's `docs/history/phase0.md` so both can run at once;
   merged in Step 0.6).
 - Verify: sections (c) and (d) exist, each ending in `Decision: go` / `Decision: no-go`, with the
   version (commit) tested and the command used.
@@ -77,7 +77,7 @@ remote viewing · editing PLAN.md / PROGRESS.md · Codex → Claude links · des
   line in `ground-truth.md`; Codex reviews the schema and the expected files.
 
 ### Step 0.6 — Revise design from Phase 0
-- Claude merges `docs/phase0-deps.md` into `docs/phase0.md`, updates `docs/design.md` and this plan with the go / no-go results, gets a Codex critique,
+- Claude merges `docs/history/phase0-deps.md` into `docs/history/phase0.md`, updates `docs/design.md` and this plan with the go / no-go results, gets a Codex critique,
   then splits Phase 1 into steps.
 - Verify: Review log below has a Phase 0 entry; Phase 1 has numbered steps with Verify commands.
 
@@ -308,7 +308,7 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   permission request (`-p` denies it); then tries an interactive `claude` session driven by `/usr/bin/expect`
   (tmux is not installed) held at a permission prompt and then answered.
 - Raw payloads go to `fixtures/raw/hook/` (git-ignored); the capture hook is removed afterwards.
-- Answer in `docs/phase2-hook.md`, field names only, each question ending `Decision: go` / `no-go`:
+- Answer in `docs/history/phase2-hook.md`, field names only, each question ending `Decision: go` / `no-go`:
   (e) do `settings.local.json` hooks run in `-p`? (f) does `session_id` equal the transcript stem and
   `tool_use_id` the transcript's `tool_use.id`, including for the plugin's subagent call (`agent_id`)?
   (g) what is `tool_response` for a background call, and where is the task output path (or how is it
@@ -321,12 +321,12 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   (docs: unfinished async hooks are killed at teardown) and interactively? Test with a capture hook that
   sleeps 10 s before writing, on a background hand-off; if killed in `-p`, 2.5 records the hand-off first
   (child `null`) and appends a second record when the id appears (Codex P2 #8).
-- Files: `docs/phase2-hook.md` only (plus ignored `fixtures/raw/hook/`).
-- Verify: `docs/phase2-hook.md` has sections (e)–(k), each ending in `Decision: go` or `Decision: no-go`;
+- Files: `docs/history/phase2-hook.md` only (plus ignored `fixtures/raw/hook/`).
+- Verify: `docs/history/phase2-hook.md` has sections (e)–(k), each ending in `Decision: go` or `Decision: no-go`;
   `jq -r '.. | strings' ~/.multi-link/spike/*.jsonl | rg -v '^(<[a-z]+:[0-9]+>|[0-9a-f-]{36}|toolu_\w+|/.+|[A-Za-z_]+|[0-9T:.Z-]+)$'`
   prints nothing (only allowlisted value shapes were stored);
   `ls ~/multi-link-sandbox/repo-a/.claude/settings.local.json` fails (capture hook removed);
-  `git status --short` shows only `docs/phase2-hook.md` (and PROGRESS.md).
+  `git status --short` shows only `docs/history/phase2-hook.md` (and PROGRESS.md).
 - Stop and ask if (f) is no-go (no way to tie a hook record to a transcript call) or if hooks can run only
   from `~/.claude/` settings.
 
@@ -416,7 +416,7 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   Its own `session id:` line parser (H9: keeps the hook crate off core so 2.5 ∥ 2.6).
 - Files: `crates/hook/src/**`, `crates/hook/tests/hook.rs`
 - Verify: `cargo test -p multi-link-hook` → `test result: ok`, including: each payload shape from 2.1
-  (synthetic copies with field names from `docs/phase2-hook.md`, no real content) → the record expected by
+  (synthetic copies with field names from `docs/history/phase2-hook.md`, no real content) → the record expected by
   the schema; non-codex Bash, `codex --version`, unknown event, invalid JSON, empty stdin, 10 MiB stdin →
   `None`; `session_id` `../x` → nothing written; a background payload whose output file gains the
   `session id:` line after 3 fake seconds → that child; never gains it → `child: null` after the 30 s cap
@@ -473,8 +473,8 @@ confirms them on real payloads, like Phase 0 did for transcripts.
   `/dev/null`), each tagged `Step 9.1`; then the `expect`-driven permission prompt if 2.1 (j) is go.
   After the hook has recorded the background child, delete that call's task output file (a sandbox temp
   file the sandbox run created), so only the hook can make that link exact (Codex P2 #9).
-- Results in `docs/phase2-hook.md` → "Phase 2 Verify" (ids compared, not pasted in full).
-- Files: `docs/phase2-hook.md`
+- Results in `docs/history/phase2-hook.md` → "Phase 2 Verify" (ids compared, not pasted in full).
+- Files: `docs/history/phase2-hook.md`
 - Verify: `find ~/.codex/sessions -newer <marker> -name 'rollout-*.jsonl'` gives the new rollouts; for the
   foreground and background hand-offs, `session_meta.payload.id` of the matching rollout equals the hook
   record's `child` (printed `equal` per pair); `multi-link links --json` shows the foreground one `exact` /
@@ -692,8 +692,8 @@ the bell, and FR18 open (resume / app link). Decisions T1–T11: `docs/design.md
   `unknown` / `Unavailable`, logged honestly as a Release 1 limitation). README: what Release 1 does, how to run it, limitations
   (undocumented formats, Codex waiting unsupported, app link undocumented), numbers only from these
   outputs.
-- Files: `README.md`, `docs/phase3-check.md`
-- Verify: the timings and checks above pasted in `docs/phase3-check.md`; whole-phase Verify passes.
+- Files: `README.md`, `docs/history/phase3-check.md`
+- Verify: the timings and checks above pasted in `docs/history/phase3-check.md`; whole-phase Verify passes.
 
 ### Phase 4 — Home screen cleanup (Release 1.1)
 Need: from the home screen I can tell in a few seconds which repo needs me and what is running, the way
@@ -798,8 +798,8 @@ mockup screen 6 promises. The real screen buries that (owner, 2026-10-30, after 
   at the same pinned `--now`, so before / after differ only by what changed between the two runs. Then stop
   and ask the owner to look at the real screen and confirm the need. README: update what the home screen
   shows; numbers only from these outputs.
-- Files: `README.md`, `docs/phase4-check.md`
-- Verify: outputs pasted in `docs/phase4-check.md`; whole-phase Verify passes; the owner's answer recorded.
+- Files: `README.md`, `docs/history/phase4-check.md`
+- Verify: outputs pasted in `docs/history/phase4-check.md`; whole-phase Verify passes; the owner's answer recorded.
 
 ### Phase 5 — Home redesign to the approved target (Release 1.2)
 Need (unchanged from Phase 4): from the home screen I can tell in a few seconds which repo needs me and what
@@ -863,7 +863,7 @@ target: real data, 30 Oct 16:19"), drawn only from real `overview` + `links` out
 - Verify (whole phase, 5.5 runs it): `cargo test --workspace` and clippy clean; existing JSON keys differ
   only by the added fields; the styled golden for the board-7 fixture matches the hand-drawn target from
   5.1 cell for cell (characters, fg, bg, modifiers); an HTML render of the real home screen, screenshotted,
-  next to board 7 in `docs/phase5-check.md`; the owner looks at the real screen and confirms (stop-and-ask).
+  next to board 7 in `docs/history/phase5-check.md`; the owner looks at the real screen and confirms (stop-and-ask).
 
 ### Step 5.1 — Contract and target screen (Claude)
 - Depends on: Phase 4 code (383537e).
@@ -924,13 +924,13 @@ target: real data, 30 Oct 16:19"), drawn only from real `overview` + `links` out
 - Depends on: 5.4.
 - `crates/tui/examples/home_html.rs`: renders the home buffer with colours to HTML (fixture or real `~`).
   Screenshot the real-`~` render and the phase5 fixture render in the browser pane, place them next to a
-  board 7 screenshot in `docs/phase5-check.md` (repo names only, no conversation content); note every
+  board 7 screenshot in `docs/history/phase5-check.md` (repo names only, no conversation content); note every
   difference from board 7. README home-screen section and screenshot updated from these outputs. Record the
-  owner's Phase 4 verdict in `docs/phase4-check.md`. Then stop and ask the owner to run `multi-link tui`
+  owner's Phase 4 verdict in `docs/history/phase4-check.md`. Then stop and ask the owner to run `multi-link tui`
   and confirm.
-- Files: `crates/tui/examples/home_html.rs`, `docs/phase5-check.md`, `docs/phase4-check.md`, `README.md`,
+- Files: `crates/tui/examples/home_html.rs`, `docs/history/phase5-check.md`, `docs/history/phase4-check.md`, `README.md`,
   `docs/img/**`
-- Verify: whole-phase Verify; screenshots in `docs/phase5-check.md`; the owner's answer recorded.
+- Verify: whole-phase Verify; screenshots in `docs/history/phase5-check.md`; the owner's answer recorded.
 
 ### Phase 6 — Home in words, repo swimlanes (Release 1.3)
 Need: from the home screen I can tell in a few seconds which repo needs me and what is running; from a repo
@@ -1018,7 +1018,7 @@ as images (W10).
 - Verify (whole phase, 6.5 runs it): `cargo test --workspace` and `cargo clippy --workspace --all-targets --
   -D warnings` clean; existing JSON keys equal their committed versions once the four added fields are
   removed; the phase6 fixture renders equal the hand-drawn styled goldens from 6.1 cell for cell (home and
-  repo view); fixture renders in `docs/phase6-check.md` with boards 7c/8c described (not pictured); real
+  repo view); fixture renders in `docs/history/phase6-check.md` with boards 7c/8c described (not pictured); real
   renders shown to the owner from scratch; the owner looks at the real screen and confirms (stop-and-ask).
 
 ### Step 6.1 — Contract and target screens (Claude)
@@ -1087,12 +1087,12 @@ as images (W10).
 ### Step 6.5 — Visual check and README (Claude)
 - Depends on: 6.4.
 - Extend `crates/tui/examples/home_html.rs` to render the repo view too. Real home and real repo-view renders
-  are screenshotted for the owner in scratch only (W10). `docs/phase6-check.md`: the phase6 fixture renders as
+  are screenshotted for the owner in scratch only (W10). `docs/history/phase6-check.md`: the phase6 fixture renders as
   images, boards 7c/8c described with a link to the private canvas, real-data differences in words and
-  counts. Record the owner's Phase 5 verdict in `docs/phase5-check.md`. README: home and repo-view sections,
+  counts. Record the owner's Phase 5 verdict in `docs/history/phase5-check.md`. README: home and repo-view sections,
   fixture screenshots, the W1 limitation, prompt text in JSON. Then stop and ask the owner to run
   `multi-link tui` and confirm.
-- Files: `crates/tui/examples/home_html.rs`, `docs/phase6-check.md`, `docs/phase5-check.md`, `README.md`,
+- Files: `crates/tui/examples/home_html.rs`, `docs/history/phase6-check.md`, `docs/history/phase5-check.md`, `README.md`,
   `docs/img/**`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
@@ -1151,7 +1151,7 @@ as images (W10).
 
 ### Phase 7 — Polish the Phase 6 screens (Release 1.4)
 Need: the screens the owner approved in Phase 6 say true, readable things on real data. Owner, 2026-11-02:
-"Polish leftovers first" (the four open points from `docs/phase6-check.md` that 6.6/6.7 did not fix). No new
+"Polish leftovers first" (the four open points from `docs/history/phase6-check.md` that 6.6/6.7 did not fix). No new
 screens; one additive JSON key (`last_asked`, Step 7.5); W0–W10 stay in force except where a P rule below replaces one.
 - **P1 Claude prompt after a system reminder (replaces W3's Claude rule in part).** Counted 2026-11-02 over
   181 real main transcripts: 43 have `asked` null; in 32 of them every candidate record starts with one
@@ -1226,10 +1226,10 @@ screens; one additive JSON key (`last_asked`, Step 7.5); W0–W10 stay in force 
 
 ### Step 7.4 — Real check and owner confirm (Claude)
 - Depends on: 7.3. Run the whole-phase Verify. Real renders (home at 2h and 16h, a repo view with a fold if
-  real data has one, else the fixture) shown to the owner from scratch only (W10). `docs/phase7-check.md`:
+  real data has one, else the fixture) shown to the owner from scratch only (W10). `docs/history/phase7-check.md`:
   counts before/after, what each P rule changed on screen, in words. README: the P1 prompt rule and P3 times.
   Then stop and ask the owner to run `multi-link tui` and confirm.
-- Files: `docs/phase7-check.md`, `README.md`, `PROGRESS.md`
+- Files: `docs/history/phase7-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
 ### Step 7.5 — Label quotes the latest prompt, not the first (Codex)
@@ -1591,10 +1591,10 @@ changes" line for exactly the rows U2/U5 change.
 ### Step 8.6 — Real check, README, owner confirm (Claude)
 - Depends on: 8.5.
 - Real renders of steps 6.7 (board 9's own), 6.6 (unlinked part) and one with a lost rollout, in scratch only (W10).
-  `docs/phase8-check.md`: fixture render as an image, board 9 described, differences in words and counts. README:
+  `docs/history/phase8-check.md`: fixture render as an image, board 9 described, differences in words and counts. README:
   step graph section, G3 and G6 limits, missing rollouts. Then stop and ask the owner to run `multi-link tui`, press
   `s`, and confirm the need.
-- Files: `docs/phase8-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Files: `docs/history/phase8-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 check over every committed file; the owner's answer recorded.
 
 ### Step 8.7 — TUI: 12-hour clock on screen (Codex)
@@ -1847,7 +1847,7 @@ PROGRESS, and `cargo test` compares every key; W10 scan over committed files.
   redirect rule and its path limit, and that all of it rests on undocumented formats. Then stop and ask the owner
   to re-merge the hook snippet that `multi-link hook install --scope user` prints into `~/.claude/settings.json`,
   reinstall, and confirm the need.
-- Files: `docs/phase9-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+- Files: `docs/history/phase9-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; W10 scan over every committed file; the owner's answer recorded.
 
 ### Phase 10 — Hook setup in one command (Release 1.7) — closed 2026-11-10 (owner confirmed)
@@ -2075,7 +2075,7 @@ cells (style-run splitting makes text diffs look wider); W10 scan over committed
   graph as today). Compared side by side with boards 11b, 11d, 11e. Re-shoot the repo and step images in `docs/img/` from fixtures. README: one line that
   magenta means now. Then stop and ask the owner to look at the real TUI and confirm the need.
 - Files: `README.md`, `docs/design.md` (N0–N4, L1–L7 as "Phase 11 decisions"), `docs/img/**`,
-  `docs/phase11-check.md` (the real check record, as phases 6/8/9; amended 2026-11-10), `PROGRESS.md`
+  `docs/history/phase11-check.md` (the real check record, as phases 6/8/9; amended 2026-11-10), `PROGRESS.md`
 - Verify: whole-phase Verify; the comparisons recorded in PROGRESS (what matches the board, what differs and why);
   the owner's answer recorded.
 
@@ -2084,7 +2084,7 @@ Closed 2026-11-10 (owner confirmed after Step 12.2).
 Need (design need 1: see which Codex run came from which Claude session, and how sure that is): 9 real hand-offs
 are `ambiguous` because two or more Codex runs in the same checkout started within the 60 s creation window. The
 TUI says "2 possible runs" and links nothing, though in most of them the answer is plain from the data. Owner chose
-this over the other backlog items on 2026-11-10. Phase 9's check explained the 9 (`docs/phase9-check.md`).
+this over the other backlog items on 2026-11-10. Phase 9's check explained the 9 (`docs/history/phase9-check.md`).
 Measured 2026-11-10 on real data (`links` / `sessions --since all`, release build at 04b4233; counts only):
 - 234 hand-offs: 124 heuristic, 53 exact, 48 unlinked, 9 ambiguous.
 - **Calibration on ground truth.** 29 exact launch links (child id observed, not `resume`): the true child is among
@@ -2181,7 +2181,7 @@ clean; every committed answer key equal except the values Step 12.0 lists; W10 s
   heuristic → unlinked case. Re-run the masked check on every exact launch link with the built resolver (scratch
   harness); any wrong answer stops the phase for the owner. README: the "Ambiguous links" limitation rewritten (what still stays ambiguous and why).
   Then stop and ask the owner to look at the repo view's links and confirm the need.
-- Files: `docs/phase12-check.md`, `README.md`, `PROGRESS.md`
+- Files: `docs/history/phase12-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts match K4 or each difference is explained; the owner's answer recorded.
 
 ### Phase 13 — Known folders and a key that is never lost (Release 1.10)
@@ -2288,12 +2288,12 @@ equal except 13.0's list; `python3 -I tools/resize-key-check.py target/release/m
 - Depends on: 13.1, 13.2. Real counts before/after (the 35 `cd` hand-offs by outcome, option-first resumes found), a
   masked check of `cd` links where an id was observed (if any), the resize check on the release build and a real TUI
   smoke run (PTY harness, scratch). README: remove the lost-key limitation, describe `cd` handling and its limits.
-- Files: `docs/phase13-check.md`, `README.md`, `PROGRESS.md`
+- Files: `docs/history/phase13-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts explained; the owner's answer recorded.
 
 ### Phase 14 — Live grid: what is each agent doing now? (Release 1.11)
 Closed 2026-11-11 (owner confirmed after Step 14.4; the cold first pass misses the 2 s NFR, disclosed in
-`docs/phase14-check.md`).
+`docs/history/phase14-check.md`).
 Need (owner, 2026-11-10): "see what each agent is doing right now (its last few actions, its state, how long it has
 been at it) without switching terminal tabs." Design needs 1, 2 and 5; FR12, screen 5. Home answers "which repo needs
 me"; the repo view and step graph answer "what happened". Neither shows, for every live session at once, what it is
@@ -2451,13 +2451,13 @@ equals `fixtures/expected/phase14/live.json`; the fixture render equals the 14.0
   of 10 passes), and one pass after a card's transcript grows; each ≤ 2 s;
   card counts by state and a PTY smoke run (open with `l`, move, `esc`, `--live`, resize, `q`), scratch only.
   README: the live grid section, its keys, an image from the fixture render, limits (fixed labels hide plain
-  reads; Codex part kinds only for tagged hand-offs). `docs/phase14-check.md` with counts only.
-- Files: `docs/phase14-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+  reads; Codex part kinds only for tagged hand-offs). `docs/history/phase14-check.md` with counts only.
+- Files: `docs/history/phase14-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; real counts and timing recorded; the owner's answer recorded.
 
 ### Phase 15 — A fast first load with a school of fish (Release 1.12)
 Need (owner, 2026-11-11): "when I open multi-link it should be ready fast, and while it loads it should be fun to
-look at." Design NFR "Speed": every refresh ≤ 2 s. Today the cold first pass takes 8.8–9.4 s (`docs/phase14-check.md`;
+look at." Design NFR "Speed": every refresh ≤ 2 s. Today the cold first pass takes 8.8–9.4 s (`docs/history/phase14-check.md`;
 re-measured 2026-11-11: `multi-link overview --json` real 8.79 s, user 7.10 s, sys 0.77 s) while reading every file
 with `cat` takes 0.38 s, so the wait is CPU, not disk. A 7 s `sample` of that run: 87 % in `Scanner::read_claude`,
 most of it `multi_link_claude::parse_file`, about 12 % inside `read_claude` itself (cache-value clones). The machine
@@ -2493,7 +2493,7 @@ Decisions:
   overview --json` ≤ 2.0 s wall; (b) the TUI worker's first report — `refresh_with_live` as the worker runs it,
   including the all-time pass, once without and once with `--live` — ≤ 2.0 s; (c) first home frame
   = max(first report, 1.0 s) + 0.25 s fade ≤ 2.25 s; (d) warm refresh median of 10 passes ≤ 2 s and no more than 20 %
-  above 14.4's 191–212 ms. A scratch harness (as `docs/phase14-check.md`) measures (b)–(d); the 15.0 baseline records
+  above 14.4's 191–212 ms. A scratch harness (as `docs/history/phase14-check.md`) measures (b)–(d); the 15.0 baseline records
   (a) and (b) before any change. If 15.1 misses (a) or (b), Claude stops and plans a disk cache step (15.1a) instead
   of pushing on; a disk cache is not built otherwise (invalidation and format-version risk for no gain).
 - **F4 Honest progress.** A thread-safe progress handle (atomics) created by the CLI worker and given to its
@@ -2593,8 +2593,8 @@ real cold overview ≤ 2.0 s (F3); loading goldens equal cell for cell; W10 scan
 - Depends on: 15.3. Release build on real `~`: F3 (a)–(d) (3 fresh runs; warm median of 10); a PTY smoke run
   (loading shows, the counter rises, skip, resize across 60×16 and 30×6, `q` and Ctrl-C during loading and during the
   fade restore the terminal; `--live` start).
-  README: the loading screen with an image from the fixture render, the new cold time. `docs/phase15-check.md`.
-- Files: `docs/phase15-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+  README: the loading screen with an image from the fixture render, the new cold time. `docs/history/phase15-check.md`.
+- Files: `docs/history/phase15-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; timings recorded; the owner's answer recorded.
 
 ### Phase 16 — A multi-link pane inside Claude Code (Release 1.13)
@@ -2737,14 +2737,14 @@ committed key unchanged except the new `fixtures/expected/pane/` files; `fixture
   desktop app: the pane matches board 16 C (screenshot side by side), the coordinator and a step session show under
   `working`, a Codex hand-off appears nested with the right `exact`/`likely`, NFRs measured (first data, refresh
   median, no orphan 5 s after quit). README: a "Claude Code pane" section with the screenshot and the one load
-  command. `docs/phase16-check.md`.
-- Files: `docs/phase16-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
+  command. `docs/history/phase16-check.md`.
+- Files: `docs/history/phase16-check.md`, `README.md`, `docs/img/**`, `PROGRESS.md`
 - Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
 
 ### Phase 17 — The pane shows the step, acts on rows, and says when Codex finishes (Release 1.14)
 Need (owner, 2026-11-11): "in the pane I want to see how my step is going across both tools, do something with a row,
 and know when a Codex run I handed off is done without watching for it." Backlog items "pane step strip and actions
-(board 16 B)" and "notifications", plus the owner's two Phase 16 polish notes (`docs/phase16-check.md` →
+(board 16 B)" and "notifications", plus the owner's two Phase 16 polish notes (`docs/history/phase16-check.md` →
 Observations: empty section rules stay drawn; `updated Ns ago` counts from the last printed line, up to ~30 s).
 Board 17 (claude.ai artifact P8y29q3iki7kbmCWKWytfJ, source `docs/boards/board17-pane-strip.html`): the owner picked
 **S1 · Chain** (strip), **A1 · Expand in place** (row actions) and **N2 · What it said** (notification) on 2026-11-11.
@@ -2876,8 +2876,8 @@ committed key unchanged except the pane keys' new fields (17.0) and new `fixture
   (one marker file), tick CPU measured by the NFR method. Mocked plugin tests are not the desktop check. The owner: the
   desktop app shows the strip and acts on a row, and macOS shows the notification (allowing notifications for the
   sender if macOS asks). README: the pane section updated (strip, actions, notifications and what they show).
-  `docs/phase17-check.md`.
-- Files: `docs/phase17-check.md`, `README.md`, `PROGRESS.md`
+  `docs/history/phase17-check.md`.
+- Files: `docs/history/phase17-check.md`, `README.md`, `PROGRESS.md`
 - Verify: whole-phase Verify; NFRs recorded; the owner's answer recorded.
 
 ### Phase 18 — Jump to a running terminal session's own tab (Release 1.15)
@@ -2990,9 +2990,9 @@ split inside an iTerm2 tab beyond selecting its session.
   front from another window (selected tab's tty checked by AppleScript), the TUI's Enter does the same (PTY), the
   pane's button is checked by its tests and the owner; tab-gone and inside-tmux (if tmux is ever installed; otherwise
   fixtures only) messages recorded; the Automation prompt seen once. README: the open table and the pane section;
-  iTerm2 stated untested unless it was installed. `docs/phase18-check.md`. Owner: one jump from the desktop pane to a
+  iTerm2 stated untested unless it was installed. `docs/history/phase18-check.md`. Owner: one jump from the desktop pane to a
   terminal session (stop and ask).
-- Files: `docs/phase18-check.md`, `README.md`, `PROGRESS.md`
+- Files: `docs/history/phase18-check.md`, `README.md`, `PROGRESS.md`
 - Verify (whole phase): `TZ=UTC cargo test --workspace`, clippy `-D warnings`, fmt clean; every `fixtures/expected/*/
   check.sh` exit 0; `claude plugin validate` and `claude plugin test` pass; the real-check items above recorded with
   their commands; the owner's answer recorded.
@@ -3124,11 +3124,11 @@ unsupported); the web browser app (next phase, backlog).
   (screenshot); a waiting count appears and clears; a row opens in the app or jumps to Terminal; a real `codex exec`
   hand-off with a pane also open gives one notification credited to multi-link (one marker, no `osascript` from the
   pane); quitting the app, or denying its notifications, hands them back to the pane. README: a menu-bar section
-  (build, run, permissions, rebuild re-prompts, login items), Limitations (loss window). `docs/phase19-check.md`.
+  (build, run, permissions, rebuild re-prompts, login items), Limitations (loss window). `docs/history/phase19-check.md`.
   Owner: use it for a while (stop and ask).
 - Status (2026-11-12): real check, README and docs done; **owner check pinned for later** with Phase 18's (both need
   the 1.16 binary installed). Steps in PROGRESS.md "Current state".
-- Files: `docs/phase19-check.md`, `README.md`, `PROGRESS.md`
+- Files: `docs/history/phase19-check.md`, `README.md`, `PROGRESS.md`
 - Verify (whole phase): the 19.1 Rust commands and check scripts; `swift test` in `apps/menubar`; `claude plugin
   test mod/multi-link-pane` (pane unchanged); the real-check items recorded with their commands; the owner's answer
   recorded.
@@ -3214,13 +3214,13 @@ Non-goals: a replacement step strip in the menu bar; changing the TUI; changing 
 - Depends on: 20.2. README and check-doc notes (R5). Real check after R6 (setting removed, Claude Code restarted, no
   `multi-link pane` process), with the 1.17 binary installed by the owner and the rebuilt app: one real Codex hand-off gives one notification credited to multi-link (this also closes the pinned
   Phase 19 check; the pinned Phase 18 pane check is dropped, since its button is gone and the jump was proven from the
-  CLI and TUI). `docs/phase20-check.md`. Owner confirm (stop and ask).
-- Files: `README.md`, `docs/phase16-check.md`, `docs/phase17-check.md`, `docs/phase18-check.md`,
-  `docs/phase19-check.md` (one-line notes), `docs/phase20-check.md`, `PROGRESS.md`
+  CLI and TUI). `docs/history/phase20-check.md`. Owner confirm (stop and ask).
+- Files: `README.md`, `docs/history/phase16-check.md`, `docs/history/phase17-check.md`, `docs/history/phase18-check.md`,
+  `docs/history/phase19-check.md` (one-line notes), `docs/history/phase20-check.md`, `PROGRESS.md`
 - Verify (whole phase): the 20.1 Rust commands and check scripts; `swift test`; the real-check items recorded with
   their commands; the owner's answer recorded.
 - Status (2026-11-13): done. Owner: "Yes, from multi-link" on the third real hand-off, after turning on Allow
-  Notifications for multi-link; the first two were claimed but never shown (`docs/phase20-check.md`). → Step 20.4.
+  Notifications for multi-link; the first two were claimed but never shown (`docs/history/phase20-check.md`). → Step 20.4.
 
 ### Step 20.4 — Notify only when macOS really allows it (Codex)
 - Need (seen live in 20.3): with Allow Notifications off, `alertSetting` stayed `.enabled`, so the app ran `--notify`,
@@ -3358,14 +3358,14 @@ builds; Windows/Linux; changing the menubar contract or the TUI.
 - Depends on: 21.4. README: Install becomes "download, drag, Open Anyway, Setup", with the source build below;
   Uninstall; limits (unsigned, arm64 only, hooks after a deleted app, the hook-write race). Real check: the 21.4 DMG
   downloaded through Safari (real quarantine) under a new bundle id, through every setup row, an upgrade over it
-  keeping permissions, one real login launch from "Open at login", and one real hand-off showing the notification with the new icon. `docs/phase21-check.md`.
+  keeping permissions, one real login launch from "Open at login", and one real hand-off showing the notification with the new icon. `docs/history/phase21-check.md`.
   Owner confirm; the owner publishes the release.
-- Files: `README.md`, `docs/phase21-check.md`, `PROGRESS.md`, `apps/menubar/Info.plist` (amended 2026-11-14:
+- Files: `README.md`, `docs/history/phase21-check.md`, `PROGRESS.md`, `apps/menubar/Info.plist` (amended 2026-11-14:
   release version, Review log)
 - Verify (whole phase): the Rust and Swift commands above, `release.sh`, the real-check items with their commands,
   the owner's answer recorded.
 - Status (2026-11-14): done. Owner ran the checklist with Claude (items 1–15 pass; downloads via Chrome, real
-  quarantine), recorded in `docs/phase21-check.md` "Owner answer". Phase 21 closed; publishing (item 17) is the owner's.
+  quarantine), recorded in `docs/history/phase21-check.md` "Owner answer". Phase 21 closed; publishing (item 17) is the owner's.
 
 ### Phase 22 — Release pipeline: CI, a Homebrew tap, multi-link in Terminal (Release 1.19)
 Need (owner, 2026-11-14): after Phase 21's non-goals review, "CLI on PATH from the app, homebrew cask, and CI release
@@ -3508,7 +3508,7 @@ the `setup --json` contract.
   `gh run view --log-failed` (read-only) and fixes failures in this step, with Codex reviewing Claude's edits; then
   the owner pushes again. No tag yet. Owner-only, one time: create `jar-narvz/homebrew-tap` and the `TAP_TOKEN`
   secret (copy-paste commands; the token is made in the browser), skipped on a no-go.
-- Files: `.github/workflows/**`, `tools/**`, `docs/phase22-check.md`, `PROGRESS.md`
+- Files: `.github/workflows/**`, `tools/**`, `docs/history/phase22-check.md`, `PROGRESS.md`
 - Verify: the CI run on the pushed `main` commit is green, its log shows arm64, Swift 6.2 and the five commands.
 
 ### Step 22.6 — Docs, Release 1.19, owner check (Claude)
@@ -3516,17 +3516,17 @@ the `setup --json` contract.
   first (on a go), the DMG second,
   "Use in Terminal", a CI badge, a short Releasing section (bump Info.plist, tag, check and publish the draft), Uninstall
   (`/usr/local/bin` link, brew uninstall, hooks), and limits (Open Anyway per version for brew too; an earlier `PATH`
-  entry wins; an existing DMG install and brew). Info.plist `1.19`. Owner, from `docs/phase22-check.md`: push, push
+  entry wins; an existing DMG install and brew). Info.plist `1.19`. Owner, from `docs/history/phase22-check.md`: push, push
   tag `v1.19`, check the draft (two files, sizes), publish it, see the cask land in the tap at 1.19, install with brew
   (over the current app as 22.0 found), Open Anyway, `multi-link setup` from Terminal shows the bundled path, one
   hand-off banner. Release workflow failures found here are fixed in this step (`.github/workflows/**`, `tools/**`).
-- Files: `README.md`, `apps/menubar/Info.plist`, `.github/workflows/**`, `tools/**`, `docs/phase22-check.md`,
+- Files: `README.md`, `apps/menubar/Info.plist`, `.github/workflows/**`, `tools/**`, `docs/history/phase22-check.md`,
   `PROGRESS.md`
 - Verify (whole phase): the local commands above; `gh run list` showing CI, release and cask runs green; the published
   release and the tap's cask at `1.19`; the owner's answer recorded.
 - Status (2026-11-17): done. Owner ran the checklist with Claude (items 1–9 pass: CI, release and cask runs green,
   v1.19 published, tap cask at 1.19, brew install, CLI via the brew link reports the bundled path, banner), recorded in
-  `docs/phase22-check.md` "Owner answer". Phase 22 closed; a real `brew upgrade` waits for the next release.
+  `docs/history/phase22-check.md` "Owner answer". Phase 22 closed; a real `brew upgrade` waits for the next release.
 
 ### Phase 23 — A README a newcomer understands in a minute (docs only)
 Need (owner, 2026-11-17): someone landing on the repo (a recruiter, or a developer who runs Claude Code and Codex)
@@ -3537,7 +3537,7 @@ screen, retired pane) come before Install; Install mixes Homebrew, DMG, Terminal
 hook-merge internals; the menu-bar section hard-codes `/Users/jarednarvaez/...` paths; "States and links", hook
 exit codes and a ~100-line Limitations list sit inline. Nothing is wrong, it is in the wrong order and depth.
 Non-goals: no code, test, workflow or behaviour change; no new screenshots or measurements (only existing images in
-`docs/img/`, only numbers already in the repo with their source); no change to `docs/phase*-check.md`, `PLAN.md`
+`docs/img/`, only numbers already in the repo with their source); no change to `docs/history/phase*-check.md`, `PLAN.md`
 history or `docs/design.md`; no notarization, website or GIF.
 
 ### Step 23.1 — Rewrite README.md for the big picture; move the depth to docs/ (Claude)
@@ -3572,7 +3572,7 @@ history or `docs/design.md`; no notarization, website or GIF.
   states and links; full Limitations and validation; Releasing). The retired Claude Code pane may shrink to one line
   in `docs/reference.md`. Replace `/Users/jarednarvaez/multi-link/` paths with repo-relative ones.
 - Honesty: every number left in any of the three files keeps its existing source link; no new claims. Commands must
-  match the cask and `docs/phase22-check.md` exactly.
+  match the cask and `docs/history/phase22-check.md` exactly.
 - Files: `README.md`, `docs/install.md` (new), `docs/reference.md` (new), `PROGRESS.md`
 - Verify (inline commands in the PROGRESS entry):
   - `grep -c '/Users/' README.md docs/install.md docs/reference.md` → `0` for each.
@@ -3582,7 +3582,7 @@ history or `docs/design.md`; no notarization, website or GIF.
   - Coverage: every `##`/`###` heading of `git show HEAD:README.md` appears (same or recorded new name) in one of the
     three files, except the retired-pane section, listed → prints `0 missing`.
   - `grep -n 'brew trust --cask jar-narvz/tap/multi-link\|brew install --cask jar-narvz/tap/multi-link' README.md`
-    → both present, and they match `docs/phase22-check.md` item 7.
+    → both present, and they match `docs/history/phase22-check.md` item 7.
   - No code changed: `git diff --stat` lists only the four files.
 - Review: an adversarial reader who did not write it reads only the new README as a newcomer and reports (a) what
   multi-link is in one sentence, (b) anything confusing, (c) any install step that would fail; plus Codex (or the
@@ -3673,18 +3673,18 @@ Decisions (critique below may amend):
 
 ### Step 24.4 — Release 1.20 and owner check (Claude)
 - `apps/menubar/Info.plist` both keys `1.20`; README/`docs/install.md` version mentions and the brew-upgrade limitation
-  (left as "not yet seen" until the owner's answer); `docs/phase24-check.md` with Claude's checks (all local Verify
+  (left as "not yet seen" until the owner's answer); `docs/history/phase24-check.md` with Claude's checks (all local Verify
   commands, a read-only `~/.cargo/bin/multi-link hook check` on the real settings showing `other copy` if that copy
   exists) and the owner checklist: push, CI green, tag `v1.20`, draft with 2 files, publish, tap cask at 1.20,
   `brew upgrade --cask multi-link` → no Open Anyway prompt, app opens at 1.20, setup window rows green with no stale
   line, `/opt/homebrew/bin/multi-link setup < /dev/null` → `cli: ok`, `hooks: ok`, `app: installed`, quarantine flag,
   one hand-off banner. The brew upgrade is persistence evidence only (notifications are already authorized there);
   the stale-error fix rests on 24.1's tests, recorded as such. Then README/install limitation updated from the answer.
-- Files: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/phase24-check.md`,
+- Files: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/history/phase24-check.md`,
   `PROGRESS.md`
 - Verify (whole phase): all Rust and Swift commands above; `apps/menubar/release.sh` → DMG 1.20; the owner's answer
   recorded.
-- Status (2026-11-17): done. Owner check all pass (`docs/phase24-check.md` "Owner answer"): v1.20 published, tap at
+- Status (2026-11-17): done. Owner check all pass (`docs/history/phase24-check.md` "Owner answer"): v1.20 published, tap at
   1.20, first real `brew upgrade` with no Open Anyway prompt, setup window all green, banner. Phase 24 closed.
 
 ### Phase 25 — A demo GIF at the top of the README (docs only)
@@ -3794,13 +3794,20 @@ checker in CI; no rewording of history docs.
 - Verify (on the finished working tree, before commit): `sh tools/tests/check-links.sh` → exit 0;
   `python3 -I tools/check-links.py` → exit 0; `ls docs/*.md` → exactly `design.md install.md output-schema.md
   reference.md`; `ls docs/history | wc -l` → 23; after `git add -A docs/` (only `docs/`):
-  `git diff --cached -M --name-status HEAD -- docs/ | grep -c '^R100'` → 22 and the only `A` is
-  `docs/history/README.md`; `git grep -nE 'docs/phase[0-9]' -- '*.md' ':!fixtures'` → no output (stale root paths gone).
+  `git diff --cached -M --name-status HEAD -- docs/ | grep -c '^R'` → 22 (each `docs/<name>` →
+  `docs/history/<name>`; `R100` only for files the rewrite left untouched, the rest `R9x`), the only
+  `A` is `docs/history/README.md`, and there is no `D`; `git grep -nE 'docs/phase[0-9]' -- '*.md' ':!fixtures'` → no output (stale root paths gone).
 
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · stale Notifications error, hooks owned by another copy, first real brew upgrade in Phase 24 (Release 1.20) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-26 — Step 26.3 Verify amendment: renames are not all `R100` (Claude)
+| # | Finding | Decision |
+|---|---|---|
+| 1 | Verify asked for 22 `R100` renames, but the same step makes links inside 17 moved files gain `../` (to `design.md`, `output-schema.md`, `img/`), so those can only be `R9x` once staged | Accepted. Verify counts `^R` = 22 with each file landing at `docs/history/<same name>`, the README as the only `A` and no `D`. Why: the check exists to prove the files moved with history kept, not that their bytes are untouched |
+| 2 | `phase0-deps.md` in `docs/` (merged into `phase0.md` and deleted in Step 0.6) is still named in PLAN.md, PROGRESS.md and `phase0.md`, so the final `git grep` for `docs/phase[0-9]` could never be empty | Accepted. The step's rule applies to it like any history-doc path: it becomes `docs/history/phase0-deps.md`; the surrounding text already says it was deleted |
 
 ### 2026-11-26 — Phase 26 plan critique (Codex, read-only)
 | # | Point | Decision |
@@ -4223,8 +4230,8 @@ Quota check: `primary 0%, secondary 39%, CODEX: OK`. Ten points; outcome:
     6 are `resume_turn`), marked descriptive, not an acceptance target.
 
 ### 2026-11-10 — Step 11.3 Files amendment (Claude, during the step)
-The real check needs a record like `docs/phase9-check.md` (method, frames, board comparison) that the README links
-to; `docs/phase11-check.md` added to the Files. Synthetic content only (W10): real frames are summarised, not pasted.
+The real check needs a record like `docs/history/phase9-check.md` (method, frames, board comparison) that the README links
+to; `docs/history/phase11-check.md` added to the Files. Synthetic content only (W10): real frames are summarised, not pasted.
 
 ### 2026-11-10 — Step 11.2 Files amendment (Claude, during the step, Codex loop)
 Codex stopped before writing code: `Refresh` is built with exhaustive struct initializers in TUI tests outside
@@ -4436,7 +4443,7 @@ Real data: launches 124 → 149; 2h Codex `asked` null 1 → 0; the route-impact
 
 ### 2026-11-02 — Step 6.5 review (adversarial Claude subagent, diff + Step 6.5 + W0–W10)
 The reviewer re-ran `cargo test` (35 ok) and clippy (clean), checked README claims against the code and the counts
-in docs/phase6-check.md against each other, and looked at both images (synthetic only). 0 P1, 2 P2, 5 P3; all accepted.
+in docs/history/phase6-check.md against each other, and looked at both images (synthetic only). 0 P1, 2 P2, 5 P3; all accepted.
 | # | Finding | Decision |
 | --- | --- | --- |
 | 1 | P2: example `parse_since` panics on `2ч` and on overflow, rejects `90s`, unlike the CLI it claims to follow | Accepted: the CLI's rule (ASCII digits, `s/m/h/d`, `checked_mul`, same message) |

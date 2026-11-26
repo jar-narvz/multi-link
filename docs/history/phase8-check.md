@@ -52,7 +52,7 @@ owner's check below covers them on real data.
 
 ## Fixture render
 
-![Step graph on the phase8 fixture](img/step-phase8-fixture.png)
+![Step graph on the phase8 fixture](../img/step-phase8-fixture.png)
 
 *`fixtures/sessions-phase8`, step 1.1, 120×40, UTC−8, `implement` selected. Synthetic prompts and ids.*
 
@@ -193,7 +193,7 @@ The pinned `git diff --exit-code --diff-filter=MD e5f6c78 -- fixtures/expected/`
 Step 8.4a allows: from 8.4a on, each step checked that only its own keys changed. The one-line check above repeats
 8.4b's and 8.4c's checks across the whole phase.
 
-**W10 over the files this step commits** (`docs/phase8-check.md`, `README.md`, `docs/img/step-phase8-fixture.png`,
+**W10 over the files this step commits** (`docs/history/phase8-check.md`, `README.md`, `docs/img/step-phase8-fixture.png`,
 `PROGRESS.md`): no prompt or agent message text (the real `asked`/`said` lines are described, never quoted), no
 session ids (only this repo's commit hashes and synthetic fixture ids), no `/Users/` path, no secrets. The image is
 the synthetic fixture. Board 9 and the real renders stay out of the repo.

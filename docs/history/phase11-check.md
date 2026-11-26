@@ -1,7 +1,7 @@
 # Phase 11 check: where is now?
 
 Step 11.3, 2026-11-10. Phase 11 adds a now line to the repo view (N0–N4) and live boxes to the step graph (L1–L7);
-see [design](design.md#phase-11-decisions-where-is-now-steps-111112). The target is board 11 (boards 11a–11i on the
+see [design](../design.md#phase-11-decisions-where-is-now-steps-111112). The target is board 11 (boards 11a–11i on the
 design canvas, approved by the owner on 2026-11-10).
 
 ## How the real check was run

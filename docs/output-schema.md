@@ -76,7 +76,7 @@ synthetic busy record `.claude/sessions/70001.json` (a second busy session in `/
 FR17 warning; no `hostSessionId`), which adds one row to every sessions key.
 
 Transcript formats are undocumented. Every field path below was observed in the Phase 0 fixtures
-(`docs/phase0.md`), not in any spec.
+(`docs/history/phase0.md`), not in any spec.
 
 ## Common rules
 
@@ -497,7 +497,7 @@ Steps never come from session prompts in Phase 1 (see Segments), so `steps` list
 
 Phase 2's optional Claude Code hook (design H1–H11) writes these files; `sessions` and `links` read them.
 They are multi-link's own format, so unlike transcripts this section is a spec, not an observation. The
-payload fields the hook reads are the ones Step 2.1 saw on real payloads (`docs/phase2-hook.md`).
+payload fields the hook reads are the ones Step 2.1 saw on real payloads (`docs/history/phase2-hook.md`).
 
 ### File layout
 - One file per Claude session: `<state>/hook/<session_id>.jsonl` (H10). `<state>` is `$MULTI_LINK_HOME`

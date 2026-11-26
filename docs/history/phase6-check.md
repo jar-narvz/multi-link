@@ -49,11 +49,11 @@ to check the real screen (see [Owner check](#owner-check-stop-and-ask--met)).
 
 **Home, `fixtures/sessions-phase6`, 120×40, UTC−8, nothing selected**
 
-![Home on the phase6 fixture](img/home-phase6-fixture.png)
+![Home on the phase6 fixture](../img/home-phase6-fixture.png)
 
 **Repo view on `repo-r`, same fixture, parent lane selected**
 
-![Repo view on the phase6 fixture](img/repo-phase6-fixture.png)
+![Repo view on the phase6 fixture](../img/repo-phase6-fixture.png)
 
 ## The boards, in words
 

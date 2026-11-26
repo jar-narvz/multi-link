@@ -1,8 +1,8 @@
 # Phase 12 check: settle ambiguous links with evidence
 
 Step 12.2, 2026-11-10. Phase 12 adds a nearest-run rule for launch hand-offs (K0–K4); see
-[design](design.md#phase-12-decisions-settle-ambiguous-links-with-evidence-step-120) and
-[output schema](output-schema.md) (Heuristic → Phase 12). Nothing real is committed (W10): the exports, ids and paths
+[design](../design.md#phase-12-decisions-settle-ambiguous-links-with-evidence-step-120) and
+[output schema](../output-schema.md) (Heuristic → Phase 12). Nothing real is committed (W10): the exports, ids and paths
 stayed in scratch storage; this page gives counts and gaps only.
 
 ## Before and after on real data

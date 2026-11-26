@@ -3,7 +3,7 @@
 Step 15.4, 2026-11-11. Phase 15 makes the cold first load fast (the transcript parse runs on every core, F1) and shows
 a loading screen while it runs: board 15 option E, two schools of ASCII fish in Claude orange and Codex blue, with a
 progress bar and a real file counter (F4–F8); see
-[design](design.md) → "Phase 15 decisions". The render answer keys are `fixtures/expected/tui/loading-*`.
+[design](../design.md) → "Phase 15 decisions". The render answer keys are `fixtures/expected/tui/loading-*`.
 
 ## How the real check was run
 

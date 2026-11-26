@@ -4,7 +4,7 @@
 
 Step 16.4, 2026-11-11. Phase 16 adds `multi-link pane --json [--watch]` (`crates/cli/src/pane.rs`) and a Claude Code
 mod that draws its output beside the chat (`mod/multi-link-pane/`). The target look is board 16 option C, picked by the
-owner; see [design](design.md) → "Phase 16 decisions". The answer keys are `fixtures/expected/pane/*.json`.
+owner; see [design](../design.md) → "Phase 16 decisions". The answer keys are `fixtures/expected/pane/*.json`.
 
 ## How the real check was run
 

@@ -6,7 +6,7 @@ Step 18.4, 2026-11-12. Phase 18 makes `multi-link open` bring a running Claude s
 tab to the front, instead of saying `unavailable` and printing a `claude --resume` that would start a second copy. The
 same rule runs from the CLI, the TUI (`o`) and the Claude Code pane (`Jump to terminal`). The target look is board 18
 (`docs/boards/board18-terminal-jump.html`), option J1 Jump straight, picked by the owner. See
-[design](design.md) → "Phase 18 decisions".
+[design](../design.md) → "Phase 18 decisions".
 
 ## How the real check was run
 

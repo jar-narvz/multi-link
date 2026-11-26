@@ -1,7 +1,7 @@
 # Phase 0 — hand-offs, state signals and dependencies
 
 Questions (a) and (b) come from Step 0.2 (Codex, reviewed by Claude); (c) and (d) from Step 0.3
-(merged here from `docs/phase0-deps.md` in Step 0.6). How each result changed the design:
+(merged here from `docs/history/phase0-deps.md` in Step 0.6). How each result changed the design:
 `docs/design.md` → "Phase 0 results".
 
 | Question | Result | One-line reason |

@@ -162,7 +162,7 @@ Checks: the phase6 overview and the phase8 and phase9 graph reports equal their 
 text of the home, repo and phase8 step HTML equals `home-phase6.txt`, `repo-phase6.txt` and `step-phase8.txt`
 line for line (40 of 40 lines each). The phase9 render has no text golden; its report is the 9.6 key `graph-2.1.json`.
 
-![Step graph on the phase9 fixture](img/step-phase9-fixture.png)
+![Step graph on the phase9 fixture](../img/step-phase9-fixture.png)
 
 *`fixtures/sessions-phase9`, repo `repo-p9r`, step 2.1, UTC, `fix round 1` selected: implement, review, fix 1,
 review, fix 2 from one Codex run resumed with `--last`. Synthetic prompts and ids.*
@@ -189,7 +189,7 @@ cargo test compares every key                          → included in the 580
 W10 scan over committed files                          → see below
 ```
 
-**W10 over the files this step commits** (`docs/phase9-check.md`, `README.md`, the four `docs/img/` PNGs,
+**W10 over the files this step commits** (`docs/history/phase9-check.md`, `README.md`, the four `docs/img/` PNGs,
 `PROGRESS.md`): no prompt or agent message text, no real session or run ids (only this repo's commit hashes and
 synthetic fixture ids), no `/Users/` path, no secrets. All images are synthetic fixtures. Real renders, JSON and the
 count scripts stay in scratch.

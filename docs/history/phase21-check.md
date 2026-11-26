@@ -1,7 +1,7 @@
 # Phase 21 check: one download, one setup window, a logo
 
 Step 21.5, 2026-11-14. Phase 21 ships multi-link as `multi-link-1.18-arm64.dmg` (Release 1.18): the menu-bar app
-with the CLI inside it, a setup window and icon C. See [design](design.md) → "Phase 21 decisions" and PLAN.md
+with the CLI inside it, a setup window and icon C. See [design](../design.md) → "Phase 21 decisions" and PLAN.md
 Phase 21 (E1–E7). This file has two parts: what Claude checked on this Mac without the owner, and the owner checklist
 for the parts that need the owner's password, clicks in System Settings, or a log out.
 

@@ -2,7 +2,7 @@
 
 Step 20.3, 2026-11-12 to 2026-11-13. Phase 20 removes the Claude Code pane and `multi-link pane` (Release 1.17). The
 menu-bar app (Phase 19) is now the only thing that shows sessions outside the terminal and the only notifier.
-See [design](design.md) → "Phase 20 decisions" and PLAN.md Phase 20 (R1–R6).
+See [design](../design.md) → "Phase 20 decisions" and PLAN.md Phase 20 (R1–R6).
 
 ## How the real check was run
 
@@ -51,4 +51,4 @@ require `authorizationStatus == .authorized` too, so a watcher that cannot reall
 
 Done (2026-11-13): after Allow Notifications was turned on, a real Codex hand-off showed a banner credited to
 multi-link. The pinned Phase 18 pane check is dropped: its button is gone, and the jump was proven from the CLI and
-the TUI (`docs/phase18-check.md`).
+the TUI (`docs/history/phase18-check.md`).

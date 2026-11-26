@@ -1,21 +1,23 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 26: Step 26.2 is done (Codex, reviewed by Claude, 2026-11-26): `multi-link --version` / `-V` print
-`multi-link 1.20.0`.** Next: Step 26.3 (Claude, history docs to `docs/history/` + `tools/check-links.py`). What 26.3
-needs: `docs/reference.md` changed in 26.2 (Run gains a `--version` line; Releasing step 1 now bumps the plist *and*
-root `Cargo.toml`); its existing links to `phaseN-check.md` files are 26.3's to repoint. `](LICENSE)` in README must
-stay valid. Workspace version `1.20.0`, `license = "MIT"` inherited by all eight crates; test
-`plist_version_matches_cargo` (in `crates/cli/src/main.rs`) fails if `apps/menubar/Info.plist` and Cargo drift, so the
-next release bumps both. Rust: 763 passed, 1 ignored; Swift: 48 pass.
-After the owner pushes, check `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit` and record it.
-Steps share files, so run them in order, not in parallel.
+**Phase 26 is done (2026-11-26): MIT license, `multi-link --version`, and `docs/` shows only the 4 user docs.**
+Next: the backlog in PLAN.md (notarized download if the owner enrolls, web browser app, tmux / Herdr panes); nothing
+is planned, the owner picks. What the next phase needs to know:
+- Build-history docs (Phase 0 findings, Phase 2 hook notes, every `phaseN-check.md`) live in `docs/history/`, listed
+  in `docs/history/README.md`. A new phase's owner check goes there too (`docs/history/phaseN-check.md`), linked from
+  `docs/reference.md` as `history/phaseN-check.md` and from inside history files to user docs as `../design.md`.
+- `python3 -I tools/check-links.py` checks every relative Markdown link and image in the repo (137 ok today; not in
+  CI, by Phase 26's non-goal); its tests are `sh tools/tests/check-links.sh`. Known limits are in its docstring.
+- Workspace version `1.20.0` mirrors `apps/menubar/Info.plist`; `plist_version_matches_cargo` fails CI if a release
+  bumps one and not the other. Rust: 763 passed, 1 ignored; Swift: 48 pass (Step 26.2).
+- After the owner pushes, check `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit` and record it.
 
 **Phase 25 is done (2026-11-26): the README banner is now a demo GIF** (`docs/img/demo-phase14-fixture.gif`, recorded
 by `vhs tools/demo.tape` from `fixtures/sessions-phase14`). To re-record after a UI change: `cargo build --release -p
 multi-link && vhs tools/demo.tape`. The tape pins `TZ=America/Los_Angeles`. Backlog unchanged; the owner picks next.
 
-**Phase 24 is closed (2026-11-17): Release 1.20 is published; owner check all pass** (`docs/phase24-check.md` →
+**Phase 24 is closed (2026-11-17): Release 1.20 is published; owner check all pass** (`docs/history/phase24-check.md` →
 "Owner answer"). The owner now runs 1.20 from Homebrew. What the next phase needs to know:
 - The first real `brew upgrade` (1.19 → 1.20) kept the Open Anyway approval: no prompt, quarantine `03c1;…`.
 - Hooks owned by another existing copy read `other copy` (exit 0, no fix); `--take-over` moves them; the app's Turn on
@@ -35,7 +37,7 @@ Next: Step 24.4 (Release 1.20, Claude).** What 24.4 needs:
   `CLAUDE_CONFIG_DIR`, hooks pointed at a temp executable named `multi-link`): `setup --json` → hooks `ok`, owners
   [temp path], all events `other copy`; `hook apply --take-over` → exit 0, backup made; `setup --json` → `ok`, `[]`.
 - `./build.sh` passes outside Codex's sandbox (its sandbox fails at `iconutil`). `SetupRenderer.swift` has no
-  owners screen; add one in 24.4 only if `docs/phase24-check.md` needs a picture (it is not in 24.4's Files).
+  owners screen; add one in 24.4 only if `docs/history/phase24-check.md` needs a picture (it is not in 24.4's Files).
 - 24.4's owner check can expect: after `brew upgrade`, the app's setup window shows hooks green (the brew app owns
   its own hooks); if a `~/.cargo/bin/multi-link` once took them, the window shows the amber line and Turn on fixes it.
 
@@ -79,12 +81,12 @@ What a later step needs to know:
   keys, full limitations, releasing). Old headings kept their names there, so old `README.md#…` anchors now live in one
   of the two docs.
 - A future README edit should keep: every number with its source link, the brew commands equal to the cask and
-  `docs/phase22-check.md` item 7, and no `/Users/` paths. The one-off link and coverage checks are pasted in the 23.1
+  `docs/history/phase22-check.md` item 7, and no `/Users/` paths. The one-off link and coverage checks are pasted in the 23.1
   log entry.
 - Next release: update the "brew upgrade not seen yet" limit in README and `docs/reference.md` once it is checked.
 
 **Phase 22 is closed (2026-11-17): Release 1.19 is published and installable with Homebrew.** Owner check all pass
-(`docs/phase22-check.md` → "Owner answer"). What the next phase needs to know:
+(`docs/history/phase22-check.md` → "Owner answer"). What the next phase needs to know:
 - Release flow works end to end: bump both `apps/menubar/Info.plist` keys, push `main`, wait for CI, push tag `vX.Y`,
   check the draft (2 files), publish it in the browser (a publish by `GITHUB_TOKEN` would not start `cask.yml`), and
   `cask.yml` writes the tap's `Casks/multi-link.rb` in about 15 s.
@@ -222,7 +224,7 @@ bundled CLI; Open at login is on.
 one DMG (`apps/menubar/build/multi-link-1.18-arm64.dmg`, 2,900,741 bytes, git-ignored) with the CLI inside, a
 two-row setup window, "Open at login" and icon C. README Install is "download, drag, Open Anyway, Setup", with the
 source build, Uninstall and the download limits.
-- **Owner check pending:** the numbered checklist in `docs/phase21-check.md` → "Owner checklist" (Safari download
+- **Owner check pending:** the numbered checklist in `docs/history/phase21-check.md` → "Owner checklist" (Safari download
   of a never-seen-id build, Open Anyway, every setup row, a hand-off banner with icon C, an upgrade keeping
   permissions, one login launch, switching to the real 1.18 app, publishing). Phase 21 closes when the owner's answer
   is recorded there ("Owner answer") and here. Publishing (push + `gh release create v1.18`) is the owner's.
@@ -254,7 +256,7 @@ source build, Uninstall and the download limits.
 **Phase 20 is done (Claude, 2026-11-13).** The pane and `multi-link pane`
 are gone (Release 1.17); the menu-bar app is the only notifier and holds `~/.multi-link/menubar.lock` as a
 single-instance guard.
-- Owner check done: a real hand-off showed a banner credited to multi-link (`docs/phase20-check.md`), closing the
+- Owner check done: a real hand-off showed a banner credited to multi-link (`docs/history/phase20-check.md`), closing the
   pinned Phase 19 check. The pinned Phase 18 pane check is dropped.
 - Step 20.4: "can deliver" now requires `authorizationStatus == .authorized` and `alertSetting == .enabled`.
   Regression coverage checks every other status and authorized-without-alerts, including watcher arguments;
@@ -271,7 +273,7 @@ single-instance guard.
 (`apps/menubar/`, built by `build.sh`) shows every repo's sessions (board 19 P2 + I1) from `multi-link menubar --watch`.
 - Checked live: the popover matches the board (owner); the icon showed only after the owner freed two menu-bar items
   (notch); one real hand-off made one notification, but from Script Editor, because the pane's 1.14 watcher has no
-  lock check (`docs/phase19-check.md`).
+  lock check (`docs/history/phase19-check.md`).
 - **Pinned owner check (shared with Phase 18):** `cargo install --path /Users/jarednarvaez/multi-link/crates/cli
   --locked`, restart Claude Code, then (a) Phase 18's `Jump to terminal` from the pane and (b) one Codex hand-off with
   the menu-bar app open: the notification should come from multi-link. If (b) shows nothing, require
@@ -284,7 +286,7 @@ single-instance guard.
 and the pane's `Jump to terminal` bring a running Claude session's Terminal.app / iTerm2 tab to the front (board 18 J1).
 - Checked live with Terminal.app: the CLI and the TUI `o` jumped to the right tab from another front window; the real
   script answers `not found` for a missing tab. iTerm2, tmux, other terminals, a denied Automation prompt (-1743) and a
-  real tab-gone process are covered by fixtures and tests only (`docs/phase18-check.md`, README Limitations).
+  real tab-gone process are covered by fixtures and tests only (`docs/history/phase18-check.md`, README Limitations).
 - A Claude session never sent a prompt has no transcript, so no list (TUI, pane) shows it, though `open <id>` resolves it.
 - **Pinned (owner, 2026-11-12): the owner check is deferred; the owner tests it later.** Steps: run `cargo install
   --path /Users/jarednarvaez/multi-link/crates/cli --locked`, restart the app, open a session in
@@ -298,7 +300,7 @@ Script Editor allowed once for `osascript` notifications (README). Nothing is pl
 
 **Phase 16 is closed (2026-11-11): owner confirmed the Claude Code pane ("Looks good").** `multi-link pane --json
 [--watch]` and the mod in `mod/multi-link-pane/` are committed; checked in the terminal and in the desktop app
-(`docs/phase16-check.md`). The owner's `~/.claude/settings.json` sets `CLAUDE_CODE_PLUGIN_DIRS` to the mod folder, so
+(`docs/history/phase16-check.md`). The owner's `~/.claude/settings.json` sets `CLAUDE_CODE_PLUGIN_DIRS` to the mod folder, so
 every Claude Code session on this machine loads the pane. **Next:** the backlog (PLAN.md): tmux / Herdr jump
 (optional), desktop app with notifications, pane step strip and actions (board 16 B). Owner's polish notes, not
 asked for yet: empty section rules stay drawn; `updated Ns ago` counts from the last printed line.
@@ -330,7 +332,7 @@ median **1.16 s**; (b) worker first report **1525 ms** without `--live`, **1613 
 the real TUI (PTY) **1.952 s** (`--live` 1.969 s); (d) warm **130 / 194 ms**. Under load 12–17 one `--live` first report
 took 2212 ms (median 1853 ms). PTY smoke 14/14 ok (resize 60×16 / 30×6, skip, `--live`, `q` and Ctrl-C during
 loading and the fade restore the terminal). README has a "Loading screen" section with
-`docs/img/loading-phase15-fixture.png`; details in `docs/phase15-check.md`. **Next:** the backlog (PLAN.md). Scratch tools (not in the repo): PTY harness with a draining reader thread and screen model, and
+`docs/img/loading-phase15-fixture.png`; details in `docs/history/phase15-check.md`. **Next:** the backlog (PLAN.md). Scratch tools (not in the repo): PTY harness with a draining reader thread and screen model, and
 the (b)/(d) timing crate, in this step's session scratchpad.
 
 Step 15.2 is committed: `multi_link_tui::{render_loading, LoadingOptions, LoadPhase, Fade}` is the pure renderer;
@@ -369,22 +371,22 @@ amended in review to prefetch Claude desktop-app records too (Review log). No di
 **Phase 14 is closed (2026-11-11): Step 14.4 is committed and the owner confirmed it ("look good").** The live grid
 (`l` from home or the repo view, `multi-link tui --live`) shows a card per working, waiting or stale session with its
 last prompt, state, counts and last 3 notable calls, a Claude card paired with its live Codex card, and a hand-off feed;
-data from `core::live` / `multi-link live`. Real check in `docs/phase14-check.md`: warm refresh ~0.2 s; **cold first
+data from `core::live` / `multi-link live`. Real check in `docs/history/phase14-check.md`: warm refresh ~0.2 s; **cold first
 pass 9.2–9.4 s, over the 2 s NFR**, almost all the overview's first parse (predates Phase 14). Next is the backlog
 (PLAN.md); a faster first load is a candidate. The owner pushes `main`.
 
 **Phase 13 is closed (2026-11-10): Step 13.3 is committed and the owner confirmed it ("Looks good").** C1 resolves a
 literal `cd` into Link `launch_dir` (omitted when equal to `checkout`); C3 reads option-first explicit resume ids; D1
-reads keys with crossterm `use-dev-tty`. Real check in `docs/phase13-check.md`: unlinked 49 → 12, ambiguous 1 → 0,
+reads keys with crossterm `use-dev-tty`. Real check in `docs/history/phase13-check.md`: unlinked 49 → 12, ambiguous 1 → 0,
 masked 0 wrong, resize check 5/5. Next is the backlog (PLAN.md). The owner pushes `main`.
 
 **Phase 12 is closed (2026-11-10): Step 12.2 is committed and the owner confirmed it ("Looks good").** Launch
 hand-offs with several runs in the window get the nearest run when the evidence is clear (K1–K3, `nearest_run`,
-never exact); real check in `docs/phase12-check.md`. Next is the backlog (PLAN.md).
+never exact); real check in `docs/history/phase12-check.md`. Next is the backlog (PLAN.md).
 
 **Phase 11 is closed (2026-11-10): Step 11.3 is committed and the owner confirmed it ("Looks good").** The repo view
 draws the now line; the step graph marks live parts (L1, computed by the CLI worker). Real check in
-`docs/phase11-check.md`. Next is the backlog (PLAN.md): `cd`-then-`resume --last`, ambiguous tie-break, lost key on
+`docs/history/phase11-check.md`. Next is the backlog (PLAN.md): `cd`-then-`resume --last`, ambiguous tie-break, lost key on
 resize, live grid. The owner pushes `main`.
 
 **Step 11.2 is committed (2026-11-10, Codex loop): step graph live box. Step 11.3 (real check, images, README, owner
@@ -427,7 +429,7 @@ Owner-facing manual steps must be one ready-to-run command, never hand-edited JS
 `SessionEnd` to `~/.claude/settings.json`.
 
 **Step 9.7 (2026-11-08, Claude step, no Codex) is committed: Phase 9 real check, README, re-shot images. Phase 9 waited
-on the owner's check (done 2026-11-09, above)** (stop-and-ask in `docs/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
+on the owner's check (done 2026-11-09, above)** (stop-and-ask in `docs/history/phase9-check.md`): reinstall, re-merge the hook snippet with `SessionEnd`,
 confirm the need. Real counts at one clock (`--now 2026-11-09T00:34:07Z`, 6a2c306 → HEAD): Codex sessions 223 → 425;
 Claude `unknown` 232 → 3, `finished` 0 → 229 (all `transcript_exit`; `session_end` 0 until the snippet is merged);
 unlinked hand-offs 124 → 47 of 222 → 221; exact 28 → 44; ambiguous 1 → 9 (all 8 new from `.zst` runs on 2026-10-30,
@@ -589,7 +591,7 @@ later steps pin them there. Wider labels drop some axis ticks under P4 and cut t
 **Step 8.6 (2026-11-08). Step 8.6 is committed; the owner check it asked for is now done (Phase 8 closed, above).** 8.6 ran in
 the main checkout as a Claude step (no Codex, no worktree). The owner must reinstall (`cargo install --path crates/cli
 --force`; the installed binary predates the graph), run `multi-link tui`, press `s` on a repo-view lane and confirm
-the step graph meets need 4. Record the answer in `docs/phase8-check.md` → "Owner check" and here. A "no" with notes
+the step graph meets need 4. Record the answer in `docs/history/phase8-check.md` → "Owner check" and here. A "no" with notes
 becomes amendment steps, as 8.4a–c were.
 - **Finding for the next planner (not fixed, Phase 8 non-goal):** most "lost" Codex rollouts look compressed, not deleted.
   `~/.codex/sessions` held 202 `rollout-*.jsonl.zst` (folders 2026-10-16 to 10-30) next to 211 plain `.jsonl` on
@@ -598,7 +600,7 @@ becomes amendment steps, as 8.4a–c were.
   backlog step. PLAN.md's "Codex rollouts disappear" line is out of date.
 - Also seen: a `codex exec resume --last` fix hand-off is unlinked and its turn lands in the resumed run's part (step
   6.6), while the panel says `(the rollout may be gone)`; candidate wording/link fix for a later step.
-- Real step 6.7 matches board 9's layout; differences (G5/G6 counts, W5 minutes, wording) are in `docs/phase8-check.md`.
+- Real step 6.7 matches board 9's layout; differences (G5/G6 counts, W5 minutes, wording) are in `docs/history/phase8-check.md`.
 
 **Step 8.5 (2026-11-08).** **Step 8.5 is committed (Claude-only mode, merged ff-only into `main`; branch
 `step/8.5` and worktree `.claude/worktrees/step-8.5` left in place); Step 8.6 closes Phase 8.** Run
@@ -784,7 +786,7 @@ rose 32 → 108; cause not investigated. Phase 8 is the number: the planning ses
 
 **Earlier (2026-11-06).** **Phase 7 is closed: the need is met.** The owner saw real renders of home
 at 2h and 16h and the repo view at 4d and answered "Yes, close Phase 7". Verdict recorded in
-`docs/phase7-check.md`. Phase 7 commits: ed043e0 (plan) through 9d58365 (7.5), all local; the owner pushes. No
+`docs/history/phase7-check.md`. Phase 7 commits: ed043e0 (plan) through 9d58365 (7.5), all local; the owner pushes. No
 next phase is planned. Board 9 (step graph target, mockup canvas) was reported as waiting on the owner's approval
 in the plan-step-graph session; nothing from it is in PLAN.md, and if approved it becomes Phase 8 (that session
 calls it Phase 7, a number now taken).
@@ -792,19 +794,19 @@ calls it Phase 7, a number now taken).
 **Resume here (2026-11-03, latest): Step 7.5 is committed; Phase 7 is still NOT closed.** It waits on the
 owner's stop-and-ask, which now covers Steps 7.1–7.5: the owner runs `target/release/multi-link tui` (and
 `--since 16h`) and confirms, including that labels now quote each session's latest prompt. The coordinator
-records the answer in `docs/phase7-check.md` → "Owner check" and here. What 7.5 changed:
+records the answer in `docs/history/phase7-check.md` → "Owner check" and here. What 7.5 changed:
 - Session/SessionRow carry additive `last_asked` (P5); `asked` is unchanged. Labels: latest step › `last_asked`
   › `asked` › `· no prompt`. The selected line and `o` are unchanged.
 - Real counts (counts only): Claude 186 sessions, `asked` null 11, `last_asked` null 14 (3 extra: only `isMeta`
   eligible text, so they fall back to `asked`), 89 differ; Codex 295, both null 154, 6 differ.
 - 276 tests pass, clippy clean, the four 6.1 goldens unchanged vs 26af6f2, JSON equals 081cdcc minus `last_asked`.
-- `docs/phase7-check.md` does not mention P5 yet (7.4 wrote it before 7.5); add a line when recording the answer.
+- `docs/history/phase7-check.md` does not mention P5 yet (7.4 wrote it before 7.5); add a line when recording the answer.
 
 **Before Step 7.5:**
 **Resume here (2026-11-02, latest): Step 7.4 is committed except its last Verify item (the owner's answer);
 Phase 7 is NOT closed.** It waits on the owner's
 stop-and-ask: the owner runs `target/release/multi-link tui` (and `--since 16h`) and confirms the Phase 7 need.
-The coordinator records the answer in `docs/phase7-check.md` → "Owner check" and here. What 7.4 found:
+The coordinator records the answer in `docs/history/phase7-check.md` → "Owner check" and here. What 7.4 found:
 - Whole-phase Verify passes; real Claude count `[185,11]` (baseline `[181,43]`); the 11 are the plan's non-goal.
 - Real 16 h multi-link repo view: three folds all show their length (`1h05`, `54m`, `2h56`) beside `21:19 now`.
   The two adjacent folds read `54m 2h56`; left as is (possible owner point).
@@ -826,7 +828,7 @@ check and owner confirm; ends with a stop-and-ask). What 7.4 needs:
 **Before Phase 7:**
 **Resume here (2026-11-02, latest).** **Phase 6 is closed: the need is met.** The owner checked the real
 screen and approved it with one change (Step 6.6 linked launches in subshells / after heredocs and fixed Codex
-prompt labels; Step 6.7 added the `✓ done` label). Verdict recorded in `docs/phase6-check.md`. Phase 6 commits:
+prompt labels; Step 6.7 added the `✓ done` label). Verdict recorded in `docs/history/phase6-check.md`. Phase 6 commits:
 d4d862a (plan) through 0190090 (6.7), all local; the owner pushes. No next phase is planned; candidates are in
 PLAN.md's Backlog (hook install for needs-you, step graph from board 3, live grid).
 
@@ -852,8 +854,8 @@ the owner's verdict).
 **Earlier (before Step 6.6):**
 **Step 6.5 is committed; Phase 6 is NOT closed.** It waits on the owner's
 stop-and-ask: the owner looks at the real screen (`target/release/multi-link tui`, and `--since 16h` for last night's
-runs) and confirms. Record the answer in `docs/phase6-check.md` → "Owner check" and here. Real renders were shown from
-scratch only (W10). Open points found on real data (docs/phase6-check.md, "Differences from the boards"), each a
+runs) and confirms. Record the answer in `docs/history/phase6-check.md` → "Owner check" and here. Real renders were shown from
+scratch only (W10). Open points found on real data (docs/history/phase6-check.md, "Differences from the boards"), each a
 candidate follow-up step, not fixed in 6.5 (outside its files):
 - Codex `asked` is null on every real run: 2026-11-02 `codex exec` rollouts have no `user_message`; the prompt is in a
   `response_item` `message` with role `user` (crates/codex parser, W3). Lanes read `codex codex · no prompt`.
@@ -930,7 +932,7 @@ stop-and-ask to the owner). What 6.5 needs:
 
 **Earlier (2026-11-01).** The owner ran Phase 5 on the real screen: the bars on home and the
 timeline screen are "really hard to read … random blocks and timestamps on top". Phase 5 closes as not
-meeting the need for its bars (6.5 records this in `docs/phase5-check.md`). The owner approved **board 7c**
+meeting the need for its bars (6.5 records this in `docs/history/phase5-check.md`). The owner approved **board 7c**
 (home in words, no timeline) and **board 8c** (repo view: board 2's swimlanes on real data) on the mockup
 canvas. **Phase 6 is planned** in PLAN.md (W0–W10, Steps 6.1–6.5; Codex critique logged, 10/10 accepted).
 Next: Step 6.1, then 6.2 → 6.5 in order; 6.5 ends with a stop-and-ask. Facts measured 2026-11-01 for 6.1/6.2:
@@ -946,10 +948,10 @@ screen still hard to read, nothing like the mockup, so Phase 4 closes as not mee
 5.2 is committed** (Claude-reviewed, 0 fix rounds). **5.3 is committed** (Claude-reviewed, 0 fix rounds).
 **5.4 is committed** (Claude-reviewed, 1 Codex fix round: narrow-width truncation). **5.5 is committed
 but Phase 5 is NOT closed: waiting on the owner.** Next: the owner runs `target/release/multi-link tui` on
-the real screen and says whether the need is met; Claude records the answer in `docs/phase5-check.md`
+the real screen and says whether the need is met; Claude records the answer in `docs/history/phase5-check.md`
 ("Owner check") and here. If not met, the owner's notes become new Phase 5 steps. The older notes below are history.
 
-- **What the owner check / any follow-up step needs from 5.5:** `docs/phase5-check.md` has the real-`~`,
+- **What the owner check / any follow-up step needs from 5.5:** `docs/history/phase5-check.md` has the real-`~`,
   fixture and board 7 images (`docs/img/`) and 18 numbered differences. Found issues for a possible next
   step (none fixed in 5.5, which may not touch `home.rs`): (1) in a terminal the lane tracks touch, so a
   card's bar area reads as one dark slab, unlike board 7's separated lanes — the biggest visual gap;
@@ -1007,9 +1009,9 @@ home screen far noisier than mockup screen 6. **4.1 and 4.2 are committed** (coo
 **4.5 is committed** (Claude-reviewed, 0 fix rounds; Claude re-ran `cargo test --workspace` → 29
 `test result: ok`, 0 failed; clippy `-D warnings` clean).
 **4.6 is committed but Phase 4 is NOT closed: waiting on the owner.** Real-`~` before/after is in
-`docs/phase4-check.md` (home non-blank rows 28 → 15 default, 246 → 30 `--since all`; multi-link links at one
+`docs/history/phase4-check.md` (home non-blank rows 28 → 15 default, 246 → 30 `--since all`; multi-link links at one
 pinned time 48 → 12 unlinked). Next: the owner runs `target/release/multi-link tui` (and `--since all`), says
-whether the need is met, and Claude records the answer in `docs/phase4-check.md` ("Owner check") and here.
+whether the need is met, and Claude records the answer in `docs/history/phase4-check.md` ("Owner check") and here.
 If not met, the owner's notes become new Phase 4 steps. Open trade-off: collapsed repos hide their latest
 hand-off line. Codex-off mode is off.
 Claude's host checks confirm warm timing with changed files, draining resize, Ctrl-C,
@@ -1017,7 +1019,7 @@ stub/missing-program child handling and terminal restoration. The child checks u
 record in a scratch HOME because real `~` had 0 finished sessions. The crossterm 0.29 lost-key
 item remains backlog: a key arriving with resize can be delayed until the next key. A cleanly
 exited terminal Claude session deletes its record, leaving `unknown` / `Unavailable` with a
-resume command; Resume requires a record that outlives the process. See `docs/phase3-check.md`.
+resume command; Resume requires a record that outlives the process. See `docs/history/phase3-check.md`.
 Codex-off mode is off: Codex implements, Claude plans and reviews.
 
 - **What 4.6 needs from 4.5:** home lanes (top-level and child session rows) end in a fixed bar column on the
@@ -1105,6 +1107,78 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-26 — Step 26.3: Move build-history docs to docs/history/ — Claude
+- Did: wrote `tools/tests/check-links.sh` first (RED: `FAIL: tools/check-links.py is missing`, exit 1), then
+  `tools/check-links.py`. Baseline on the unchanged tree: `check-links: 109 links ok`, exit 0 (no old breaks, so no
+  Files amendment). `git mv` of the 22 history files into `docs/history/` (names kept), then a script rewrote Markdown
+  destinations only (outside code): user docs `phaseN-check.md` → `history/phaseN-check.md`; inside moved files,
+  links to `design.md`, `output-schema.md` and `img/` gained `../`, links between history files stayed bare. Repo-root
+  path strings `docs/<history name>` became `docs/history/<name>` in PLAN.md, PROGRESS.md, the user docs and the
+  moved files (link text that spelled the old path included); `fixtures/…` and other root paths untouched.
+  Added `docs/history/README.md` (one paragraph + the 22 files in phase order). README.md, AGENTS.md and CLAUDE.md
+  held no such references and are unchanged. Link count 109 → 137 (the 28 links of the new README).
+- Changed: `docs/history/*` (22 moved + `README.md`), `docs/{design,install,output-schema,reference}.md`, `PLAN.md`,
+  `PROGRESS.md`, `tools/check-links.py`, `tools/tests/check-links.sh`.
+- Verify: mode check `python3 -I tools/codex-quota.py` → `primary: 9% …`, `secondary: 2% …`, `CODEX: OK` (exit 0),
+  so the review went to Codex. Verify run on the finished tree before commit (verbatim):
+  ```text
+$ sh tools/tests/check-links.sh
+PASS: good links (file, anchor, directory, ../) pass with a count
+PASS: broken link fails with file:line: dest
+PASS: links resolve from the file that holds them
+PASS: links inside backticks and fences are ignored
+PASS: image links are checked
+PASS: https, http, mailto and fragment-only links are skipped
+PASS: excluded folders are skipped
+PASS: files on disk are read (no git needed)
+PASS: escaped backticks, titles, escapes, entities and a backtick info string
+exit=0
+$ python3 -I tools/check-links.py
+check-links: 137 links ok
+exit=0
+$ ls docs/*.md
+docs/design.md
+docs/install.md
+docs/output-schema.md
+docs/reference.md
+$ ls docs/history | wc -l
+      23
+$ git diff --cached -M --name-status HEAD -- docs/ | cut -f1 | sort | uniq -c
+   1 A
+   4 M
+   2 R094
+   1 R096
+   4 R097
+   7 R098
+   4 R099
+   4 R100
+grep -c ^R: 22
+$ non-R lines:
+M	docs/design.md
+A	docs/history/README.md
+M	docs/install.md
+M	docs/output-schema.md
+M	docs/reference.md
+$ renames whose name changed:
+$ git grep -nE docs/phase[0-9]
+exit=1
+  ```
+- Review: independent review by Codex (`codex exec -s read-only`, given only the diff and the step), 2 rounds.
+  Round 1: 9 findings. Accepted and fixed: (1) the Verify amendment row itself matched the stale-path grep (reworded);
+  (3) a backtick fence whose info string has a backtick is not a fence; (4) escaped backticks are text, not code
+  spans; (7) link titles are no longer read as links; (8) backslash escapes and HTML entities are undone before the
+  file lookup. All five have a new `edges` test case (RED first: 4 wrong lines). Accepted as documented limits in the
+  docstring: (2) destination split across lines, (5) fences inside blockquotes / lists, (6) code spans split across
+  lines. Rejected: (9) backticks inside a filename (no such file in the repo). Round 2: the fixes hold (nested image
+  links, titles, 137 links still checked); 3 more rare false positives (a tab before a title, an empty destination
+  with a title, an escaped `>` inside `<…>`) left as is: each fails loudly, none occurs in the repo, and the 2-round
+  limit was reached. Codex also confirmed the 22 renames keep their names and found no out-of-scope changes.
+- Gotchas: Verify asked for 22 `R100`, but 18 moved files must change (17 with `../` links, plus prose paths in `phase0.md`), so they stage as
+  `R094`–`R099`; Claude amended Verify to 22 `^R` with names kept, the README as the only `A` and no `D` (Review log
+  2026-11-26). `phase0-deps.md` in `docs/` (deleted in Step 0.6) also became `docs/history/phase0-deps.md` so the final
+  grep can be empty. Loading the checker as a module from a helper script leaves `tools/__pycache__/` (deleted; not
+  ignored by `.gitignore`).
 
 ### 2026-11-26 — Step 26.2: CLI version matches the app — Codex
 - Did: enabled top-level clap version flags; aligned workspace version with app 1.20, added MIT license inheritance,
@@ -1255,10 +1329,10 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
 - Gotchas: VHS needs quoted paths (`Output "…"`) and quoted keys (`Type "s"`); zsh does not split `set -- $var`.
 
 ### 2026-11-17 — Step 24.4: owner check, Phase 24 closed — Claude
-- Did: walked the owner through `docs/phase24-check.md` items 1–10, checked each read-only (`gh`, `brew`, `xattr`,
+- Did: walked the owner through `docs/history/phase24-check.md` items 1–10, checked each read-only (`gh`, `brew`, `xattr`,
   `defaults read`, the repo build's `hook check`); recorded the answer; removed the "brew upgrade not seen" limitation
   from README and updated `docs/install.md` / `docs/reference.md`.
-- Changed: `docs/phase24-check.md`, `README.md`, `docs/install.md`, `docs/reference.md`, `PLAN.md`, `PROGRESS.md`
+- Changed: `docs/history/phase24-check.md`, `README.md`, `docs/install.md`, `docs/reference.md`, `PLAN.md`, `PROGRESS.md`
 - Verify (remote, 2026-11-17): CI 44204971252 on `ce6ab77` → `success`; release 44205997651 → 3 jobs `success`;
   v1.20 published, assets 2,942,615 / 92 bytes; cask run 44207505046 → `success`, tap `version "1.20"`, sha256 =
   release file; `brew list --cask --versions multi-link` → `multi-link 1.20`, quarantine `03c1;…`, no Open Anyway;
@@ -1271,7 +1345,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   copy" row and Turn on / Turn on everything running `hook apply --take-over` (Remove flag-free), brew-upgrade limit
   still "not yet seen" pointing at the Phase 24 check. `README.md`: one sentence on the amber row in Install step 4;
   the brew-upgrade limit points at the 1.20 check. `docs/reference.md`: Release 1.20 sentence, setup-window bullet,
-  brew-upgrade limit, Releasing example `v1.20`. New `docs/phase24-check.md`: local Verify, the real settings read
+  brew-upgrade limit, Releasing example `v1.20`. New `docs/history/phase24-check.md`: local Verify, the real settings read
   read-only, pre-check git state, 11-item owner checklist with Claude's check per item, Not covered.
   Real settings, read-only: `target/debug/multi-link hook check < /dev/null` → all 5 events `other copy (owned by
   /Applications/multi-link.app/Contents/MacOS/multi-link)`, closing line naming the owner and the optional
@@ -1279,7 +1353,7 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   (`cb012d65…`); same as the coordinator's earlier run.
   Mode: Claude step; review by Codex (`python3 -I tools/codex-quota.py` → primary 28%, secondary 30%, `CODEX: OK`;
   30% / 31% right before the review).
-- Changed: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/phase24-check.md`,
+- Changed: `apps/menubar/Info.plist`, `README.md`, `docs/install.md`, `docs/reference.md`, `docs/history/phase24-check.md`,
   `PROGRESS.md`
 - Verify (local, 2026-11-17): `TZ=UTC cargo test --workspace --locked` → exit 0, 757 passed / 0 failed / 1 ignored
   (71 `test result` lines); `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0; `cargo fmt
@@ -1460,7 +1534,7 @@ test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
   retired pane as one paragraph, Menu-bar app, States and links, Run, Limitations and validation, Releasing), with
   link paths fixed for `docs/` and cross-file anchors repointed. Content kept word for word except: the retired pane
   shortened to one paragraph; the Phase 22 limit "(owner check pending)" → "(owner check passed 2026-11-17; a real
-  `brew upgrade` is not covered yet)" (source: `docs/phase22-check.md` Owner answer); "(below)/(above)" pointers made
+  `brew upgrade` is not covered yet)" (source: `docs/history/phase22-check.md` Owner answer); "(below)/(above)" pointers made
   into links. No new numbers: the README's only numbers are the 120-character prompt cap
   (`docs/output-schema.md`), the 2 h default window and macOS 15.
 - Changed: `README.md`, `docs/install.md` (new), `docs/reference.md` (new), `PROGRESS.md`
@@ -1476,7 +1550,7 @@ test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
     heading still exists in `docs/reference.md`) → `excluded (listed): Claude Code pane (retired)`, `0 missing`.
   - `grep -n 'brew trust --cask jar-narvz/tap/multi-link\|brew install --cask jar-narvz/tap/multi-link' README.md` →
     `56:   brew trust --cask jar-narvz/tap/multi-link`, `62:   brew install --cask jar-narvz/tap/multi-link`; equal to
-    `docs/phase22-check.md` lines 111 and 115 (item 7).
+    `docs/history/phase22-check.md` lines 111 and 115 (item 7).
   - `git status --short` → ` M README.md`, `?? docs/install.md`, `?? docs/reference.md` (plus this file, and the
     pre-existing untracked `.claude/`, not touched). No code, test or workflow changed.
 - Review: two rounds.
@@ -1488,7 +1562,7 @@ test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
     them, name `~/.claude/settings.json`, explain fork, one link word (`confirmed`), `<step-id>` in the graph example, a
     "Built with" line, Codex waits not counted, notification fires on the turn ending, Claude desktop app optional.
     Rejected: "the Gatekeeper dialog may differ / `brew trust` before tapping may fail" (both ran for real in
-    `docs/phase22-check.md` item 7); "list tested Claude Code / Codex versions" (no recorded source, so it would be a
+    `docs/history/phase22-check.md` item 7); "list tested Claude Code / Codex versions" (no recorded source, so it would be a
     new claim).
   - Codex round 1 (diff, lost content, unsourced claims): lost content none; install commands match item 7 and the
     cask. 3 findings, all accepted and fixed: JSON prompt text is per field (`asked`, `last_asked`, graph `said`), not
@@ -1499,9 +1573,9 @@ test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
   screenshot is the phase6 synthetic fixture; `docs/img/home-real.png` was not used.
 
 ### 2026-11-17 — Step 22.6: owner check, Phase 22 closed — Claude
-- Did: walked the owner through `docs/phase22-check.md` items 1–9 and checked each read-only with `gh` / `brew` /
+- Did: walked the owner through `docs/history/phase22-check.md` items 1–9 and checked each read-only with `gh` / `brew` /
   `xattr`; recorded the answer; fixed checklist item 7.3 (`mv` into `~/.Trash` → Finder via `open -R`).
-- Changed: `docs/phase22-check.md` (Owner answer, item 7.3), `PLAN.md` (22.6 status), `PROGRESS.md`
+- Changed: `docs/history/phase22-check.md` (Owner answer, item 7.3), `PLAN.md` (22.6 status), `PROGRESS.md`
 - Verify (remote, 2026-11-17): CI run 43952924468 on `620a0bc` → `success`; release run 43956976978 → `check`,
   `ci / test`, `release` all `success`; `gh release view v1.19` → `isDraft` false, assets `multi-link-1.19-arm64.dmg`
   2,929,184 bytes and `.sha256` 92 bytes; `cask.yml` run 44193075230 (event `release`) → ✓; tap cask → `version "1.19"`,
@@ -1519,11 +1593,11 @@ test unhealthy_files_are_outdated_and_real_alias_is_ok ... ok
   `--force`), DMG second (now 1.19), new "Use in Terminal" (the window's copied `sudo ln -s` command, no `-f`,
   `command -v`), Uninstall per install type (brew uninstall, `sudo rm /usr/local/bin/multi-link`, hooks and Open at
   login first), new "Releasing" (plist, push, tag, draft, publish, cask), Homebrew and release limits. Info.plist
-  both keys `1.19`. `docs/phase22-check.md`: remote CI runs (43678448297 hang, 43771809152 green) and the fix,
+  both keys `1.19`. `docs/history/phase22-check.md`: remote CI runs (43678448297 hang, 43771809152 green) and the fix,
   pre-check state via `gh` (tap empty, `TAP_TOKEN` set, only v1.18), local Verify, 10-item owner checklist.
   Found: on this Mac `~/.cargo/bin` precedes `/opt/homebrew/bin`, so item 8 calls `/opt/homebrew/bin/multi-link`.
   Mode: Claude step (docs); review by Codex (`python3 -I tools/codex-quota.py` → primary 0%, secondary 26%, CODEX: OK).
-- Changed: `README.md`, `apps/menubar/Info.plist`, `docs/phase22-check.md`, `PROGRESS.md`
+- Changed: `README.md`, `apps/menubar/Info.plist`, `docs/history/phase22-check.md`, `PROGRESS.md`
 - Verify (local, 2026-11-16): `TZ=UTC cargo test --workspace --locked` → exit 0, 748 passed / 0 failed / 1 ignored;
   `cargo clippy --workspace --all-targets --locked -- -D warnings` → exit 0; `cargo fmt --check` → exit 0;
   `swift test --disable-sandbox` → "✔ Test run with 41 tests in 0 suites passed after 11.208 seconds."; `actionlint`
@@ -2061,10 +2135,10 @@ terminal-mixed-dark.png
   AppleScript quit while modal; `pkill` ended it. `brew style`'s first run installs Homebrew's dev gems.
 
 ### 2026-11-14 — Step 21.5: Owner real check, Phase 21 closed — Claude (with the owner)
-- Did: walked the owner through the `docs/phase21-check.md` checklist; Claude ran the server, quit the dev app,
+- Did: walked the owner through the `docs/history/phase21-check.md` checklist; Claude ran the server, quit the dev app,
   ran item 10's `setup` and item 11's hand-off, and read process / login times; the owner did the downloads, Open
   Anyway, the setup clicks, the log out and the switch to the real app. Results recorded in "Owner answer".
-- Changed: `docs/phase21-check.md` (Owner answer; item 11 command fixed), `PLAN.md` (21.5 status, backlog item),
+- Changed: `docs/history/phase21-check.md` (Owner answer; item 11 command fixed), `PLAN.md` (21.5 status, backlog item),
   `PROGRESS.md`
 - Verify: items 1–15 pass (details and commands in the check file): quarantine `…;Chrome;…`; `setup` exit 0 with
   `/Applications` paths (test app, then real 1.18); banner seen by the owner and the popover linked `step 21.5` →
@@ -2083,9 +2157,9 @@ terminal-mixed-dark.png
   `hook apply` / `hook remove`; Limitations gained the Mac app download limits (not notarized, Open Anyway per copy and
   version, arm64 / macOS 15 only, hooks after a deleted or moved app, a hand-mounted DMG not seen as temporary) and
   the narrowed hook-write race. Release version decided: `Info.plist` `1.0` → `1.18` (Files amendment in PLAN.md
-  Review log). `docs/phase21-check.md`: every check Claude could run, with commands and results, and a 17-item owner
+  Review log). `docs/history/phase21-check.md`: every check Claude could run, with commands and results, and a 17-item owner
   checklist (each one command or one click). Claude-only step (no `codex exec`); no quota check needed.
-- Changed: `README.md`, `docs/phase21-check.md`, `apps/menubar/Info.plist`, `PLAN.md` (Step 21.5 Files amendment,
+- Changed: `README.md`, `docs/history/phase21-check.md`, `apps/menubar/Info.plist`, `PLAN.md` (Step 21.5 Files amendment,
   status, Review log), `PROGRESS.md`
 - Verify:
   - `TZ=UTC cargo test --workspace` → 747 passed / 0 failed / 1 ignored (69 `test result: ok` lines);
@@ -2094,7 +2168,7 @@ terminal-mixed-dark.png
   - `apps/menubar/release.sh` → `hdiutil: verify: checksum of ".../multi-link-1.18-arm64.dmg" is VALID`, prints
     `/Users/jarednarvaez/multi-link/apps/menubar/build/multi-link-1.18-arm64.dmg` (2,900,741 bytes, sha256
     `0a5b1dcea63866162946f5a9b72aa295d1bc80e77d977c778685335ee32b42e8`); both executables arm64.
-  - Real-check items Claude could do (table in `docs/phase21-check.md`): never-seen-id DMGs built and served from
+  - Real-check items Claude could do (table in `docs/history/phase21-check.md`): never-seen-id DMGs built and served from
     `127.0.0.1:8765` (`200 OK`, byte-identical download); mounted under `/Volumes` the bundled CLI reads `cli:
     temporary` (exit 1) and `setup --yes` refuses (`move multi-link to Applications first`, exit 1, scratch file
     unchanged); the real gate window from the mounted DMG (screenshot in `~/multi-link-sandbox/check21/`), no child
@@ -2515,8 +2589,8 @@ apps/menubar/build/multi-link-1.0-arm64.dmg
   limitations text; the menu-bar limit now records the live result. One-line Phase 20 notes on the Phase 16–19 check
   docs. Real check: stopped the two leftover 1.16 pane watchers (owner installed 1.17 but did not restart Claude Code),
   ended the stuck pre-20.2 app, cleared the binary-path setting, relaunched the app, ran three real Codex hand-offs.
-- Changed: `README.md`, `docs/phase16-check.md`, `docs/phase17-check.md`, `docs/phase18-check.md`,
-  `docs/phase19-check.md`, `docs/phase20-check.md` (new), `PLAN.md` (20.3 status, new Step 20.4), `PROGRESS.md`.
+- Changed: `README.md`, `docs/history/phase16-check.md`, `docs/history/phase17-check.md`, `docs/history/phase18-check.md`,
+  `docs/history/phase19-check.md`, `docs/history/phase20-check.md` (new), `PLAN.md` (20.3 status, new Step 20.4), `PROGRESS.md`.
 - Verify: `TZ=UTC cargo test --workspace` 731 passed / 0 failed / 1 ignored; clippy `-D warnings` and `cargo fmt
   --check` clean; `fixtures/expected/{menubar,open-jump,phase12,phase13,phase14}/check.sh` and `phase9/check.sh 6` exit
   0; `swift test` 22 passed; `./build.sh` built and verified. Real check: app ran `~/.cargo/bin/multi-link menubar
@@ -2997,8 +3071,8 @@ apps/menubar/build/multi-link-1.0-arm64.dmg
   notch hid the icon until the owner freed two menu-bar items (window x 825 → 863 → 908). A real `codex exec` hand-off
   made one marker (28 → 29), announced by the pane through Script Editor (installed 1.14 binary, no lock check). The
   owner declined installing the new binary now, so the multi-link-credited notification is pinned with Phase 18's check.
-  Wrote `docs/phase19-check.md` and the README menu-bar section and limitations.
-- Changed: `docs/phase19-check.md`, `README.md`, `PROGRESS.md`.
+  Wrote `docs/history/phase19-check.md` and the README menu-bar section and limitations.
+- Changed: `docs/history/phase19-check.md`, `README.md`, `PROGRESS.md`.
 - Verify: all six `check.sh` exit 0 and `claude plugin test` 134 pass (re-run); Rust unchanged since 19.1 (736 / 0 /
   1); `swift test` 18 passed and `build.sh` verified at 19.3. Owner's answers: "Matches the board", "From Script
   Editor"; owner check pinned.
@@ -3696,13 +3770,13 @@ note lanes.json is checked by the 9.5 worker-to-App test, not here
 - Did: Real checks on Terminal.app in `~/multi-link-sandbox/repo-p17`: the CLI jump and the TUI `o` (PTY harness,
   home → repo-p17 → Enter → `o`) each brought the session's tab to the front from another front window, checked with
   AppleScript (`/dev/ttys006, true`). The committed Terminal script prints `not found` for a tty with no tab. Wrote
-  `docs/phase18-check.md`; README: the jump answers table, the Automation note, the pane button, the TUI key, and
+  `docs/history/phase18-check.md`; README: the jump answers table, the Automation note, the pane button, the TUI key, and
   the limitations (iTerm2 untested).
-- Changed: `docs/phase18-check.md`, `README.md`, `PROGRESS.md`.
+- Changed: `docs/history/phase18-check.md`, `README.md`, `PROGRESS.md`.
 - Verify (whole phase, Claude): `TZ=UTC cargo test --workspace` → 730 passed / 0 failed / 1 ignored; clippy
   `-D warnings` and `cargo fmt --check` clean; `open-jump`, `phase12`, `phase13`, `phase14` and `phase9 6` check.sh
   all exit 0; `claude plugin validate` → `✔ Validation passed` (existing catalog notice); `claude plugin test` →
-  134 pass / 0 fail. Real-check commands and outputs are in `docs/phase18-check.md`. Owner's answer: pending.
+  134 pass / 0 fail. Real-check commands and outputs are in `docs/history/phase18-check.md`. Owner's answer: pending.
 - Review: Claude's own step (docs only); no code changed.
 - Gotchas: the first sandbox session exited before the TUI check, and a session with no prompt has no transcript, so
   lists skip it; a new one was started with a prompt. On home, `o` on a repo card asks for the repo view first
@@ -4092,9 +4166,9 @@ note lanes.json is checked by the 9.5 worker-to-App test, not here
   ran one synthetic `codex exec` for Step 1.1. Four runs; runs 1–2 failed on Claude Code's trust prompt (harness
   keys), run 3 worked without a step in the hand-off, run 4 is the result. Found and fixed two mod bugs (pane sized
   from the whole screen; `unexpected argument` from a 1.13 binary looped) with tests that fail without the fixes.
-  Wrote `docs/phase17-check.md`, updated the README pane section and limitation line.
+  Wrote `docs/history/phase17-check.md`, updated the README pane section and limitation line.
 - Changed: `mod/multi-link-pane/hooks/register.tsx`, `mod/multi-link-pane/hooks/register.test.tsx` (Review log
-  "Step 17.4 scope"), `docs/phase17-check.md`, `README.md`, `docs/design.md` (H6 date), `PLAN.md`, `PROGRESS.md`.
+  "Step 17.4 scope"), `docs/history/phase17-check.md`, `README.md`, `docs/design.md` (H6 date), `PLAN.md`, `PROGRESS.md`.
 - Verify: run 4 events — both panes' watchers with `--notify`; strip seen 9 s after the prompt; `osascript calls: 1;
   new markers: 1`; shim line `4:-e:codex finished (1.1)` with a 2-character body; `tick CPU, one watcher, 30 s idle:
   195 ms/tick`; pane data 3.64 s (A) and 4.27 s (B) from launch; `watchers 5 s after exit: 0`. `claude plugin
@@ -4839,8 +4913,8 @@ ok   live.json
   `/exit`, saved screens. Run 1 inherited `CLAUDE_CODE_CHILD_SESSION` (no transcript saved → `not seen yet`, correct);
   runs 2–4 cleared `CLAUDE_CODE_*` and set `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`. One run with the installed 1.12
   binary. Watcher CPU per tick: a fresh watcher, `ps -o time` after its first line and 30 s later. README section
-  "Claude Code pane" (the captured pane text, not an image) and a limitation line; `docs/phase16-check.md`.
-- Changed: `README.md`, `docs/phase16-check.md`, `PROGRESS.md` (also corrects the 16.2 Review note about a phase9
+  "Claude Code pane" (the captured pane text, not an image) and a limitation line; `docs/history/phase16-check.md`.
+- Changed: `README.md`, `docs/history/phase16-check.md`, `PROGRESS.md` (also corrects the 16.2 Review note about a phase9
   FAIL: it was my zsh loop, not the check).
 - Verify: whole-phase Verify: `TZ=UTC cargo test --workspace` → 698 passed, 0 failed, 1 ignored; clippy `-D warnings`
   and `fmt --check` clean; `bash fixtures/expected/phase9/check.sh 6` rc 0, `phase12`, `phase13`, `phase14` ok;
@@ -4858,7 +4932,7 @@ ok   live.json
 - Review: Claude's own step (docs only; no code), as 15.4. Numbers in README and the check doc are from the scratch
   `events.txt` of runs 1–4 and `old`, and the CPU script output. Board check: the captured pane has board 16 C's
   header, rules, `▌` row and `└` children. Desktop half: done by the owner 2026-11-11 (screenshot; recorded in
-  `docs/phase16-check.md` → "Desktop app"). Owner's answer (2026-11-11): "Looks good". Phase 16 closed.
+  `docs/history/phase16-check.md` → "Desktop app"). Owner's answer (2026-11-11): "Looks good". Phase 16 closed.
 - Gotchas: a `claude` started from a Claude Code session inherits `CLAUDE_CODE_CHILD_SESSION` and saves no
   transcript, so the pane cannot find it; clear `CLAUDE_CODE_*` for real checks. In zsh, `bash dir/$s` with
   `s="check.sh 6"` is one word.
@@ -5445,15 +5519,15 @@ ok   live.json
   screen left + cursor shown + PTY back to echo/canonical/isig). Rendered `home_html --loading 4.0 --size 76x22`,
   screenshot with headless Chrome 2x, compared by eye with a paused scratch copy of board 15 (option E only). Wrote
   the README "Loading screen" section, Release 1.12 line, a feature bullet and two limits lines; wrote
-  `docs/phase15-check.md`.
-- Changed: `docs/phase15-check.md` (new), `docs/img/loading-phase15-fixture.png` (new), `README.md`, `PROGRESS.md`.
+  `docs/history/phase15-check.md`.
+- Changed: `docs/history/phase15-check.md` (new), `docs/img/loading-phase15-fixture.png` (new), `README.md`, `PROGRESS.md`.
 - Verify (whole phase):
 ```
 cargo test --workspace → exit 0; 65 `test result: ok`, 686 passed, 0 failed, 1 ignored (real_counts)
 cargo clippy --workspace --all-targets -- -D warnings → exit 0;  cargo fmt --all -- --check → exit 0
 fixtures/expected/phase9/check.sh 6 → 47 ok, 0 FAIL;  phase12/check.sh → 3 ok;  phase13 → 1 ok;  phase14 → 1 ok
 git diff --stat c29c516 -- fixtures/expected → 25 files, all fixtures/expected/tui/loading-* (15.0's goldens only)
-W10: grep -nE "/Users/|\bsk-|api_key|local_[0-9a-f]{8}" README.md docs/phase15-check.md → nothing
+W10: grep -nE "/Users/|\bsk-|api_key|local_[0-9a-f]{8}" README.md docs/history/phase15-check.md → nothing
 series 2 (a) overview --json: real 1.27 user 9.53 sys 1.19 | real 1.16 user 9.25 sys 1.18 | real 1.16 user 9.39 sys 1.26 → 1.16 s
 series 2 (b) no live: 1446 = 1006+440 | 1598 = 1157+441 | 1525 = 1082+443                 → median 1525 ms
              --live:  1613 = 1098+439+75 | 1581 = 1058+444+79 | 1629 = 1113+440+77      → median 1613 ms
@@ -5771,8 +5845,8 @@ board check: rows 0–14 of loading-76x22.txt vs the board's drawC(4.0) cell gri
   forced-full-frame run for the `selected` line. Rendered the fixture report with `home_html --live-grid` and
   headless Chrome (2x) into `docs/img/live-phase14-fixture.png`. README: Release 1.11 line and bullet, "Live grid"
   section (image, cards, rows, feed, keys, sizes, CLI), `l` in Run, `multi-link live --json`, live-grid limits.
-  Wrote `docs/phase14-check.md` (counts and timings only).
-- Changed: `docs/phase14-check.md` (new), `docs/img/live-phase14-fixture.png` (new), `README.md`, `PROGRESS.md`.
+  Wrote `docs/history/phase14-check.md` (counts and timings only).
+- Changed: `docs/history/phase14-check.md` (new), `docs/img/live-phase14-fixture.png` (new), `README.md`, `PROGRESS.md`.
 - Verify (whole phase):
 ```
 cargo test --workspace → exit 0; 62 `test result: ok`, 660 passed, 0 failed, 1 ignored (real_counts)
@@ -5782,7 +5856,7 @@ fixtures/expected/phase9/check.sh 6 → 47 ok, 0 FAIL;  phase12/check.sh → ok 
 phase13/check.sh → ok links.json;  phase14/check.sh → ok live.json
 git diff --stat f1fbec6 -- fixtures/expected → phase14 keys, live-phase14* goldens, and the 14.3 home/repo footer
   goldens only (16 files, 2 lines each)
-W10: rg "/Users/|\bsk-|api_key|<real ids>" README.md docs/phase14-check.md → nothing; image is the fixture render
+W10: rg "/Users/|\bsk-|api_key|<real ids>" README.md docs/history/phase14-check.md → nothing; image is the fixture render
 timing run 1 → cold 9354 ms; warm median 191 ms (174–218); after growth (+493 B) 197 ms
 timing run 2 → cold 9156 ms (overview 8607 · all-time 447 · live 102); warm median 212 ms (187–248);
   after growth (+6638 B) 205 ms
@@ -6594,10 +6668,10 @@ ok   fixtures/expected/phase8/graph-1.9.json (committed HEAD key)
 ### 2026-11-10 — Step 13.3: Phase 13 real check and README — Claude
 - Did: Ran the real check (scratch, counts only, W10): 8f643fd vs 46b4a36 release links, paired per hand-off; masked
   check of the 32 exact launch links; `tools/resize-key-check.py` 5 rounds; real TUI smoke. Wrote
-  `docs/phase13-check.md`. README: `resume --last` paragraph (interactive resume needs an id; option-first ids), new
+  `docs/history/phase13-check.md`. README: `resume --last` paragraph (interactive resume needs an id; option-first ids), new
   "Launch folder" paragraph with C1's limits, the ambiguous-limitation now says 0 real ambiguous, removed the
   resize/key limitation (fixed by D1), added the "no hidden-id test for `cd`" limitation.
-- Changed: `docs/phase13-check.md` (new), `README.md`, `PROGRESS.md`.
+- Changed: `docs/history/phase13-check.md` (new), `README.md`, `PROGRESS.md`.
 - Verify:
 ```
 python3 -I tools/resize-key-check.py target/release/multi-link 5   → round 1–5: pass, exit 0
@@ -7096,9 +7170,9 @@ Key diff matches Step 13.0 exactly: exit 0
 ### 2026-11-10 — Step 12.2: Real check, README, owner confirm — Claude
 - Did: real before/after transitions by hand-off (release builds 04b4233 and 437adf4, scratch, counts and gaps only);
   masked check with the built resolver (scratch harness: per exact launch link, that checkout's real transcripts in a
-  temp root, child id replaced in the parent transcript); `docs/phase12-check.md`; README nearest-run bullet and the
+  temp root, child id replaced in the parent transcript); `docs/history/phase12-check.md`; README nearest-run bullet and the
   ambiguous-links limitation rewritten; corrected "59 exact" to 53 in the 12.1 Review line.
-- Changed: `docs/phase12-check.md`, `README.md`, `PROGRESS.md`.
+- Changed: `docs/history/phase12-check.md`, `README.md`, `PROGRESS.md`.
 - Verify: transitions on the 233 exported ids equal K4 (53 exact, 6 resume_turn, 117 heuristic, 47 unlinked
   unchanged; 1 heuristic → unlinked, own gap 9.4 s vs 2.2 s to a later hand-off that picks it; 8 ambiguous →
   nearest_run; 1 ambiguous stays at 0.91 s / 7.88 s). Masked: 30 links, 23 + 2 right, 0 wrong, 3 unlinked (1 child
@@ -7445,8 +7519,8 @@ diff --git a/fixtures/expected/phase12/overview.json b/fixtures/expected/phase12
 - Did: real check of the release TUI (120×40 PTY harness, scratch only) through a real sandbox `claude -p` →
   `codex exec` → `resume --last` cycle on a synthetic one-step plan; README sections for the now line and live parts
   and the new image; Phase 11 decisions table in `docs/design.md`; re-shot the repo image and added the live step
-  image from fixtures; `docs/phase11-check.md` (Files amended, Review log).
-- Changed: `README.md`, `docs/design.md`, `docs/phase11-check.md`, `docs/img/repo-phase6-fixture.png`,
+  image from fixtures; `docs/history/phase11-check.md` (Files amended, Review log).
+- Changed: `README.md`, `docs/design.md`, `docs/history/phase11-check.md`, `docs/img/repo-phase6-fixture.png`,
   `docs/img/step-live-fixture.png`, `PLAN.md` (Files amendment), `PROGRESS.md`.
 - Verify: `cargo test --workspace` 609 passed / 0 failed / 1 ignored; clippy `-D warnings` and `fmt --check` clean;
   JSON keys unchanged since the plan commit 2584519; `check.sh 6` 47/47 `ok`; TUI snapshots changed since 2584519:
@@ -7821,7 +7895,7 @@ SessionEnd: outdated (binary: ~/.cargo/bin/multi-link -> ~/multi-link/target/rel
 
 ### 2026-11-09 — Phase 9 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 9.7 answer and closed Phase 9.
-- Changed: `docs/phase9-check.md` (Owner check → confirmed), `PLAN.md` (Phase 9 heading marked closed), `PROGRESS.md`.
+- Changed: `docs/history/phase9-check.md` (Owner check → confirmed), `PLAN.md` (Phase 9 heading marked closed), `PROGRESS.md`.
 - Verify: the owner's words after reinstalling, adding `SessionEnd` (settings.json now has it) and viewing
   `multi-link tui --since 24h` and the fixture demo: "looks good". Tests at 2c359d0: 580 passed, 0 failed.
 - Review: no code change.
@@ -7837,8 +7911,8 @@ SessionEnd: outdated (binary: ~/.cargo/bin/multi-link -> ~/multi-link/target/rel
   × open action. Explained ambiguous 1 → 9, counted R7's real gaps (rollout `task_started` times, plain and `.zst`,
   read-only), rendered step 8.7's real graph (scratch only). Re-shot `docs/img/{home,repo}-phase6-fixture.png` and
   `step-phase8-fixture.png` with HEAD (12-hour clock); added `step-phase9-fixture.png` (graph-2.1). Wrote
-  `docs/phase9-check.md`; README: Release 1.6, "States and links" section, limits updated.
-- Changed: `docs/phase9-check.md`, `README.md`, `docs/img/home-phase6-fixture.png`, `docs/img/repo-phase6-fixture.png`,
+  `docs/history/phase9-check.md`; README: Release 1.6, "States and links" section, limits updated.
+- Changed: `docs/history/phase9-check.md`, `README.md`, `docs/img/home-phase6-fixture.png`, `docs/img/repo-phase6-fixture.png`,
   `docs/img/step-phase8-fixture.png`, `docs/img/step-phase9-fixture.png`, `PROGRESS.md`
 - Verify (HEAD a223dc1): `cargo test --workspace` → exit 0, 54 result lines all `ok`, 580 passed, 0 failed, 1 ignored;
   `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; `git diff --stat 6a2c306 -- fixtures/expected` →
@@ -9035,7 +9109,7 @@ session c205b4c0 checkout: ~/multi-link/.claude/worktrees/step-9.6a
 
 ### 2026-11-08 — Phase 8 close: owner confirm — Claude (coordinator)
 - Did: recorded the owner's Step 8.6 answer and closed Phase 8.
-- Changed: `docs/phase8-check.md` (Owner check → confirmed), `PLAN.md` (Phase 8 heading marked closed), `PROGRESS.md`.
+- Changed: `docs/history/phase8-check.md` (Owner check → confirmed), `PLAN.md` (Phase 8 heading marked closed), `PROGRESS.md`.
 - Verify: the owner's words, after reinstalling (`cargo install --path crates/cli --force`) and running the TUI:
   "it looks good", then "Yes, close Phase 8". Tests at HEAD 956d965: 521 passed, 0 failed; clippy clean.
 - Review: no code change.
@@ -9082,12 +9156,12 @@ session c205b4c0 checkout: ~/multi-link/.claude/worktrees/step-9.6a
   an independent adversarial Claude subagent, 2 rounds.
 - Did: real step graphs of 6.7 (board 9's own), 6.6 (an unlinked part) and 3.7 (a compressed rollout) from the
   release build (`graph --json` + `home_html --graph`, `--now 2026-11-09T00:00:00Z`), scratch only (W10); board 9's
-  source read from the owner's canvas for the comparison. Wrote `docs/phase8-check.md` (method, fixture image, board 9
+  source read from the owner's canvas for the comparison. Wrote `docs/history/phase8-check.md` (method, fixture image, board 9
   in words, 6.7 vs board 9 region by region, 6.6, 3.7, missing-rollout counts, Step 8.4's graph, whole-phase Verify,
   owner check waiting). README: step graph section (keys, membership, G3/G5/G6 limits, missing runs), `s` and `graph`
   in Run, step graph limits, Phase 7 marked approved. Found that most "lost" rollouts are on disk as `.jsonl.zst`
   (Current state).
-- Changed: `docs/phase8-check.md`, `docs/img/step-phase8-fixture.png`, `README.md`, `PROGRESS.md`
+- Changed: `docs/history/phase8-check.md`, `docs/img/step-phase8-fixture.png`, `README.md`, `PROGRESS.md`
 - Verify (whole phase, HEAD 0ec1283): `cargo test --workspace` → exit 0, 49 test binaries, 519 passed, 0 failed, 1
   ignored; `cargo clippy --workspace --all-targets -- -D warnings` → exit 0; phase8 fixture report == `graph-1.1.json`
   → True, its HTML text == `step-phase8.txt` (diff empty); 8.1 golden history → only 8448da9; amended key check
@@ -9899,10 +9973,10 @@ Claude first-only sessions: 3; excluded eligible-record categories by session: {
 - Did: Ran the whole-phase Verify. Rendered real `~` at `--now 2026-11-03T05:19:00Z` (UTC−8) with
   `crates/tui/examples/home_html.rs`: home at `--since 2h` and `16h`, multi-link repo view at both (the 16 h
   view has three folds, so the fixture was not needed); screenshots by headless Chrome, scratch only, shown to
-  the owner. Wrote `docs/phase7-check.md` (counts before/after, P1–P4 on screen in words, Verify, pending
+  the owner. Wrote `docs/history/phase7-check.md` (counts before/after, P1–P4 on screen in words, Verify, pending
   owner check). README: release status, the Claude prompt rule (P1), clock times (P3), the named window (P2),
   the axis label order (P4), and the stale `no prompt` / `last 2h` limitations replaced by the 11 remaining.
-- Changed: docs/phase7-check.md, README.md, PROGRESS.md
+- Changed: docs/history/phase7-check.md, README.md, PROGRESS.md
 - Verify: `cargo test --workspace` → exit 0, 36 `test result: ok`, 0 failed; `cargo clippy --workspace
   --all-targets -- -D warnings` → exit 0; `git diff --exit-code 26af6f2 -- fixtures/expected/tui/home-phase6.txt
   fixtures/expected/tui/home-phase6.styles.txt fixtures/expected/tui/repo-phase6.txt
@@ -10315,11 +10389,11 @@ repo-phase6.styles.txt: byte-for-byte unchanged from HEAD
   window, drawn with `render_repo` (fitted, folds on, imports hidden, first lane selected). Rendered the phase6 fixture
   (home + repo-r) to `docs/img/{home,repo}-phase6-fixture.png` (headless Chrome, 2x). Rendered real `~` at
   2026-11-02T22:07:21Z with `--since 2h` and `--since 16h` (home + multi-link repo view) to scratch only and looked
-  at them. Wrote `docs/phase6-check.md` (method, fixture images, boards 7c/8c in words with the canvas link, real-data
+  at them. Wrote `docs/history/phase6-check.md` (method, fixture images, boards 7c/8c in words with the canvas link, real-data
   differences in words and counts, Verify, pending owner check). Recorded the owner's 2026-11-01 Phase 5 verdict in
-  `docs/phase5-check.md`. README: release status, home and repo-view sections with fixture images, keys, limitations
+  `docs/history/phase5-check.md`. README: release status, home and repo-view sections with fixture images, keys, limitations
   (W1 gaps, Codex done, `no prompt` on real Codex runs, `last 2h` wording, JSON exports prompt text).
-- Changed: crates/tui/examples/home_html.rs, docs/phase6-check.md, docs/phase5-check.md, README.md,
+- Changed: crates/tui/examples/home_html.rs, docs/history/phase6-check.md, docs/history/phase5-check.md, README.md,
   docs/img/home-phase6-fixture.png, docs/img/repo-phase6-fixture.png, PLAN.md (Review log), PROGRESS.md
 - Verify: `cargo test --workspace` → exit 0, 35 `test result: ok`, 0 failed (incl.
   `phase6_matches_immutable_text_and_styles ... ok`, `phase6_repo_matches_immutable_text_and_styles ... ok`);
@@ -10332,7 +10406,7 @@ repo-phase6.styles.txt: byte-for-byte unchanged from HEAD
 - Review: adversarial Claude subagent (diff + Step 6.5 + W0–W10, re-ran Verify: same counts): 0 P1, 2 P2, 5 P3, all
   accepted and fixed (PLAN.md → Review log); it also noted Phase 5's committed `docs/img/home-real.png` and
   `board7-target.png`: checked, they show repo names, step titles, counts and times only, no prompts; kept because
-  docs/phase5-check.md uses them.
+  docs/history/phase5-check.md uses them.
 - Gotchas: the example used to hard-code a 2 h repo window; with 16 h JSON that drew a fold labelled `1h58` and no
   bars. Pass `--since` to both the CLI and the example. zsh: pass CLI flags as an array.
 
@@ -10598,10 +10672,10 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   with the Artifact tool, rendered locally without the canvas runtime) in the built-in browser pane and
   screenshotted them; committed PNGs captured from the same HTML with local headless Chrome (pane
   screenshots are small JPEG previews). Checked every image: repo names, step titles, counts, times only.
-  Wrote `docs/phase5-check.md` (method, images, 18 differences from board 7, Verify, owner check pending).
+  Wrote `docs/history/phase5-check.md` (method, images, 18 differences from board 7, Verify, owner check pending).
   README home-screen section rewritten from these outputs with the real image. Recorded the owner's
-  Phase 4 verdict in `docs/phase4-check.md` and closed Phase 4 as not meeting the need.
-- Changed: `crates/tui/examples/home_html.rs`, `docs/phase5-check.md`, `docs/phase4-check.md`, `README.md`,
+  Phase 4 verdict in `docs/history/phase4-check.md` and closed Phase 4 as not meeting the need.
+- Changed: `crates/tui/examples/home_html.rs`, `docs/history/phase5-check.md`, `docs/history/phase4-check.md`, `README.md`,
   `docs/img/{home-real,home-phase5-fixture,board7-target}.png`, `PROGRESS.md`. (`.claude/launch.json`, a
   local static server for the pane, is untracked and not committed.)
 - Verify (whole phase): Rust PATH set per AGENTS.md.
@@ -10614,7 +10688,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
     all equal-after-strip
   p5.html text vs fixtures/expected/tui/home-phase5.txt → golden-text-equal
   ```
-  Screenshots in `docs/phase5-check.md`. Owner's answer: not yet (stop-and-ask).
+  Screenshots in `docs/history/phase5-check.md`. Owner's answer: not yet (stop-and-ask).
 - Review: adversarial Claude subagent (diff + Step 5.5 + images + scratch inputs), 9 findings. Accepted
   1–8: (1) inline `<pre>` left page-colour strips between rows, hiding that terminal tracks merge into one
   slab — renderer fixed, images retaken, now difference 1; it also removed a false "blank row inside the
@@ -10919,9 +10993,9 @@ PASS: regression baseline equals all three committed overview keys
   afterwards; this checkout's branch never switched). Re-ran multi-link link counts on real `~`, unpinned and
   with both builds at pinned `--now 2026-10-30T22:15:00Z`. Captured `tui` in a pty (stdlib Python VT
   emulator, 600×100 and 40×100, default window and `--since all`, each before/after pair back to back).
-  Wrote `docs/phase4-check.md` (repo names, header lines and counts only) and a README "Home screen"
+  Wrote `docs/history/phase4-check.md` (repo names, header lines and counts only) and a README "Home screen"
   section. No code changed.
-- Changed: `README.md`, `docs/phase4-check.md`, `PROGRESS.md`, `PLAN.md` (Review log only).
+- Changed: `README.md`, `docs/history/phase4-check.md`, `PROGRESS.md`, `PLAN.md` (Review log only).
 - Verify: link counts, checkout exactly this repo's path, `links --since 24h --json`:
   ```text
   baseline (Phase 4 plan): 43 calls → 42 unlinked / 1 heuristic / 0 ambiguous
@@ -11227,7 +11301,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   timing (Run B satisfies k ≥ 1), crossterm resize root cause, draining resize, Ctrl-C, synthetic
   scratch-HOME Resume stub/missing-program checks and clean-exit record deletion. Replaced pending
   README claims with the two evidenced limitations and updated Current state. No code or PTY reruns.
-- Changed: `README.md`, `docs/phase3-check.md`, `PROGRESS.md` only.
+- Changed: `README.md`, `docs/history/phase3-check.md`, `PROGRESS.md` only.
 - Verify: `cargo run --release -q -p multi-link-core --example refresh_timing -- 3` → exit 0, actual output:
   ```text
   pass 1: 3794 ms, 25 sessions, 4 repos, 441 files re-parsed, 508526132 bytes re-parsed
@@ -11236,7 +11310,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   ```
 - Verify: `cargo build --release -q -p multi-link` → no output, exit 0.
   `cargo test --workspace` → exit 0; all actual `test result:` lines are pasted in
-  `docs/phase3-check.md`; the overview key comparison printed:
+  `docs/history/phase3-check.md`; the overview key comparison printed:
   ```text
   test overview_json_matches_answer_key_and_text_has_one_line_per_repo ... ok
   ```
@@ -11252,7 +11326,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   ```
   `diff -u <scratch>/simple.before <scratch>/simple.after` → no output,
   exit 0 (`DIFF_EXIT=0`). Full identical `stty -a` snapshots and scrubbed repo-name screen
-  evidence are in `docs/phase3-check.md`.
+  evidence are in `docs/history/phase3-check.md`.
 - Verify: `/usr/bin/expect <scratch>/check.exp normal` (real home, resize 40x160 →
   32x120, then `q`) → exit 1, actual decisive output:
   ```text
@@ -11313,9 +11387,9 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
   {"action":"unavailable","reason":"not_known_finished","command":"claude --resume 9c0a9a1d…","cwd":"~/multi-link-sandbox/repo-a"}
   ```
   `sessions --json` → state unknown, record null. Whole-phase Verify passes with the documented
-  dependency and record-lifetime limitations; full host evidence is in `docs/phase3-check.md`.
+  dependency and record-lifetime limitations; full host evidence is in `docs/history/phase3-check.md`.
 - Verify (review round 1, Codex): `git diff --check` → no output, exit 0.
-- Review: Claude (step session), 1 Codex fix round. Diff stays in `README.md`, `docs/phase3-check.md`, `PROGRESS.md`
+- Review: Claude (step session), 1 Codex fix round. Diff stays in `README.md`, `docs/history/phase3-check.md`, `PROGRESS.md`
   (plus Claude's PLAN.md backlog line). Codex's sandbox could not run `ps` or write `~/.claude`, so Claude ran the
   host checks and Codex folded them in (round 1). Resize "quit timeout": reproduced on host, root-caused to crossterm
   0.29 (edge-triggered tty readiness dropped when SIGWINCH and a key share one kevent wake; first `q` delayed, second
@@ -11912,7 +11986,7 @@ pass 3: 31 ms, 61 sessions, 2 files re-parsed, 1177474 bytes re-parsed
   and bg3 (inherited env) after bg's hook child came back `null`, with a temporary payload-saving hook; then an
   `expect` session held at a permission prompt for 60 s and answered. Deleted the three background task output
   files, ran `links --json` / `sessions --json` with the sandbox `MULTI_LINK_HOME`, removed the hook config.
-- Changed: `docs/phase2-hook.md` (new "Step 2.8 results" section), `PROGRESS.md`.
+- Changed: `docs/history/phase2-hook.md` (new "Step 2.8 results" section), `PROGRESS.md`.
 - Verify: `find ~/.codex/sessions -newer <marker> -name 'rollout-*.jsonl' | wc -l` → `5`, one per marker.
   Per-case compare of `session_meta.payload.id` with the hook's last non-null `child`:
   `fg … hook_child=01a18ba2-f020-… rollout=01a18ba2… equal`; `bg3 … hook_records=2 hook_child=01a18ba5-1239-…
@@ -12109,7 +12183,7 @@ release ignores deadline_ms=1: ok
   line during the hold; the session record shows `status: "waiting"` + `waitingFor`), (j) go (needs env -i,
   --permission-mode default, trust dialog), (k) no-go in -p (unfinished async hooks killed at teardown) →
   write first, append the child later.
-- Changed: docs/phase2-hook.md (plus ignored fixtures/raw/hook/)
+- Changed: docs/history/phase2-hook.md (plus ignored fixtures/raw/hook/)
 - Verify: sections `## (e)`…`## (k)` each with a `Decision:` line; allowlist check → no output; sandbox
   `settings.local.json` removed. Re-checked by the coordinator: 7 sections, 7 Decision lines, settings file gone.
 - Review: Codex (read-only), 4 findings, all accepted and fixed (kept session-record snapshots and expect logs
@@ -12539,7 +12613,7 @@ warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix
   `crates/claude/src/lib.rs:124` bad session records dropped silently, against "skip and count" → fixed
   (`bad_records`, 12 bad files asserted). Checked: 13 transcripts' 7 fields equal sessions.json, 5 records
   (1 busy, 4 idle), Claude skipped = repo-e lines 3/4/5, known type list equals the schema, field paths
-  match `docs/phase0.md`, no network code, only the step's files changed. Claude re-ran Verify and fmt:
+  match `docs/history/phase0.md`, no network code, only the step's files changed. Claude re-ran Verify and fmt:
   matches the paste.
 - Gotchas: Field paths are from Phase 0 fixtures, not a spec. A vanished main transcript also hides its
   subagents. `.json` entries in `sessions/` that are directories count as bad records. This entry and the
@@ -12578,7 +12652,7 @@ warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix
   test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
   ```
   `cargo clippy -p multi-link-codex --all-targets` → no warnings.
-- Review: Claude, re-ran Verify (same 9 passed, clippy clean). Fields match `docs/phase0.md`
+- Review: Claude, re-ran Verify (same 9 passed, clippy clean). Fields match `docs/history/phase0.md`
   (`session_meta.payload.{id,cwd,git.branch,timestamp}`, `event_msg.payload.{type,turn_id}`); fail-soft
   on unknown records (skip + count, later lines read); no network; only the step's files changed.
   2 low findings accepted, not fixed (recorded in Current state): `crates/codex/src/lib.rs:85` a
@@ -12633,7 +12707,7 @@ warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix
   steps. Options serialize as null without omission.
 
 ### 2026-10-29 — Step 0.6: Revise design from Phase 0 — Claude
-- Did: Merged `docs/phase0-deps.md` into `docs/phase0.md` as (c) and (d) (content kept; added a results
+- Did: Merged `docs/history/phase0-deps.md` into `docs/history/phase0.md` as (c) and (d) (content kept; added a results
   table and the Step 0.2 review corrections up top; noted in the method that agtrace was later run).
   Updated `docs/design.md`: new "Phase 0 results and decisions" table (P1–P12, each with a why), linking
   algorithm (forms, evidence order, 60 s window, task-output fallback), state table (waiting only via the
@@ -12641,14 +12715,14 @@ warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix
   split credited), step-id suffix, edge cases, plan, open questions. Split Phase 1 into Steps 1.1–1.9
   (Cargo workspace, one crate per parser so parallel steps can't break each other's build), marked
   1.2–1.5 parallel; noted Phase 2/3 changes forced by Phase 0. Ran the Codex critique and applied it.
-- Changed: `docs/phase0.md`, `docs/phase0-deps.md` (deleted), `docs/design.md`, `docs/output-schema.md`
+- Changed: `docs/history/phase0.md`, `docs/history/phase0-deps.md` (deleted), `docs/design.md`, `docs/output-schema.md`
   (outside the step's named files: id suffix row, Codex latest-turn rule, `cd`/`-C` heuristic rule —
   the schema is the binding contract, so decisions had to land there too), `PLAN.md`, `PROGRESS.md`
 - Verify: `grep -n '^### 2026-10-29 — Phase 0' PLAN.md` →
   `273:### 2026-10-29 — Phase 0: design revision and Phase 1 split (Step 0.6, Codex critique, read-only)`;
   Phase 1 step headings vs Verify lines (awk over PLAN.md between `### Step 1.1` and `### Phase 2`) →
-  `steps: 9, verify lines in Phase 1 steps: 9`; `test -e docs/phase0-deps.md` → absent;
-  `grep -c '^Decision: ' docs/phase0.md` → `4`.
+  `steps: 9, verify lines in Phase 1 steps: 9`; `test -e docs/history/phase0-deps.md` → absent;
+  `grep -c '^Decision: ' docs/history/phase0.md` → `4`.
 - Review: Codex critique (`codex exec -s read-only`), 10 findings, all P2: 9 accepted, 1 partly accepted
   (`checkout` output field deferred to Phase 3). Main fixes: probe outcomes Alive/Gone/Unavailable, Codex
   latest-turn rule, no heuristic after `cd`/`-C`, concrete missing-task-output result (474 ms, checked),
@@ -12684,7 +12758,7 @@ warning: `multi-link-claude` (lib) generated 4 warnings (run `cargo clippy --fix
   mention parent df403bfa… in links: 0 (line 15)
   ```
   Deviation: the 5 `unlinked` organic links (parents 85a715ba…, 11c1f13c…) have no ground-truth row
-  (organic data); they trace to `fixtures/README.md:116` and `docs/phase0.md` (organic launches, no child id).
+  (organic data); they trace to `fixtures/README.md:116` and `docs/history/phase0.md` (organic launches, no child id).
 - Review: Codex (read-only), 3 findings, all accepted and fixed in the schema; expected files unchanged:
   (1) state rows overlapped → first-match order, process-exit first, probe-unavailable and unknown-status rules;
   (2) `--since` link visibility undefined → window filters output only, all files parsed, link listed if
@@ -12748,8 +12822,8 @@ PASS: 18 distinct raw home directories (including cwd ancestors) map to distinct
 - Did: Subagent read zoetrope @b1f31dd and agtrace @7649b7e via `gh api` (no clone/run, per the
   auto-mode safety check). After owner approval, Claude cloned both outside the repo, built agtrace and
   ran it on copies of the sandbox sessions under a throwaway `HOME`.
-- Changed: `docs/phase0-deps.md` (new)
-- Verify: `grep -n 'Decision:' docs/phase0-deps.md` → `116:Decision: no-go`, `123`/`125` (definition
+- Changed: `docs/history/phase0-deps.md` (new)
+- Verify: `grep -n 'Decision:' docs/history/phase0-deps.md` → `116:Decision: no-go`, `123`/`125` (definition
   lines), `213:Decision: go`. agtrace index: 9 claude_code + 10 codex sessions, 0 with `parent_session_id`.
 - Review: Codex, read-only on local clones. 2 P2 findings, both accepted and applied: the live in-memory
   parent path (`workspace/view.rs::link`) is now covered; "neither survives" softened (short commands
@@ -12763,11 +12837,11 @@ PASS: 18 distinct raw home directories (including cwd ancestors) map to distinct
   10 ground-truth cases: all observed positive child IDs and negative parent expectations agree.
   Documented JSON paths for each invocation form, child origin metadata, real state fields/events,
   the approval-event gap, and a proposed 300-second freshness policy.
-- Changed: `docs/phase0.md`, `PROGRESS.md`; ignored `fixtures/raw/.claude/**`,
+- Changed: `docs/history/phase0.md`, `PROGRESS.md`; ignored `fixtures/raw/.claude/**`,
   `fixtures/raw/.codex/**`, `fixtures/raw/task-output/be01y5dv6.output`,
   `fixtures/raw/inspect-phase0.py`, `fixtures/raw/phase0-evidence.json`,
   `fixtures/raw/check-phase0-privacy.py`.
-- Verify: `grep -n 'Decision:' docs/phase0.md` → actual output:
+- Verify: `grep -n 'Decision:' docs/history/phase0.md` → actual output:
   ```text
   116:Decision: go
   197:Decision: no-go
@@ -12784,21 +12858,21 @@ PASS: 18 distinct raw home directories (including cwd ancestors) map to distinct
   ```
 - Review: Claude, 2026-10-29. Spot-checked exec, plugin and background child ids against
   ground truth independently: all match. Findings, carried into Step 0.6 (no doc edits):
-  1. `docs/phase0.md:176` — 300 s freshness must apply to `busy` only. Outside the sandbox,
+  1. `docs/history/phase0.md:176` — 300 s freshness must apply to `busy` only. Outside the sandbox,
      `ps -p <pid> -o lstart=` shows all 5 recorded pids alive, including the 3 idle records aged
      6131–9224 s: idle desktop sessions legitimately go hours without an update.
-  2. `docs/phase0.md:186` — liveness is confirmable with `ps` (pid + start time vs `procStart`);
+  2. `docs/history/phase0.md:186` — liveness is confirmable with `ps` (pid + start time vs `procStart`);
      the "unverified" gap was a Codex-sandbox limit, not a data gap.
-  3. `docs/phase0.md:197` — the no-go is about *waiting* only; busy / idle / finished are supportable.
+  3. `docs/history/phase0.md:197` — the no-go is about *waiting* only; busy / idle / finished are supportable.
      Waiting for Claude needs another source (Phase 2 hook, e.g. a Notification hook); Codex waiting
      stays unsupported. Not a stop-and-ask: the design already has stale/unknown and hook bridges.
-  4. `docs/phase0.md:50` — background exact links depend on a temp task-output file that can vanish;
+  4. `docs/history/phase0.md:50` — background exact links depend on a temp task-output file that can vanish;
      links must fall back to heuristic when it's gone (doc already says unresolved; design to decide).
 - Gotchas: Background child ID requires the task output file; plugin uses a thread ID in a subagent
   result, alongside a different turn ID. Both close-together cases are exact when output IDs exist.
   Found 3 old organic idle records, but process probes returned EPERM and `ps` was sandbox-denied;
   live process identity remains unverified. No explicit approval/waiting event types were found
-  in 91 local Codex transcripts. Existing `CLAUDE.md` changes and `docs/phase0-deps.md` were left
+  in 91 local Codex transcripts. Existing `CLAUDE.md` changes and `docs/history/phase0-deps.md` were left
   untouched; nothing staged, committed, or pushed.
 
 ### 2026-10-29 — Step 0.2a: Generate known hand-offs — Claude

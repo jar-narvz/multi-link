@@ -1,7 +1,7 @@
 # Phase 24 check: two setup fixes, Release 1.20, the first real brew upgrade
 
 Step 24.4, 2026-11-17. Phase 24 fixes two setup bugs and ships them as Release 1.20 through the Phase 22 pipeline
-unchanged (see PLAN.md Phase 24, decisions D1–D4, and [design](design.md)):
+unchanged (see PLAN.md Phase 24, decisions D1–D4, and [design](../design.md)):
 
 - **Step 24.1:** the setup window no longer keeps the orange "Notifications are not allowed for this application" line
   under a green Notifications row. The error has its own field and clears when the status reads authorized.
@@ -143,7 +143,7 @@ After each item Claude checks it read-only (the "Claude checks" line).
    ```
    Look for: `cli: ok (/Applications/multi-link.app/Contents/MacOS/multi-link)`, `hooks: ok (…/.claude/settings.json)`,
    `app: installed (/Applications/multi-link.app)`, `exit 0`, and no line about another copy. (A bare `multi-link` on
-   this Mac still finds `~/.cargo/bin/multi-link` first; see `docs/phase22-check.md` → "PATH on this Mac".)
+   this Mac still finds `~/.cargo/bin/multi-link` first; see `docs/history/phase22-check.md` → "PATH on this Mac".)
    Claude checks: the same command read-only, plus `hook check` from the repo's cargo build now reading the hooks as
    `other copy` owned by the upgraded app's path (the path is unchanged by the upgrade, so the hooks did not need to
    move).
