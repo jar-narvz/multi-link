@@ -1,10 +1,12 @@
 # PROGRESS.md — multi-link
 
 ## Current state
-**Phase 26 is planned (2026-11-26): repo polish, three steps. Next: Step 26.1 (Claude).** Owner picked MIT.
-26.1 LICENSE + `.claude/` ignore (Claude) → 26.2 `--version` and Cargo `1.20.0` matching `Info.plist` (Codex) →
-26.3 history docs to `docs/history/` with a link checker (Claude). Steps share `README.md` / `PLAN.md` /
-`PROGRESS.md`, so run them in order, not in parallel. Codex critique (9 points, all accepted) is in PLAN.md's Review log.
+**Phase 26: Step 26.1 is done (Claude, 2026-11-26): MIT `LICENSE`, README `## License`, `.claude/` ignored.
+Next: Step 26.2 (Codex, `--version`).** What 26.2 needs: `Cargo.toml` has no `license` yet (26.2 adds
+`license = "MIT"` to `[workspace.package]`, matching `LICENSE`). README now ends with `## License`; 26.2 does not touch
+README. 26.3 follows (history docs to `docs/history/`, link checker); `](LICENSE)` must stay a valid link there.
+After the owner pushes, check `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit` and record it.
+Steps share `README.md` / `PLAN.md` / `PROGRESS.md`, so run them in order, not in parallel.
 
 **Phase 25 is done (2026-11-26): the README banner is now a demo GIF** (`docs/img/demo-phase14-fixture.gif`, recorded
 by `vhs tools/demo.tape` from `fixtures/sessions-phase14`). To re-record after a UI change: `cargo build --release -p
@@ -1100,6 +1102,21 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-26 — Step 26.1: MIT license and `.claude/` ignored — Claude
+- Mode: Claude docs-only step (no Codex hand-off, per the step's owner). `git fetch` first: `main` = `origin/main`
+  (ec1024c), no owner edits to pull.
+- Did: wrote `LICENSE` from `gh api licenses/mit` with `[year]` → 2026 and `[fullname]` → Jared Narvaez (D1); added
+  `## License` ("MIT, see [LICENSE](LICENSE).") at the end of README; added `.claude/` to `.gitignore` with a comment.
+- Changed: `LICENSE` (new), `README.md`, `.gitignore`, `PROGRESS.md`
+- Verify (2026-11-26): `diff <(gh api licenses/mit -q .body | sed 's/\[year\]/2026/; s/\[fullname\]/Jared Narvaez/') LICENSE`
+  → no output, exit 0; `grep -c '](LICENSE)' README.md` → `1`; `git check-ignore -q .claude/launch.json && echo
+  ignored` → `ignored`; `git ls-files .claude | wc -l` → `0`. Pending after the owner pushes: `gh repo view --json
+  licenseInfo -q .licenseInfo.key` → `mit` (not a gate).
+- Review: Claude self-check (docs only, no code): diff touches only the four named files; LICENSE is byte-identical
+  to GitHub's template after the two substitutions; `.claude/` held only `handoff/`, `launch.json`, `worktrees/`,
+  none tracked.
+- Gotchas: none.
 
 ### 2026-11-26 — Step 25.1: demo GIF as the README banner — Claude (Codex review)
 - Mode: Codex loop (`python3 -I tools/codex-quota.py` → `CODEX: OK`, 5% / 1%); Claude wrote the step, Codex reviewed.

@@ -174,3 +174,7 @@ The full list, with the evidence and numbers behind each item, is in
   [releasing](docs/reference.md#releasing)
 - [Design](docs/design.md) and [output schema](docs/output-schema.md)
 - [Plan](PLAN.md) and [progress log](PROGRESS.md): how this was built, step by step
+
+## License
+
+MIT, see [LICENSE](LICENSE).

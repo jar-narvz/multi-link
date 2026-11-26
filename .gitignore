@@ -17,3 +17,6 @@ target/
 # Swift menu-bar app
 apps/menubar/.build/
 apps/menubar/build/
+
+# Local Claude Code config, hand-off notes and worktrees
+.claude/
