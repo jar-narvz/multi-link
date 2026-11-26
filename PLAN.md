@@ -3713,10 +3713,107 @@ Non-goals: no code, test or behaviour change; no new measurements; no change to 
   show home, timeline, step graph and live grid, each with content.
 - Status (2026-11-26): done. Codex review: 1 finding (host timezone), fixed by pinning `TZ`. Phase 25 closed.
 
+### Phase 26 — Repo polish: license, `--version`, docs layout (no behaviour change for users)
+Need (owner, 2026-11-26): someone landing on the public repo can tell they may use it, can tell which version they
+run, and finds the user docs first. Current state (Claude audit, 2026-11-26): tests, clippy, fmt and CI are green, but
+(1) there is no LICENSE, so GitHub shows no license and the code is legally "all rights reserved"; (2) `multi-link
+--version` exits 2 ("unexpected argument"), and the Cargo workspace says `0.1.0` while the app is 1.20, so a bug report
+cannot name the CLI version; (3) `docs/` lists 22 build-history files (`phaseN-check.md`, `phase2-hook.md`,
+`phase0.md`) before the 4 user docs (`install.md`, `reference.md`, `design.md`, `output-schema.md`).
+Decisions:
+- D1 License is MIT (owner, 2026-11-26). Why: short and permissive, the norm for dev tools; the owner's goal is reuse
+  and a portfolio, not copyleft. Copyright line: the owner's git name, year 2026.
+- D2 `Info.plist`'s `CFBundleShortVersionString` stays the release source of truth (the release workflow already checks
+  the tag against it). The Cargo workspace version mirrors it as semver: plist `1.20` ↔ Cargo `1.20.0`, plist `1.20.1`
+  ↔ Cargo `1.20.1`. A Rust unit test compares the two on every CI run (release.yml runs the CI job on the tag commit too),
+  so drift fails before a release, not after. Why not a `build.rs` that reads the plist: more moving parts for a value
+  that changes once per release; a failing test with a clear message is enough.
+- D3 History docs move with `git mv` to `docs/history/` (names kept), and every relative link to or from them is
+  rewritten, including path strings in PLAN.md and PROGRESS.md. Why rewrite the logs: it is a mechanical path change,
+  not a content change, and broken links in the build record would defeat keeping it. `docs/boards/` and `docs/img/`
+  stay where they are.
+Non-goals: no new CLI behaviour beyond `--version` / `-V`; no version shown in the menu-bar app or `setup` output; no
+release (1.21 is not cut in this phase: the version bump only aligns Cargo with the already-shipped 1.20); no link
+checker in CI; no rewording of history docs.
+
+### Step 26.1 — Add the MIT license and ignore `.claude/` (Claude, docs only)
+- `LICENSE`: the standard MIT text exactly as GitHub's template, with `[year]` → `2026` and `[fullname]` → `Jared Narvaez`.
+- `README.md`: a short `## License` section at the end ("MIT, see [LICENSE](LICENSE)").
+- `.gitignore`: `.claude/` (local Claude Code launch config, hand-off notes and worktrees; nothing in it is tracked).
+- Files: `LICENSE`, `README.md`, `.gitignore`, `PROGRESS.md`
+- Verify: `diff <(gh api licenses/mit -q .body | sed 's/\[year\]/2026/; s/\[fullname\]/Jared Narvaez/') LICENSE` → no
+  output, exit 0 (a public GET, no repo data sent); `grep -c '](LICENSE)' README.md` → 1;
+  `git check-ignore -q .claude/launch.json && echo ignored` → `ignored`; `git ls-files .claude | wc -l` → 0. After the
+  owner pushes: `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit` (recorded in PROGRESS.md when seen; not a
+  gate for the commit).
+
+### Step 26.2 — `multi-link --version` reports the app's version (Codex)
+- `Cargo.toml`: `[workspace.package]` `version = "1.20.0"` and `license = "MIT"`. Each `crates/*/Cargo.toml` adds
+  `license.workspace = true`. `Cargo.lock` updates by `cargo build` only.
+- `crates/cli/src/main.rs`: the top-level clap `#[command(...)]` gains `version`, so `--version` and `-V` print
+  `multi-link 1.20.0` on stdout and exit 0. Subcommands do not gain the flag. Tests (existing `#[cfg(test)]` module):
+  (a) for both `--version` and `-V`, `Cli::try_parse_from` yields `ErrorKind::DisplayVersion`, `use_stderr()` false,
+  `exit_code()` 0, and rendered text exactly `format!("multi-link {}\n", env!("CARGO_PKG_VERSION"))`; (b) `multi-link
+  overview --version` is rejected (not `DisplayVersion`); (c) a pure `plist_versions(text) -> Result<(String,String)>`
+  that extracts `CFBundleShortVersionString` and `CFBundleVersion` by plain string search (no new crate), plus
+  `semver_of("1.20") == "1.20.0"` / `semver_of("1.20.1") == "1.20.1"`, tested on in-memory samples: each key mismatched
+  on its own, each key missing; (d) `plist_version_matches_cargo` reads `apps/menubar/Info.plist` via
+  `CARGO_MANIFEST_DIR` and asserts both keys, normalized, equal `CARGO_PKG_VERSION`; its failure message names
+  `apps/menubar/Info.plist` and `Cargo.toml` as the two files to bump. `Info.plist` is not edited.
+- `docs/reference.md` → Releasing step 1: also set `version` in the root `Cargo.toml` (`1.21` → `1.21.0`); test (d)
+  fails CI if they differ. `docs/reference.md` → Run: one line for `multi-link --version`.
+- Files: `Cargo.toml`, `Cargo.lock`, `crates/{claude,cli,codex,core,hook,model,plan,tui}/Cargo.toml`,
+  `crates/cli/src/main.rs`, `docs/reference.md`, `PROGRESS.md`
+- Verify: `cargo build --release -p multi-link && ./target/release/multi-link --version; echo $?` → `multi-link 1.20.0`
+  then `0`; `-V` → same; `cargo test --workspace` → all pass, including (a)–(d); `cargo clippy --workspace
+  --all-targets -- -D warnings` → clean; `git diff --stat apps/menubar/Info.plist` → empty;
+  `(cd apps/menubar && swift test)` → 48 pass (unchanged).
+
+### Step 26.3 — Move build-history docs to `docs/history/` (Claude, docs only)
+- Baseline first, on the unchanged tree: write `tools/check-links.py` and run it. Any old broken link in a file this
+  step names is fixed here; one in a file it does not name stops the step for a Files amendment.
+- `mkdir docs/history`, then `git mv` the 22 history files (Phase 0 findings, the Phase 2 hook notes and every
+  phase-N owner check) into it, names kept.
+- Two kinds of reference, handled differently:
+  - Markdown link destinations (`[text](dest)`, images too), resolved from the file that holds them: links to a moved
+    file are repointed (`docs/` files → `history/<name>`, root files → `docs/history/<name>`); links inside moved files
+    to anything outside `docs/history/` gain one `../`; links between history files stay bare.
+  - Repo-root path strings in backticks or prose (mostly PLAN.md and PROGRESS.md): an old history-doc path becomes
+    `docs/history/<name>`; every other root path (`fixtures/…`, commands) is left alone.
+- `docs/history/README.md`: one paragraph ("owner checks and Phase 0 findings, one file per phase, kept as the build
+  record") and a link list of the files in phase order.
+- `tools/check-links.py`: for every `*.md` on disk (working tree, so new files count) outside `fixtures/`, `target/`,
+  `.claude/` and `apps/menubar/.build/`, finds Markdown link and image destinations outside inline code and fenced
+  blocks; skips `http(s):`, `mailto:` and fragment-only (`#…`) links; strips `#anchor`; reports each destination that is
+  not an existing file or directory as `file:line: dest` and exits 1 if any, else prints `check-links: N links ok`.
+  `tools/tests/check-links.sh` builds a temp tree and asserts: a good link passes, a broken link fails with its line,
+  a link inside backticks and one inside a fence are ignored, an image link is checked, an `https:` link is skipped.
+- Files: `docs/history/*` (22 moved + `README.md`), `README.md`, `docs/{design,install,output-schema,reference}.md`,
+  `PLAN.md`, `PROGRESS.md`, `AGENTS.md` / `CLAUDE.md` (only if they hold such references), `tools/check-links.py`,
+  `tools/tests/check-links.sh`
+- Verify (on the finished working tree, before commit): `sh tools/tests/check-links.sh` → exit 0;
+  `python3 -I tools/check-links.py` → exit 0; `ls docs/*.md` → exactly `design.md install.md output-schema.md
+  reference.md`; `ls docs/history | wc -l` → 23; after `git add -A docs/` (only `docs/`):
+  `git diff --cached -M --name-status HEAD -- docs/ | grep -c '^R100'` → 22 and the only `A` is
+  `docs/history/README.md`; `git grep -nE 'docs/phase[0-9]' -- '*.md' ':!fixtures'` → no output (stale root paths gone).
+
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · stale Notifications error, hooks owned by another copy, first real brew upgrade in Phase 24 (Release 1.20) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
+
+### 2026-11-26 — Phase 26 plan critique (Codex, read-only)
+| # | Point | Decision |
+|---|---|---|
+| 1 | The link checker would flag literal link examples in inline code (PLAN.md itself) | Accepted. Checker ignores inline code and fences, skips external and fragment-only links, checks images; `tools/tests/check-links.sh` added to Files |
+| 2 | The final grep for bare `](phase…` links contradicts "links between history files stay bare" and matches its own pattern in PLAN.md | Accepted. Replaced by the checker (destinations resolve) plus `git grep` for stale root paths, with the plan text written so it does not match |
+| 3 | "Tracked file" semantics conflict with the new untracked history README; `git mv` stages part of the change | Accepted. Checker reads the working tree; Verify runs on the finished tree before commit |
+| 4 | Testing drift by editing `Info.plist` touches a file outside Files and cannot prove both keys are checked | Accepted. Pure extractor tested on in-memory samples (each key mismatched or missing); `Info.plist` stays untouched, Verify checks its diff is empty |
+| 5 | Moved docs and the logs mix Markdown destinations with repo-root path strings (`fixtures/…`) | Accepted. Step 26.3 now handles the two kinds separately; only history-doc root paths change |
+| 6 | clap renders a trailing newline; subcommand rejection untested | Accepted. Exact `"multi-link {}\n"`, `DisplayVersion`, stdout, exit 0 for both flags; `overview --version` rejected |
+| 7 | "Exit 0" vs "listed in PROGRESS.md" contradict for old breaks; fixing them may need other files | Accepted. Baseline on the unchanged tree first; zero failures required; a break outside Files stops the step for an amendment |
+| 8 | Rename check depends on staging and branch, misses untracked files; `docs/history/` must exist first | Accepted. `mkdir` first; stage `docs/` only, compare to `HEAD`, count `R100` = 22 and the README as the only add |
+| 9 | Heading + copyright check accepts an incomplete license; `.claude/` check needs the folder to exist | Accepted. `diff` against GitHub's MIT template; `git check-ignore` on `.claude/launch.json` |
 
 ### 2026-11-17 — Phase 24 plan critique (Codex, read-only)
 | # | Point | Decision |

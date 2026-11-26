@@ -1,6 +1,11 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 26 is planned (2026-11-26): repo polish, three steps. Next: Step 26.1 (Claude).** Owner picked MIT.
+26.1 LICENSE + `.claude/` ignore (Claude) → 26.2 `--version` and Cargo `1.20.0` matching `Info.plist` (Codex) →
+26.3 history docs to `docs/history/` with a link checker (Claude). Steps share `README.md` / `PLAN.md` /
+`PROGRESS.md`, so run them in order, not in parallel. Codex critique (9 points, all accepted) is in PLAN.md's Review log.
+
 **Phase 25 is done (2026-11-26): the README banner is now a demo GIF** (`docs/img/demo-phase14-fixture.gif`, recorded
 by `vhs tools/demo.tape` from `fixtures/sessions-phase14`). To re-record after a UI change: `cargo build --release -p
 multi-link && vhs tools/demo.tape`. The tape pins `TZ=America/Los_Angeles`. Backlog unchanged; the owner picks next.
