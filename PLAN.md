@@ -3746,6 +3746,7 @@ checker in CI; no rewording of history docs.
   `git check-ignore -q .claude/launch.json && echo ignored` → `ignored`; `git ls-files .claude | wc -l` → 0. After the
   owner pushes: `gh repo view --json licenseInfo -q .licenseInfo.key` → `mit` (recorded in PROGRESS.md when seen; not a
   gate for the commit).
+- Status (2026-11-26): done (2607ca0). Verify re-run by the coordinator: LICENSE matches the template, `.claude/` ignored.
 
 ### Step 26.2 — `multi-link --version` reports the app's version (Codex)
 - `Cargo.toml`: `[workspace.package]` `version = "1.20.0"` and `license = "MIT"`. Each `crates/*/Cargo.toml` adds
@@ -3768,6 +3769,7 @@ checker in CI; no rewording of history docs.
   then `0`; `-V` → same; `cargo test --workspace` → all pass, including (a)–(d); `cargo clippy --workspace
   --all-targets -- -D warnings` → clean; `git diff --stat apps/menubar/Info.plist` → empty;
   `(cd apps/menubar && swift test)` → 48 pass (unchanged).
+- Status (2026-11-26): done (243d429, Codex loop). Coordinator re-run: `--version` / `-V` → `multi-link 1.20.0`, exit 0; workspace tests pass; `Info.plist` untouched.
 
 ### Step 26.3 — Move build-history docs to `docs/history/` (Claude, docs only)
 - Baseline first, on the unchanged tree: write `tools/check-links.py` and run it. Any old broken link in a file this
@@ -3797,9 +3799,10 @@ checker in CI; no rewording of history docs.
   `git diff --cached -M --name-status HEAD -- docs/ | grep -c '^R'` → 22 (each `docs/<name>` →
   `docs/history/<name>`; `R100` only for files the rewrite left untouched, the rest `R9x`), the only
   `A` is `docs/history/README.md`, and there is no `D`; `git grep -nE 'docs/phase[0-9]' -- '*.md' ':!fixtures'` → no output (stale root paths gone).
+- Status (2026-11-26): done (f12eaba, Codex review 2 rounds). All 22 moves are renames, but only 4 are `R100`: the other 18 are R094–R099 because the step itself rewrites links inside the moved files, so the "R100 → 22" Verify contradicted the step's own rule. The intent (renames, not delete + add) holds. Phase 26 closed.
 
 ### Backlog (ordered, uncommitted)
-`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · stale Notifications error, hooks owned by another copy, first real brew upgrade in Phase 24 (Release 1.20) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
+`hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · stale Notifications error, hooks owned by another copy, first real brew upgrade in Phase 24 (Release 1.20) · MIT license, `--version`, `docs/history/` in Phase 26 · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 
 ## Review log
 
