@@ -3687,6 +3687,32 @@ Decisions (critique below may amend):
 - Status (2026-11-17): done. Owner check all pass (`docs/phase24-check.md` "Owner answer"): v1.20 published, tap at
   1.20, first real `brew upgrade` with no Open Anyway prompt, setup window all green, banner. Phase 24 closed.
 
+### Phase 25 — A demo GIF at the top of the README (docs only)
+Need (owner, 2026-11-26): a recruiter landing on the repo sees multi-link working in the first few seconds, without
+installing it. Current state: the README's top image is the loading screen (a splash, not the product); the screens
+that show what it does (home, timeline, step graph, live grid) are still images further down or in `docs/reference.md`.
+Decision (owner): the GIF replaces the loading-screen banner; the loading screen stays in `docs/reference.md`, where
+it already is. Why a GIF recorded with VHS from a scripted tape: it is reproducible (`vhs tools/demo.tape`), so it can
+be re-recorded after a UI change, and it runs on the committed synthetic fixture, so no real prompt or path shows.
+`fixtures/sessions-phase14` is used because it alone shows all four screens with content (11 working sessions, a
+confirmed and a matched-by-time link, a waiting session, a shared checkout).
+Non-goals: no code, test or behaviour change; no new measurements; no change to fixtures; no menu-bar app recording
+(it needs a screen recording of the real desktop, which would show real data); no hosting outside the repo.
+
+### Step 25.1 — Record the demo with VHS and make it the README banner (Claude)
+- `tools/demo.tape`: builds nothing; runs `TZ=America/Los_Angeles ./target/release/multi-link tui --root fixtures/sessions-phase14 --now
+  2026-11-10T22:20:00Z --since all` hidden, then shows home → Enter (repo timeline) → `s` (step graph) → Esc → `l`
+  (live grid), about 3 s each; writes `docs/img/demo-phase14-fixture.gif`. A comment says to run
+  `cargo build --release -p multi-link` first.
+- `README.md`: the banner image becomes the GIF, with alt text naming the four screens and a caption that it is the
+  synthetic fixture.
+- Files: `tools/demo.tape`, `docs/img/demo-phase14-fixture.gif`, `README.md`, `PROGRESS.md`
+- Verify: `cargo build --release -p multi-link && vhs tools/demo.tape` → exit 0; `ls -l docs/img/demo-phase14-fixture.gif`
+  → exists, under 2 MB; `grep -c 'demo-phase14-fixture.gif' README.md` → 1 and `grep -c 'loading-phase15-fixture.png'
+  README.md` → 0; `grep -c 'loading-phase15-fixture.png' docs/reference.md` → 1; four frames extracted from the GIF
+  show home, timeline, step graph and live grid, each with content.
+- Status (2026-11-26): done. Codex review: 1 finding (host timezone), fixed by pinning `TZ`. Phase 25 closed.
+
 ### Backlog (ordered, uncommitted)
 `hook check` shipped in Phase 10 · live grid shipped in Phase 14 · faster cold first load in Phase 15 · Claude Code pane in Phase 16 · pane strip, actions and Codex-done notifications in Phase 17 · terminal tab jump in Phase 18 (tmux / Herdr panes stay optional backlog) · desktop menu-bar app in Phase 19 · Claude Code pane retired in Phase 20 · easy first install and logo in Phase 21 · release pipeline (CI, tap, Terminal) in Phase 22 · stale Notifications error, hooks owned by another copy, first real brew upgrade in Phase 24 (Release 1.20) · notarized download (if the owner enrolls) · web browser app (owner, 2026-11-12: after the menu-bar app; reads the same `menubar` contract).
 

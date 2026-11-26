@@ -1,6 +1,10 @@
 # PROGRESS.md — multi-link
 
 ## Current state
+**Phase 25 is done (2026-11-26): the README banner is now a demo GIF** (`docs/img/demo-phase14-fixture.gif`, recorded
+by `vhs tools/demo.tape` from `fixtures/sessions-phase14`). To re-record after a UI change: `cargo build --release -p
+multi-link && vhs tools/demo.tape`. The tape pins `TZ=America/Los_Angeles`. Backlog unchanged; the owner picks next.
+
 **Phase 24 is closed (2026-11-17): Release 1.20 is published; owner check all pass** (`docs/phase24-check.md` →
 "Owner answer"). The owner now runs 1.20 from Homebrew. What the next phase needs to know:
 - The first real `brew upgrade` (1.19 → 1.20) kept the Open Anyway approval: no prompt, quarantine `03c1;…`.
@@ -1091,6 +1095,20 @@ Codex-off mode is off: Codex implements, Claude plans and reviews.
   and `~/.multi-link/spike/` (Step 2.1 capture). Safe to keep; delete by hand if unwanted.
 
 ## Log (newest first)
+
+### 2026-11-26 — Step 25.1: demo GIF as the README banner — Claude (Codex review)
+- Mode: Codex loop (`python3 -I tools/codex-quota.py` → `CODEX: OK`, 5% / 1%); Claude wrote the step, Codex reviewed.
+- Did: picked `fixtures/sessions-phase14` (the only fixture with content on all four screens, after probing phase8,
+  phase9 and phase14); wrote `tools/demo.tape` (home → Enter → `s` → Esc → `l`); recorded the GIF; swapped the README
+  banner and added a caption. The loading screen stays in `docs/reference.md`.
+- Changed: `tools/demo.tape`, `docs/img/demo-phase14-fixture.gif`, `README.md`, `PLAN.md`, `PROGRESS.md`
+- Verify (2026-11-26): `cargo build --release -p multi-link && vhs tools/demo.tape` → exit 0; GIF 13.8 s; README refs: demo GIF 1, loading image 0; `docs/reference.md` loading image 1; frames at 2 / 5 / 8.5 / 13 s
+  show home, repo-n timeline, step 4.1 graph and live grid, each with content. Re-recorded with `TZ=UTC` on the host:
+  the frame still reads `2:20pm` and `times UTC-8`. That `TZ=UTC` recording is the
+  committed GIF: 569,976 bytes.
+- Review: Codex (read-only), 1 finding: [P2] `tools/demo.tape:17` times depended on the host timezone → fixed by
+  pinning `TZ=America/Los_Angeles` (verified above). Codex saw no personal data in sampled frames.
+- Gotchas: VHS needs quoted paths (`Output "…"`) and quoted keys (`Type "s"`); zsh does not split `set -- $var`.
 
 ### 2026-11-17 — Step 24.4: owner check, Phase 24 closed — Claude
 - Did: walked the owner through `docs/phase24-check.md` items 1–10, checked each read-only (`gh`, `brew`, `xattr`,

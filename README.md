@@ -1,6 +1,9 @@
 # multi-link
 
-![multi-link's terminal loading screen: Claude (orange) and Codex (blue) arrows swimming across the screen, the multi·link wordmark and a progress bar](docs/img/loading-phase15-fixture.png)
+![multi-link's terminal dashboard: the home screen with every repo's Claude and Codex sessions, a repo timeline with a Claude session handing a step to Codex, that step's graph (plan, implement, verify and commit) and the live grid of what every agent is doing now](docs/img/demo-phase14-fixture.gif)
+
+*Recorded with [VHS](https://github.com/charmbracelet/vhs) from synthetic test data (`fixtures/sessions-phase14`,
+`tools/demo.tape`), so no real prompts are shown.*
 
 [![CI](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jar-narvz/multi-link/actions/workflows/ci.yml)
 
