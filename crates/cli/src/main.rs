@@ -29,7 +29,11 @@ fn canonical_executable() -> io::Result<PathBuf> {
 }
 
 #[derive(Parser)]
-#[command(name = "multi-link", about = "Inspect local Claude and Codex sessions")]
+#[command(
+    name = "multi-link",
+    version,
+    about = "Inspect local Claude and Codex sessions"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -898,6 +902,110 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plist_versions(text: &str) -> Result<(String, String), String> {
+        fn value(text: &str, key: &str) -> Result<String, String> {
+            let marker = format!("<key>{key}</key>");
+            text.split_once(&marker)
+                .and_then(|(_, rest)| rest.trim_start().strip_prefix("<string>"))
+                .and_then(|rest| rest.split_once("</string>"))
+                .map(|(value, _)| value.trim().to_owned())
+                .ok_or_else(|| format!("missing string for {key}"))
+        }
+        Ok((
+            value(text, "CFBundleShortVersionString")?,
+            value(text, "CFBundleVersion")?,
+        ))
+    }
+
+    fn semver_of(version: &str) -> String {
+        if version.split('.').count() == 2 {
+            format!("{version}.0")
+        } else {
+            version.to_owned()
+        }
+    }
+
+    #[test]
+    fn plist_versions_extracts_each_key_independently() {
+        let sample = "<dict>\n<key>CFBundleShortVersionString</key>\n<string>1.20</string>\n<key>CFBundleVersion</key><string>1.20</string>\n</dict>";
+        assert_eq!(
+            plist_versions(sample).unwrap(),
+            ("1.20".into(), "1.20".into())
+        );
+        for (key, expected) in [
+            ("CFBundleShortVersionString", ("1.21".into(), "1.20".into())),
+            ("CFBundleVersion", ("1.20".into(), "1.21".into())),
+        ] {
+            let marker = format!("<key>{key}</key>");
+            let (before, after) = sample.split_once(&marker).unwrap();
+            let mismatched = format!("{before}{marker}{}", after.replacen("1.20", "1.21", 1));
+            assert_eq!(plist_versions(&mismatched).unwrap(), expected);
+            let missing = sample.replace(&marker, "<key>OtherKey</key>");
+            assert_eq!(
+                plist_versions(&missing).unwrap_err(),
+                format!("missing string for {key}")
+            );
+        }
+    }
+
+    #[test]
+    fn plist_versions_rejects_missing_string_values() {
+        let sample =
+            "<key>CFBundleShortVersionString</key><key>CFBundleVersion</key><string>1.20</string>";
+        assert_eq!(
+            plist_versions(sample).unwrap_err(),
+            "missing string for CFBundleShortVersionString"
+        );
+    }
+
+    #[test]
+    fn plist_versions_normalize_two_part_and_patch_versions() {
+        assert_eq!(semver_of("1.20"), "1.20.0");
+        assert_eq!(semver_of("1.20.1"), "1.20.1");
+    }
+
+    #[test]
+    fn plist_version_matches_cargo() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/menubar/Info.plist");
+        let text = std::fs::read_to_string(path).unwrap();
+        let (short, bundle) = plist_versions(&text).unwrap();
+        for (key, version) in [
+            ("CFBundleShortVersionString", short),
+            ("CFBundleVersion", bundle),
+        ] {
+            assert_eq!(
+                semver_of(&version),
+                env!("CARGO_PKG_VERSION"),
+                "{key}: bump apps/menubar/Info.plist and Cargo.toml together"
+            );
+        }
+    }
+
+    #[test]
+    fn version_flags_print_to_stdout_and_exit_successfully() {
+        for flag in ["--version", "-V"] {
+            let error = Cli::try_parse_from(["multi-link", flag]).err().unwrap();
+            assert_eq!(error.kind(), clap::error::ErrorKind::DisplayVersion);
+            assert!(!error.use_stderr());
+            assert_eq!(error.exit_code(), 0);
+            assert_eq!(
+                error.to_string(),
+                format!("multi-link {}\n", env!("CARGO_PKG_VERSION"))
+            );
+        }
+    }
+
+    #[test]
+    fn overview_rejects_version_flag() {
+        let error = Cli::try_parse_from(["multi-link", "overview", "--version"])
+            .err()
+            .unwrap();
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert!(error.use_stderr());
+        assert_eq!(error.exit_code(), 2);
+    }
 
     fn argv(command: &std::process::Command) -> Vec<String> {
         std::iter::once(command.get_program())

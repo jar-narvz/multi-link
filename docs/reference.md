@@ -331,6 +331,8 @@ corresponding external program; hook recording writes multi-link's own state dir
 
 ## Run
 
+`multi-link --version` (or `-V`) prints the installed CLI version.
+
 Use ↑/↓ to select, Enter (or `t`) to open a repo view, `o` to open (or jump to a running session's terminal tab,
 without leaving the TUI), `f` to fork, Esc to return, and
 `q` to quit. In the repo view, `+`/`-` zoom, ←/→ pan, `0` resets the range, `z` unfolds idle stretches
@@ -463,8 +465,10 @@ the Phase 4 home check is in [docs/phase4-check.md](phase4-check.md), the Phase 
 
 For the maintainer. Releases are built by GitHub Actions, never by hand.
 
-1. Set the new version in `apps/menubar/Info.plist` (both `CFBundleShortVersionString` and `CFBundleVersion`), commit,
-   push `main` and wait for the [CI workflow](../.github/workflows/ci.yml) to pass.
+1. Set the new version in `apps/menubar/Info.plist` (both `CFBundleShortVersionString` and `CFBundleVersion`) and
+   `[workspace.package]` `version` in the root `Cargo.toml` (`1.21` in the plist → `1.21.0` in Cargo). The
+   `plist_version_matches_cargo` test fails CI if either plist key differs from Cargo. Commit, push `main` and wait
+   for the [CI workflow](../.github/workflows/ci.yml) to pass.
 2. Tag that commit and push the tag: `git tag v1.20 && git push origin v1.20` (with the new version). The
    [release workflow](../.github/workflows/release.yml) refuses a tag that doesn't equal `v` + the plist version or whose
    commit is not on `main`, runs the CI job on it, builds the DMG with `apps/menubar/release.sh`, and opens a **draft**

@@ -417,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "clap",
  "crossterm",
@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-claude"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "multi-link-model",
  "multi-link-plan",
@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-codex"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "multi-link-model",
  "ruzstd",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-core"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "multi-link-claude",
  "multi-link-codex",
@@ -473,7 +473,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-hook"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "multi-link-claude",
  "multi-link-model",
@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-model"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-plan"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "multi-link-model",
  "serde",
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "multi-link-tui"
-version = "0.1.0"
+version = "1.20.0"
 dependencies = [
  "crossterm",
  "multi-link-model",
